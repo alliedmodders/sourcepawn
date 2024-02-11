@@ -558,7 +558,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
         Type* type = arg->type();
         int numdim = arg->type_info().numdim();
 
-        if (arg->type_info().ident == iREFERENCE)
+        if (arg->type()->isReference())
             bytes.push_back(cb::kByRef);
 
         std::vector<int> dims;
@@ -736,7 +736,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
         encode_type_into(bytes, ft->ret_type);
 
     for (const auto& arg : ft->args) {
-        if (arg.ident == iREFERENCE)
+        if (arg.reference)
             bytes.push_back(cb::kByRef);
 
         std::vector<int> dims;

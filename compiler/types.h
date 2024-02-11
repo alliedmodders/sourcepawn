@@ -45,7 +45,6 @@ using namespace cc;
 enum IdentifierKind {
     iINVALID = 0,
     iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
-    iREFERENCE = 2,     /* iVARIABLE, but must be dereferenced */
     iARRAY = 3,
     iREFARRAY = 4,      /* an array passed by reference (i.e. a pointer) */
     iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
@@ -76,6 +75,7 @@ enum class TypeKind : uint8_t {
     Pstruct,
     Methodmap,
     Enum,
+    Reference,
 };
 
 struct funcenum_t;
@@ -132,7 +132,9 @@ struct typeinfo_t {
         is_const(false),
         is_new(false),
         has_postdims(false),
-        is_label(false)
+        is_label(false),
+        reference(false),
+        resolved(false)
     {}
 
     // Array information.
@@ -150,6 +152,8 @@ struct typeinfo_t {
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
     bool is_label : 1;      // If type_atom came from a tLABEL.
+    bool reference : 1;
+    bool resolved : 1;
 
     TypenameInfo ToTypenameInfo() const;
 
@@ -239,6 +243,7 @@ class Type : public PoolObject
     bool isVoid() const { return isBuiltin(BuiltinType::Void); }
     bool isFloat() const { return isBuiltin(BuiltinType::Float); }
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
+    bool isReference() const { return kind_ == TypeKind::Reference; }
 
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum)
@@ -312,6 +317,11 @@ class Type : public PoolObject
         return pstruct_ptr_;
     }
 
+    Type* inner() const {
+        assert(isReference());
+        return inner_type_;
+    }
+
   private:
     void setFunction(funcenum_t* func) {
         assert(kind_ == TypeKind::Function);
@@ -336,6 +346,11 @@ class Type : public PoolObject
         assert(kind_ == TypeKind::Builtin);
         builtin_type_ = type;
     }
+    void setReference(Type* inner) {
+        assert(!inner->isReference());
+        assert(kind_ == TypeKind::Reference);
+        inner_type_ = inner;
+    }
 
     void resetPtr();
 
@@ -349,6 +364,7 @@ class Type : public PoolObject
         EnumStructDecl* enumstruct_ptr_;
         PstructDecl* pstruct_ptr_;
         BuiltinType builtin_type_;
+        Type* inner_type_;
     };
 };
 
@@ -371,6 +387,7 @@ class TypeManager
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
+    Type* defineReference(Type* inner);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
@@ -386,12 +403,13 @@ class TypeManager
   private:
     Type* add(const char* name, TypeKind kind);
     Type* add(Atom* name, TypeKind kind);
-    void RegisterType(Type* type);
+    void RegisterType(Type* type, bool unique_name = true);
     Type* defineBuiltin(const char* name, BuiltinType type);
 
   private:
     CompileContext& cc_;
     tr::unordered_map<Atom*, Type*> types_;
+    tr::unordered_map<Type*, Type*> ref_types_;
     std::vector<Type*> by_index_;
     Type* type_int_ = nullptr;
     Type* type_object_ = nullptr;

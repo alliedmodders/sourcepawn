@@ -384,6 +384,16 @@ static bool HasTagOnInheritanceChain(Type* type, Type* other) {
 }
 
 bool matchtag(Type* formal, Type* actual, int flags) {
+    Type* given_formal = formal;
+    Type* given_actual = actual;
+
+    if (flags & MATCHTAG_COERCE) {
+        if (formal->isReference())
+            formal = formal->inner();
+        if (actual->isReference())
+            actual = actual->inner();
+    }
+
     if (formal == actual)
         return true;
 
@@ -401,7 +411,7 @@ bool matchtag(Type* formal, Type* actual, int flags) {
 
     if (formal->asEnumStruct() || actual->asEnumStruct()) {
         if (formal != actual) {
-            report(134) << formal << actual;
+            report(134) << given_formal << given_actual;
             return false;
         }
         return true;
@@ -454,7 +464,7 @@ bool matchtag(Type* formal, Type* actual, int flags) {
     }
 
     if (!(flags & MATCHTAG_SILENT))
-        report(213) << formal << actual;
+        report(213) << given_formal << given_actual;
     return false;
 }
 

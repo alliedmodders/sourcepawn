@@ -4,6 +4,7 @@
  *  Function and variable definition and declaration, statement parser.
  *
  *  Copyright (c) ITB CompuPhase, 1997-2006
+ *  Copyright (c) AlliedModders LLC 2024
  *
  *  This software is provided "as-is", without any express or implied warranty.
  *  In no event will the authors be held liable for any damages arising from
@@ -20,8 +21,6 @@
  *  2.  Altered source versions must be plainly marked as such, and must not be
  *      misrepresented as being the original software.
  *  3.  This notice may not be removed or altered from any source distribution.
- *
- *  Version: $Id$
  */
 #include <ctype.h>
 
@@ -103,13 +102,14 @@ Type* TypeManager::add(Atom* name, TypeKind kind) {
     return type;
 }
 
-void TypeManager::RegisterType(Type* type) {
-    assert(types_.find(type->name()) == types_.end());
-
+void TypeManager::RegisterType(Type* type, bool unique_name) {
     type->set_index((int)by_index_.size());
     by_index_.emplace_back(type);
 
-    types_.emplace(type->name(), type);
+    if (unique_name) {
+        assert(types_.find(type->name()) == types_.end());
+        types_.emplace(type->name(), type);
+    }
 }
 
 Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
@@ -192,6 +192,21 @@ Type* TypeManager::definePstruct(PstructDecl* decl) {
 
     Type* type = add(decl->name(), TypeKind::Pstruct);
     type->setPstruct(decl);
+    return type;
+}
+
+Type* TypeManager::defineReference(Type* inner) {
+    assert(!inner->isReference());
+
+    if (auto it = ref_types_.find(inner); it != ref_types_.end())
+        return it->second;
+
+    auto name = inner->name()->str() + "&";
+    Type* type = new Type(cc_.atom(name), TypeKind::Reference);
+    type->setReference(inner);
+    RegisterType(type, false);
+
+    ref_types_.emplace(inner, type);
     return type;
 }
 

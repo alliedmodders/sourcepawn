@@ -69,20 +69,27 @@ bool SemaContext::BindType(const token_pos_t& pos, TypenameInfo* ti) {
 }
 
 bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
-    if (ti->type)
+    if (ti->resolved) {
+        assert(ti->type);
         return true;
+    }
 
-    Type* type;
-    if (!BindType(pos, ti->type_atom, ti->is_label, &type))
-        return false;
+    // Inner typename might already be bound. If not, bind it now.
+    if (!ti->type) {
+        if (!BindType(pos, ti->type_atom, ti->is_label, &ti->type))
+            return false;
+    }
 
-    if (auto enum_type = type->asEnumStruct()) {
-        if (ti->ident == iREFERENCE) {
+    if (auto enum_type = ti->type->asEnumStruct()) {
+        if (ti->reference) {
             report(pos, 136);
             return false;
         }
+    } else if (ti->reference) {
+        ti->type = cc_.types()->defineReference(ti->type);
     }
-    ti->set_type(type);
+
+    ti->resolved = true;
     return true;
 }
 
@@ -854,7 +861,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             if (init && sc.sema()->CheckExpr(init)) {
                 AutoErrorPos pos(init->pos());
 
-                assert(typeinfo.ident == iVARIABLE || typeinfo.ident == iREFERENCE);
+                assert(typeinfo.ident == iVARIABLE);
                 var->set_default_value(new DefaultArg());
 
                 cell val;
@@ -873,7 +880,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             }
         }
 
-        if (var->type_info().ident == iREFERENCE)
+        if (var->type()->isReference())
             var->set_is_read();
         if (is_callback_ || is_public_)
             var->set_is_read();

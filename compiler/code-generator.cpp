@@ -1109,11 +1109,8 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             break;
         }
         case iVARIABLE:
-            if (sym->type()->isEnumStruct()) {
+            if (sym->type()->isEnumStruct())
                 __ address(sym, sPRI);
-                break;
-            }
-        case iREFERENCE:
             break;
         default:
             // Note: constexprs are handled in Expr::Emit().
@@ -1234,7 +1231,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
 
         switch (arg->type_info().ident) {
             case iVARARGS:
-                if (val.ident == iVARIABLE || val.ident == iREFERENCE) {
+                if (val.ident == iVARIABLE) {
                     assert(val.sym);
                     assert(lvalue);
                     /* treat a "const" variable passed to a function with a non-const
@@ -1257,13 +1254,14 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
                 }
                 break;
             case iVARIABLE:
-            case iREFARRAY:
-                break;
-            case iREFERENCE:
-                if (val.ident == iVARIABLE || val.ident == iREFERENCE) {
-                    assert(val.sym);
-                    __ address(val.sym, sPRI);
+                if (arg->type_info().type->isReference()) {
+                    if (val.ident == iVARIABLE) {
+                        assert(val.sym);
+                        __ address(val.sym, sPRI);
+                    }
                 }
+                break;
+            case iREFARRAY:
                 break;
             default:
                 assert(false);
@@ -1287,16 +1285,17 @@ CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
         case iREFARRAY:
             EmitDefaultArray(expr, arg);
             break;
-        case iREFERENCE:
-            __ const_pri(arg->default_value()->val.get());
-            __ setheap_pri();
-            TrackTempHeapAlloc(expr, 1);
-            break;
         case iVARIABLE:
-            if (arg->type()->isEnumStruct())
-                EmitDefaultArray(expr, arg);
-            else
+            if (arg->type()->isReference()) {
                 __ const_pri(arg->default_value()->val.get());
+                __ setheap_pri();
+                TrackTempHeapAlloc(expr, 1);
+            } else {
+                if (arg->type()->isEnumStruct())
+                    EmitDefaultArray(expr, arg);
+                else
+                    __ const_pri(arg->default_value()->val.get());
+            }
             break;
         default:
             assert(false);
@@ -1513,16 +1512,19 @@ CodeGenerator::EmitRvalue(value* lval)
         case iARRAYCHAR:
             __ emit(OP_LODB_I, 1);
             break;
-        case iREFERENCE: {
-            auto var = lval->sym->as<VarDeclBase>();
-            assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-            __ emit(OP_LREF_S_PRI, var->addr());
-            break;
-        }
         case iACCESSOR:
             InvokeGetter(lval->accessor());
             lval->ident = iEXPRESSION;
             break;
+        case iVARIABLE: {
+            if (lval->type()->isReference()) {
+                auto var = lval->sym->as<VarDeclBase>();
+                assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+                __ emit(OP_LREF_S_PRI, var->addr());
+                break;
+            }
+            [[fallthrough]];
+        }
         default: {
             auto var = lval->sym->as<VarDeclBase>();
             if (!var->type()->isEnumStruct()) {
@@ -1546,15 +1548,18 @@ CodeGenerator::EmitStore(const value* lval)
         case iARRAYCHAR:
             __ emit(OP_STRB_I, 1);
             break;
-        case iREFERENCE: {
-            auto var = lval->sym->as<VarDeclBase>();
-            assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-            __ emit(OP_SREF_S_PRI, var->addr());
-            break;
-        }
         case iACCESSOR:
             InvokeSetter(lval->accessor(), true);
             break;
+        case iVARIABLE: {
+            if (lval->type()->isReference()) {
+                auto var = lval->sym->as<VarDeclBase>();
+                assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+                __ emit(OP_SREF_S_PRI, var->addr());
+                break;
+            }
+            [[fallthrough]];
+        }
         default: {
             auto var = lval->sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
@@ -2027,19 +2032,22 @@ void CodeGenerator::EmitInc(const value* lval)
             __ emit(OP_POP_ALT);
             __ emit(OP_POP_PRI);
             break;
-        case iREFERENCE: {
-            auto var = lval->sym->as<VarDeclBase>();
-            __ emit(OP_PUSH_PRI);
-            __ emit(OP_LREF_S_PRI, var->addr());
-            __ emit(OP_INC_PRI);
-            __ emit(OP_SREF_S_PRI, var->addr());
-            __ emit(OP_POP_PRI);
-            break;
-        }
         case iACCESSOR:
             __ emit(OP_INC_PRI);
             InvokeSetter(lval->accessor(), false);
             break;
+        case iVARIABLE: {
+            if (lval->type()->isReference()) {
+                auto var = lval->sym->as<VarDeclBase>();
+                __ emit(OP_PUSH_PRI);
+                __ emit(OP_LREF_S_PRI, var->addr());
+                __ emit(OP_INC_PRI);
+                __ emit(OP_SREF_S_PRI, var->addr());
+                __ emit(OP_POP_PRI);
+                break;
+            }
+            [[fallthrough]];
+        }
         default: {
             auto var = lval->sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
@@ -2067,19 +2075,22 @@ void CodeGenerator::EmitDec(const value* lval)
             __ emit(OP_POP_ALT);
             __ emit(OP_POP_PRI);
             break;
-        case iREFERENCE: {
-            auto var = lval->sym->as<VarDeclBase>();
-            __ emit(OP_PUSH_PRI);
-            __ emit(OP_LREF_S_PRI, var->addr());
-            __ emit(OP_DEC_PRI);
-            __ emit(OP_SREF_S_PRI, var->addr());
-            __ emit(OP_POP_PRI);
-            break;
-        }
         case iACCESSOR:
             __ emit(OP_DEC_PRI);
             InvokeSetter(lval->accessor(), false);
             break;
+        case iVARIABLE: {
+            if (lval->type()->isReference()) {
+                auto var = lval->sym->as<VarDeclBase>();
+                __ emit(OP_PUSH_PRI);
+                __ emit(OP_LREF_S_PRI, var->addr());
+                __ emit(OP_DEC_PRI);
+                __ emit(OP_SREF_S_PRI, var->addr());
+                __ emit(OP_POP_PRI);
+                break;
+            }
+            [[fallthrough]];
+        }
         default: {
             auto var = lval->sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)

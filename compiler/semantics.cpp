@@ -179,7 +179,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
         return true;
     }
 
-    assert(type.ident == iVARIABLE || type.ident == iREFERENCE);
+    assert(type.ident == iVARIABLE);
 
     auto init = decl->init();
 
@@ -599,6 +599,9 @@ RvalueExpr::RvalueExpr(Expr* expr)
         if (val_.accessor()->getter())
             markusage(val_.accessor()->getter(), uREAD);
         val_.ident = iEXPRESSION;
+    } else if (val_.ident == iVARIABLE) {
+        if (val_.type()->isReference())
+            val_.set_type(val_.type()->inner());
     }
 }
 
@@ -701,12 +704,16 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
         markusage(expr_val.accessor()->setter(), uREAD);
     }
 
-    find_userop(*sc_, incdec->token(), expr_val.type(), 0, 1, &expr_val, &incdec->userop());
+    Type* type = expr_val.type();
+    if (type->isReference())
+        type = type->inner();
+
+    find_userop(*sc_, incdec->token(), type, 0, 1, &expr_val, &incdec->userop());
 
     // :TODO: more type checks
     auto& val = incdec->val();
     val.ident = iEXPRESSION;
-    val.set_type(expr_val.type());
+    val.set_type(type);
     return true;
 }
 
@@ -755,8 +762,11 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
-            if (sym->vclass() == sARGUMENT && (sym->ident() == iREFERENCE || sym->ident() == iREFARRAY))
+            if (sym->vclass() == sARGUMENT &&
+                (sym->type()->isReference() || sym->ident() == iREFARRAY))
+            {
                 markusage(sym, uREAD);
+            }
         } else if (auto* accessor = left->val().accessor()) {
             if (!accessor->setter()) {
                 report(expr, 152) << accessor->name();
@@ -1288,7 +1298,7 @@ TernaryExpr::ProcessDiscardUses(SemaContext& sc)
 bool Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
-    const auto& atype = expr->type();
+    Type* atype = expr->type();
     if (atype->isVoid()) {
         report(expr, 144);
         return false;
@@ -1314,6 +1324,13 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         report(expr, 89);
     } else if (atype->isEnumStruct() || ltype->isEnumStruct()) {
         report(expr, 95) << atype->name();
+    }
+    if (ltype->isReference() && !atype->isReference()) {
+        if (atype->isEnumStruct()) {
+            report(expr, 136);
+            return false;
+        }
+        atype = cc_.types()->defineReference(atype);
     }
     out_val.set_type(atype);
     return true;
@@ -1383,7 +1400,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
     switch (decl->ident()) {
         case iVARIABLE:
-        case iREFERENCE:
             expr->set_lvalue(true);
             break;
         case iARRAY:
@@ -1646,6 +1662,8 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     Type* base_type = base_val.type();
     if (auto es = base_type->asEnumStruct())
         return CheckEnumStructFieldAccessExpr(expr, base_type, es, from_call);
+    if (base_type->isReference())
+        base_type = base_type->inner();
 
     auto map = base_type->asMethodmap();
     if (!map) {
@@ -1907,7 +1925,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
         case iARRAYCELL:
         case iVARIABLE:
-        case iREFERENCE:
             if (auto es = cv.type()->asEnumStruct()) {
                 val.set_constval(es->array_size());
             } else {
@@ -2148,7 +2165,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         // The rest of the code to handle default values is in DoEmit.
         ps->argv[pos] = param;
 
-        if (arg->type_info().ident == iREFERENCE ||
+        if (arg->type()->isReference() ||
             ((arg->type_info().ident == iREFARRAY || arg->type()->isEnumStruct()) &&
              !arg->type_info().is_const && arg->default_value()->array))
         {
@@ -2179,7 +2196,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             assert(!handling_this);
 
             // Always pass by reference.
-            if (val->ident == iVARIABLE || val->ident == iREFERENCE) {
+            if (val->ident == iVARIABLE) {
                 if (val->sym->is_const() && !arg->type_info().is_const) {
                     // Treat a "const" variable passed to a function with a
                     // non-const "variable argument list" as a constant here.
@@ -2199,6 +2216,21 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             break;
         case iVARIABLE:
         {
+            if (arg->type()->isReference()) {
+                assert(!handling_this);
+
+                if (!lvalue || val->ident == iARRAYCHAR) {
+                    report(param, 35) << visual_pos; // argument type mismatch
+                    return false;
+                }
+                if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
+                    report(param, 35) << visual_pos; // argument type mismatch
+                    return false;
+                }
+                checktag(arg->type()->inner(), val->type());
+                break;
+            }
+
             if (val->ident == iFUNCTN || val->ident == iARRAY || val->ident == iREFARRAY) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
@@ -2221,19 +2253,6 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 checktag(arg->type(), val->type());
             break;
         }
-        case iREFERENCE:
-            assert(!handling_this);
-
-            if (!lvalue || val->ident == iARRAYCHAR) {
-                report(param, 35) << visual_pos; // argument type mismatch
-                return false;
-            }
-            if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
-                report(param, 35) << visual_pos; // argument type mismatch
-                return false;
-            }
-            checktag(arg->type(), val->type());
-            break;
         case iREFARRAY:
             // Hack until arrays and types are unified: special case enum structs coercing to
             // arrays.
@@ -2771,12 +2790,16 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             break;
     }
 
-    if (v.type()->isInt()) {
+    Type* type = v.type();
+    if (type->isReference())
+        type = type->inner();
+
+    if (type->isInt()) {
         report(expr, 167) << "integers";
         return false;
     }
 
-    auto map = v.type()->asMethodmap();
+    auto map = type->asMethodmap();
     if (!map) {
         report(expr, 115) << "type" << v.type();
         return false;
@@ -2809,7 +2832,6 @@ bool Semantics::CheckExitStmt(ExitStmt* stmt) {
 
     switch (expr->val().ident) {
         case iEXPRESSION:
-        case iREFERENCE:
         case iVARIABLE:
         case iCONSTEXPR:
         case iARRAYCHAR:
@@ -3245,7 +3267,6 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
 
         switch (decl->ident()) {
             case iVARIABLE:
-            case iREFERENCE:
             case iARRAY:
             case iREFARRAY:
                 decl->set_is_written();
