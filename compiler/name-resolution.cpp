@@ -397,12 +397,12 @@ ConstDecl::Bind(SemaContext& sc)
 }
 
 bool VarDeclBase::Bind(SemaContext& sc) {
-    if (!sc.BindType(pos(), &type_))
-        return false;
-
     // |int x = x| should bind to outer x, not inner.
     if (init_)
         init_rhs()->Bind(sc);
+
+    if (!sc.BindType(pos(), &type_))
+        return false;
 
     if (type_.ident == iARRAY)
         ResolveArraySize(sc.sema(), this);
