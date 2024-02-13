@@ -3386,7 +3386,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
 bool IsLegacyEnumType(SymbolScope* scope, Type* type) {
     if (!type->isEnum())
         return false;
-    auto decl = FindSymbol(scope, type->nameAtom());
+    auto decl = FindSymbol(scope, type->name());
     if (!decl)
         return false;
     if (auto ed = decl->as<EnumDecl>())

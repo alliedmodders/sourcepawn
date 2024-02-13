@@ -216,7 +216,6 @@ class Type : public PoolObject
     Atom* name() const {
         return name_;
     }
-    Atom* nameAtom() const { return name_; }
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
