@@ -81,6 +81,19 @@ bool Type::canOperatorOverload() const {
     return isEnum() || isMethodmap() || isFloat() || isInt();
 }
 
+ArrayType::ArrayType(Type* inner, const PoolList<int>& dims, size_t depth)
+  : Type(nullptr, TypeKind::Array)
+{
+    inner_type_ = inner;
+    dims_ = dims.data() + depth;
+    numdim_ = dims.size() - depth;
+}
+
+int ArrayType::dim(int at) const {
+    assert(at >= 0 && at < numdim_);
+    return dims_[at];
+}
+
 TypeManager::TypeManager(CompileContext& cc)
   : cc_(cc)
 {}
@@ -122,9 +135,30 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
     return ptr;
 }
 
-void
-TypeManager::init()
-{
+ArrayType* TypeManager::defineArray(Type* element_type, const PoolList<int>& dims) {
+    size_t depth = dims.size() - 1;
+    Type* iter = element_type;
+    for (;;) {
+        if (auto cached = LookupCachedArray(iter, dims, depth); cached != nullptr) {
+            iter = cached;
+        } else {
+            iter = new ArrayType(iter, dims, depth);
+            RegisterType(iter, false);
+        }
+
+        if (!depth)
+            break;
+        depth--;
+    }
+    return iter->to<ArrayType>();
+}
+
+ArrayType* TypeManager::LookupCachedArray(Type* element_type, const PoolList<int>& dims, size_t depth) {
+    // NYI.
+    return nullptr;
+}
+
+void TypeManager::init() {
     type_int_ = defineBuiltin("int", BuiltinType::Int);
     types_.emplace(cc_.atom("_"), type_int_);
 

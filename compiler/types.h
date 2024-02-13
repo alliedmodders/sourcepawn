@@ -76,6 +76,7 @@ enum class TypeKind : uint8_t {
     Methodmap,
     Enum,
     Reference,
+    Array,
 };
 
 struct funcenum_t;
@@ -241,6 +242,7 @@ class Type : public PoolObject
     bool isFloat() const { return isBuiltin(BuiltinType::Float); }
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
+    bool isArray() const { return kind_ == TypeKind::Array; }
 
     bool canOperatorOverload() const;
 
@@ -317,7 +319,7 @@ class Type : public PoolObject
     }
 
     Type* inner() const {
-        assert(isReference());
+        assert(isReference() || isArray());
         return inner_type_;
     }
 
@@ -357,6 +359,8 @@ class Type : public PoolObject
     Atom* name_;
     int index_;
     TypeKind kind_;
+
+  protected:
     union {
         funcenum_t* funcenum_ptr_;
         MethodmapDecl* methodmap_ptr_;
@@ -365,6 +369,20 @@ class Type : public PoolObject
         BuiltinType builtin_type_;
         Type* inner_type_;
     };
+};
+
+class ArrayType : public Type {
+  public:
+    ArrayType(Type* inner, const PoolList<int>& dims, size_t depth);
+
+    int numdim() const { return numdim_; }
+    int dim(int at) const;
+
+    static bool is_a(Type* type) { return type->kind() == TypeKind::Array; }
+
+  private:
+    int numdim_;
+    const int* dims_;
 };
 
 class TypeManager
@@ -387,6 +405,7 @@ class TypeManager
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
     Type* defineReference(Type* inner);
+    ArrayType* defineArray(Type* element_type, const PoolList<int>& dims);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
@@ -404,6 +423,7 @@ class TypeManager
     Type* add(Atom* name, TypeKind kind);
     void RegisterType(Type* type, bool unique_name = true);
     Type* defineBuiltin(const char* name, BuiltinType type);
+    ArrayType* LookupCachedArray(Type* element_type, const PoolList<int>& dims, size_t depth);
 
   private:
     CompileContext& cc_;
