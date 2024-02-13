@@ -213,9 +213,7 @@ class Type : public PoolObject
   public:
     Type(Atom* name, TypeKind kind);
 
-    Atom* name() const {
-        return name_;
-    }
+    Atom* declName() const { return name_; }
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName() const;
@@ -243,6 +241,8 @@ class Type : public PoolObject
     bool isFloat() const { return isBuiltin(BuiltinType::Float); }
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
+
+    bool canOperatorOverload() const;
 
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum)

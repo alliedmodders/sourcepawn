@@ -46,7 +46,7 @@ Type::Type(Atom* name, TypeKind kind)
 const char* Type::prettyName() const {
   if (kind_ == TypeKind::Function)
     return kindName();
-  return name()->chars();
+  return declName()->chars();
 }
 
 const char*
@@ -75,6 +75,10 @@ Type::kindName() const
     default:
       return "type";
   }
+}
+
+bool Type::canOperatorOverload() const {
+    return isEnum() || isMethodmap() || isFloat() || isInt();
 }
 
 TypeManager::TypeManager(CompileContext& cc)
@@ -107,8 +111,8 @@ void TypeManager::RegisterType(Type* type, bool unique_name) {
     by_index_.emplace_back(type);
 
     if (unique_name) {
-        assert(types_.find(type->name()) == types_.end());
-        types_.emplace(type->name(), type);
+        assert(types_.find(type->declName()) == types_.end());
+        types_.emplace(type->declName(), type);
     }
 }
 
@@ -201,7 +205,7 @@ Type* TypeManager::defineReference(Type* inner) {
     if (auto it = ref_types_.find(inner); it != ref_types_.end())
         return it->second;
 
-    auto name = inner->name()->str() + "&";
+    auto name = inner->declName()->str() + "&";
     Type* type = new Type(cc_.atom(name), TypeKind::Reference);
     type->setReference(inner);
     RegisterType(type, false);

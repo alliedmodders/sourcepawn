@@ -441,7 +441,7 @@ RttiBuilder::add_enumstruct(Type* type)
     typeid_cache_.add(p, type, es_index);
 
     smx_rtti_enumstruct es = {};
-    es.name = names_->add(*cc_.atoms(), type->name());
+    es.name = names_->add(*cc_.atoms(), type->declName());
     es.first_field = es_fields_->count();
     es.size = es_decl->array_size();
     enumstructs_->add(es);
@@ -585,7 +585,7 @@ RttiBuilder::add_enum(Type* type)
 
     smx_rtti_enum entry;
     memset(&entry, 0, sizeof(entry));
-    entry.name = names_->add(*cc_.atoms(), type->name());
+    entry.name = names_->add(*cc_.atoms(), type->declName());
     enums_->add(entry);
     return index;
 }
@@ -607,7 +607,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
     uint32_t signature = type_pool_.add(bytes);
 
     smx_rtti_typedef& def = typedefs_->at(index);
-    def.name = names_->add(*cc_.atoms(), type->name());
+    def.name = names_->add(*cc_.atoms(), type->declName());
     def.type_id = MakeTypeId(signature, kTypeId_Complex);
     return index;
 }
@@ -632,7 +632,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
         encode_signature_into(bytes, iter);
 
     smx_rtti_typeset& entry = typesets_->at(index);
-    entry.name = names_->add(*cc_.atoms(), type->name());
+    entry.name = names_->add(*cc_.atoms(), type->declName());
     entry.signature = type_pool_.add(bytes);
     return index;
 }

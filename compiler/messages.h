@@ -331,4 +331,5 @@ static const char* errmsg_ex[] = {
     /*446*/ "enum structs are not allowed in legacy structs\n",
     /*447*/ "invalid use of enum struct in expression\n",
     /*448*/ "invalid enum struct initializer\n",
+    /*449*/ "cannot use type \"%s\" in an operator overload\n",
 };
