@@ -836,7 +836,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
         Type* type = typeinfo.type;
         if (type->isEnumStruct()) {
             if (is_native_)
-                report(var->pos(), 135) << type->name();
+                report(var->pos(), 135) << type;
         }
 
         /* Stack layout:
@@ -937,7 +937,12 @@ Atom* FunctionDecl::NameForOperator() {
             report(pos_, 59) << var->name();
         count++;
 
-        params.emplace_back(var->type()->name()->str());
+        if (!var->type()->canOperatorOverload()) {
+            report(pos_, 449) << var->type();
+            continue;
+        }
+
+        params.emplace_back(var->type()->declName()->str());
     }
 
     /* for '!', '++' and '--', count must be 1

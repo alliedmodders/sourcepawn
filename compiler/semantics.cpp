@@ -1323,7 +1323,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (atype->isEnumStruct() || ltype->isEnumStruct()) {
-        report(expr, 95) << atype->name();
+        report(expr, 95) << atype;
     }
     if (ltype->isReference() && !atype->isReference()) {
         if (atype->isEnumStruct()) {
@@ -1821,7 +1821,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 
     auto field_decl = expr->resolved();
     if (!field_decl) {
-        report(expr, 105) << type->name() << expr->name();
+        report(expr, 105) << type << expr->name();
         return false;
     }
 
@@ -1879,7 +1879,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     Type* type = base_val.type();
     Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
-        report(expr, 105) << type->name() << expr->name();
+        report(expr, 105) << type << expr->name();
         return false;
     }
 
@@ -3386,7 +3386,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
 bool IsLegacyEnumType(SymbolScope* scope, Type* type) {
     if (!type->isEnum())
         return false;
-    auto decl = FindSymbol(scope, type->name());
+    auto decl = FindSymbol(scope, type->declName());
     if (!decl)
         return false;
     if (auto ed = decl->as<EnumDecl>())
