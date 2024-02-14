@@ -2571,8 +2571,17 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
             out.push_back(substitute[pos + 1]);
             continue;
         }
-        if (stringize)
-            out += '"' + iter->second + '"';
+        if (stringize) {
+            out += '"';
+
+            auto arg_macro = FindMacro(cc_.atom(iter->second));
+            if (arg_macro != nullptr && !arg_macro->args)
+                out += arg_macro->substitute->str();
+            else
+                out += iter->second;
+
+            out += '"';
+        }
         else
             out += iter->second;
     }
