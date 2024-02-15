@@ -327,11 +327,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
     bool is_struct = (decl->ident() == iVARIABLE && decl->type()->isEnumStruct());
 
     if (decl->ident() == iVARIABLE && !is_struct) {
-        cell_t cells = 1;
-        if (auto es = decl->type()->asEnumStruct())
-            cells = es->array_size();
-
-        markstack(decl, MEMUSE_STATIC, cells);
+        markstack(decl, MEMUSE_STATIC, 1);
         decl->BindAddress(-current_stack_ * sizeof(cell));
 
         if (init) {
@@ -348,14 +344,9 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
                 EmitExpr(init->right());
                 __ emit(OP_PUSH_PRI);
             }
-        } else if (cells == 1) {
+        } else {
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
-        } else {
-            __ emit(OP_STACK, -(cells * sizeof(cell_t)));
-            __ emit(OP_CONST_PRI, 0);
-            __ emit(OP_ADDR_ALT, decl->addr());
-            __ emit(OP_FILL, cells * sizeof(cell_t));
         }
     } else if (decl->ident() == iARRAY || is_struct) {
         ArrayData array;
