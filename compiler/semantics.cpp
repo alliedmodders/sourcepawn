@@ -174,7 +174,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (type.ident == iARRAY || type.ident == iREFARRAY || type.type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
             return false;
-        if (decl->vclass() == sLOCAL && decl->ident() == iREFARRAY)
+        if (decl->vclass() == sLOCAL)
             pending_heap_allocation_ = true;
         return true;
     }

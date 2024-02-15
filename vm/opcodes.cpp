@@ -154,6 +154,11 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
       fprintf(fp, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
       break;
 
+    case OP_INITARRAY_PRI:
+    case OP_INITARRAY_ALT:
+      fprintf(fp, "%d %d %d %d %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
+      break;
+
     default:
       break;
   }
