@@ -149,13 +149,17 @@ class SmxAssemblyBuffer : public ByteBuffer
 
   void address(VarDeclBase* sym, regid reg) {
     if (sym->ident() == iREFARRAY || sym->type()->isReference() ||
-        (sym->type()->isEnumStruct() && sym->vclass() == sARGUMENT))
+        (sym->ident() == iARRAY && sym->vclass() == sLOCAL) ||
+        (sym->type()->isEnumStruct() && (sym->vclass() == sARGUMENT || sym->vclass() == sLOCAL)))
     {
       if (reg == sPRI)
         emit(OP_LOAD_S_PRI, sym->addr());
       else
         emit(OP_LOAD_S_ALT, sym->addr());
     } else {
+      if (sym->ident() == iARRAY) {
+        assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
+      }
       if (reg == sPRI) {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_PRI, sym->addr());

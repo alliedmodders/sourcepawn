@@ -319,9 +319,7 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
     }
 }
 
-void
-CodeGenerator::EmitLocalVar(VarDeclBase* decl)
-{
+void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
 
     bool is_struct = (decl->ident() == iVARIABLE && decl->type()->isEnumStruct());
@@ -348,66 +346,7 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
         }
-    } else if (decl->ident() == iARRAY || is_struct) {
-        ArrayData array;
-        BuildCompoundInitializer(decl, &array, 0);
-
-        cell iv_size = (cell)array.iv.size();
-        cell data_size = (cell)array.data.size() + array.zeroes;
-        cell total_size = iv_size + data_size;
-
-        markstack(decl, MEMUSE_STATIC, total_size);
-        decl->BindAddress(-cell(current_stack_ * sizeof(cell)));
-        __ emit(OP_STACK, -cell(total_size * sizeof(cell)));
-
-        cell fill_value = 0;
-        cell fill_size = 0;
-        if (!array.zeroes) {
-            // Check for a fill value as an optimization. Note that zeroes are
-            // handled by INITARRAY so we don't bother with zeroes here.
-            cell test_value = array.data[0];
-            for (size_t i = 1; i < array.data.size(); i++) {
-                if (test_value != array.data[i]) {
-                    test_value = 0;
-                    break;
-                }
-            }
-
-            if (test_value) {
-                // Note: data_size must be preserved since it includes any fills.
-                fill_value = test_value;
-                fill_size = data_size;
-                array.data.clear();
-            }
-        }
-
-        cell iv_addr = data_.dat_address();
-        data_.Add(std::move(array.iv));
-        data_.Add(std::move(array.data));
-        if (array.zeroes < 16) {
-            // For small numbers of extra zeroes, fold them into the data
-            // section.
-            data_.AddZeroes(array.zeroes);
-            array.zeroes = 0;
-        }
-
-        if (array.zeroes) {
-            assert(fill_value == 0);
-            fill_size = array.zeroes;
-        }
-
-        cell non_filled = data_size - fill_size;
-
-        // the decl keyword is deprecated, but we preserve its optimization for
-        // older plugins so we don't introduce any surprises. Note we zap the
-        // fill size *after* computing the non-fill size, since we need to
-        // compute the copy size correctly.
-        if (!decl->autozero() && fill_size && fill_value == 0)
-            fill_size = 0;
-
-        __ emit(OP_ADDR_PRI, decl->addr());
-        __ emit(OP_INITARRAY_PRI, iv_addr, iv_size, non_filled, fill_size, fill_value);
-    } else if (decl->ident() == iREFARRAY) {
+    } else if (decl->ident() == iREFARRAY || decl->ident() == iARRAY || is_struct) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
@@ -415,7 +354,40 @@ CodeGenerator::EmitLocalVar(VarDeclBase* decl)
         decl->BindAddress(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
-        if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
+        if (!init_rhs || decl->ident() == iARRAY || is_struct) {
+            ArrayData array;
+            BuildCompoundInitializer(decl, &array, 0);
+
+            cell iv_size = (cell)array.iv.size();
+            cell data_size = (cell)array.data.size() + array.zeroes;
+            cell total_size = iv_size + data_size;
+
+            TrackHeapAlloc(decl, MEMUSE_STATIC, total_size);
+
+            cell iv_addr = data_.dat_address();
+            data_.Add(std::move(array.iv));
+            data_.Add(std::move(array.data));
+
+            if (array.zeroes < 16) {
+                // For small numbers of extra zeroes, fold them into the data
+                // section.
+                data_.AddZeroes(array.zeroes);
+                array.zeroes = 0;
+            }
+
+            cell non_filled = data_size - array.zeroes;
+
+            // the decl keyword is deprecated, but we preserve its
+            // optimization for older plugins so we don't introduce any
+            // surprises. Note we zap the fill size *after* computing the
+            // non-fill size, since we need to compute the copy size correctly.
+            if (!decl->autozero() && array.zeroes)
+                array.zeroes = 0;
+
+            __ emit(OP_HEAP, total_size * sizeof(cell));
+            __ emit(OP_PUSH_ALT);
+            __ emit(OP_INITARRAY_ALT, iv_addr, iv_size, non_filled, array.zeroes, 0);
+        } else if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
             EmitExpr(ctor);
         } else if (StringExpr* ctor = init_rhs->as<StringExpr>()) {
             auto queue_size = data_.size();
@@ -1518,12 +1490,10 @@ CodeGenerator::EmitRvalue(value* lval)
         }
         default: {
             auto var = lval->sym->as<VarDeclBase>();
-            if (!var->type()->isEnumStruct()) {
-                if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
-                  __ emit(OP_LOAD_S_PRI, var->addr());
-                else
-                  __ emit(OP_LOAD_PRI, var->addr());
-            }
+            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
+              __ emit(OP_LOAD_S_PRI, var->addr());
+            else
+              __ emit(OP_LOAD_PRI, var->addr());
             break;
         }
     }
