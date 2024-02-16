@@ -517,11 +517,6 @@ bool FixedArrayValidator::CheckArgument(SymbolExpr* expr) {
         return false;
     }
 
-    // No more checks needed if we want an iREFARRAY, since iARRAYs convert
-    // implicitly.
-    if (type_.ident == iREFARRAY)
-        return true;
-
     for (int i = 0; i < type_.numdim(); i++) {
         if (type_.dim(i) && type_.dim(i) != dim[i]) {
             report(expr->pos(), 48);
