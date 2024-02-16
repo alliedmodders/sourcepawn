@@ -177,7 +177,7 @@ void
 PluginRuntime::InstallBuiltinNatives()
 {
   Environment* env = Environment::get();
-  for (size_t i = 0; i < image_->NumNatives(); i++) {
+  for (uint32_t i = 0; i < image_->NumNatives(); i++) {
     if (!float_table_[i].found)
       continue;
 
@@ -262,7 +262,7 @@ PluginRuntime::FindNativeByName(const char* name, uint32_t* index)
     return SP_ERROR_NOT_FOUND;
 
   if (index)
-    *index = idx;
+    *index = (uint32_t)idx;
 
   return SP_ERROR_NONE;
 }
@@ -340,7 +340,7 @@ PluginRuntime::GetNative(uint32_t index)
 uint32_t
 PluginRuntime::GetNativesNum()
 {
-  return image_->NumNatives();
+  return (uint32_t)image_->NumNatives();
 }
 
 int
@@ -351,7 +351,7 @@ PluginRuntime::FindPublicByName(const char* name, uint32_t* index)
     return SP_ERROR_NOT_FOUND;
 
   if (index)
-    *index = idx;
+    *index = (uint32_t)idx;
   return SP_ERROR_NONE;
 }
 
@@ -377,7 +377,7 @@ PluginRuntime::GetPublicByIndex(uint32_t index, sp_public_t** out)
 uint32_t
 PluginRuntime::GetPublicsNum()
 {
-  return image_->NumPublics();
+  return (uint32_t)image_->NumPublics();
 }
 
 int
@@ -407,7 +407,7 @@ PluginRuntime::FindPubvarByName(const char* name, uint32_t* index)
     return SP_ERROR_NOT_FOUND;
 
   if (index)
-    *index = idx;
+    *index = (uint32_t)idx;
   return SP_ERROR_NONE;
 }
 
@@ -429,7 +429,7 @@ PluginRuntime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_
 uint32_t
 PluginRuntime::GetPubVarsNum()
 {
-  return image_->NumPubvars();
+  return (uint32_t)image_->NumPubvars();
 }
 
 IPluginContext*
@@ -464,7 +464,7 @@ PluginRuntime::GetFunctionById(funcid_t func_id)
 }
 
 ScriptedInvoker*
-PluginRuntime::GetPublicFunction(size_t index)
+PluginRuntime::GetPublicFunction(uint32_t index)
 {
   assert(index < image_->NumPublics());
   ScriptedInvoker* pFunc = entrypoints_[index];
@@ -523,7 +523,7 @@ PluginRuntime::GetCodeHash()
 {
   if (!computed_code_hash_) {
     MD5 md5_pcode;
-    md5_pcode.update((const unsigned char*)code_.bytes, code_.length);
+    md5_pcode.update((const unsigned char*)code_.bytes, (unsigned int)code_.length);
     md5_pcode.finalize();
     md5_pcode.raw_digest(code_hash_);
     computed_code_hash_ = true;
@@ -536,7 +536,7 @@ PluginRuntime::GetDataHash()
 {
   if (!computed_data_hash_) {
     MD5 md5_data;
-    md5_data.update((const unsigned char*)data_.bytes, data_.length);
+    md5_data.update((const unsigned char*)data_.bytes, (unsigned int)data_.length);
     md5_data.finalize();
     md5_data.raw_digest(data_hash_);
     computed_data_hash_ = true;
@@ -621,7 +621,7 @@ PluginRuntime::PerformFullValidation()
   std::deque<cell_t> work;
 
   Environment* env = Environment::get();
-  for (size_t i = 0; i < GetPublicsNum(); i++) {
+  for (uint32_t i = 0; i < GetPublicsNum(); i++) {
     int err;
     sp_public_t* fun;
     if ((err = GetPublicByIndex(i, &fun)) != SP_ERROR_NONE) {

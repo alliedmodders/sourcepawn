@@ -55,7 +55,7 @@ bool SourceManager::Open(const token_pos_t& from, std::shared_ptr<SourceFile> fi
         return {};
     }
 
-    file->set_sources_index(opened_files_.size());
+    file->set_sources_index((uint32_t)opened_files_.size());
     opened_files_.emplace_back(file);
     return true;
 }
@@ -69,7 +69,7 @@ std::shared_ptr<SourceFile> SourceManager::Open(const std::string& name, tr::str
 
 LocationRange SourceManager::EnterFile(std::shared_ptr<SourceFile> file, const token_pos_t& from) {
     size_t loc_index;
-    if (!TrackExtents(file->size(), &loc_index)) {
+    if (!TrackExtents((uint32_t)file->size(), &loc_index)) {
         report(from, 422);
         return {};
     }
@@ -84,7 +84,7 @@ LocationRange SourceManager::EnterMacro(const token_pos_t& from, SourceLocation 
     assert(expansion_loc.valid());
 
     size_t lr_index;
-    if (!TrackExtents(text->length(), &lr_index)) {
+    if (!TrackExtents((uint32_t)text->length(), &lr_index)) {
         report(from, 422);
         return {};
     }

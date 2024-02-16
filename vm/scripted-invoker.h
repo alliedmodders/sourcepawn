@@ -53,7 +53,7 @@ class ScriptedInvoker : public IPluginFunction
   int PushCellByRef(cell_t* cell, int flags);
   int PushFloat(float number);
   int PushFloatByRef(float* number, int flags);
-  int PushArray(cell_t* inarray, unsigned int cells, int copyback);
+  int PushArray(cell_t* inarray, size_t cells, int copyback);
   int PushString(const char* string);
   int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags);
   int Execute(cell_t* result);

@@ -854,10 +854,10 @@ SmxV1Image::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const
 bool
 SmxV1Image::FindPublic(const char* name, size_t* indexp) const
 {
-  int high = publics_.length() - 1;
+  long high = (long)publics_.length() - 1;
   int low = 0;
   while (low <= high) {
-    int mid = (low + high) / 2;
+    long mid = (low + high) / 2;
     const char* candidate = names_ + publics_[mid].name;
     int diff = strcmp(candidate, name);
     if (diff == 0) {
@@ -893,10 +893,10 @@ SmxV1Image::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const
 bool
 SmxV1Image::FindPubvar(const char* name, size_t* indexp) const
 {
-  int high = pubvars_.length() - 1;
-  int low = 0;
+  long high = (long)pubvars_.length() - 1;
+  long low = 0;
   while (low <= high) {
-    int mid = (low + high) / 2;
+    long mid = (low + high) / 2;
     const char* candidate = names_ + pubvars_[mid].name;
     int diff = strcmp(candidate, name);
     if (diff == 0) {
@@ -928,11 +928,11 @@ SmxV1Image::ImageSize() const
 const char*
 SmxV1Image::LookupFile(uint32_t addr) const
 {
-  int high = debug_files_.length();
-  int low = -1;
+  long high = (long)debug_files_.length();
+  long low = -1;
 
   while (high - low > 1) {
-    int mid = (low + high) / 2;
+    long mid = (low + high) / 2;
     if (debug_files_[mid].addr <= addr)
       low = mid;
     else
@@ -1023,11 +1023,11 @@ SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset) const
 bool
 SmxV1Image::LookupLine(uint32_t addr, uint32_t* line) const
 {
-  int high = debug_lines_.length();
-  int low = -1;
+  long high = (long)debug_lines_.length();
+  long low = -1;
 
   while (high - low > 1) {
-    int mid = (low + high) / 2;
+    long mid = (low + high) / 2;
     if (debug_lines_[mid].addr <= addr)
       low = mid;
     else

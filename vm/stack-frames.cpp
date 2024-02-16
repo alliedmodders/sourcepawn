@@ -126,7 +126,7 @@ InterpFrameIterator::cip() const
   const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ivk_->cip_);
   assert(ptr >= code.bytes && ptr < code.bytes + code.length);
 
-  return ptr - code.bytes;
+  return (cell_t)(ptr - code.bytes);
 }
 
 uint32_t
@@ -189,7 +189,7 @@ cell_t
 JitFrameIterator::function_cip() const
 {
   assert(cur_frame_->frame_type == JitFrameType::Scripted);
-  return cur_frame_->function_id;
+  return (cell_t)cur_frame_->function_id;
 }
 
 cell_t
@@ -216,7 +216,7 @@ uint32_t
 JitFrameIterator::native_index() const
 {
   assert(type() == FrameType::Native);
-  return GetExitFramePayload(cur_frame_->function_id);
+  return (cell_t)GetExitFramePayload(cur_frame_->function_id);
 }
 
 FrameIterator::FrameIterator()

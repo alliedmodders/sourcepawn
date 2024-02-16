@@ -1430,7 +1430,7 @@ int Lexer::LexInjectedToken() {
 }
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
-    uint32_t offset = state_.pos - state_.start;
+    uint32_t offset = (uint32_t)(state_.pos - state_.start);
     if (!state_.macro)
         *pos = token_pos_t(state_.loc_range.FilePos(offset), state_.tokline);
     else

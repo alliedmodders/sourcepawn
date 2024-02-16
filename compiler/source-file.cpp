@@ -149,14 +149,14 @@ bool SourceFile::OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* c
     ComputeLineExtents();
 
     if (offset == data_.size()) {
-        *line = line_extents_.size();
+        *line = (uint32_t)line_extents_.size();
         if (col)
             *col = 0;
         return true;
     }
 
     uint32_t lower = 0;
-    uint32_t upper = line_extents_.size();
+    uint32_t upper = (uint32_t)line_extents_.size();
     while (lower < upper) {
         uint32_t index = (lower + upper) / 2;
         uint32_t line_start = line_extents_[index];
@@ -168,7 +168,7 @@ bool SourceFile::OffsetToLineAndCol(uint32_t offset, uint32_t* line, uint32_t* c
         // The range should be (start, end].
         uint32_t line_end = (index < line_extents_.size() - 1)
                             ? line_extents_[index + 1]
-                            : data_.size();
+                            : (uint32_t)data_.size();
         if (offset >= line_end) {
             lower = index + 1;
             continue;
@@ -196,7 +196,7 @@ bool SourceFile::OffsetOfLine(uint32_t line, uint32_t* offset) {
         return false;
 
     if (line_index == line_extents_.size())
-        *offset = data_.size();
+        *offset = (uint32_t)data_.size();
     else
         *offset = line_extents_[line_index];
     return true;
@@ -211,7 +211,7 @@ tr::string SourceFile::GetLine(uint32_t line) {
 
     uint32_t end;
     if (!OffsetOfLine(line + 1, &end))
-        end = data_.size();
+        end = (uint32_t)data_.size();
 
     return data_.substr(offset, end - offset);
 }

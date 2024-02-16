@@ -60,7 +60,7 @@ CompiledFunction::FindCipByPc(void* pc)
   if (uintptr_t(pc) < uintptr_t(code_.address()))
     return kInvalidCip;
 
-  uint32_t pcoffs = intptr_t(pc) - intptr_t(code_.address());
+  uint32_t pcoffs = (uint32_t)(intptr_t(pc) - intptr_t(code_.address()));
   if (pcoffs > code_.bytes())
     return kInvalidCip;
 

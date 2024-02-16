@@ -74,7 +74,7 @@ class PluginRuntime
   virtual unsigned char* GetDataHash() override;
   void SetNames(const char* fullname, const char* name);
   unsigned GetNativeReplacement(size_t index);
-  ScriptedInvoker* GetPublicFunction(size_t index);
+  ScriptedInvoker* GetPublicFunction(uint32_t index);
   int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags, void* data) override;
   int UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
                                 void* data) override;

@@ -166,7 +166,7 @@ class ICallable
      * @param flags    Whether or not changes should be copied back to the input array.
      * @return      Error code, if any.
      */
-    virtual int PushArray(cell_t* inarray, unsigned int cells, int flags = 0) = 0;
+    virtual int PushArray(cell_t* inarray, size_t cells, int flags = 0) = 0;
 
     /**
      * @brief Pushes a string onto the current call.
@@ -740,7 +740,7 @@ class IPluginContext
      * @param local_addr  Will be filled with data offset to heap.
      * @param phys_addr    Physical address to heap memory.
      */
-    virtual int HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) = 0;
+    virtual int HeapAlloc(size_t cells, cell_t* local_addr, cell_t** phys_addr) = 0;
 
     /**
      * @brief Pops a heap address off the heap stack.  Use this to free memory allocated with

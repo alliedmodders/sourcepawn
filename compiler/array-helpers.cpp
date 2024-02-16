@@ -199,7 +199,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
             // analysis.
             return;
         }
-        SetRankSize(expr, rank, expr->text()->length() + 1);
+        SetRankSize(expr, rank, (int)expr->text()->length() + 1);
         return;
     }
 
@@ -213,7 +213,7 @@ ArraySizeResolver::ResolveRank(int rank, Expr* init)
     if (!type_->dim[rank] && expr->ellipses())
         report(expr->pos(), 41);
 
-    SetRankSize(expr, rank, expr->exprs().size());
+    SetRankSize(expr, rank, (int)expr->exprs().size());
 
     for (const auto& child : expr->exprs())
         ResolveRank(rank + 1, child);
@@ -411,7 +411,7 @@ class FixedArrayValidator final
     token_pos_t pos_;
     Expr* init_;
     const typeinfo_t& type_;
-    unsigned total_cells_ = 0;
+    size_t total_cells_ = 0;
     Type* es_;
 };
 
@@ -579,7 +579,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
             return false;
         }
 
-        auto cells = char_array_cells(str->text()->length() + 1);
+        auto cells = char_array_cells((cell)str->text()->length() + 1);
         if (!AddCells(cells))
             return false;
 
@@ -651,7 +651,7 @@ FixedArrayValidator::ValidateRank(int rank, Expr* init)
         prev1 = ke::Some(v.constval());
     }
 
-    cell ncells = rank_size ? rank_size : array->exprs().size();
+    cell ncells = rank_size ? rank_size : (cell)array->exprs().size();
     if (!AddCells(ncells))
         return false;
 
@@ -733,7 +733,7 @@ FixedArrayValidator::ValidateEnumStruct(Expr* init)
 bool
 FixedArrayValidator::AddCells(size_t ncells)
 {
-    if (!ke::IsUintAddSafe<uint32_t>(total_cells_, ncells)) {
+    if (!ke::IsUintAddSafe<size_t>(total_cells_, ncells)) {
         report(pos_, 52);
         return false;
     }
@@ -891,7 +891,7 @@ class ArrayEmitter final
 
     size_t AddString(StringExpr* expr);
     void AddInlineArray(symbol* field, ArrayExpr* expr);
-    void EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellipses,
+    void EmitPadding(int rank_size, int tag, size_t emitted, bool ellipses,
                      const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2);
 
   private:
@@ -942,7 +942,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
             cell addr = Emit(rank + 1, child);
             iv_[start + i] = addr;
         }
-        return start * sizeof(cell);
+        return (cell)start * sizeof(cell);
     }
 
     size_t start = data_size();
@@ -1002,7 +1002,7 @@ ArrayEmitter::Emit(int rank, Expr* init)
 
     EmitPadding(type_.dim[rank], type_.tag(), emitted, ellipses, prev1, prev2);
 
-    return (start * sizeof(cell)) | kDataFlag;
+    return (cell)(start * sizeof(cell)) | kDataFlag;
 }
 
 void
@@ -1022,7 +1022,7 @@ ArrayEmitter::AddInlineArray(symbol* field, ArrayExpr* array)
 }
 
 void
-ArrayEmitter::EmitPadding(size_t rank_size, int tag, size_t emitted, bool ellipses,
+ArrayEmitter::EmitPadding(int rank_size, int tag, size_t emitted, bool ellipses,
                           const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2)
 {
     // Pad remainder to zeroes if the array was explicitly sized.
@@ -1082,7 +1082,7 @@ BuildArrayInitializer(const typeinfo_t& type, Expr* init, ArrayData* array)
 
     array->iv = std::move(emitter.iv());
     array->data = std::move(emitter.data());
-    array->zeroes = emitter.pending_zeroes();
+    array->zeroes = (uint32_t)emitter.pending_zeroes();
 }
 
 void

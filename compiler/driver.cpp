@@ -156,7 +156,11 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
-        hwndFinish = (HWND)atoi(opt_hwnd.value().c_str());
+#if defined _WIN64
+        hwndFinish = (HWND)std::stoull(opt_hwnd.value().c_str());
+#else
+        hwndFinish = (HWND)std::stoi(opt_hwnd.value().c_str());
+#endif
         if (!IsWindow(hwndFinish))
             hwndFinish = (HWND)0;
     }

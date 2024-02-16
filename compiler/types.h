@@ -210,7 +210,7 @@ struct structarg_t : public PoolObject
 
     typeinfo_t type;
     Atom* name;
-    unsigned int offs;
+    size_t offs;
     int index;
 };
 

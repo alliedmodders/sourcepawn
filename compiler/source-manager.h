@@ -112,8 +112,8 @@ struct LocationRange
         if (!valid())
             return 0;
         if (is_macro())
-            return text_->length();
-        return file_->size();
+            return (uint32_t)text_->length();
+        return (uint32_t)file_->size();
     }
 
     bool owns(const SourceLocation& loc) const {

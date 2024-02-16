@@ -285,7 +285,7 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_PUSH4_C:
   case OP_PUSH5_C:
   {
-    size_t n = 1;
+    uint32_t n = 1;
     if (op >= OP_PUSH2_C)
       n = ((op - OP_PUSH2_C) / 4) + 2;
 
@@ -299,11 +299,11 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_PUSH4:
   case OP_PUSH5:
   {
-    size_t n = 1;
+    uint32_t n = 1;
     if (op >= OP_PUSH2)
       n = ((op - OP_PUSH2) / 4) + 2;
     
-    for (size_t i = 0; i < n; i++) {
+    for (uint32_t i = 0; i < n; i++) {
       cell_t offset = readCell();
       if (!verifyDatOffset(offset))
         return false;
@@ -317,11 +317,11 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_PUSH4_S:
   case OP_PUSH5_S:
   {
-    size_t n = 1;
+    uint32_t n = 1;
     if (op >= OP_PUSH2_S)
       n = ((op - OP_PUSH2_S) / 4) + 2;
 
-    for (size_t i = 0; i < n; i++) {
+    for (uint32_t i = 0; i < n; i++) {
       cell_t offset = readCell();
       if (!verifyStackOffset(offset))
         return false;
@@ -335,11 +335,11 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_PUSH4_ADR:
   case OP_PUSH5_ADR:
   {
-    size_t n = 1;
+    uint32_t n = 1;
     if (op >= OP_PUSH2_ADR)
       n = ((op - OP_PUSH2_ADR) / 4) + 2;
 
-    for (size_t i = 0; i < n; i++) {
+    for (uint32_t i = 0; i < n; i++) {
       cell_t offset = readCell();
       if (!verifyStackOffset(offset))
         return false;

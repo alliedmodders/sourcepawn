@@ -144,7 +144,7 @@ Environment::DisableProfiling()
 }
 
 bool
-Environment::InstallWatchdogTimer(int timeout_ms)
+Environment::InstallWatchdogTimer(size_t timeout_ms)
 {
   return watchdog_timer_->Initialize(timeout_ms);
 }

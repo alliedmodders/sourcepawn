@@ -64,7 +64,7 @@ class Environment : public ISourcePawnEnvironment
   // Access the current Environment.
   static Environment* get();
 
-  bool InstallWatchdogTimer(int timeout_ms);
+  bool InstallWatchdogTimer(size_t timeout_ms);
 
   void EnterExceptionHandlingScope(ExceptionHandler* handler) override;
   void LeaveExceptionHandlingScope(ExceptionHandler* handler) override;

@@ -93,7 +93,7 @@ class PcodeReader
     return insn_begin_;
   }
   cell_t cip_offset() const {
-    return (cip_ - code_) * sizeof(cell_t);
+    return (cell_t)((cip_ - code_) * sizeof(cell_t));
   }
 
   void jump(cell_t offset) {

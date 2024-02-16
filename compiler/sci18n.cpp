@@ -48,7 +48,9 @@
 #include "errors.h"
 #include "sc.h"
 
+#ifndef _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 #define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+#endif
 
 #if defined(__clang__)
 # pragma clang diagnostic push

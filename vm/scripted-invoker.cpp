@@ -107,7 +107,7 @@ ScriptedInvoker::PushFloatByRef(float* number, int flags)
 }
 
 int
-ScriptedInvoker::PushArray(cell_t* inarray, unsigned int cells, int copyback)
+ScriptedInvoker::PushArray(cell_t* inarray, size_t cells, int copyback)
 {
   if (m_curparam >= SP_MAX_EXEC_PARAMS)
   {
@@ -118,7 +118,7 @@ ScriptedInvoker::PushArray(cell_t* inarray, unsigned int cells, int copyback)
 
   info->flags = inarray ? copyback : 0;
   info->marked = true;
-  info->size = cells;
+  info->size = (ucell_t)cells;
   info->str.is_sz = false;
   info->orig_addr = inarray;
 
@@ -150,7 +150,7 @@ ScriptedInvoker::_PushString(const char* string, int sz_flags, int cp_flags, siz
   info->marked = true;
   info->orig_addr = (cell_t*)string;
   info->flags = cp_flags;
-  info->size = len;
+  info->size = (ucell_t)len;
   info->str.sz_flags = sz_flags;
   info->str.is_sz = true;
 

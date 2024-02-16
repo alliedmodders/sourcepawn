@@ -46,8 +46,8 @@ PluginContext::PluginContext(PluginRuntime* pRuntime)
     mem_size_ = data_size_ + kMinHeapSize;
   assert(ke::IsAligned(mem_size_, sizeof(cell_t)));
 
-  hp_ = data_size_;
-  sp_ = mem_size_ - sizeof(cell_t);
+  hp_ = cell_t(data_size_);
+  sp_ = cell_t(mem_size_ - sizeof(cell_t));
   stp_ = sp_;
   frm_ = sp_;
   hp_scope_ = -1;
@@ -89,10 +89,9 @@ PluginContext::Initialize()
 }
 
 int
-PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr)
+PluginContext::HeapAlloc(size_t cells, cell_t* local_addr, cell_t** phys_addr)
 {
   cell_t* addr;
-  ucell_t realmem;
 
 #if 0
   if (cells > CELLBOUNDMAX)
@@ -103,7 +102,7 @@ PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_a
   assert(cells < CELLBOUNDMAX);
 #endif
 
-  realmem = cells * sizeof(cell_t);
+  ucell_t realmem = (ucell_t)(cells * sizeof(cell_t));
 
   /**
    * Check if the space between the heap and stack is sufficient.
@@ -704,7 +703,8 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero)
     return SP_ERROR_ARRAY_TOO_BIG;
 
   uint32_t new_hp = hp_ + bytes;
-  if (new_hp >= sp_ - STACK_MARGIN)
+  cell_t cmp = (sp_ - STACK_MARGIN);
+  if (cmp >= 0 && new_hp >= (uint32_t)cmp)
     return SP_ERROR_HEAPLOW;
 
   cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);

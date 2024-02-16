@@ -392,13 +392,13 @@ Block::unlink()
 uint32_t
 Block::startPc() const
 {
-  return start_ - graph_.rt()->code().bytes;
+  return (uint32_t)(start_ - graph_.rt()->code().bytes);
 }
 
 uint32_t
 Block::endPc() const
 {
-  return end_ - graph_.rt()->code().bytes;
+  return (uint32_t)(end_ - graph_.rt()->code().bytes);
 }
 
 } // namespace sp

@@ -1425,7 +1425,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
     }
 
     auto& val = array->val();
-    val.set_array(iARRAY, array->exprs().size());
+    val.set_array(iARRAY, (int)array->exprs().size());
     val.tag = lasttag;
     return true;
 }

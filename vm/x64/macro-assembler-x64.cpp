@@ -38,7 +38,7 @@ MacroAssembler::leaveFrame()
 void
 MacroAssembler::enterExitFrame(ExitFrameType type, uintptr_t payload)
 {
-  enterFrame(JitFrameType::Exit, EncodeExitFrameId(type, payload));
+  enterFrame(JitFrameType::Exit, (uint32_t)EncodeExitFrameId(type, payload));
   movq(AddressOperand(Environment::get()->addressOfExit()), rbp);
 }
 

@@ -304,8 +304,8 @@ RttiBuilder::build_debuginfo()
               });
 
     // Finish up debug header statistics.
-    dbg_info_->header().num_files = dbg_files_->count();
-    dbg_info_->header().num_lines = dbg_lines_->count();
+    dbg_info_->header().num_files = (uint32_t)dbg_files_->count();
+    dbg_info_->header().num_lines = (uint32_t)dbg_lines_->count();
     dbg_info_->header().num_syms = 0;
     dbg_info_->header().num_arrays = 0;
 }
@@ -410,7 +410,7 @@ RttiBuilder::add_method(symbol* sym)
 {
     assert(!sym->unused());
 
-    uint32_t index = methods_->count();
+    uint32_t index = (uint32_t)methods_->count();
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(sym->nameAtom());
     method.pcode_start = sym->addr();
@@ -422,7 +422,7 @@ RttiBuilder::add_method(symbol* sym)
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
-    debug.first_local = dbg_locals_->count();
+    debug.first_local = (uint32_t)dbg_locals_->count();
 
     for (auto& iter : *sym->function()->dbgstrs) {
         const char* chars = iter.c_str();
@@ -457,12 +457,12 @@ RttiBuilder::add_enumstruct(Type* type)
         return p->value;
 
     symbol* sym = type->asEnumStruct();
-    uint32_t es_index = enumstructs_->count();
+    uint32_t es_index = (uint32_t)enumstructs_->count();
     typeid_cache_.add(p, type, es_index);
 
     smx_rtti_enumstruct es = {};
     es.name = names_->add(*cc_.atoms(), type->name());
-    es.first_field = es_fields_->count();
+    es.first_field = (uint32_t)es_fields_->count();
     es.size = sym->addr();
     enumstructs_->add(es);
 
@@ -502,7 +502,7 @@ RttiBuilder::add_struct(Type* type)
     if (p.found())
         return p->value;
 
-    uint32_t struct_index = classdefs_->count();
+    uint32_t struct_index = (uint32_t)classdefs_->count();
     typeid_cache_.add(p, type, struct_index);
 
     pstruct_t* ps = type->as<pstruct_t>();
@@ -511,7 +511,7 @@ RttiBuilder::add_struct(Type* type)
     memset(&classdef, 0, sizeof(classdef));
     classdef.flags = kClassDefType_Struct;
     classdef.name = names_->add(*cc_.atoms(), ps->name());
-    classdef.first_field = fields_->count();
+    classdef.first_field = (uint32_t)fields_->count();
     classdefs_->add(classdef);
 
     // Pre-reserve space in case we recursively add structs.
@@ -610,7 +610,7 @@ RttiBuilder::add_enum(Type* type)
     if (p.found())
         return p->value;
 
-    uint32_t index = enums_->count();
+    uint32_t index = (uint32_t)enums_->count();
     typeid_cache_.add(p, type, index);
 
     smx_rtti_enum entry;
@@ -628,7 +628,7 @@ RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
         return p->value;
 
     // Reserve slot beforehand in case the type is recursive.
-    uint32_t index = typedefs_->count();
+    uint32_t index = (uint32_t)typedefs_->count();
     typeid_cache_.add(p, type, index);
     typedefs_->add();
 
@@ -650,7 +650,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
         return p->value;
 
     // Reserve slot beforehand in case the type is recursive.
-    uint32_t index = typesets_->count();
+    uint32_t index = (uint32_t)typesets_->count();
     typeid_cache_.add(p, type, index);
     typesets_->add();
 
@@ -1009,8 +1009,8 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();
 
     if (compression_level) {
-        size_t region_size = header->imagesize - header->dataoffs;
-        size_t zbuf_max = compressBound(region_size);
+        uLong region_size = header->imagesize - header->dataoffs;
+        uLong zbuf_max = compressBound(region_size);
         std::unique_ptr<Bytef[]> zbuf = std::make_unique<Bytef[]>(zbuf_max);
 
         uLong new_disksize = zbuf_max;

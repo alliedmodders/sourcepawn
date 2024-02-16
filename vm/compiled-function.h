@@ -62,7 +62,7 @@ class CompiledFunction
     return code_offset_;
   }
   uint32_t NumLoopEdges() const {
-    return edges_->size();
+    return (uint32_t)edges_->size();
   }
   LoopEdge& GetLoopEdge(size_t i) {
     return edges_->at(i);

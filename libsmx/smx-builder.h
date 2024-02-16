@@ -213,7 +213,7 @@ class SmxNameTable : public SmxSection
     if (iter != name_table_.end())
       return iter->second;
 
-    if (!ke::IsUint32AddSafe(buffer_size_, str->length() + 1)) {
+    if (!ke::IsUint32AddSafe(buffer_size_, (uint32_t)str->length() + 1)) {
       fprintf(stderr, "out of memory in nametable\n");
       abort();
     }
@@ -221,17 +221,17 @@ class SmxNameTable : public SmxSection
     uint32_t index = buffer_size_;
     name_table_.emplace(str, index);
     names_.push_back(str);
-    buffer_size_ += str->length() + 1;
+    buffer_size_ += (uint32_t)str->length() + 1;
     return index;
   }
 
   bool write(ISmxBuffer* buf) override;
   size_t length() const override {
-    return buffer_size_;
+    return (size_t)buffer_size_;
   }
 
  private:
-  std::unordered_map<Atom*, size_t> name_table_;
+  std::unordered_map<Atom*, uint32_t> name_table_;
   std::vector<Atom*> names_;
   uint32_t buffer_size_;
 };
