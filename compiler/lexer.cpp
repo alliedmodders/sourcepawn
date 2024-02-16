@@ -33,6 +33,8 @@
 #include <string>
 #include <unordered_set>
 #include <utility>
+#include <iomanip>
+#include <sstream>
 
 #if defined __linux__ || defined __FreeBSD__ || defined __OpenBSD__ || defined DARWIN
 #    include <unistd.h>
@@ -2572,15 +2574,11 @@ std::string Lexer::PerformMacroSubstitution(MacroEntry* macro,
             continue;
         }
         if (stringize) {
-            out += '"';
-
             auto arg_macro = FindMacro(cc_.atom(iter->second));
             if (arg_macro != nullptr && !arg_macro->args)
-                out += arg_macro->substitute->str();
+                out += QuoteString(arg_macro->substitute->str());
             else
-                out += iter->second;
-
-            out += '"';
+                out += QuoteString(iter->second);
         }
         else
             out += iter->second;
@@ -2661,6 +2659,12 @@ void Lexer::InjectCachedTokens(TokenCache* cache) {
 void Lexer::DiscardCachedTokens() {
     using_injected_tokens_ = false;
     injected_token_stream_.clear();
+}
+
+std::string QuoteString(const std::string& string) {
+	std::stringstream ss;
+	ss << std::quoted(string);
+	return ss.str();
 }
 
 } // namespace sp
