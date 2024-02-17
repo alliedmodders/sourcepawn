@@ -408,8 +408,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
     bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
-    // REFARRAY is invalid in both file and local static contexts.
-    if (type_.ident == iARRAY && !type_.isFixedArray()) {
+    if (type_.ident == iARRAY && (!type_.has_postdims || implicit_dynamic_array())) {
         if (vclass_ == sGLOBAL)
             error(pos_, 162);
         else if (vclass_ == sSTATIC)

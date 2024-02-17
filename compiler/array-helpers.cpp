@@ -49,6 +49,7 @@ class ArraySizeResolver
     Semantics* sema_;
     TypeManager* types_;
     const token_pos_t& pos_;
+    VarDeclBase* decl_ = nullptr;
     typeinfo_t* type_;
     Expr* initializer_;
     std::vector<int> computed_;
@@ -64,6 +65,7 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, VarDeclBase* decl)
   : sema_(sema),
     types_(sema->cc().types()),
     pos_(decl->pos()),
+    decl_(decl),
     type_(decl->mutable_type_info()),
     initializer_(decl->init_rhs()),
     computed_(type_->numdim()),
@@ -107,7 +109,7 @@ void ArraySizeResolver::Resolve() {
 
     // If this is an implicit dynamic arraay (old syntax), the initializer
     // cannot be used for computing a size.
-    if (type_->implicit_dynamic_array)
+    if (decl_ && decl_->implicit_dynamic_array())
         return;
 
     // Traverse the initializer if present. For arguments, initializers
@@ -238,9 +240,7 @@ ArraySizeResolver::SetRankSize(Expr* expr, int rank, int size)
     }
 }
 
-bool
-ArraySizeResolver::ResolveDimExprs()
-{
+bool ArraySizeResolver::ResolveDimExprs() {
     for (int i = 0; i < type_->numdim(); i++) {
         Expr* expr = type_->get_dim_expr(i);
         if (!expr) {
@@ -298,7 +298,8 @@ ArraySizeResolver::ResolveDimExprs()
             }
             assert(type_->dim(i) == 0);
 
-            type_->implicit_dynamic_array = true;
+            // sLOCAL guarantees we have a decl.
+            decl_->set_implicit_dynamic_array();
         } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym &&
                    v.sym->as<EnumDecl>())
         {
@@ -361,10 +362,10 @@ ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int 
     resolver.Resolve();
 }
 
-class FixedArrayValidator final
+class ArrayValidator final
 {
   public:
-    FixedArrayValidator(Semantics* sema, VarDeclBase* decl)
+    ArrayValidator(Semantics* sema, VarDeclBase* decl)
       : sema_(sema),
         types_(sema->cc().types()),
         decl_(decl),
@@ -375,7 +376,7 @@ class FixedArrayValidator final
     {
     }
 
-    FixedArrayValidator(Semantics* sema, const typeinfo_t& type, Expr* init)
+    ArrayValidator(Semantics* sema, const typeinfo_t& type, Expr* init)
       : sema_(sema),
         types_(sema->cc().types()),
         decl_(nullptr),
@@ -388,6 +389,7 @@ class FixedArrayValidator final
     bool Validate();
 
   private:
+    bool ValidateInitializer();
     bool ValidateRank(int rank, Expr* init);
     bool ValidateEnumStruct(Expr* init);
     bool AddCells(size_t ncells);
@@ -405,44 +407,32 @@ class FixedArrayValidator final
 };
 
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init) {
-    FixedArrayValidator av(sema, type, init);
+    ArrayValidator av(sema, type, init);
 
     AutoCountErrors errors;
     return av.Validate() && errors.ok();
 }
 
-bool FixedArrayValidator::Validate() {
+bool ArrayValidator::Validate() {
     es_ = type_.type->asEnumStruct();
 
     if (init_) {
-        // As a special exception, array arguments can be initialized with a global
-        // reference.
-        if (decl_ && decl_->vclass() == sARGUMENT) {
-            if (auto expr = init_->as<SymbolExpr>())
-                return CheckArgument(expr);
-        }
-        if (type_.numdim() == 0) {
-            assert(es_);
-            if (auto array = init_->as<ArrayExpr>()) {
-                ValidateEnumStruct(array);
+        if (!ValidateInitializer())
+            return false;
+    } else {
+        // The array has no initializer, which means it was declared as a fixed
+        // size array.
+        for (int i = 0; i < type_.numdim(); i++) {
+            if (!type_.dim(i) && decl_ && decl_->vclass() != sARGUMENT) {
+                report(decl_->pos(), 46) << decl_->name()->chars();
                 return true;
             }
-            report(448);
-            return false;
-        } else {
-            if (!ValidateRank(0, init_))
-                return false;
-        }
-        return true;
-    }
-
-    for (int i = 0; i < type_.numdim(); i++) {
-        if (!type_.dim(i) && decl_ && decl_->vclass() != sARGUMENT) {
-            report(decl_->pos(), 46) << decl_->name()->chars();
-            return true;
         }
     }
 
+    // Check that the declared size does not overflow when multiplied by
+    // sizeof(cell_t).
+    //
     // Quick, non-recursive computation. For example take [3][4][5]:
     //   3 + (3 * 4) + (3 * 4 * 5)
     //
@@ -466,6 +456,50 @@ bool FixedArrayValidator::Validate() {
     return true;
 }
 
+bool ArrayValidator::ValidateInitializer() {
+    // As a special exception, array arguments can be initialized with a global
+    // reference.
+    if (decl_ && decl_->vclass() == sARGUMENT) {
+        if (auto expr = init_->as<SymbolExpr>())
+            return CheckArgument(expr);
+    }
+
+    // Handle enum structs here (gross, yes).
+    if (type_.numdim() == 0) {
+        assert(es_);
+        if (auto array = init_->as<ArrayExpr>()) {
+            ValidateEnumStruct(array);
+            return true;
+        }
+        report(448);
+        return false;
+    }
+
+    // Check for dynamic initializers.
+    if (auto ctor = init_->as<NewArrayExpr>()) {
+        for (int i = 0; i < type_.numdim(); i++)
+            assert(!type_.dim(i) || (decl_ && decl_->implicit_dynamic_array()));
+
+        if (ctor->type() != type_.type) {
+            report(ctor->pos(), 164) << ctor->type() << type_.type;
+            return false;
+        }
+
+        size_t expected_dims = type_.numdim();
+        if (expected_dims != ctor->exprs().size()) {
+            report(436) << (int)expected_dims << (int)ctor->exprs().size();
+            return false;
+        }
+
+        if (!sema_->CheckNewArrayExprForArrayInitializer(ctor))
+            return false;
+        return true;
+    }
+
+    // Probably not a dynamic array, check for a fixed initializer.
+    return ValidateRank(0, init_);
+}
+
 cell CalcArraySize(const typeinfo_t& type) {
     cell size = 0;
     cell last_size = 1;
@@ -486,7 +520,7 @@ cell CalcArraySize(const typeinfo_t& type) {
     return size;
 }
 
-bool FixedArrayValidator::CheckArgument(SymbolExpr* expr) {
+bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     Decl* decl = expr->decl();
     if (!decl)
         return false;
@@ -524,7 +558,7 @@ bool FixedArrayValidator::CheckArgument(SymbolExpr* expr) {
     return true;
 }
 
-bool FixedArrayValidator::ValidateRank(int rank, Expr* init) {
+bool ArrayValidator::ValidateRank(int rank, Expr* init) {
     if (rank < type_.numdim() - 1) {
         ArrayExpr* array = init->as<ArrayExpr>();
         if (!array) {
@@ -563,11 +597,13 @@ bool FixedArrayValidator::ValidateRank(int rank, Expr* init) {
         return true;
     }
 
-    cell rank_size;
-    if (type_.type->isChar())
-        rank_size = char_array_cells(type_.dim(rank));
-    else
-        rank_size = type_.dim(rank);
+    cell rank_size = 0;
+    if (int dim_size = type_.dim(rank)) {
+        if (type_.type->isChar())
+            rank_size = char_array_cells(dim_size);
+        else
+            rank_size = dim_size;
+    }
 
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
@@ -575,7 +611,7 @@ bool FixedArrayValidator::ValidateRank(int rank, Expr* init) {
         // compatibility:
         //
         //    int x[10] = 0;
-        if (es_ || !decl_ || type_.numdim() != 1) {
+        if (es_ || !decl_ || type_.numdim() != 1 || !type_.has_postdims) {
             report(init->pos(), 47);
             return false;
         }
@@ -605,9 +641,16 @@ bool FixedArrayValidator::ValidateRank(int rank, Expr* init) {
         return true;
     }
 
-    if (rank_size && rank_size < (cell)array->exprs().size()) {
-        report(init->pos(), 47);
-        return false;
+    if (rank_size) {
+        if (rank_size < (cell)array->exprs().size()) {
+            report(init->pos(), 47);
+            return false;
+        }
+    } else {
+        if (!type_.has_postdims && decl_ && decl_->vclass() != sARGUMENT) {
+            report(init->pos(), 160);
+            return false;
+        }
     }
 
     ke::Maybe<cell> prev1, prev2;
@@ -660,7 +703,7 @@ bool FixedArrayValidator::ValidateRank(int rank, Expr* init) {
     return true;
 }
 
-bool FixedArrayValidator::ValidateEnumStruct(Expr* init) {
+bool ArrayValidator::ValidateEnumStruct(Expr* init) {
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
         report(init->pos(), 47);
@@ -708,9 +751,7 @@ bool FixedArrayValidator::ValidateEnumStruct(Expr* init) {
     return true;
 }
 
-bool
-FixedArrayValidator::AddCells(size_t ncells)
-{
+bool ArrayValidator::AddCells(size_t ncells) {
     if (!ke::IsUintAddSafe<uint32_t>(total_cells_, ncells)) {
         report(pos_, 52);
         return false;
@@ -724,9 +765,7 @@ FixedArrayValidator::AddCells(size_t ncells)
     return true;
 }
 
-bool
-Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
-{
+bool Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl) {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type_info();
     assert(!type->type->asEnumStruct());
@@ -753,83 +792,27 @@ Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
         exprs.emplace_back(expr);
     }
 
+    assert(!decl->init_rhs());
+
     auto init = new NewArrayExpr(decl->pos(), ti, exprs);
-    if (!CheckNewArrayExprForArrayInitializer(init))
-        return false;
-    if (!decl->init_rhs())
-        decl->set_init(init);
+    decl->set_init(init);
     if (!decl->autozero())
         init->set_no_autozero();
-
-    // Since we could have added EmitOnlyExprs during analysis, make sure
-    // we don't analyze these again. This is a pretty gross hack we should
-    // look to remove in the future.
-    init->set_analysis_result(true);
     return true;
 }
 
 bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     AutoCountErrors errors;
-    const auto& type = decl->type_info();
 
-    if (type.isFixedArray() ||
-        (type.ident == iVARIABLE && type.type->isEnumStruct()) ||
-        decl->vclass() == sARGUMENT)
-    {
-        FixedArrayValidator validator(this, decl);
-        if (!validator.Validate() || !errors.ok())
+    if (decl->implicit_dynamic_array()) {
+        assert(!decl->init_rhs());
+        if (!AddImplicitDynamicInitializer(decl))
             return false;
-        return true;
     }
 
-    // The array is dynamic, and either a declaration like:
-    //   int[] x
-    //
-    // Or:
-    //   new x[y]
-
-    Expr* init = decl->init_rhs();
-    if (!init) {
-        if (decl->vclass() == sARGUMENT)
-            return true;
-
-        if (type.is_new) {
-            report(decl->pos(), 101);
-            return false;
-        }
-        return AddImplicitDynamicInitializer(decl);
-    }
-
-    if (!CheckExprForArrayInitializer(init))
+    ArrayValidator validator(this, decl);
+    if (!validator.Validate() || !errors.ok())
         return false;
-
-    if (type.is_new && type.isCharArray()) {
-        if (init->as<StringExpr>())
-            return true;
-    }
-
-    if (decl->vclass() == sARGUMENT) {
-        report(init->pos(), 185);
-        return false;
-    }
-
-    NewArrayExpr* ctor = init->as<NewArrayExpr>();
-    if (!ctor) {
-        report(init->pos(), 160);
-        return false;
-    }
-
-    if (ctor->type() != type.type) {
-        report(ctor->pos(), 164) << ctor->type() << type.type;
-        return false;
-    }
-
-    size_t expected_dims = type.numdim();
-    if (expected_dims != ctor->exprs().size()) {
-        report(436) << (int)expected_dims << (int)ctor->exprs().size();
-        return false;
-    }
-
     return true;
 }
 

@@ -192,7 +192,7 @@ static const char* errmsg[] = {
     /*161*/
     "brackets after variable name indicate a fixed-size array, but a dynamic size was given - did "
     "you mean to use 'new %s[size]' syntax?\n",
-    /*162*/ "cannot create dynamic arrays in global scope - did you mean to "
+    /*162*/ "cannot create dynamic arrays here - did you mean to "
 	    "create a fixed-length array?\n",
     /*163*/ "indeterminate array size in \"sizeof\" expression\n",
     /*164*/ "allocated array type '%s' doesn't match original type '%s'\n",
@@ -221,7 +221,7 @@ static const char* errmsg[] = {
     /*183*/ "brackets after variable name indicates a fixed-size array, but "
 	    "size is missing or not constant\n",
     /*184*/ "implicit dynamic array has a dimension of unspecified size\n",
-    /*185*/ "invalid default array initializer\n",
+    /*185*/ "unused\n",
 };
 
 static const char* warnmsg[] = {

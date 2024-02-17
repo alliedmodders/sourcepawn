@@ -2385,17 +2385,6 @@ bool Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
     return false;
 }
 
-bool Semantics::CheckExprForArrayInitializer(Expr* expr) {
-    switch (expr->kind()) {
-        case ExprKind::NewArrayExpr: {
-            auto actual = expr->to<NewArrayExpr>();
-            return CheckNewArrayExprForArrayInitializer(actual);
-        }
-        default:
-            return CheckRvalue(expr);
-    }
-}
-
 bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     if (na->analyzed())
         return na->analysis_result();

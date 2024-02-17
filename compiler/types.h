@@ -134,8 +134,7 @@ struct typeinfo_t {
         has_postdims(false),
         is_label(false),
         reference(false),
-        resolved(false),
-        implicit_dynamic_array(false)
+        resolved(false)
     {}
 
     // Array information.
@@ -155,7 +154,6 @@ struct typeinfo_t {
     bool is_label : 1;      // If type_atom came from a tLABEL.
     bool reference : 1;
     bool resolved : 1;
-    bool implicit_dynamic_array : 1;
 
     TypenameInfo ToTypenameInfo() const;
 
@@ -181,7 +179,6 @@ struct typeinfo_t {
         assert(i < numdim());
         return (size_t)i < dim_exprs.size() ? dim_exprs[i] : nullptr;
     }
-    bool isFixedArray() const;
 };
 
 struct functag_t : public PoolObject

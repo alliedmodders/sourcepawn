@@ -195,7 +195,8 @@ static const char* sErrorMsgTable[] =
   "Integer overflow",
   "Script execution timed out",
   "Custom error",
-  "Fatal error"
+  "Fatal error",
+  "Invalid array size",
 };
 
 const char*
