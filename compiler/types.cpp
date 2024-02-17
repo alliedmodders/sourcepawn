@@ -258,4 +258,9 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
     return TypenameInfo(type_atom, is_label);
 }
 
+bool typeinfo_t::isFixedArray() const {
+    return ident == iARRAY &&
+           (has_postdims && !implicit_dynamic_array);
+}
+
 } // namespace sp

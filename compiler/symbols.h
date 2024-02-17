@@ -82,14 +82,14 @@ struct value {
         constval_ = val;
     }
     void set_array(IdentifierKind ident, Decl* sym, int level) {
-        assert(ident == iARRAY || ident == iREFARRAY || ident == iARRAYCELL ||
+        assert(ident == iARRAY || ident == iARRAYCELL ||
                ident == iARRAYCHAR);
         this->ident = ident;
         this->sym = sym;
         this->array_level_ = level;
     }
     void set_array(IdentifierKind ident, int size) {
-        assert(ident == iARRAY || ident == iREFARRAY);
+        assert(ident == iARRAY);
         this->ident = ident;
         this->sym = nullptr;
         this->array_level_ = size;
@@ -115,6 +115,10 @@ struct value {
         return v;
     }
 };
+
+static inline bool IsLocal(int kind) {
+    return kind == sLOCAL || kind == sARGUMENT;
+}
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);

@@ -2,6 +2,7 @@
 //  Pawn compiler - Recursive descend expresion parser
 //
 //  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (C) AlliedModders LLC, 2024
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -18,8 +19,6 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
 
 #include <amtl/am-maybe.h>
 #include <amtl/am-utility.h>
@@ -87,11 +86,11 @@ ArraySizeResolver::ArraySizeResolver(Semantics* sema, const token_pos_t& pos, ty
 {
 }
 
-void
-ArraySizeResolver::Resolve()
-{
+void ArraySizeResolver::Resolve() {
     assert(type_->ident == iARRAY);
-    assert(type_->has_postdims);
+
+    if (!type_->has_postdims)
+        return;
 
     // If the array has old-style dimensions, we analyze them now. This is
     // technically a violation of the normal parsing order. The experimental
@@ -106,9 +105,9 @@ ArraySizeResolver::Resolve()
 
     PrepareDimArray();
 
-    // If the array was converted to an iREFARRAY, we can skip everything
-    // else because the initializer cannot be used for computing a size.
-    if (type_->ident == iREFARRAY)
+    // If this is an implicit dynamic arraay (old syntax), the initializer
+    // cannot be used for computing a size.
+    if (type_->implicit_dynamic_array)
         return;
 
     // Traverse the initializer if present. For arguments, initializers
@@ -299,8 +298,7 @@ ArraySizeResolver::ResolveDimExprs()
             }
             assert(type_->dim(i) == 0);
 
-            // The array type must automatically become iREFARRAY.
-            type_->ident = iREFARRAY;
+            type_->implicit_dynamic_array = true;
         } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym &&
                    v.sym->as<EnumDecl>())
         {
@@ -499,7 +497,7 @@ bool FixedArrayValidator::CheckArgument(SymbolExpr* expr) {
 
     assert(var->vclass() == sGLOBAL);
 
-    if (var->ident() != iARRAY && var->ident() != iREFARRAY) {
+    if (var->ident() != iARRAY) {
         report(expr->pos(), 134) << type_.type << "array";
         return false;
     }
@@ -773,7 +771,11 @@ Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl)
 bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     AutoCountErrors errors;
     const auto& type = decl->type_info();
-    if (type.ident == iARRAY || decl->vclass() == sARGUMENT || type.ident == iVARIABLE) {
+
+    if (type.isFixedArray() ||
+        (type.ident == iVARIABLE && type.type->isEnumStruct()) ||
+        decl->vclass() == sARGUMENT)
+    {
         FixedArrayValidator validator(this, decl);
         if (!validator.Validate() || !errors.ok())
             return false;
@@ -785,7 +787,6 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     //
     // Or:
     //   new x[y]
-    assert(type.ident == iREFARRAY);
 
     Expr* init = decl->init_rhs();
     if (!init) {

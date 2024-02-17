@@ -46,7 +46,6 @@ enum IdentifierKind {
     iINVALID = 0,
     iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
     iARRAY = 3,
-    iREFARRAY = 4,      /* an array passed by reference (i.e. a pointer) */
     iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
     iARRAYCHAR = 6,     /* array element, character from cell from array */
     iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
@@ -135,7 +134,8 @@ struct typeinfo_t {
         has_postdims(false),
         is_label(false),
         reference(false),
-        resolved(false)
+        resolved(false),
+        implicit_dynamic_array(false)
     {}
 
     // Array information.
@@ -155,6 +155,7 @@ struct typeinfo_t {
     bool is_label : 1;      // If type_atom came from a tLABEL.
     bool reference : 1;
     bool resolved : 1;
+    bool implicit_dynamic_array : 1;
 
     TypenameInfo ToTypenameInfo() const;
 
@@ -180,6 +181,7 @@ struct typeinfo_t {
         assert(i < numdim());
         return (size_t)i < dim_exprs.size() ? dim_exprs[i] : nullptr;
     }
+    bool isFixedArray() const;
 };
 
 struct functag_t : public PoolObject
@@ -370,6 +372,12 @@ class Type : public PoolObject
         Type* inner_type_;
     };
 };
+
+static inline bool IsReferenceType(IdentifierKind kind, Type* type) {
+    return kind == iARRAY ||
+           type->isReference() ||
+           (kind == iVARIABLE && type->isEnumStruct());
+}
 
 class ArrayType : public Type {
   public:

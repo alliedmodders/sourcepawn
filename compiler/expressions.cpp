@@ -197,7 +197,7 @@ bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numpar
 }
 
 bool checktag_string(Type* type, const value* sym1) {
-    if (sym1->ident == iARRAY || sym1->ident == iREFARRAY)
+    if (sym1->ident == iARRAY)
         return false;
 
     if ((sym1->type()->isChar() && type->isInt()) ||
@@ -209,11 +209,8 @@ bool checktag_string(Type* type, const value* sym1) {
 }
 
 bool checkval_string(const value* sym1, const value* sym2) {
-    if (sym1->ident == iARRAY || sym2->ident == iARRAY || sym1->ident == iREFARRAY ||
-        sym2->ident == iREFARRAY)
-    {
+    if (sym1->ident == iARRAY || sym2->ident == iARRAY)
         return false;
-    }
     if ((sym1->type()->isChar() && sym2->type()->isInt()) ||
         (sym1->type()->isInt() && sym2->type()->isChar()))
     {
@@ -223,7 +220,7 @@ bool checkval_string(const value* sym1, const value* sym2) {
 }
 
 bool matchtag_string(int ident, Type* type) {
-    if (ident == iARRAY || ident == iREFARRAY)
+    if (ident == iARRAY)
         return false;
     return type->isChar();
 }
@@ -302,7 +299,7 @@ static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) 
     if (actual.ident != formal.ident)
         return false;
 
-    if (actual.ident == iREFARRAY || actual.ident == iARRAY) {
+    if (actual.ident == iARRAY) {
         if (actual.dim_vec() != formal.dim_vec())
             return false;
     }

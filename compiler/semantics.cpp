@@ -171,7 +171,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
         report(decl->pos(), 251);
 
     // CheckArrayDecl works on enum structs too.
-    if (type.ident == iARRAY || type.ident == iREFARRAY || type.type->isEnumStruct()) {
+    if (type.ident == iARRAY || type.type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
             return false;
         if (decl->vclass() == sLOCAL)
@@ -232,7 +232,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (visited[i])
             continue;
         auto arg = ps->fields()[i];
-        if (arg->type_info().ident == iREFARRAY) {
+        if (arg->type_info().ident == iARRAY) {
             assert(arg->type()->isChar());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
@@ -258,7 +258,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     visited->at(arg->offset()) = true;
 
     if (auto expr = field->value->as<StringExpr>()) {
-        if (arg->type_info().ident != iREFARRAY) {
+        if (arg->type_info().ident != iARRAY) {
             report(expr->pos(), 48);
             return false;
         }
@@ -291,7 +291,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
                 return false;
             }
             matchtag(arg->type(), var->type(), MATCHTAG_COERCE);
-        } else if (arg->type_info().ident == iREFARRAY) {
+        } else if (arg->type_info().ident == iARRAY) {
             if (var->ident() != iARRAY) {
                 report(expr->pos(), 405);
                 return false;
@@ -530,7 +530,7 @@ bool Expr::HasSideEffects() {
 
 bool Semantics::CheckScalarType(Expr* expr) {
     const auto& val = expr->val();
-    if (val.ident == iARRAY || val.ident == iREFARRAY) {
+    if (val.ident == iARRAY) {
         if (val.sym)
             report(expr, 33) << val.sym->name();
         else
@@ -763,7 +763,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
             // If it's an outparam, also mark it as read.
             if (sym->vclass() == sARGUMENT &&
-                (sym->type()->isReference() || sym->ident() == iREFARRAY))
+                (sym->type()->isReference() || sym->ident() == iARRAY))
             {
                 markusage(sym, uREAD);
             }
@@ -799,12 +799,12 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     if (oper_tok) {
         assert(token != '=');
 
-        if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
+        if (left_val.ident == iARRAY) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
-        if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
+        if (right_val.ident == iARRAY) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
@@ -859,7 +859,7 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
     }
 
     int oper_tok = expr->oper();
-    if (left_ident == iARRAY || left_ident == iREFARRAY) {
+    if (left_ident == iARRAY) {
         // array assignment is permitted too (with restrictions)
         if (oper_tok) {
             report(expr, 23);
@@ -908,8 +908,8 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
-    if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
-        if (right_val.ident != iARRAY && right_val.ident != iREFARRAY) {
+    if (left_val.ident == iARRAY) {
+        if (right_val.ident != iARRAY) {
             report(expr, 47);
             return false;
         }
@@ -959,7 +959,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         else if (auto es = left_val.sym->type()->asEnumStruct())
             expr->set_array_copy_length(right_length * es->array_size());
     } else {
-        if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
+        if (right_val.ident == iARRAY) {
             // Hack. Special case array literals assigned to an enum struct,
             // since we don't have the infrastructure to deduce an RHS type
             // yet.
@@ -978,7 +978,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         !checkval_string(&left_val, &right_val) &&
         !expr->assignop().sym)
     {
-        if ((left_val.ident == iARRAY || left_val.ident == iREFARRAY) &&
+        if ((left_val.ident == iARRAY) &&
             ((left_val.type()->isChar() && !right_val.type()->isChar()) ||
              (!left_val.type()->isChar() && right_val.type()->isChar())))
         {
@@ -1137,12 +1137,12 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         const auto& left_val = left->val();
         const auto& right_val = right->val();
 
-        if (left_val.ident == iARRAY || left_val.ident == iREFARRAY) {
+        if (left_val.ident == iARRAY) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
             report(left, 33) << ptr; /* array must be indexed */
             return false;
         }
-        if (right_val.ident == iARRAY || right_val.ident == iREFARRAY) {
+        if (right_val.ident == iARRAY) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
             report(right, 33) << ptr; /* array must be indexed */
             return false;
@@ -1224,8 +1224,8 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
 
     const auto& left = second->val();
     const auto& right = third->val();
-    bool left_array = (left.ident == iARRAY || right.ident == iREFARRAY);
-    bool right_array = (left.ident == iARRAY || right.ident == iREFARRAY);
+    bool left_array = (left.ident == iARRAY);
+    bool right_array = (left.ident == iARRAY);
     if (!left_array && right_array) {
         const char* ptr = "-unknown-";
         if (left.sym != nullptr)
@@ -1258,9 +1258,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     if (val.ident == iARRAY && right.ident == iARRAY && right.array_size() > val.array_size())
         val = right;
 
-    if (val.ident == iARRAY)
-        val.ident = iREFARRAY;
-    else if (val.ident != iREFARRAY)
+    if (val.ident != iARRAY)
         val.ident = iEXPRESSION;
     return true;
 }
@@ -1403,7 +1401,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             expr->set_lvalue(true);
             break;
         case iARRAY:
-        case iREFARRAY:
         case iFUNCTN:
             // Not an l-value.
             break;
@@ -1508,7 +1505,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         report(base, 29);
         return false;
     }
-    if (base_val.ident != iARRAY && base_val.ident != iREFARRAY) {
+    if (base_val.ident != iARRAY) {
         report(index, 28) << base_val.sym->name();
         return false;
     }
@@ -1557,7 +1554,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto base_var = base_val.sym->as<VarDeclBase>();
     if (base_val.array_level() < base_var->type_info().numdim() - 1) {
         // Note: Intermediate arrays are not l-values.
-        out_val.set_array(iREFARRAY, base_val.sym, base_val.array_level() + 1);
+        out_val.set_array(iARRAY, base_val.sym, base_val.array_level() + 1);
         return true;
     }
 
@@ -1581,13 +1578,13 @@ IndexExpr::ProcessUses(SemaContext& sc)
 
 bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto sym = expr->decl();
-    assert(sym->ident() == iREFARRAY || sym->ident() == iVARIABLE);
+    assert(sym->ident() == iVARIABLE);
 
     auto& val = expr->val();
     val.ident = sym->ident();
     val.sym = sym;
     val.set_type(sym->type());
-    expr->set_lvalue(sym->ident() != iREFARRAY);
+    expr->set_lvalue(true);
     return true;
 }
 
@@ -1631,7 +1628,6 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     const auto& base_val = base->val();
     switch (base_val.ident) {
         case iARRAY:
-        case iREFARRAY:
             report(expr, 96) << expr->name() << "type" << "array";
             return false;
         case iFUNCTN:
@@ -1849,7 +1845,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 
     if (field->type_info().numdim()) {
         ti.dim_ = {field->type_info().dim(0)};
-        ti.ident = iREFARRAY;
+        ti.ident = iARRAY;
     } else {
         ti.ident = ti.type->isChar() ? iARRAYCHAR : iARRAYCELL;
         expr->set_lvalue(true);
@@ -1915,7 +1911,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     const auto& cv = child->val();
     switch (cv.ident) {
         case iARRAY:
-        case iREFARRAY:
             if (!cv.array_size()) {
                 report(child, 163);
                 return false;
@@ -2027,7 +2022,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     val.ident = iEXPRESSION;
     val.set_type(fun->return_type());
     if (fun->return_array()) {
-        val.ident = iREFARRAY;
+        val.ident = iARRAY;
         val.sym = fun->return_array()->var;
         NeedsHeapAlloc(call);
     }
@@ -2166,7 +2161,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         ps->argv[pos] = param;
 
         if (arg->type()->isReference() ||
-            ((arg->type_info().ident == iREFARRAY || arg->type()->isEnumStruct()) &&
+            ((arg->type_info().ident == iARRAY || arg->type()->isEnumStruct()) &&
              !arg->type_info().is_const && arg->default_value()->array))
         {
             NeedsHeapAlloc(ps->argv[pos]);
@@ -2231,7 +2226,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 break;
             }
 
-            if (val->ident == iFUNCTN || val->ident == iARRAY || val->ident == iREFARRAY) {
+            if (val->ident == iFUNCTN || val->ident == iARRAY) {
                 report(param, 35) << visual_pos; // argument type mismatch
                 return false;
             }
@@ -2253,7 +2248,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 checktag(arg->type(), val->type());
             break;
         }
-        case iREFARRAY:
+        case iARRAY:
             // Hack until arrays and types are unified: special case enum structs coercing to
             // arrays.
             if (val->ident == iVARIABLE && arg->type_info().type->isAny()) {
@@ -2271,7 +2266,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     break;
                 }
             }
-            if (val->ident != iARRAY && val->ident != iREFARRAY && val->ident != iARRAYCELL &&
+            if (val->ident != iARRAY && val->ident != iARRAYCELL &&
                 val->ident != iARRAYCHAR)
             {
                 report(param, 35) << visual_pos; // argument type mismatch
@@ -2285,7 +2280,7 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             // always has a single dimension. An iARRAYCELL parameter is also
             // assumed to have a single dimension.
             if (!val->sym) {
-                assert(val->ident == iARRAY || val->ident == iREFARRAY);
+                assert(val->ident == iARRAY);
                 if (arg->type_info().numdim() != 1) {
                     report(param, 48); // array dimensions must match
                     return false;
@@ -2409,7 +2404,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
 
     auto& val = na->val();
     auto type = na->type();
-    val.ident = iREFARRAY;
+    val.ident = iARRAY;
     val.set_type(type);
     for (auto& expr : na->exprs()) {
         if (!CheckRvalue(expr))
@@ -2658,7 +2653,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     /* see if this function already has a sub type (an array attached) */
     auto sub = fun->return_array() ? fun->return_array()->var : nullptr;
     if (sc_->returns_value()) {
-        int retarray = (v.ident == iARRAY || v.ident == iREFARRAY);
+        int retarray = (v.ident == iARRAY);
         /* there was an earlier "return" statement in this function */
         if ((sub == nullptr && retarray) || (sub != nullptr && !retarray)) {
             report(stmt, 79); /* mixing "return array;" and "return value;" */
@@ -2677,7 +2672,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     if (!matchtag_string(v.ident, v.type()))
         matchtag(fun->return_type(), v.type(), TRUE);
 
-    if (v.ident == iARRAY || v.ident == iREFARRAY || v.type()->isEnumStruct()) {
+    if (v.ident == iARRAY || v.type()->isEnumStruct()) {
         if (!CheckArrayReturnStmt(stmt))
             return false;
     }
@@ -2693,7 +2688,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
     auto& array = stmt->array();
     array.set_type(val.type());
     if (val.array_dim_count()) {
-        array.ident = iREFARRAY;
+        array.ident = iARRAY;
         array.has_postdims = true;
         for (int i = 0; i < val.array_dim_count(); i++) {
             if (!val.array_dim(i)) {
@@ -2740,7 +2735,7 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         int argcount = (int)curfunc->args().size();
 
-        auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sGLOBAL, false,
+        auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sLOCAL, false,
                                false, false, nullptr);
         var->BindAddress((argcount + 3) * sizeof(cell));
 
@@ -2777,7 +2772,6 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
             return false;
 
         case iARRAY:
-        case iREFARRAY:
             report(expr, 167) << "arrays";
             return false;
             break;
@@ -2968,7 +2962,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
     bool tag_ok = CheckRvalue(expr);
     const auto& v = expr->val();
-    if (tag_ok && (v.ident == iARRAY || v.ident == iREFARRAY))
+    if (tag_ok && v.ident == iARRAY)
         report(expr, 33) << "-unknown-";
 
     if (expr->lvalue())
@@ -3268,7 +3262,6 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
         switch (decl->ident()) {
             case iVARIABLE:
             case iARRAY:
-            case iREFARRAY:
                 decl->set_is_written();
                 break;
         }
@@ -3363,7 +3356,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
         result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
     if (auto a1_def = a1->default_value()) {
         auto a2_def = a2->default_value();
-        if (a1->type_info().ident == iREFARRAY) {
+        if (a1->type_info().ident == iARRAY) {
             if (result)
                 result = !!a1_def->array == !!a2_def->array;
             if (result && a1_def->array)

@@ -30,7 +30,7 @@
 namespace sp {
 
 inline int value::array_size() const {
-    assert(ident == iARRAY || ident == iREFARRAY);
+    assert(ident == iARRAY);
     if (sym) {
         auto var = sym->as<VarDeclBase>();
         return var->type_info().dim(array_level_);
@@ -39,7 +39,7 @@ inline int value::array_size() const {
 }
 
 inline int value::array_level() const {
-    assert(ident == iARRAY || ident == iREFARRAY);
+    assert(ident == iARRAY);
     if (sym)
         return array_level_;
     return 0;
@@ -48,7 +48,7 @@ inline int value::array_level() const {
 inline int value::array_dim_count() const {
     if (ident == iARRAYCHAR || ident == iARRAYCELL)
         return 1;
-    assert(ident == iARRAY || ident == iREFARRAY);
+    assert(ident == iARRAY);
     if (sym) {
         auto var = sym->as<VarDeclBase>();
         return var->type_info().numdim() - array_level_;
@@ -60,7 +60,7 @@ inline int value::array_dim(int n) const {
     if (ident == iARRAYCHAR || ident == iARRAYCELL)
         return 0;
 
-    assert(ident == iARRAY || ident == iREFARRAY);
+    assert(ident == iARRAY);
 
     if (sym) {
         auto var = sym->as<VarDeclBase>();

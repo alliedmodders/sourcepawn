@@ -104,7 +104,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    *addr, decl->type()->type_index(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
-    if (decl->ident() == iARRAY || decl->ident() == iREFARRAY) {
+    if (decl->ident() == iARRAY) {
         string += " [ ";
         for (int i = 0; i < decl->dim_count(); i++)
             string += ke::StringPrintf("%x:%x ", decl->type()->type_index(), decl->dim(i));
@@ -346,7 +346,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
         }
-    } else if (decl->ident() == iREFARRAY || decl->ident() == iARRAY || is_struct) {
+    } else if (decl->ident() == iARRAY || is_struct) {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
@@ -354,7 +354,9 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         decl->BindAddress(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
-        if (!init_rhs || decl->ident() == iARRAY || is_struct) {
+        if (init_rhs && init_rhs->as<NewArrayExpr>()) {
+            EmitExpr(init_rhs->as<NewArrayExpr>());
+        } else if (!init_rhs || decl->ident() == iARRAY || is_struct) {
             ArrayData array;
             BuildCompoundInitializer(decl, &array, 0);
 
@@ -387,8 +389,6 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             __ emit(OP_HEAP, total_size * sizeof(cell));
             __ emit(OP_PUSH_ALT);
             __ emit(OP_INITARRAY_ALT, iv_addr, iv_size, non_filled, array.zeroes, 0);
-        } else if (NewArrayExpr* ctor = init_rhs->as<NewArrayExpr>()) {
-            EmitExpr(ctor);
         } else if (StringExpr* ctor = init_rhs->as<StringExpr>()) {
             auto queue_size = data_.size();
             auto str_addr = data_.dat_address();
@@ -711,7 +711,6 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
             case iARRAYCELL:
             case iARRAYCHAR:
             case iARRAY:
-            case iREFARRAY:
                 if (oper) {
                     __ emit(OP_PUSH_PRI);
                     EmitRvalue(left_val);
@@ -744,7 +743,7 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
     }
 
     assert(!expr->array_copy_length());
-    assert(left_val.ident != iARRAY && left_val.ident != iREFARRAY);
+    assert(left_val.ident != iARRAY);
 
     EmitBinaryInner(oper, expr->userop(), left, right);
 
@@ -1059,7 +1058,6 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
     Decl* sym = expr->decl();
     switch (sym->ident()) {
         case iARRAY:
-        case iREFARRAY:
             __ address(sym, sPRI);
             break;
         case iFUNCTN: {
@@ -1126,7 +1124,7 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
 
     // The indexed item is another array (multi-dimensional arrays).
     if (base_val.array_dim_count() > 1) {
-        assert(expr->val().ident == iARRAY || expr->val().ident == iREFARRAY);
+        assert(expr->val().ident == iARRAY);
         __ emit(OP_LOAD_I);
     }
 }
@@ -1224,7 +1222,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
                     }
                 }
                 break;
-            case iREFARRAY:
+            case iARRAY:
                 break;
             default:
                 assert(false);
@@ -1245,7 +1243,7 @@ CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
 {
     const auto& arg = expr->arg();
     switch (arg->type_info().ident) {
-        case iREFARRAY:
+        case iARRAY:
             EmitDefaultArray(expr, arg);
             break;
         case iVARIABLE:
@@ -1394,7 +1392,7 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         EmitExpr(stmt->expr());
 
         const auto& v = stmt->expr()->val();
-        if (v.ident == iARRAY || v.ident == iREFARRAY)
+        if (v.ident == iARRAY)
             EmitReturnArrayStmt(stmt);
     } else {
         /* this return statement contains no expression */

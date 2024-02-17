@@ -502,7 +502,7 @@ RttiBuilder::add_struct(Type* type)
         auto arg = ps->fields()[i];
 
         int dims[1] = {0};
-        int dimcount = arg->type_info().ident == iREFARRAY ? 1 : 0;
+        int dimcount = arg->type_info().ident == iARRAY ? 1 : 0;
 
         variable_type_t type = {arg->type(), dims, dimcount, !!arg->type_info().is_const};
         std::vector<uint8_t> encoding;

@@ -2220,11 +2220,11 @@ Parser::fix_mispredicted_postdims(declinfo_t* decl)
 
     decl->type.has_postdims = false;
 
-    // We got a declaration like:
-    //      int[3] x;
-    //
-    // This is illegal, so report it now, and strip dim_exprs.
     if (!decl->type.dim_exprs.empty()) {
+        // We got a declaration like:
+        //      int[3] x;
+        //
+        // This is illegal, so report it now, and strip dim_exprs.
         for (int i = 0; i < decl->type.dim_exprs.size(); i++) {
             if (decl->type.dim_exprs[i]) {
                 report(decl->type.dim_exprs[i]->pos(), 101);
@@ -2233,9 +2233,6 @@ Parser::fix_mispredicted_postdims(declinfo_t* decl)
         }
         decl->type.dim_exprs = {};
     }
-
-    // If has_postdims is false, we never want to report an iARRAY.
-    decl->type.ident = iREFARRAY;
 }
 
 bool
@@ -2483,8 +2480,7 @@ Parser::parse_post_array_dims(declinfo_t* decl, int flags)
 
     parse_post_dims(type);
 
-    // We can't deduce iARRAY vs iREFARRAY until the analysis phase. Start with
-    // iARRAY for now.
+    // We can't deduce iARRAY until the analysis phase. Start with iARRAY for now.
     decl->type.ident = iARRAY;
     decl->type.has_postdims = TRUE;
 }
@@ -2524,12 +2520,12 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
                 lexer_->match(']');
             }
         } while (lexer_->match('['));
-        type->ident = iREFARRAY;
+        type->ident = iARRAY;
     }
 
     if (flags & DECLFLAG_ARGUMENT) {
         if (lexer_->match('&')) {
-            if (type->ident == iARRAY || type->ident == iREFARRAY)
+            if (type->ident == iARRAY)
                 report(137);
             else
                 type->reference = true;
