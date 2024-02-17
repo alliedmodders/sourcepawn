@@ -13,6 +13,9 @@
 *.suo
 *.user
 
+# IDEA
+.idea/
+
 # Build directories
 CrazyDebug*/
 Debug*/

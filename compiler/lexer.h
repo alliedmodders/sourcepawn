@@ -533,5 +533,6 @@ class Lexer
 };
 
 std::string StringizePath(const std::filesystem::path& in_path);
+std::string QuoteString(const std::string& string);
 
 } // namespace sp
