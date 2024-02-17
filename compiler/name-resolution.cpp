@@ -1010,14 +1010,13 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             report(field->pos(), 94) << field->name();
 
         if (field->type_info().numdim()) {
-            if (field->type_info().ident == iARRAY) {
-                ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
+            ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
 
-                if (field->type_info().numdim() > 1) {
-                    error(field->pos(), 65);
-                    continue;
-                }
-            } else {
+            if (field->type_info().numdim() > 1) {
+                error(field->pos(), 65);
+                continue;
+            }
+            if (!field->type_info().dim(0)) {
                 error(field->pos(), 81);
                 continue;
             }
@@ -1036,6 +1035,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             size = field->type()->isChar()
                    ? char_array_cells(field->type_info().dim(0))
                    : field->type_info().dim(0);
+            assert(size);
         }
         position += size;
     }

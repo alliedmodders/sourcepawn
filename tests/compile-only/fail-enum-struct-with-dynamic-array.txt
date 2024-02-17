@@ -1,0 +1,1 @@
+(2) : error 081: enum struct field arrays must have fixed sizes
