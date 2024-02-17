@@ -747,7 +747,9 @@ PluginContext::generateArray(cell_t dims, cell_t* stk, bool autozero)
 {
   if (dims == 1) {
     uint32_t size = *stk;
-    if (size == 0 || !ke::IsUint32MultiplySafe(size, 4))
+    if (size <= 0)
+      return SP_ERROR_INVALID_ARRAY_SIZE;
+    if (!ke::IsUint32MultiplySafe(size, 4))
       return SP_ERROR_ARRAY_TOO_BIG;
     *stk = hp_;
 

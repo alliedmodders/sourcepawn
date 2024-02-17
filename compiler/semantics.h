@@ -140,9 +140,9 @@ class SemaContext
 class Semantics final
 {
     friend class ArraySizeResolver;
+    friend class ArrayValidator;
     friend class ConstDecl;
     friend class EnumDecl;
-    friend class FixedArrayValidator;
     friend class FunctionDecl;
     friend class Parser;
 
@@ -228,7 +228,6 @@ class Semantics final
     };
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
-    bool CheckExprForArrayInitializer(Expr* expr);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
     bool CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
                        ParamState* ps, unsigned int argpos);

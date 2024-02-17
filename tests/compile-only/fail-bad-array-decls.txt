@@ -1,4 +1,4 @@
-(1) : error 162: cannot create dynamic arrays in global scope - did you mean to create a fixed-length array?
+(1) : error 162: cannot create dynamic arrays here - did you mean to create a fixed-length array?
 (6) : error 161: brackets after variable name indicate a fixed-size array, but a dynamic size was given - did you mean to use 'new int[size]' syntax?
 (11) : error 165: cannot create dynamic arrays in static scope - did you mean to create a fixed-length array with brackets after the variable name?
 (19) : error 183: brackets after variable name indicates a fixed-size array, but size is missing or not constant

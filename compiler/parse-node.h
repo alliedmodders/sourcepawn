@@ -352,6 +352,8 @@ class VarDeclBase : public Decl
     void set_is_read() { is_read_ = true; }
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
+    bool implicit_dynamic_array() const { return implicit_dynamic_array_; }
+    void set_implicit_dynamic_array() { implicit_dynamic_array_ = true; }
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
     Type* type() const override { return type_.type; }
@@ -368,6 +370,7 @@ class VarDeclBase : public Decl
     bool autozero_ : 1;
     bool is_read_ : 1;
     bool is_written_ : 1;
+    bool implicit_dynamic_array_ : 1;
     Label addr_;
 };
 

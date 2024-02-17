@@ -94,7 +94,8 @@ typedef uint32_t funcid_t; /**< Function index code */
 #define SP_ERROR_TIMEOUT 30             /**< Timeout */
 #define SP_ERROR_USER 31                /**< Custom message */
 #define SP_ERROR_FATAL 32               /**< Custom fatal message */
-#define SP_MAX_ERROR_CODES 33
+#define SP_ERROR_INVALID_ARRAY_SIZE 33  /**< Invalid arrary size */
+#define SP_MAX_ERROR_CODES 34
 //Hey you! Update the string table if you add to the end of me! */
 
 /**********************************************
