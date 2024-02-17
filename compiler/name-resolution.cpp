@@ -256,9 +256,7 @@ PstructDecl::EnterNames(SemaContext& sc)
             return false;
         }
 
-        if (field->type_info().ident == iARRAY)
-            field->mutable_type_info().ident = iREFARRAY;
-        else if (field->type_info().type->isEnumStruct())
+        if (field->type_info().type->isEnumStruct())
             report(field, 446);
         field->set_offset(position);
 
@@ -322,9 +320,7 @@ TypedefInfo::Bind(SemaContext& sc)
             ResolveArraySize(sc.sema(), pos, &arg->type, sARGUMENT);
 
         typeinfo_t type = arg->type;
-        if (type.ident == iARRAY)
-            type.ident = iREFARRAY;
-        if (type.ident != iREFARRAY && type.ident != iARRAY)
+        if (type.ident != iARRAY)
             assert(!type.numdim());
         ft_args.emplace_back(type);
     }
@@ -410,28 +406,20 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (type()->isVoid())
         error(pos_, 144);
 
-    if (vclass_ == sGLOBAL) {
-        if (type_.ident == iREFARRAY) {
-            // Dynamic array in global scope.
-            assert(type_.is_new);
-            error(pos_, 162);
-        }
-    }
-
     bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
     // REFARRAY is invalid in both file and local static contexts.
-    if ((vclass_ == sSTATIC || vclass_ == sGLOBAL) && type_.ident == iREFARRAY)
-        error(pos_, 165);
+    if (type_.ident == iARRAY && !type_.isFixedArray()) {
+        if (vclass_ == sGLOBAL)
+            error(pos_, 162);
+        else if (vclass_ == sSTATIC)
+            error(pos_, 165);
+    }
 
     if (type()->isPstruct()) {
         type_.is_const = true;
     } else {
-        IdentifierKind ident = type_.ident;
-        if (vclass_ == sARGUMENT && ident == iARRAY)
-            type_.ident = ident = iREFARRAY;
-
-        if (ident == iVARARGS)
+        if (type_.ident == iVARARGS)
             markusage(this, uREAD);
     }
 
@@ -618,7 +606,7 @@ ReturnStmt::Bind(SemaContext& sc)
     if (auto sym_expr = expr_->as<SymbolExpr>()) {
         if (auto decl = sym_expr->decl()) {
             if (auto var = decl->as<VarDeclBase>()) {
-                if (var->type_info().ident == iARRAY || var->type_info().ident == iREFARRAY)
+                if (var->type_info().ident == iARRAY)
                     sc.func()->set_maybe_returns_array();
             }
         }
@@ -851,9 +839,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
         var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
         arg_index++;
 
-        if (typeinfo.ident == iREFARRAY || typeinfo.ident == iARRAY ||
-            typeinfo.type->isEnumStruct())
-        {
+        if (typeinfo.ident == iARRAY || typeinfo.type->isEnumStruct()) {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(sc.cc(), var);
         } else {

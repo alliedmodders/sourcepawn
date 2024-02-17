@@ -62,7 +62,7 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     std::vector<typeinfo_t> args;
     for (auto arg : fun->canonical()->args()) {
         typeinfo_t type = arg->type_info();
-        if (type.ident != iARRAY && type.ident != iREFARRAY)
+        if (type.ident != iARRAY)
           assert(!type.numdim());
 
         args.emplace_back(type);
