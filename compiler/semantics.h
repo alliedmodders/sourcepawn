@@ -29,6 +29,7 @@
 #include "parse-node.h"
 
 namespace sp {
+namespace cc {
 
 class AutoCreateScope;
 class Semantics;
@@ -139,7 +140,7 @@ class SemaContext
 
 class Semantics final
 {
-    friend class ArraySizeResolver;
+    friend class ArrayTypeResolver;
     friend class ArrayValidator;
     friend class ConstDecl;
     friend class EnumDecl;
@@ -182,7 +183,7 @@ class Semantics final
     bool CheckAssertStmt(AssertStmt* stmt);
     bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
     bool CheckReturnStmt(ReturnStmt* stmt);
-    bool CheckArrayReturnStmt(ReturnStmt* stmt);
+    bool CheckCompoundReturnStmt(ReturnStmt* stmt);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
@@ -229,8 +230,8 @@ class Semantics final
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    bool CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
-                       ParamState* ps, unsigned int argpos);
+    Expr* CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
+                        ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     FunctionDecl* BindNewTarget(Expr* target);
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
@@ -315,4 +316,5 @@ int argcompare(ArgDecl* a1, ArgDecl* a2);
 void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumType(SymbolScope* scope, Type* type);
 
+} // namespace cc
 } // namespace sp

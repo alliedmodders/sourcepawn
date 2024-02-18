@@ -62,6 +62,7 @@
 #include "types.h"
 
 namespace sp {
+namespace cc {
 
 namespace fs = std::filesystem;
 
@@ -2654,4 +2655,5 @@ void Lexer::DiscardCachedTokens() {
     injected_token_stream_.clear();
 }
 
+} // namespace cc
 } // namespace sp

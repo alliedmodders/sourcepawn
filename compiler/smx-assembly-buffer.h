@@ -15,8 +15,7 @@
 //
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#ifndef _include_spcomp_smx_assembly_buffer_h_
-#define _include_spcomp_smx_assembly_buffer_h_
+#pragma once
 
 #include "shared/byte-buffer.h"
 #include <smx/smx-v1-opcodes.h>
@@ -27,6 +26,7 @@
 #include "symbols.h"
 
 namespace sp {
+namespace cc {
 
 enum regid {
     sPRI, /* indicates the primary register */
@@ -111,9 +111,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_POP_ALT);
   }
 
-  void load_hidden_arg(FunctionDecl* fun, VarDecl* sym, bool save_pri) {
+  void load_hidden_arg(FunctionDecl* fun, bool save_pri) {
     if (!fun->IsVariadic()) {
-      address(sym, sALT);
+      emit(OP_LOAD_S_ALT, fun->return_array()->hidden_address);
       return;
     }
 
@@ -154,9 +154,9 @@ class SmxAssemblyBuffer : public ByteBuffer
       else
         emit(OP_LOAD_S_ALT, sym->addr());
     } else {
-      if (sym->ident() == iARRAY) {
+      if (sym->type()->isArray())
         assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
-      }
+
       if (reg == sPRI) {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_PRI, sym->addr());
@@ -172,7 +172,7 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void copyarray(VarDeclBase* sym, cell size) {
-    if (sym->ident() == iARRAY) {
+    if (sym->type()->isArray()) {
       assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
       emit(OP_LOAD_S_ALT, sym->addr());
     } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
@@ -257,6 +257,5 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 };
 
-}
-
-#endif // _include_spcomp_smx_assembly_buffer_h_
+} // namespace cc
+} // namespace sp

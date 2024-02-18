@@ -29,6 +29,7 @@
 #include "sc.h"
 
 namespace sp {
+namespace cc {
 
 class ParseNode;
 
@@ -131,8 +132,12 @@ void break_on_error(int number);
 
 int pc_enablewarning(int number, int enable);
 
+class AutoDeferReports;
+
 class ReportManager
 {
+    friend class AutoDeferReports;
+
   public:
     ReportManager(CompileContext& cc);
 
@@ -152,6 +157,10 @@ class ReportManager
     AutoErrorPos* pos_override() const { return pos_override_; }
 
   private:
+    void PushAutoDefer(AutoDeferReports* defer);
+    void PopAutoDefer(AutoDeferReports* defer);
+
+  private:
     CompileContext& cc_;
     bool errflag_ = false;
     unsigned int errors_on_line_ = 0;
@@ -168,6 +177,32 @@ class ReportManager
 
     // This is the actual # of reported errors.
     size_t total_reported_errors_ = 0;
+
+    std::vector<AutoDeferReports*> defers_;
+};
+
+class AutoDeferReports {
+    friend class ReportManager;
+
+  public:
+    explicit AutoDeferReports(CompileContext& cc);
+    ~AutoDeferReports();
+
+    // Deactivate this deferral object and move all deferred reports back
+    // into ReportManager.
+    void Report();
+
+    bool HasErrors() const { return has_errors_; }
+    bool HasWarnings() const { return has_warnings_; }
+
+  private:
+    void AddDeferred(ErrorReport&& report);
+
+  private:
+    ReportManager* reports_;
+    std::vector<ErrorReport> deferred_;
+    bool has_errors_ = false;
+    bool has_warnings_ = false;
 };
 
 class AutoCountErrors
@@ -183,4 +218,5 @@ class AutoCountErrors
     unsigned old_errors_;
 };
 
+} // namespace cc
 } // namespace sp

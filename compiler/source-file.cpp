@@ -30,6 +30,7 @@
 #endif
 
 namespace sp {
+namespace cc {
 
 SourceFile::SourceFile()
   : pos_(0)
@@ -183,4 +184,5 @@ tr::string SourceFile::GetLine(uint32_t line) {
     return data_.substr(offset, end - offset);
 }
 
+} // namespace cc
 } // namespace sp

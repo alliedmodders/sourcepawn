@@ -1,1 +1,1 @@
-(4) : error 047: array sizes do not match, or destination array is too small
+(4) : error 450: no viable conversion from "int[5]" to "int[6]"

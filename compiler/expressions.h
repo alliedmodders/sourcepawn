@@ -28,6 +28,7 @@
 #include "sc.h"
 
 namespace sp {
+namespace cc {
 
 class SemaContext;
 struct value;
@@ -60,5 +61,8 @@ bool checktag_string(Type* type, const value* sym1);
 bool checktag(Type* type, Type* expr_type);
 bool checktag_string(int tag, const value* sym1);
 bool checktag(int tag, int exprtag);
+bool HasTagOnInheritanceChain(Type* type, Type* other);
+bool functag_compare(const functag_t* formal, const functag_t* actual);
 
+} // namespace cc
 } // namespace sp

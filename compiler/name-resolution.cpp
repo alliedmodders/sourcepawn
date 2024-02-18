@@ -1,6 +1,7 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 //  Copyright (c) ITB CompuPhase, 1997-2005
+//  Copyright (c) AlliedModders LLC, 2024
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -17,8 +18,6 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
 
 #include <unordered_set>
 
@@ -36,6 +35,7 @@
 #include "symbols.h"
 
 namespace sp {
+namespace cc {
 
 AutoEnterScope::AutoEnterScope(SemaContext& sc, SymbolScope* scope)
   : sc_(sc),
@@ -256,18 +256,22 @@ PstructDecl::EnterNames(SemaContext& sc)
             return false;
         }
 
-        if (field->type_info().type->isEnumStruct())
+        if (field->type_info().type->isEnumStruct()) {
             report(field, 446);
-        field->set_offset(position);
-
-        position++;
-
+            return false;
+        }
         if (field->type_info().numdim() > 1 ||
             (field->type_info().numdim() == 1 && field->type_info().dim(0) != 0))
         {
             report(field, 69);
             return false;
         }
+        if (field->type_info().numdim())
+            ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(), sGLOBAL);
+
+        field->set_offset(position);
+
+        position++;
     }
     return true;
 }
@@ -316,13 +320,10 @@ TypedefInfo::Bind(SemaContext& sc)
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
 
-        if (arg->type.ident == iARRAY)
-            ResolveArraySize(sc.sema(), pos, &arg->type, sARGUMENT);
+        if (arg->type.numdim())
+            ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
 
-        typeinfo_t type = arg->type;
-        if (type.ident != iARRAY)
-            assert(!type.numdim());
-        ft_args.emplace_back(type);
+        ft_args.emplace_back(arg->type);
     }
     new (&ft->args) PoolArray<typeinfo_t>(ft_args);
 
@@ -400,15 +401,17 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (!sc.BindType(pos(), &type_))
         return false;
 
-    if (type_.ident == iARRAY)
-        ResolveArraySize(sc.sema(), this);
+    if (type_.numdim()) {
+        if (!ResolveArrayType(sc.sema(), this))
+            return false;
+    }
 
     if (type()->isVoid())
         error(pos_, 144);
 
     bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
-    if (type_.ident == iARRAY && (!type_.has_postdims || implicit_dynamic_array())) {
+    if (type_.type->isArray() && (!type_.has_postdims || implicit_dynamic_array())) {
         if (vclass_ == sGLOBAL)
             error(pos_, 162);
         else if (vclass_ == sSTATIC)
@@ -418,7 +421,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (type()->isPstruct()) {
         type_.is_const = true;
     } else {
-        if (type_.ident == iVARARGS)
+        if (type_.is_varargs)
             markusage(this, uREAD);
     }
 
@@ -566,6 +569,13 @@ NewArrayExpr::Bind(SemaContext& sc)
     if (!sc.BindType(pos_, &type_))
         return false;
 
+    std::vector<int> dims;
+    for (size_t i = 0; i < exprs_.size(); i++)
+        dims.emplace_back(0);
+
+    auto array_type = sc.cc().types()->defineArray(type_.type(), dims.data(), (int)dims.size());
+    type_ = TypenameInfo(array_type);
+
     bool ok = true;
     for (const auto& expr : exprs_)
         ok &= expr->Bind(sc);
@@ -597,21 +607,7 @@ ReturnStmt::Bind(SemaContext& sc)
     if (!expr_)
         return true;
 
-    if (!expr_->Bind(sc))
-        return false;
-
-    // Do some peeking to see if this really returns an array. This is a
-    // compatibility hack.
-    if (auto sym_expr = expr_->as<SymbolExpr>()) {
-        if (auto decl = sym_expr->decl()) {
-            if (auto var = decl->as<VarDeclBase>()) {
-                if (var->type_info().ident == iARRAY)
-                    sc.func()->set_maybe_returns_array();
-            }
-        }
-    }
-
-    return true;
+    return expr_->Bind(sc);
 }
 
 bool
@@ -730,6 +726,8 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
+    if (decl_.type.numdim())
+        ResolveArrayType(outer_sc.sema(), pos_, &decl_.type, sLOCAL);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
@@ -741,7 +739,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (this_type_) {
         typeinfo_t typeinfo = {};
         typeinfo.set_type(this_type_);
-        typeinfo.ident = iVARIABLE;
         typeinfo.is_const = true;
 
         auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
@@ -814,7 +811,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
 
         AutoErrorPos pos(var->pos());
 
-        if (typeinfo.ident == iVARARGS) {
+        if (typeinfo.is_varargs) {
             /* redimension the argument list, add the entry iVARARGS */
             var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
             break;
@@ -838,7 +835,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
         var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
         arg_index++;
 
-        if (typeinfo.ident == iARRAY || typeinfo.type->isEnumStruct()) {
+        if (type->isArray() || typeinfo.type->isEnumStruct()) {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(sc.cc(), var);
         } else {
@@ -846,7 +843,7 @@ FunctionDecl::BindArgs(SemaContext& sc)
             if (init && sc.sema()->CheckExpr(init)) {
                 AutoErrorPos pos(init->pos());
 
-                assert(typeinfo.ident == iVARIABLE);
+                assert(!typeinfo.is_varargs);
                 var->set_default_value(new DefaultArg());
 
                 cell val;
@@ -916,7 +913,7 @@ Atom* FunctionDecl::NameForOperator() {
     for (const auto& var : args_) {
         if (count < 2)
             tags[count] = var->type();
-        if (var->type_info().ident != iVARIABLE)
+        if (IsReferenceType(iVARIABLE, var->type()))
             report(pos_, 66) << var->name();
         if (var->init_rhs())
             report(pos_, 59) << var->name();
@@ -952,7 +949,7 @@ Atom* FunctionDecl::NameForOperator() {
                 error(pos_, 62);
             break;
     }
-    if (decl_.type.ident != iVARIABLE)
+    if (IsReferenceType(iVARIABLE, decl_.type.type))
         error(pos_, 62);
 
     std::string name =
@@ -1005,11 +1002,8 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
 
-        if (field->type_info().is_const)
-            report(field->pos(), 94) << field->name();
-
         if (field->type_info().numdim()) {
-            ResolveArraySize(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
+            ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
 
             if (field->type_info().numdim() > 1) {
                 error(field->pos(), 65);
@@ -1021,6 +1015,9 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             }
         }
 
+        if (field->type_info().is_const)
+            report(field->pos(), 94) << field->name();
+
         if (seen.count(field->name())) {
             report(field->pos(), 103) << field->name() << "enum struct";
             continue;
@@ -1029,13 +1026,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
         field->set_offset(position);
 
-        cell size = 1;
-        if (field->type_info().numdim()) {
-            size = field->type()->isChar()
-                   ? char_array_cells(field->type_info().dim(0))
-                   : field->type_info().dim(0);
-            assert(size);
-        }
+        cell size = field->type()->CellStorageSize();
         position += size;
     }
 
@@ -1202,7 +1193,6 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
 
             auto& type = method->mutable_type_info();
             type.set_type(type_);
-            type.ident = iVARIABLE;
             type.is_new = true;
         } else if (method->is_dtor()) {
             if (method->is_static())
@@ -1213,12 +1203,11 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
                 report(method, 118);
 
             auto& type = method->mutable_type_info();
-            if (type.ident != 0)
+            if (type.type || type.type_atom)
                 report(method, 439);
             type.set_type(sc.cc().types()->type_void());
             type.is_new = true;
-            type.ident = iVARIABLE;
-        } else if (method->type_info().ident == 0) {
+        } else if (!method->type_info().bindable()) {
             // Parsed as a constructor, but not using the map name. This is illegal.
             report(method, 114) << "constructor" << "methodmap" << name_;
             continue;
@@ -1271,9 +1260,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
     }
 
     auto decl = fun->args()[1];
-    if (decl->type_info().ident != iVARIABLE || decl->init_rhs() ||
-        decl->type_info().type != prop->type())
-    {
+    if (decl->init_rhs() || decl->type_info().type != prop->type()) {
         report(prop, 150) << prop->type();
         return false;
     }
@@ -1361,4 +1348,5 @@ AutoCreateScope::~AutoCreateScope() {
     sc_.set_scope_creator(prev_creator_);
 }
 
+} // namespace cc
 } // namespace sp

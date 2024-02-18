@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 namespace sp {
+namespace cc {
 
 class SourceManager;
 
@@ -82,4 +83,5 @@ class SourceLocation
   uint32_t id_;
 };
 
+} // namespace cc
 } // namespace sp

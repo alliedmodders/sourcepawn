@@ -32,6 +32,7 @@
 #include "smx-assembly-buffer.h"
 
 namespace sp {
+namespace cc {
 
 class CompileContext;
 class ParseTree;
@@ -222,7 +223,7 @@ class CodeGenerator final
 
     tr::vector<tr::string> debug_strings_;
     tr::vector<FunctionDecl*> native_list_;
-    sp::SmxAssemblyBuffer asm_;
+    SmxAssemblyBuffer asm_;
     DataQueue data_;
 
     ke::Maybe<uint32_t> last_break_op_;
@@ -250,4 +251,5 @@ class CodeGenerator final
     AutoCountErrors errors_;
 };
 
+} // namespace cc
 } // namespace sp

@@ -50,10 +50,11 @@
 #include "symbols.h"
 #include "types.h"
 
+namespace sp {
+namespace cc {
+
 using namespace SourcePawn;
 using namespace ke;
-
-namespace sp {
 
 struct function_entry {
     function_entry() {}
@@ -142,7 +143,6 @@ class RttiBuilder
     void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_type_into(std::vector<uint8_t>& bytes, Type* type);
-    void encode_ret_array_into(std::vector<uint8_t>& bytes, const typeinfo_t& type);
     void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
     void encode_var_type(std::vector<uint8_t>& bytes, const variable_type_t& info);
     void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
@@ -502,7 +502,7 @@ RttiBuilder::add_struct(Type* type)
         auto arg = ps->fields()[i];
 
         int dims[1] = {0};
-        int dimcount = arg->type_info().ident == iARRAY ? 1 : 0;
+        int dimcount = arg->type()->isArray() ? 1 : 0;
 
         variable_type_t type = {arg->type(), dims, dimcount, !!arg->type_info().is_const};
         std::vector<uint8_t> encoding;
@@ -545,14 +545,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     if (fun->IsVariadic())
         bytes.push_back(cb::kVariadic);
 
-    VarDecl* child = fun->return_array() ? fun->return_array()->var : nullptr;
-    if (child && child->type_info().numdim()) {
-        encode_ret_array_into(bytes, child->type_info());
-    } else if (fun->return_type()->isVoid()) {
-        bytes.push_back(cb::kVoid);
-    } else {
-        encode_type_into(bytes, fun->return_type());
-    }
+    encode_type_into(bytes, fun->return_type());
 
     for (const auto& arg : fun->args()) {
         Type* type = arg->type();
@@ -658,14 +651,6 @@ RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
     CompactEncodeUint32(bytes, add_enumstruct(type));
 }
 
-void RttiBuilder::encode_ret_array_into(std::vector<uint8_t>& bytes, const typeinfo_t& type) {
-    for (int i = 0; i < type.numdim(); i++) {
-        bytes.push_back(cb::kFixedArray);
-        CompactEncodeUint32(bytes, type.dim(i));
-    }
-    encode_type_into(bytes, type.type);
-}
-
 uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
     if (type->isBool())
         return cb::kBool;
@@ -677,10 +662,27 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
         return cb::kFloat32;
     if (type->isInt())
         return cb::kInt32;
+    if (type->isVoid())
+        return cb::kVoid;
     return 0;
 }
 
 void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type) {
+    if (auto array = type->as<ArrayType>()) {
+        for (;;) {
+            if (array->size()) {
+                bytes.emplace_back(cb::kFixedArray);
+                CompactEncodeUint32(bytes, array->size());
+            } else {
+                bytes.emplace_back(cb::kArray);
+            }
+            if (!array->inner()->isArray())
+                break;
+            array = array->inner()->to<ArrayType>();
+        }
+        type = array->inner();
+    }
+
     if (uint8_t b = TypeToRttiBytecode(type)) {
         bytes.push_back(b);
         return;
@@ -728,7 +730,7 @@ RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft)
 {
     bytes.push_back(cb::kFunction);
     bytes.push_back((uint8_t)ft->args.size());
-    if (!ft->args.empty() && ft->args[ft->args.size() - 1].ident == iVARARGS)
+    if (!ft->args.empty() && ft->args[ft->args.size() - 1].is_varargs)
         bytes.push_back(cb::kVariadic);
     if (ft->ret_type->isVoid())
         bytes.push_back(cb::kVoid);
@@ -1010,4 +1012,5 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
     return splat_to_binary(cc, binfname, buffer.bytes(), buffer.size());
 }
 
+} // namespace cc
 } // namespace sp

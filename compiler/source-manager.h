@@ -29,6 +29,7 @@
 #include "source-location.h"
 
 namespace sp {
+namespace cc {
 
 class CompileContext;
 
@@ -204,4 +205,5 @@ class SourceManager final
     size_t last_lr_lookup_ = 0;
 };
 
+} // namespace cc
 } // namespace sp

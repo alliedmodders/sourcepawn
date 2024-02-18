@@ -28,6 +28,7 @@
 #include "stl/stl-deque.h"
 
 namespace sp {
+namespace cc {
 
 class Semantics;
 
@@ -145,4 +146,5 @@ class Parser
     int sources_index_ = -1;
 };
 
+} // namespace cc
 } // namespace sp

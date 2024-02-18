@@ -31,6 +31,7 @@
 #include "semantics.h"
 
 namespace sp {
+namespace cc {
 
 void markusage(Decl* decl, int usage) {
     if (auto var = decl->as<VarDeclBase>()) {
@@ -179,4 +180,5 @@ void DefineSymbol(SemaContext& sc, Decl* decl, int vclass) {
         scope->Add(decl);
 }
 
+} // namespace cc
 } // namespace sp

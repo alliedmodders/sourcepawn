@@ -52,6 +52,7 @@ typedef int32_t cell;
 typedef uint32_t ucell;
 
 namespace sp {
+namespace cc {
 
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
@@ -119,4 +120,5 @@ static constexpr cell kMaxCells = INT_MAX / sizeof(cell) / 2;
 # define SP_BITFIELD(n)
 #endif
 
+} // namespace cc
 } // namespace sp

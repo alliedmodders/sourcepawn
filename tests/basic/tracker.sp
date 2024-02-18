@@ -1,12 +1,12 @@
 #include <shell>
 
-String:blah()
+char[] blah()
 {
   char str[] = "hello\n";
   return str;
 }
 
-String:other()
+char[] other()
 {
   char str[] = "what is this\n";
   return str;

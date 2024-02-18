@@ -11,6 +11,10 @@ import sys
 import tempfile
 import threading
 
+DIAGNOSE_DELETE = 0
+DIAGNOSE_SKIP = 1
+DIAGNOSE_QUIT = 2
+
 # Tool for interacting with a .sp corpus to find behavorial differences between
 # compiler versions.
 def main():
@@ -97,6 +101,7 @@ class Runner(object):
         self.missing_includes_ = {}
         self.log_ = sys.stderr
         self.failed_ = 0
+        self.should_quit_ = False
 
         self.includes_ = [os.path.join(self.args_.corpus, 'include')]
         self.includes_.extend(args.include)
@@ -155,6 +160,8 @@ class Runner(object):
 
             if self.failed_ and self.args_.fail_fast:
                 break
+            if self.should_quit_:
+                break
 
     def run_mt(self, bar):
         for file in self.files_:
@@ -170,6 +177,8 @@ class Runner(object):
             self.handle_result(result_tuple)
             if self.failed_ and self.args_.fail_fast:
                 break
+            if self.should_quit_:
+                break
             bar.update(self.progress_)
             self.progress_ += 1
 
@@ -179,6 +188,8 @@ class Runner(object):
     def consumer(self):
         while True:
             if self.failed_ and self.args_.fail_fast:
+                break
+            if self.should_quit_:
                 break
             try:
                 item = self.work_.get_nowait()
@@ -268,7 +279,11 @@ class Runner(object):
                     self.log_.write("\n")
 
             if self.args_.diagnose:
-                remove = diagnose_error(os.path.join(self.args_.corpus, path), output)
+                rv = diagnose_error(os.path.join(self.args_.corpus, path), output)
+                if rv == DIAGNOSE_DELETE:
+                    remove = True
+                elif rv == DIAGNOSE_QUIT:
+                    self.should_quit_ = True
             elif self.args_.remove_bad:
                 if self.args_.commit:
                     remove = True
@@ -313,14 +328,16 @@ def diagnose_error(path, output):
         print("")
 
     while True:
-        sys.stdout.write("(D)elete or (S)kip? ")
+        sys.stdout.write("(D)elete, (S)kip, or (Q)uit? ")
         progressbar.streams.flush()
         line = sys.stdin.readline()
         line = line.strip()
         if line == 'D' or line == 'd':
-            return True
+            return DIAGNOSE_DELETE
         elif line == 'S' or line == 's':
-            return False
+            return DIAGNOSE_SKIP
+        elif line == 'Q' or line == 'q':
+            return DIAGNOSE_QUIT
 
 def extract_line(path, number):
     with open(path, 'rb') as fp:

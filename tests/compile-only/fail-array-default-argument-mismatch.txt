@@ -1,1 +1,1 @@
-(3) : error 048: arrays do not match
+(3) : error 450: no viable conversion from "int[3][]" to "int[3][2]"

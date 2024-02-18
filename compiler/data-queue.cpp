@@ -42,6 +42,7 @@
 #include "symbols.h"
 
 namespace sp {
+namespace cc {
 
 DataQueue::DataQueue()
 {
@@ -78,4 +79,5 @@ DataQueue::AddZeroes(cell count)
     buffer_.resize(buffer_.size() + count, 0);
 }
 
+} // namespace cc
 } // namespace sp

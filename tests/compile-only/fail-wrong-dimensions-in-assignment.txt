@@ -1,1 +1,1 @@
-2) : error 436: wrong number of dimensions, expected 1 got 2
+(2) : error 450: no viable conversion from "char[][]" to "char[]"

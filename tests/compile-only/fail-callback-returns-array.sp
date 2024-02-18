@@ -1,16 +1,16 @@
-String:MyFunction()
+char[] MyFunction()
 {
-  new String:egg[10] = "egg";
+  char egg[10] = "egg";
   return egg;
 }
 
 public crab()
 {
-  new String:egg[10];
+  char egg[10];
   egg = MyFunction();
 }
 
-public Function:main()
+public Function main()
 {
   return MyFunction;
 }

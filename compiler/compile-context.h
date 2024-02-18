@@ -35,6 +35,7 @@
 #include "stl/stl-vector.h"
 
 namespace sp {
+namespace cc {
 
 class Decl;
 class FunctionDecl;
@@ -172,4 +173,5 @@ class CompileContext final
     bool detected_illegal_preproc_symbols_ = false;
 };
 
+} // namespace cc
 } // namespace sp

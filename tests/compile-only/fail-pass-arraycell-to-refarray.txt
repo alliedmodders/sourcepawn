@@ -1,1 +1,1 @@
-(8) : error 047: array sizes do not match, or destination array is too small
+(8) : error 450: no viable conversion from "int[]" to "int[3]"

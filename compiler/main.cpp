@@ -84,6 +84,7 @@
 using namespace ke;
 
 namespace sp {
+namespace cc {
 
 namespace fs = std::filesystem;
 
@@ -134,7 +135,11 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
 
-    assert(options->source_files.size() == 1);
+    if (options->source_files.size() > 1) {
+        report(452);
+        goto cleanup;
+    }
+
     {
         auto sf = cc.sources()->Open({}, options->source_files[0]);
         if (!sf) {
@@ -359,4 +364,5 @@ void setcaption() {
     printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
 }
 
+} // namespace cc
 } // namespace sp

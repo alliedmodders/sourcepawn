@@ -26,6 +26,8 @@
 
 #include <utility>
 
+#include <amtl/am-string.h>
+#include "array-helpers.h"
 #include "compile-context.h"
 #include "parse-node.h"
 #include "sc.h"
@@ -33,6 +35,7 @@
 #include "types.h"
 
 namespace sp {
+namespace cc {
 
 using namespace ke;
 
@@ -43,9 +46,24 @@ Type::Type(Atom* name, TypeKind kind)
 {
 }
 
-const char* Type::prettyName() const {
+const char* Type::prettyName() {
   if (kind_ == TypeKind::Function)
     return kindName();
+  if (kind_ == TypeKind::Array && !name_) {
+      std::string suffix;
+      auto iter = to<ArrayType>();
+      for (;;) {
+          if (iter->size())
+              suffix += ke::StringPrintf("[%d]", iter->size());
+          else
+              suffix += "[]";
+          if (!iter->inner()->isArray())
+              break;
+          iter = iter->inner()->to<ArrayType>();
+      }
+      suffix = iter->inner()->prettyName() + suffix;
+      name_ = CompileContext::get().atom(suffix);
+  }
   return declName()->chars();
 }
 
@@ -69,7 +87,7 @@ Type::kindName() const
           return "typeset";
         if (ke::StartsWith(name_->chars(), "::"))
           return "function";
-        return "typedef";
+        return "function";
       }
       return "function";
     default:
@@ -81,22 +99,30 @@ bool Type::canOperatorOverload() const {
     return isEnum() || isMethodmap() || isFloat() || isInt();
 }
 
-ArrayType::ArrayType(Type* inner, const PoolList<int>& dims, size_t depth)
+bool Type::isCharArray() const {
+    return isArray() && inner()->isChar();
+}
+
+cell_t Type::CellStorageSize() {
+    if (auto at = as<ArrayType>())
+        return CalcArraySize(at);
+    if (auto es = asEnumStruct())
+        return es->array_size();
+    return 1;
+}
+
+ArrayType::ArrayType(Type* inner, int size)
   : Type(nullptr, TypeKind::Array)
 {
     inner_type_ = inner;
-    dims_ = dims.data() + depth;
-    numdim_ = dims.size() - depth;
-}
-
-int ArrayType::dim(int at) const {
-    assert(at >= 0 && at < numdim_);
-    return dims_[at];
+    size_ = size;
 }
 
 TypeManager::TypeManager(CompileContext& cc)
   : cc_(cc)
-{}
+{
+    array_cache_.init(256);
+}
 
 Type* TypeManager::find(Atom* atom) {
     auto iter = types_.find(atom);
@@ -135,16 +161,30 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
     return ptr;
 }
 
-ArrayType* TypeManager::defineArray(Type* element_type, const PoolList<int>& dims) {
-    size_t depth = dims.size() - 1;
+ArrayType* TypeManager::defineArray(Type* element_type, int dim) {
+    return defineArray(element_type, &dim, 1);
+}
+
+ArrayType* TypeManager::defineArray(Type* element_type, const PoolArray<int>& dim_vec) {
+    return defineArray(element_type, dim_vec.buffer(), (int)dim_vec.size());
+}
+
+ArrayType* TypeManager::defineArray(Type* element_type, const int* dim_vec, int numdim) {
+    assert(!element_type->isArray());
+    assert(numdim >= 1);
+
+    size_t depth = numdim - 1;
     Type* iter = element_type;
     for (;;) {
-        if (auto cached = LookupCachedArray(iter, dims, depth); cached != nullptr) {
-            iter = cached;
-        } else {
-            iter = new ArrayType(iter, dims, depth);
-            RegisterType(iter, false);
+        auto lookup = ArrayCachePolicy::Lookup{iter, dim_vec[depth]};
+        auto p = array_cache_.findForAdd(lookup);
+        if (!p.found()) {
+            auto at = new ArrayType(iter, dim_vec[depth]);
+            RegisterType(at, false);
+
+            array_cache_.add(p, at);
         }
+        iter = *p;
 
         if (!depth)
             break;
@@ -153,9 +193,11 @@ ArrayType* TypeManager::defineArray(Type* element_type, const PoolList<int>& dim
     return iter->to<ArrayType>();
 }
 
-ArrayType* TypeManager::LookupCachedArray(Type* element_type, const PoolList<int>& dims, size_t depth) {
-    // NYI.
-    return nullptr;
+ArrayType* TypeManager::redefineArray(Type* element_type, ArrayType* old_type) {
+    std::vector<int> dim_vec;
+    for (auto iter = old_type; iter; iter = iter->inner()->as<ArrayType>())
+        dim_vec.emplace_back(iter->size());
+    return defineArray(element_type, dim_vec.data(), (int)dim_vec.size());
 }
 
 void TypeManager::init() {
@@ -184,9 +226,7 @@ Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {
     return type;
 }
 
-Type*
-TypeManager::defineObject(const char* name)
-{
+Type* TypeManager::defineObject(const char* name) {
     Type* type = add(name, TypeKind::Object);
     type->setObject();
     return type;
@@ -252,10 +292,25 @@ bool typeinfo_t::isCharArray() const {
     return numdim() == 1 && type->isChar();
 }
 
+bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
+    return lookup.type == type->inner() && lookup.size == type->size();
+}
+
+static inline uint32_t HashArrayType(Type* type, int size) {
+    auto first = ke::HashPointer(type);
+    auto second = ke::HashInt32(size);
+    return ke::HashCombine(first, second);
+}
+
+uint32_t TypeManager::ArrayCachePolicy::hash(const Lookup& lookup) {
+    return HashArrayType(lookup.type, lookup.size);
+}
+
 TypenameInfo typeinfo_t::ToTypenameInfo() const {
     if (type)
         return TypenameInfo(type);
     return TypenameInfo(type_atom, is_label);
 }
 
+} // namespace cc
 } // namespace sp

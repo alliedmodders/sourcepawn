@@ -23,6 +23,7 @@
 #include "source-file.h"
 
 namespace sp {
+namespace cc {
 
 class CompileContext;
 
@@ -42,4 +43,5 @@ class BuiltinGenerator final {
     tr::string buffer_;
 };
 
+} // namespace cc
 } // namespace sp
