@@ -96,6 +96,7 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
     case OP_STOR_S_ALT:
     case OP_ADDR_PRI:
     case OP_ADDR_ALT:
+    case OP_MOVS:
       fprintf(fp, "%d", cip[1]);
       break;
 

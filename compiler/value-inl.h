@@ -28,48 +28,7 @@
 #include "types.h"
 
 namespace sp {
-
-inline int value::array_size() const {
-    assert(ident == iARRAY);
-    if (sym) {
-        auto var = sym->as<VarDeclBase>();
-        return var->type_info().dim(array_level_);
-    }
-    return array_level_;
-}
-
-inline int value::array_level() const {
-    assert(ident == iARRAY);
-    if (sym)
-        return array_level_;
-    return 0;
-}
-
-inline int value::array_dim_count() const {
-    if (ident == iARRAYCHAR || ident == iARRAYCELL)
-        return 1;
-    assert(ident == iARRAY);
-    if (sym) {
-        auto var = sym->as<VarDeclBase>();
-        return var->type_info().numdim() - array_level_;
-    }
-    return 1;
-}
-
-inline int value::array_dim(int n) const {
-    if (ident == iARRAYCHAR || ident == iARRAYCELL)
-        return 0;
-
-    assert(ident == iARRAY);
-
-    if (sym) {
-        auto var = sym->as<VarDeclBase>();
-        return var->type_info().dim(array_level_ + n);
-    }
-
-    assert(n == 0);
-    return array_size();
-}
+namespace cc {
 
 inline bool value::canRematerialize() const {
     switch (ident) {
@@ -81,4 +40,5 @@ inline bool value::canRematerialize() const {
     }
 }
 
+} // namespace cc
 } // namespace sp

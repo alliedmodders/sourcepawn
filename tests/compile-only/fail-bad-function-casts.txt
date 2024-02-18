@@ -1,5 +1,5 @@
-(13) : error 178: cannot coerce char[] to any[]; storage classes differ
-(14) : error 178: cannot coerce any[] to char[]; storage classes differ
+(13) : error 450: no viable conversion from "char[3]" to "any[]"
+(14) : error 450: no viable conversion from "any[3]" to "char[]"
 (17) : error 100: function prototypes do not match
 (18) : error 100: function prototypes do not match
 (20) : error 100: function prototypes do not match

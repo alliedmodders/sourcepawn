@@ -34,6 +34,7 @@
 #include "source-manager.h"
 
 namespace sp {
+namespace cc {
 
 class CompileContext;
 class Type;
@@ -534,4 +535,5 @@ class Lexer
 
 std::string StringizePath(const std::filesystem::path& in_path);
 
+} // namespace cc
 } // namespace sp

@@ -1,20 +1,20 @@
-(14) : error 167: cannot use delete, arrays do not have destructors
-(15) : error 167: cannot use delete, arrays do not have destructors
-(16) : error 167: cannot use delete, arrays do not have destructors
-(17) : error 167: cannot use delete, arrays do not have destructors
-(18) : error 167: cannot use delete, arrays do not have destructors
-(19) : error 167: cannot use delete, arrays do not have destructors
-(20) : error 167: cannot use delete, arrays do not have destructors
+(14) : error 115: cannot use delete, type Handle[5] has no destructor
+(15) : error 115: cannot use delete, type Handle[5][5] has no destructor
+(16) : error 115: cannot use delete, type Handle[5][5][5] has no destructor
+(17) : error 115: cannot use delete, type Handle[5][5][5][5] has no destructor
+(18) : error 167: cannot use delete on type "Handle[5][5][5][5][5]"
+(19) : error 167: cannot use delete on type "char[2][4]"
+(20) : error 115: cannot use delete, type char[4] has no destructor
 (21) : error 115: cannot use delete, type char has no destructor
-(23) : error 167: cannot use delete, arrays do not have destructors
-(24) : error 167: cannot use delete, arrays do not have destructors
-(25) : error 167: cannot use delete, arrays do not have destructors
-(26) : error 167: cannot use delete, arrays do not have destructors
-(27) : error 167: cannot use delete, arrays do not have destructors
-(28) : error 167: cannot use delete, arrays do not have destructors
-(29) : error 167: cannot use delete, arrays do not have destructors
+(23) : error 115: cannot use delete, type Handle[] has no destructor
+(24) : error 115: cannot use delete, type Handle[][] has no destructor
+(25) : error 115: cannot use delete, type Handle[][][] has no destructor
+(26) : error 115: cannot use delete, type Handle[][][][] has no destructor
+(27) : error 167: cannot use delete on type "Handle[][][][][]"
+(28) : error 167: cannot use delete on type "char[2][]"
+(29) : error 115: cannot use delete, type char[] has no destructor
 (30) : error 115: cannot use delete, type char has no destructor
-(31) : error 167: cannot use delete, arrays do not have destructors
-(32) : error 167: cannot use delete, arrays do not have destructors
+(31) : error 167: cannot use delete on type "char[][]"
+(32) : error 115: cannot use delete, type char[] has no destructor
 (33) : error 115: cannot use delete, type char has no destructor
-(34) : error 167: cannot use delete, arrays do not have destructors
+(34) : error 167: cannot use delete on type "Handle[200]"

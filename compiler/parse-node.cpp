@@ -22,6 +22,7 @@
 #include "errors.h"
 
 namespace sp {
+namespace cc {
 
 VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
                          const typeinfo_t& type, int vclass, bool is_public, bool is_static,
@@ -120,7 +121,6 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
     is_forward_(false),
     is_native_(false),
     is_analyzing_(false),
-    maybe_returns_array_(false),
     explicit_return_type_(false),
     retvalue_used_(false),
     is_callback_(false),
@@ -132,7 +132,7 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
 }
 
 int FunctionDecl::FindNamedArg(Atom* name) const {
-    for (size_t i = 0; i < args_.size() && args_[i]->type_info().ident != iVARARGS; i++) {
+    for (size_t i = 0; i < args_.size() && !args_[i]->type_info().is_varargs; i++) {
         if (args_[i]->name() == name)
             return (int)i;
     }
@@ -160,7 +160,7 @@ FunctionDecl* FunctionDecl::canonical() {
 }
 
 bool FunctionDecl::IsVariadic() {
-    return !args_.empty() && args_.back()->type_info().ident == iVARARGS;
+    return !args_.empty() && args_.back()->type_info().is_varargs;
 }
 
 bool FunctionDecl::MustReturnValue() const {
@@ -220,8 +220,6 @@ Type* MethodmapPropertyDecl::property_type() const {
     if (setter_->args().size() != 2)
         return types->type_void();
     ArgDecl* valp = setter_->args()[1];
-    if (valp->type_info().ident != iVARIABLE)
-        return types->type_void();
     return valp->type();
 }
 
@@ -279,7 +277,7 @@ IdentifierKind Decl::ident_impl() {
     switch (kind()) {
         case StmtKind::ArgDecl:
         case StmtKind::VarDecl:
-            return as<VarDeclBase>()->type_info().ident;
+            return iVARIABLE;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
             return iCONSTEXPR;
@@ -310,4 +308,5 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
     return nullptr;
 }
 
+} // namespace cc
 } // namespace sp

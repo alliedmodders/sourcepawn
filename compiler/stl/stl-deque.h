@@ -21,11 +21,12 @@
 #include "stl-allocator.h"
 
 namespace sp {
+namespace cc {
 namespace tr {
 
 template <typename T>
 using deque = std::deque<T, StlAllocator<T>>;
 
 } // namespace tr
+} // namespace cc
 } // namespace sp
-

@@ -24,6 +24,7 @@
 #include "parse-node.h"
 
 namespace sp {
+namespace cc {
 
 class Semantics;
 struct typeinfo_t;
@@ -31,15 +32,16 @@ struct typeinfo_t;
 // Determine the static size of an iARRAY based on dimension expressions and
 // array initializers. The array may be converted to an iREFARRAY if it is
 // determined to be dynamic.
-void ResolveArraySize(Semantics* sema, VarDeclBase* decl);
-void ResolveArraySize(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
+bool ResolveArrayType(Semantics* sema, VarDeclBase* decl);
+bool ResolveArrayType(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
 // Perform type and size checks of an array and its initializer if present.
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
 
 void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
-void BuildCompoundInitializer(const typeinfo_t& type, Expr* init, ArrayData* array);
+void BuildCompoundInitializer(Type* type, Expr* init, ArrayData* array);
 
-cell_t CalcArraySize(const typeinfo_t& type);
+cell_t CalcArraySize(Type* type);
 
+} // namespace cc
 } // namespace sp

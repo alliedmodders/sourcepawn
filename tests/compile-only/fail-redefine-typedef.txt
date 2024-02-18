@@ -1,1 +1,1 @@
-(2) : error 432: type Bar was already declared as typedef
+(2) : error 432: type Bar was already declared as function

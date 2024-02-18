@@ -39,6 +39,7 @@
 #include "types.h"
 
 namespace sp {
+namespace cc {
 
 Parser::Parser(CompileContext& cc, Semantics* sema)
   : cc_(cc),
@@ -458,7 +459,6 @@ Parser::parse_enumstruct()
         }
 
         declinfo_t decl = {};
-        decl.type.ident = iVARIABLE;
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
@@ -504,7 +504,6 @@ Parser::parse_pstruct()
         }
 
         declinfo_t decl = {};
-        decl.type.ident = iVARIABLE;
 
         lexer_->need(tPUBLIC);
         auto pos = lexer_->pos();
@@ -1245,9 +1244,10 @@ void
 Parser::parse_post_dims(typeinfo_t* type)
 {
     std::vector<Expr*> dim_exprs;
+    std::vector<int> dims;
     bool has_dim_exprs = false;
     do {
-        type->dim_.emplace_back(0);
+        dims.emplace_back(0);
 
         if (lexer_->match(']')) {
             dim_exprs.emplace_back(nullptr);
@@ -1260,6 +1260,7 @@ Parser::parse_post_dims(typeinfo_t* type)
 
     if (has_dim_exprs)
         new (&type->dim_exprs) PoolArray<Expr*>(dim_exprs);
+    new (&type->dim_) PoolArray<int>(dims);
 }
 
 Stmt*
@@ -1779,12 +1780,11 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     return true;
 }
 
-void
-Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
-{
+void Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args) {
     if (lexer_->match(')'))
         return;
 
+    bool is_variadic = false;
     do {
         auto pos = lexer_->pos();
 
@@ -1792,9 +1792,10 @@ Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
         if (!parse_decl(&decl, DECLFLAG_ARGUMENT))
             continue;
 
-        if (decl.type.ident == iVARARGS) {
-            if (fun->IsVariadic())
+        if (decl.type.is_varargs) {
+            if (is_variadic)
                 report(401);
+            is_variadic = true;
 
             auto p = new ArgDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
                                  false, nullptr);
@@ -1802,7 +1803,7 @@ Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args)
             continue;
         }
 
-        if (fun->IsVariadic())
+        if (is_variadic)
             report(402);
 
         Expr* init = nullptr;
@@ -1915,8 +1916,6 @@ MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
         // Now, we should get an identifier.
         if (!lexer_->needsymbol(&symbol))
             return nullptr;
-
-        ret_type.type.ident = iVARIABLE;
     }
     ret_type.name = symbol;
 
@@ -1935,13 +1934,13 @@ MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     else
         fun->set_is_stock();
 
-    if (map->name() == symbol && ret_type.type.ident != 0) {
+    if (map->name() == symbol && ret_type.type.bindable()) {
         // Keep parsing, as long as we abort before name resolution it's fine.
         report(fun, 434);
     }
 
     bool has_this = false;
-    if (is_dtor || (ret_type.type.ident != 0 && !is_static))
+    if (is_dtor || (ret_type.type.bindable() && !is_static))
         has_this = true;
 
     ke::SaveAndSet<bool> require_newdecls(&lexer_->require_newdecls(), true);
@@ -2011,12 +2010,10 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
     }
 
     declinfo_t ret_type = {};
-    if (getter) {
+    if (getter)
         ret_type.type = type;
-    } else {
+    else
         ret_type.type.set_type(types_->type_void());
-        ret_type.type.ident = iVARIABLE;
-    }
 
     auto fun = new MemberFunctionDecl(pos, map, ret_type);
     std::string tmpname = map->name()->str() + "." + name->str();
@@ -2103,8 +2100,6 @@ Parser::parse_function_type()
         auto decl = cc_.allocator().alloc<declinfo_t>();
         new (decl) declinfo_t();
 
-        decl->type.ident = iVARIABLE;
-
         parse_new_decl(decl, nullptr, DECLFLAG_ARGUMENT);
 
         // Eat optional symbol name.
@@ -2141,8 +2136,6 @@ bool
 Parser::parse_decl(declinfo_t* decl, int flags)
 {
     Atom* ident = nullptr;
-
-    decl->type.ident = iVARIABLE;
 
     // Match early varargs as old decl.
     if (lexer_->peek(tELLIPS))
@@ -2216,7 +2209,6 @@ void
 Parser::fix_mispredicted_postdims(declinfo_t* decl)
 {
     assert(decl->type.has_postdims);
-    assert(decl->type.ident == iARRAY);
 
     decl->type.has_postdims = false;
 
@@ -2288,7 +2280,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
 
     // Look for varargs and end early.
     if (lexer_->match(tELLIPS)) {
-        type->ident = iVARARGS;
+        type->is_varargs = true;
         return TRUE;
     }
 
@@ -2339,7 +2331,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
 
     if (flags & DECLMASK_NAMED_DECL) {
         if ((flags & DECLFLAG_ARGUMENT) && lexer_->match(tELLIPS)) {
-            decl->type.ident = iVARARGS;
+            decl->type.is_varargs = true;
             return true;
         }
 
@@ -2425,8 +2417,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         //    int x[], y...
         //
         // Reset the fact that we saw an array.
-        decl->type.dim_.clear();
-        decl->type.ident = iVARIABLE;
+        decl->type.dim_ = {};
         decl->type.has_postdims = false;
         if (lexer_->match('[')) {
             // int x[], y[]
@@ -2463,7 +2454,6 @@ Parser::reparse_old_decl(declinfo_t* decl, int flags)
     bool is_const = decl->type.is_const;
 
     *decl = {};
-    decl->type.ident = iVARIABLE;
     decl->type.is_const = is_const;
 
     return parse_old_decl(decl, flags);
@@ -2480,8 +2470,6 @@ Parser::parse_post_array_dims(declinfo_t* decl, int flags)
 
     parse_post_dims(type);
 
-    // We can't deduce iARRAY until the analysis phase. Start with iARRAY for now.
-    decl->type.ident = iARRAY;
     decl->type.has_postdims = TRUE;
 }
 
@@ -2508,10 +2496,11 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
     type->set_type(ti);
 
     // Note: we could have already filled in the prefix array bits, so we check
-    // that ident != iARRAY before looking for an open bracket.
-    if (type->ident != iARRAY && lexer_->match('[')) {
+    // whether we already have dimensions before parsing more.
+    if (type->dim_.empty() && lexer_->match('[')) {
+        std::vector<int> dims;
         do {
-            type->dim_.emplace_back(0);
+            dims.emplace_back(0);
             if (!lexer_->match(']')) {
                 report(101);
 
@@ -2520,12 +2509,12 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
                 lexer_->match(']');
             }
         } while (lexer_->match('['));
-        type->ident = iARRAY;
+        new (&type->dim_) PoolArray<int>(dims);
     }
 
     if (flags & DECLFLAG_ARGUMENT) {
         if (lexer_->match('&')) {
-            if (type->ident == iARRAY)
+            if (type->numdim())
                 report(137);
             else
                 type->reference = true;
@@ -2622,4 +2611,5 @@ Parser::nextop(int* opidx, const int* list)
     return FALSE; /* entire list scanned, nothing found */
 }
 
+} // namespace cc
 } // namespace sp

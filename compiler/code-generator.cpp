@@ -36,7 +36,8 @@
 #include "symbols.h"
 #include "value-inl.h"
 
-using namespace sp;
+namespace sp {
+namespace cc {
 
 #define __ asm_.
 
@@ -103,7 +104,7 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    *addr, decl->type()->type_index(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
-    if (decl->ident() == iARRAY) {
+    if (decl->type()->isArray()) {
         string += " [ ";
         for (int i = 0; i < decl->dim_count(); i++)
             string += ke::StringPrintf("%x:%x ", decl->type()->type_index(), decl->dim(i));
@@ -295,7 +296,7 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
 
     __ bind_to(decl->label(), data_.dat_address());
 
-    if (decl->ident() == iARRAY || (decl->ident() == iVARIABLE && decl->type()->isEnumStruct())) {
+    if (decl->type()->isArray() || (decl->ident() == iVARIABLE && decl->type()->isEnumStruct())) {
         ArrayData array;
         BuildCompoundInitializer(decl, &array, data_.dat_address());
 
@@ -321,9 +322,10 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
 void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
 
-    bool is_struct = (decl->ident() == iVARIABLE && decl->type()->isEnumStruct());
+    bool is_struct = decl->type()->isEnumStruct();
+    bool is_array = decl->type()->isArray();
 
-    if (decl->ident() == iVARIABLE && !is_struct) {
+    if (!is_array && !is_struct) {
         markstack(decl, MEMUSE_STATIC, 1);
         decl->BindAddress(-current_stack_ * sizeof(cell));
 
@@ -345,7 +347,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_PUSH_C, 0);
         }
-    } else if (decl->ident() == iARRAY || is_struct) {
+    } else {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
@@ -355,7 +357,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         auto init_rhs = decl->init_rhs();
         if (init_rhs && init_rhs->as<NewArrayExpr>()) {
             EmitExpr(init_rhs->as<NewArrayExpr>());
-        } else if (!init_rhs || decl->ident() == iARRAY || is_struct) {
+        } else if (!init_rhs || decl->type()->isArray() || is_struct) {
             ArrayData array;
             BuildCompoundInitializer(decl, &array, 0);
 
@@ -403,11 +405,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
                 __ emit(OP_GENARRAY, 1);
             __ const_pri(str_addr);
             __ copyarray(decl, cells * sizeof(cell));
-        } else {
-            assert(false);
         }
-    } else {
-        assert(false);
     }
 }
 
@@ -706,27 +704,23 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
 
     bool saved_lhs = false;
     if (IsAssignOp(token)) {
-        switch (left_val.ident) {
-            case iARRAYCELL:
-            case iARRAYCHAR:
-            case iARRAY:
-                if (oper) {
-                    __ emit(OP_PUSH_PRI);
-                    EmitRvalue(left_val);
-                    saved_lhs = true;
-                }
-                break;
-            case iACCESSOR:
+        if (left_val.ident == iARRAYCELL || left_val.ident == iARRAYCHAR ||
+            left_val.type()->isArray())
+        {
+            if (oper) {
                 __ emit(OP_PUSH_PRI);
-                if (oper)
-                    EmitRvalue(left_val);
+                EmitRvalue(left_val);
                 saved_lhs = true;
-                break;
-            default:
-                assert(left->lvalue());
-                if (oper)
-                    EmitRvalue(left_val);
-                break;
+            }
+        } else if (left_val.ident == iACCESSOR) {
+            __ emit(OP_PUSH_PRI);
+            if (oper)
+                EmitRvalue(left_val);
+            saved_lhs = true;
+        } else {
+            assert(left->lvalue());
+            if (oper)
+                EmitRvalue(left_val);
         }
 
         if (expr->array_copy_length()) {
@@ -742,7 +736,7 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
     }
 
     assert(!expr->array_copy_length());
-    assert(left_val.ident != iARRAY);
+    assert(!left_val.type()->isArray());
 
     EmitBinaryInner(oper, expr->userop(), left, right);
 
@@ -1056,9 +1050,6 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 {
     Decl* sym = expr->decl();
     switch (sym->ident()) {
-        case iARRAY:
-            __ address(sym, sPRI);
-            break;
         case iFUNCTN: {
             auto fun = sym->as<FunctionDecl>();
             assert(fun == fun->canonical());
@@ -1069,7 +1060,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
             break;
         }
         case iVARIABLE:
-            if (sym->type()->isEnumStruct())
+            if (sym->type()->isArray() || sym->type()->isEnumStruct())
                 __ address(sym, sPRI);
             break;
         default:
@@ -1086,10 +1077,12 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     auto& base_val = expr->base()->val();
 
     cell_t rank_size = sizeof(cell_t);
-    if (base_val.array_dim_count() == 1) {
-        if (base_val.type()->isChar())
+
+    auto array_type = base_val.type()->as<ArrayType>();
+    if (!array_type->inner()->isArray()) {
+        if (array_type->inner()->isChar())
             rank_size = 1;
-        else if (auto es = base_val.type()->asEnumStruct())
+        else if (auto es = array_type->inner()->asEnumStruct())
             rank_size = es->array_size() * sizeof(cell_t);
     }
 
@@ -1103,8 +1096,8 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
         __ emit(OP_PUSH_PRI);
         EmitExpr(expr->index());
 
-        if (base_val.array_size()) {
-            __ emit(OP_BOUNDS, base_val.array_size() - 1); /* run time check for array bounds */
+        if (array_type->size()) {
+            __ emit(OP_BOUNDS, array_type->size() - 1); /* run time check for array bounds */
         } else {
             // vm uses unsigned compare, this protects against negative indices.
             __ emit(OP_BOUNDS, INT_MAX); 
@@ -1122,8 +1115,8 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     }
 
     // The indexed item is another array (multi-dimensional arrays).
-    if (base_val.array_dim_count() > 1) {
-        assert(expr->val().ident == iARRAY);
+    if (array_type->inner()->isArray()) {
+        assert(expr->val().type()->isArray());
         __ emit(OP_LOAD_I);
     }
 }
@@ -1150,18 +1143,13 @@ CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
     }
 }
 
-void
-CodeGenerator::EmitCallExpr(CallExpr* call)
-{
-    auto& val = call->val();
-
+void CodeGenerator::EmitCallExpr(CallExpr* call) {
     // If returning an array, push a hidden parameter.
-    if (val.sym) {
-        auto var = val.sym->as<VarDecl>();
-        cell retsize = CalcArraySize(var->type_info());
+    if (call->fun()->return_array()) {
+        cell retsize = call->fun()->return_type()->CellStorageSize();
+        assert(retsize);
 
-        if (retsize)
-            __ emit(OP_HEAP, retsize * sizeof(cell));
+        __ emit(OP_HEAP, retsize * sizeof(cell));
         __ emit(OP_PUSH_ALT);
         TrackTempHeapAlloc(call, 1);
     }
@@ -1186,46 +1174,38 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
             arg = arginfov[i];
         } else {
             arg = arginfov.back();
-            assert(arg->type_info().ident == iVARARGS);
+            assert(arg->type_info().is_varargs);
         }
 
-        switch (arg->type_info().ident) {
-            case iVARARGS:
-                if (val.ident == iVARIABLE) {
-                    assert(val.sym);
-                    assert(lvalue);
-                    /* treat a "const" variable passed to a function with a non-const
-                     * "variable argument list" as a constant here */
-                    if (val.sym->is_const() && !arg->type_info().is_const) {
-                        EmitRvalue(val);
-                        __ setheap_pri();
-                        TrackTempHeapAlloc(expr, 1);
-                    } else if (lvalue) {
-                        __ address(val.sym, sPRI);
-                    } else {
-                        __ setheap_pri();
-                        TrackTempHeapAlloc(expr, 1);
-                    }
-                } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
-                    /* allocate a cell on the heap and store the
-                     * value (already in PRI) there */
+        if (arg->type_info().is_varargs) {
+            if (val.ident == iVARIABLE) {
+                assert(val.sym);
+                assert(lvalue);
+                /* treat a "const" variable passed to a function with a non-const
+                 * "variable argument list" as a constant here */
+                if (val.sym->is_const() && !arg->type_info().is_const) {
+                    EmitRvalue(val);
+                    __ setheap_pri();
+                    TrackTempHeapAlloc(expr, 1);
+                } else if (lvalue) {
+                    __ address(val.sym, sPRI);
+                } else {
                     __ setheap_pri();
                     TrackTempHeapAlloc(expr, 1);
                 }
-                break;
-            case iVARIABLE:
-                if (arg->type_info().type->isReference()) {
-                    if (val.ident == iVARIABLE) {
-                        assert(val.sym);
-                        __ address(val.sym, sPRI);
-                    }
+            } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
+                /* allocate a cell on the heap and store the
+                 * value (already in PRI) there */
+                __ setheap_pri();
+                TrackTempHeapAlloc(expr, 1);
+            }
+        } else {
+            if (arg->type_info().type->isReference()) {
+                if (val.ident == iVARIABLE) {
+                    assert(val.sym);
+                    __ address(val.sym, sPRI);
                 }
-                break;
-            case iARRAY:
-                break;
-            default:
-                assert(false);
-                break;
+            }
         }
 
         __ emit(OP_PUSH_PRI);
@@ -1233,7 +1213,7 @@ CodeGenerator::EmitCallExpr(CallExpr* call)
 
     EmitCall(call->fun(), (cell)argv.size());
 
-    if (val.sym)
+    if (call->fun()->return_array())
         __ emit(OP_POP_PRI);
 }
 
@@ -1241,26 +1221,18 @@ void
 CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
 {
     const auto& arg = expr->arg();
-    switch (arg->type_info().ident) {
-        case iARRAY:
+    if (arg->type()->isReference()) {
+        __ const_pri(arg->default_value()->val.get());
+        __ setheap_pri();
+        TrackTempHeapAlloc(expr, 1);
+    } else if (arg->type()->isArray()) {
+        EmitDefaultArray(expr, arg);
+    } else {
+        if (arg->type()->isEnumStruct())
             EmitDefaultArray(expr, arg);
-            break;
-        case iVARIABLE:
-            if (arg->type()->isReference()) {
-                __ const_pri(arg->default_value()->val.get());
-                __ setheap_pri();
-                TrackTempHeapAlloc(expr, 1);
-            } else {
-                if (arg->type()->isEnumStruct())
-                    EmitDefaultArray(expr, arg);
-                else
-                    __ const_pri(arg->default_value()->val.get());
-            }
-            break;
-        default:
-            assert(false);
+        else
+            __ const_pri(arg->default_value()->val.get());
     }
-
 }
 
 void
@@ -1291,7 +1263,11 @@ void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
         numdim++;
     }
 
-    if (auto es = type->asEnumStruct()) {
+    auto innermost = type;
+    while (innermost->isArray())
+        innermost = innermost->to<ArrayType>()->inner();
+
+    if (auto es = innermost->asEnumStruct()) {
         // The last dimension is implicit in the size of the enum struct. Note
         // that when synthesizing a NewArrayExpr for old-style declarations,
         // it is impossible to have an enum struct.
@@ -1327,23 +1303,16 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
     }
 }
 
-void
-CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
-{
+void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     ArrayData array;
-    BuildCompoundInitializer(stmt->array(), nullptr, &array);
+    BuildCompoundInitializer(stmt->expr()->val().type(), nullptr, &array);
 
     auto info = fun_->return_array();
     if (array.iv.empty()) {
-        VarDecl* sub_decl = info->var;
-
         // A much simpler copy can be emitted.
-        __ load_hidden_arg(fun_, sub_decl, true);
+        __ load_hidden_arg(fun_, true);
 
-        cell size = sub_decl->dim(0); // :todo: must be val
-        if (sub_decl->type()->isChar())
-            size = char_array_cells(size);
-
+        cell size = fun_->return_type()->CellStorageSize();
         __ emit(OP_MOVS, size * sizeof(cell));
         return;
     }
@@ -1374,7 +1343,7 @@ CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt)
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(fun_, info->var, false);
+    __ load_hidden_arg(fun_, false);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
@@ -1391,7 +1360,7 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         EmitExpr(stmt->expr());
 
         const auto& v = stmt->expr()->val();
-        if (v.ident == iARRAY)
+        if (v.type()->isArray())
             EmitReturnArrayStmt(stmt);
     } else {
         /* this return statement contains no expression */
@@ -2275,3 +2244,5 @@ bool CodeGenerator::ComputeStackUsage() {
     return ComputeStackUsage(callgraph_.begin());
 }
 
+} // namespace cc
+} // namespace sp

@@ -23,6 +23,7 @@
 #include "compile-context.h"
 
 namespace sp {
+namespace cc {
 
 BuiltinGenerator::BuiltinGenerator(CompileContext& cc)
   : cc_(cc)
@@ -52,4 +53,5 @@ std::shared_ptr<SourceFile> BuiltinGenerator::Generate(const std::string& name) 
     return cc_.sources()->Open(name, std::move(buffer_));
 }
 
+} // namespace cc
 } // namespace sp

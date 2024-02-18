@@ -35,6 +35,7 @@
 #include "symbols.h"
 
 namespace sp {
+namespace cc {
 
 class FunctionDecl;
 
@@ -1361,15 +1362,12 @@ class ReturnStmt : public Stmt
 
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
-    typeinfo_t& array() { return array_; }
-    const typeinfo_t& array() const { return array_; }
 
   private:
     bool CheckArrayReturn(SemaContext& sc);
 
   private:
     Expr* expr_;
-    typeinfo_t array_;
 };
 
 class AssertStmt : public Stmt
@@ -1641,6 +1639,11 @@ class FunctionDecl : public Decl
     Type* type() const override { return return_type(); }
     Type* return_type() const { return decl_.type.type; }
 
+    // Only to be called when updating the type for return arrays.
+    // This should be removed when arrays are fully dynamic, or if type
+    // resolution becomes fully recursive.
+    void update_return_type(Type* type) { decl_.type.type = type; }
+
     const typeinfo_t& type_info() const { return decl_.type; }
     typeinfo_t& mutable_type_info() { return decl_.type; }
 
@@ -1672,14 +1675,11 @@ class FunctionDecl : public Decl
 
     SymbolScope* scope() const { return scope_; }
 
-    bool maybe_returns_array() const { return maybe_returns_array_; }
-    void set_maybe_returns_array() { maybe_returns_array_ = true; }
-
     void CheckReturnUsage();
     bool IsVariadic();
 
     struct ReturnArrayInfo : public PoolObject {
-        VarDecl* var = nullptr;
+        cell_t hidden_address = 0;
         cell_t iv_size = 0;
         cell_t dat_addr = 0;
         cell_t zeroes = 0;
@@ -1732,7 +1732,6 @@ class FunctionDecl : public Decl
     bool is_forward_ SP_BITFIELD(1);
     bool is_native_ SP_BITFIELD(1);
     bool is_analyzing_ SP_BITFIELD(1);
-    bool maybe_returns_array_ SP_BITFIELD(1);
     bool explicit_return_type_ SP_BITFIELD(1);
     bool retvalue_used_ SP_BITFIELD(1);
     bool is_callback_ SP_BITFIELD(1);
@@ -1926,4 +1925,5 @@ class MethodmapMethodDecl : public MemberFunctionDecl {
     bool is_dtor_ : 1;
 };
 
+} // namespace cc
 } // namespace sp

@@ -23,6 +23,7 @@
 #include "parse-node.h"
 
 namespace sp {
+namespace cc {
 
 void SymbolScope::Add(Decl* decl) {
     if (!symbols_) {
@@ -49,5 +50,5 @@ void SymbolScope::AddChain(Decl* decl) {
     }
 }
 
-
+} // namespace cc
 } // namespace sp

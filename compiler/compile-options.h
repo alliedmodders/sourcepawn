@@ -27,6 +27,7 @@
 #define CTRL_CHAR '\\'  /* default control character */
 
 namespace sp {
+namespace cc {
 
 struct CompileOptions {
     bool need_semicolon = false;
@@ -45,4 +46,5 @@ struct CompileOptions {
     std::vector<std::pair<std::string, std::string>> predefines;
 };
 
+} // namespace cc
 } // namespace sp

@@ -31,6 +31,7 @@
 #include "types.h"
 
 namespace sp {
+namespace cc {
 
 CompileContext* CompileContext::sInstance = nullptr;
 
@@ -104,4 +105,5 @@ void NativeAllocator::Free(void* p, size_t n) {
     free(p);
 }
 
+} // namespace cc
 } // namespace sp

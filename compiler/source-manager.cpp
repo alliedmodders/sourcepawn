@@ -27,6 +27,7 @@
 using namespace sp;
 
 namespace sp {
+namespace cc {
 
 SourceManager::SourceManager(CompileContext& cc)
   : cc_(cc)
@@ -193,4 +194,5 @@ uint32_t SourceManager::GetLineAndCol(SourceLocation loc, uint32_t* col) {
     return line;
 }
 
+} // namespace cc
 } // namespace sp

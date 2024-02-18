@@ -1,2 +1,2 @@
-(9) : error 035: argument type mismatch (argument 1)
-(10) : error 035: argument type mismatch (argument 1)
+(9) : error 450: no viable conversion from "int" to "int[]"
+(10) : error 450: no viable conversion from "int" to "int[]"

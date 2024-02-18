@@ -29,6 +29,7 @@
 #include "stl/stl-vector.h"
 
 namespace sp {
+namespace cc {
 
 class SourceFile : public std::enable_shared_from_this<SourceFile>
 {
@@ -86,4 +87,5 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
     tr::vector<uint32_t> line_extents_;
 };
 
+} // namespace cc
 } // namespace sp

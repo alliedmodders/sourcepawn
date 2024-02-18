@@ -33,6 +33,7 @@
 #include "stl/stl-unordered-map.h"
 
 namespace sp {
+namespace cc {
 
 class CompileContext;
 class Decl;
@@ -81,32 +82,17 @@ struct value {
         ident = iCONSTEXPR;
         constval_ = val;
     }
-    void set_array(IdentifierKind ident, Decl* sym, int level) {
-        assert(ident == iARRAY || ident == iARRAYCELL ||
-               ident == iARRAYCHAR);
+
+    void set_slice(IdentifierKind ident, Decl* sym) {
         this->ident = ident;
         this->sym = sym;
-        this->array_level_ = level;
     }
-    void set_array(IdentifierKind ident, int size) {
-        assert(ident == iARRAY);
-        this->ident = ident;
-        this->sym = nullptr;
-        this->array_level_ = size;
-    }
-
-    int array_size() const;
-    int array_level() const;
-    int array_dim_count() const;
-    int array_dim(int n) const;
 
     union {
         // when ident == iACCESSOR
         MethodmapPropertyDecl* accessor_;
         // when ident == iCONSTEXPR
         cell constval_;
-        // when ident == iARRAY
-        int array_level_;
     };
 
     static value ErrorValue() {
@@ -126,4 +112,5 @@ bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, 
 void markusage(Decl* decl, int usage);
 Decl* FindEnumStructField(Type* type, Atom* name);
 
+} // namespace cc
 } // namespace sp

@@ -1,0 +1,1 @@
+(10) : error 450: no viable conversion from "float[3]" to "int[3]

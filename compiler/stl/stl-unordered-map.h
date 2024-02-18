@@ -23,6 +23,7 @@
 #include "stl-allocator.h"
 
 namespace sp {
+namespace cc {
 namespace tr {
 
 template <typename Key,
@@ -32,4 +33,5 @@ template <typename Key,
 using unordered_map = std::unordered_map<Key, T, Hash, KeyEqual, StlAllocator<std::pair<const Key, T>>>;
 
 } // namespace tr
+} // namespace cc
 } // namespace sp

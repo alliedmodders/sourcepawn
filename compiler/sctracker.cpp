@@ -36,6 +36,7 @@
 #include "types.h"
 
 namespace sp {
+namespace cc {
 
 funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
     if (anonymous) {
@@ -60,13 +61,8 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     ft->ret_type = sym->type();
 
     std::vector<typeinfo_t> args;
-    for (auto arg : fun->canonical()->args()) {
-        typeinfo_t type = arg->type_info();
-        if (type.ident != iARRAY)
-          assert(!type.numdim());
-
-        args.emplace_back(type);
-    }
+    for (auto arg : fun->canonical()->args())
+        args.emplace_back(arg->type_info());
     new (&ft->args) PoolArray<typeinfo_t>(args);
 
     auto name = ke::StringPrintf("::ft:%s", fun->name()->chars());
@@ -76,4 +72,5 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     return fe;
 }
 
+} // namespace cc
 } // namespace sp

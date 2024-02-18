@@ -32,9 +32,11 @@
 #include "parse-node.h"
 #include "sctracker.h"
 #include "symbols.h"
+#include "type-checker.h"
 #include "value-inl.h"
 
 namespace sp {
+namespace cc {
 
 Semantics::Semantics(CompileContext& cc)
   : cc_(cc)
@@ -158,28 +160,27 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
 bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
-    const auto& type = decl->type_info();
+    const auto& type = decl->type();
+    bool is_const = decl->type_info().is_const;
 
     // Constants are checked during binding.
     if (decl->ident() == iCONSTEXPR)
         return true;
 
-    if (decl->type()->isPstruct())
+    if (type->isPstruct())
         return CheckPstructDecl(decl);
 
-    if (!decl->as<ArgDecl>() && type.is_const && !decl->init() && !decl->is_public())
+    if (!decl->as<ArgDecl>() && is_const && !decl->init() && !decl->is_public())
         report(decl->pos(), 251);
 
     // CheckArrayDecl works on enum structs too.
-    if (type.ident == iARRAY || type.type->isEnumStruct()) {
+    if (type->isArray() || type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
             return false;
         if (decl->vclass() == sLOCAL)
             pending_heap_allocation_ = true;
         return true;
     }
-
-    assert(type.ident == iVARIABLE);
 
     auto init = decl->init();
 
@@ -232,8 +233,8 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (visited[i])
             continue;
         auto arg = ps->fields()[i];
-        if (arg->type_info().ident == iARRAY) {
-            assert(arg->type()->isChar());
+        if (auto at = arg->type()->as<ArrayType>()) {
+            assert(at->inner()->isChar());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
             init->fields().push_back(new StructInitFieldExpr(arg->name(), expr, decl->pos()));
@@ -257,15 +258,17 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
 
     visited->at(arg->offset()) = true;
 
+        // :TODO: use tc here
+#if 0
     if (auto expr = field->value->as<StringExpr>()) {
-        if (arg->type_info().ident != iARRAY) {
+        if (!arg->type()->isArray()) {
             report(expr->pos(), 48);
             return false;
         }
-        if (!arg->type()->isChar())
+        if (!arg->type()->isCharArray())
             report(expr->pos(), 213) << types_->type_char() << arg->type();
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-        if (arg->type_info().ident != iVARIABLE) {
+        if (arg->type()->isArray()) {
             report(expr->pos(), 23);
             return false;
         }
@@ -291,8 +294,8 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
                 return false;
             }
             matchtag(arg->type(), var->type(), MATCHTAG_COERCE);
-        } else if (arg->type_info().ident == iARRAY) {
-            if (var->ident() != iARRAY) {
+        } else if (arg->type_info().type->isArray()) {
+            if (!var->type()->isArray()) {
                 report(expr->pos(), 405);
                 return false;
             }
@@ -308,6 +311,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         assert(false);
         return false;
     }
+#endif
     return true;
 }
 
@@ -491,15 +495,15 @@ bool Expr::HasSideEffects() {
             return to<CastExpr>()->expr()->HasSideEffects();
         case ExprKind::CommaExpr: {
             auto e = to<CommaExpr>();
-            return sp::HasSideEffects(e->exprs());
+            return cc::HasSideEffects(e->exprs());
         }
         case ExprKind::ArrayExpr: {
             auto e = to<ArrayExpr>();
-            return sp::HasSideEffects(e->exprs());
+            return cc::HasSideEffects(e->exprs());
         }
         case ExprKind::NewArrayExpr: {
             auto e = to<NewArrayExpr>();
-            return sp::HasSideEffects(e->exprs());
+            return cc::HasSideEffects(e->exprs());
         }
         case ExprKind::IndexExpr: {
             auto e = to<IndexExpr>();
@@ -530,7 +534,7 @@ bool Expr::HasSideEffects() {
 
 bool Semantics::CheckScalarType(Expr* expr) {
     const auto& val = expr->val();
-    if (val.ident == iARRAY) {
+    if (val.type()->isArray()) {
         if (val.sym)
             report(expr, 33) << val.sym->name();
         else
@@ -687,7 +691,7 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
 
     const auto& expr_val = expr->val();
     if (expr_val.ident != iACCESSOR) {
-        if (expr_val.sym->is_const()) {
+        if (expr_val.sym && expr_val.sym->is_const()) {
             report(incdec, 22); /* assignment to const argument */
             return false;
         }
@@ -763,7 +767,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
             // If it's an outparam, also mark it as read.
             if (sym->vclass() == sARGUMENT &&
-                (sym->type()->isReference() || sym->ident() == iARRAY))
+                (sym->type()->isReference() || sym->type()->isArray()))
             {
                 markusage(sym, uREAD);
             }
@@ -799,12 +803,12 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     if (oper_tok) {
         assert(token != '=');
 
-        if (left_val.ident == iARRAY) {
+        if (left_val.type()->isArray()) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
         }
-        if (right_val.ident == iARRAY) {
+        if (right_val.type()->isArray()) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
             report(expr, 33) << ptr; /* array must be indexed */
             return false;
@@ -859,22 +863,16 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
     }
 
     int oper_tok = expr->oper();
-    if (left_ident == iARRAY) {
+    if (auto left_array = left->val().type()->as<ArrayType>()) {
         // array assignment is permitted too (with restrictions)
         if (oper_tok) {
             report(expr, 23);
             return false;
         }
-        Decl* left_sym = left->val().sym;
-        if (!left_sym) {
-            report(expr, 142);
-            return false;
-        }
 
-        auto left_var = left_sym->as<VarDeclBase>();
-        for (int i = 0; i < left_var->type_info().numdim(); i++) {
-            if (!left_var->type_info().dim(i)) {
-                report(expr, 46) << left_sym->name();
+        for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
+            if (!iter->size()) {
+                report(left, 46);
                 return false;
             }
         }
@@ -886,7 +884,6 @@ bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
     }
 
     const auto& left_val = left->val();
-    assert(left_val.sym || left_val.accessor());
 
     // may not change "constant" parameters
     if (!expr->initializer() && left_val.sym && left_val.sym->is_const()) {
@@ -908,58 +905,25 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
-    if (left_val.ident == iARRAY) {
-        if (right_val.ident != iARRAY) {
-            report(expr, 47);
+    if (auto left_array = left_val.type()->as<ArrayType>()) {
+        TypeChecker tc(expr, left_val.type(), right_val.type(), TypeChecker::Assignment);
+        if (!tc.Coerce())
+            return false;
+
+        auto right_array = right_val.type()->to<ArrayType>();
+        if (right_array->inner()->isArray()) {
+            report(expr, 23);
             return false;
         }
 
-        bool exact_match = true;
-        cell right_length = 0;
-        Type* right_idx_type = nullptr;
-        int left_length = left_val.array_size();
-        if (right_val.sym) {
-            // Change from the old logic - we immediately reject multi-dimensional
-            // arrays in assignment and don't bother validating subarray assignment.
-            auto right_var = right_val.sym->as<VarDeclBase>();
-            if (right_var->type_info().numdim() - right_val.array_level() > 1) {
-                report(expr, 23);
-                return false;
-            }
-
-            right_length = right_val.array_size();
-            right_idx_type = right_val.type();
-        } else {
-            right_length = right_val.array_size();
-            right_idx_type = types_->type_int();
-        }
-
-        if (right_val.type()->isChar())
-            exact_match = false;
-
-        if (left_val.array_dim_count() != 1) {
-            report(expr, 47); // array dimensions must match
+        if (right_array->size() == 0) {
+            report(expr, 9);
             return false;
         }
-        if (left_length < right_length || (exact_match && left_length > right_length) ||
-            right_length == 0)
-        {
-            report(expr, 47); // array sizes must match
-            return false;
-        }
-        if (left_val.ident != iARRAYCELL &&
-            !matchtag(left_val.sym->type(), right_idx_type, MATCHTAG_COERCE | MATCHTAG_SILENT))
-        {
-            report(expr, 229) << (right_val.sym ? right_val.sym->name() : left_val.sym->name());
-        }
 
-        expr->set_array_copy_length(right_length);
-        if (left_val.sym->type()->isChar())
-            expr->set_array_copy_length(char_array_cells(expr->array_copy_length()));
-        else if (auto es = left_val.sym->type()->asEnumStruct())
-            expr->set_array_copy_length(right_length * es->array_size());
+        expr->set_array_copy_length(CalcArraySize(right_array));
     } else {
-        if (right_val.ident == iARRAY) {
+        if (right_val.type()->isArray()) {
             // Hack. Special case array literals assigned to an enum struct,
             // since we don't have the infrastructure to deduce an RHS type
             // yet.
@@ -978,7 +942,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
         !checkval_string(&left_val, &right_val) &&
         !expr->assignop().sym)
     {
-        if ((left_val.ident == iARRAY) &&
+        if (left_val.type()->isArray() &&
             ((left_val.type()->isChar() && !right_val.type()->isChar()) ||
              (!left_val.type()->isChar() && right_val.type()->isChar())))
         {
@@ -993,7 +957,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
 
             auto es = left_val.type()->asEnumStruct();
             expr->set_array_copy_length(es->array_size());
-        } else {
+        } else if (!left_val.type()->isArray()) {
             matchtag(left_val.type(), right_val.type(), TRUE);
         }
     }
@@ -1137,12 +1101,12 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         const auto& left_val = left->val();
         const auto& right_val = right->val();
 
-        if (left_val.ident == iARRAY) {
+        if (left_val.type()->isArray()) {
             const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
             report(left, 33) << ptr; /* array must be indexed */
             return false;
         }
-        if (right_val.ident == iARRAY) {
+        if (right_val.type()->isArray()) {
             const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
             report(right, 33) << ptr; /* array must be indexed */
             return false;
@@ -1224,42 +1188,23 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
 
     const auto& left = second->val();
     const auto& right = third->val();
-    bool left_array = (left.ident == iARRAY);
-    bool right_array = (left.ident == iARRAY);
-    if (!left_array && right_array) {
-        const char* ptr = "-unknown-";
-        if (left.sym != nullptr)
-            ptr = left.sym->name()->chars();
-        report(expr, 33) << ptr; /* array must be indexed */
-        return false;
-    } else if (left_array && !right_array) {
-        const char* ptr = "-unknown-";
-        if (right.sym != nullptr)
-            ptr = right.sym->name()->chars();
-        report(expr, 33) << ptr; /* array must be indexed */
-        return false;
-    }
 
-    if (left.type()->isEnumStruct() || right.type()->isEnumStruct()) {
-        if (left.type() != right.type()) {
-            report(expr, 134) << left.type() << right.type();
-            return false;
-        }
-    } else {
-        matchtag_commutative(left.type(), right.type(), FALSE);
-    }
+    TypeChecker tc(second, left.type(), right.type(), TypeChecker::Generic,
+                   TypeChecker::Ternary | TypeChecker::Commutative);
+    if (!tc.Check())
+        return false;
 
-    /* If both sides are arrays, we should return the maximal as the lvalue.
-     * Otherwise we could buffer overflow and the compiler is too stupid.
-     * Literal strings have a constval == -(num_cells) so the cmp is flipped.
-     */
+    // Huge hack: for now, take the larger of two char arrays.
     auto& val = expr->val();
     val = left;
-    if (val.ident == iARRAY && right.ident == iARRAY && right.array_size() > val.array_size())
-        val = right;
+    if (val.type()->isCharArray() && right.type()->isCharArray()) {
+        auto left_array = val.type()->to<ArrayType>();
+        auto right_array = right.type()->to<ArrayType>();
+        if (right_array->size() > left_array->size())
+            val = right;
+    }
 
-    if (val.ident != iARRAY)
-        val.ident = iEXPRESSION;
+    val.ident = iEXPRESSION;
     return true;
 }
 
@@ -1311,6 +1256,19 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     expr->set_lvalue(expr->expr()->lvalue());
 
     Type* ltype = out_val.type();
+
+    auto actual_array =  ltype->as<ArrayType>();
+    if (actual_array) {
+        // Unwind back to the inner.
+        auto iter = actual_array;
+        for (;;) {
+            if (!iter->inner()->isArray())
+                break;
+            iter = iter->inner()->to<ArrayType>();
+        }
+        ltype = iter->inner();
+    }
+
     if (ltype->isObject() || atype->isObject()) {
         matchtag(atype, out_val.type(), MATCHTAG_COERCE);
     } else if (ltype->isFunction() != atype->isFunction()) {
@@ -1328,8 +1286,10 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
             report(expr, 136);
             return false;
         }
-        atype = cc_.types()->defineReference(atype);
+        atype = types_->defineReference(atype);
     }
+    if (actual_array)
+        atype = types_->redefineArray(atype, actual_array);
     out_val.set_type(atype);
     return true;
 }
@@ -1400,7 +1360,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case iVARIABLE:
             expr->set_lvalue(true);
             break;
-        case iARRAY:
         case iFUNCTN:
             // Not an l-value.
             break;
@@ -1485,8 +1444,8 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
     }
 
     auto& val = array->val();
-    val.set_array(iARRAY, array->exprs().size());
-    val.set_type(last_type);
+    val.ident = iEXPRESSION;
+    val.set_type(types_->defineArray(last_type, (int)array->exprs().size()));
     return true;
 }
 
@@ -1501,14 +1460,12 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         base = expr->set_base(new RvalueExpr(base));
 
     const auto& base_val = base->val();
-    if (!base_val.sym) {
-        report(base, 29);
+    if (!base_val.type()->isArray()) {
+        report(index, 28);
         return false;
     }
-    if (base_val.ident != iARRAY) {
-        report(index, 28) << base_val.sym->name();
-        return false;
-    }
+
+    ArrayType* array = base_val.type()->to<ArrayType>();
 
     if (index) {
         if (!CheckRvalue(index))
@@ -1526,11 +1483,10 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
         const auto& index_val = index->val();
         if (index_val.ident == iCONSTEXPR) {
-            if (!(base_val.sym->type()->isChar() && base_val.array_level() == 0)) {
+            if (!array->isCharArray()) {
                 /* normal array index */
                 if (index_val.constval() < 0 ||
-                    (base_val.array_size() != 0 &&
-                     base_val.array_size() <= index_val.constval()))
+                    (array->size() != 0 && array->size() <= index_val.constval()))
                 {
                     report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                     return false;
@@ -1538,8 +1494,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
             } else {
                 /* character index */
                 if (index_val.constval() < 0 ||
-                    (base_val.array_size() != 0 &&
-                     base_val.array_size() <= index_val.constval()))
+                    (array->size() != 0 && array->size() <= index_val.constval()))
                 {
                     report(index, 32) << base_val.sym->name(); /* array index out of bounds */
                     return false;
@@ -1551,19 +1506,19 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto& out_val = expr->val();
     out_val = base_val;
 
-    auto base_var = base_val.sym->as<VarDeclBase>();
-    if (base_val.array_level() < base_var->type_info().numdim() - 1) {
+    if (array->inner()->isArray()) {
         // Note: Intermediate arrays are not l-values.
-        out_val.set_array(iARRAY, base_val.sym, base_val.array_level() + 1);
+        out_val.ident = iEXPRESSION;
+        out_val.set_type(array->inner());
         return true;
     }
 
     /* set type to fetch... INDIRECTLY */
-    if (base_val.sym->type()->isChar())
-        out_val.set_array(iARRAYCHAR, base_val.sym, 0);
+    if (array->isCharArray())
+        out_val.set_slice(iARRAYCHAR, base_val.sym);
     else
-        out_val.set_array(iARRAYCELL, base_val.sym, 0);
-    out_val.set_type(base_val.sym->type());
+        out_val.set_slice(iARRAYCELL, base_val.sym);
+    out_val.set_type(array->inner());
 
     expr->set_lvalue(true);
     return true;
@@ -1604,8 +1559,8 @@ bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
 
 bool Semantics::CheckStringExpr(StringExpr* expr) {
     auto& val = expr->val();
-    val.set_array(iARRAY, (cell)expr->text()->length() + 1);
-    val.set_type(types_->type_char());
+    val.ident = iEXPRESSION;
+    val.set_type(types_->defineArray(types_->type_char(), (cell)expr->text()->length() + 1));
     return true;
 }
 
@@ -1627,12 +1582,15 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
 
     const auto& base_val = base->val();
     switch (base_val.ident) {
-        case iARRAY:
-            report(expr, 96) << expr->name() << "type" << "array";
-            return false;
         case iFUNCTN:
             report(expr, 107);
             return false;
+        default:
+            if (base_val.type()->isArray()) {
+                report(expr, 96) << expr->name() << "type" << "array";
+                return false;
+            }
+            break;
     }
 
     auto& val = expr->val();
@@ -1839,26 +1797,15 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 
     Type* field_type = field->type_info().type;
 
-    typeinfo_t ti{};
     val.set_type(field_type);
-    ti.set_type(field_type);
-
-    if (field->type_info().numdim()) {
-        ti.dim_ = {field->type_info().dim(0)};
-        ti.ident = iARRAY;
+    if (field_type->isArray()) {
+        // Already an r-value.
+        val.ident = iEXPRESSION;
     } else {
-        ti.ident = ti.type->isChar() ? iARRAYCHAR : iARRAYCELL;
+        // Need LOAD_I to convert to r-value.
+        val.ident = iARRAYCELL;
         expr->set_lvalue(true);
     }
-
-    // Hack. Remove when we can.
-    auto base = expr->base();
-    auto var = new VarDecl(expr->pos(), field_decl->name(), ti, base->val().sym->vclass(), false,
-                           false, false, nullptr);
-    var->label()->bind(field->offset());
-
-    val.ident = ti.ident;
-    val.sym = var;
     return true;
 }
 
@@ -1910,18 +1857,20 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
     const auto& cv = child->val();
     switch (cv.ident) {
-        case iARRAY:
-            if (!cv.array_size()) {
-                report(child, 163);
-                return false;
-            }
-            val.set_constval(cv.array_size());
-            return true;
-
         case iARRAYCELL:
         case iVARIABLE:
+        case iEXPRESSION:
             if (auto es = cv.type()->asEnumStruct()) {
                 val.set_constval(es->array_size());
+            } else if (auto array = cv.type()->as<ArrayType>()) {
+                if (!array->size()) {
+                    report(child, 163);
+                    return false;
+                }
+                val.set_constval(array->size());
+            } else if (cv.ident == iEXPRESSION) {
+                report(child, 72);
+                return false;
             } else {
                 val.set_constval(1);
                 report(expr, 252);
@@ -1950,8 +1899,8 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 return false;
             }
             auto field = access->resolved()->as<LayoutFieldDecl>();
-            if (field->type_info().ident == iARRAY)
-                val.set_constval(field->type_info().dim(0));
+            if (auto array = field->type()->as<ArrayType>())
+                val.set_constval(array->size());
             else if (auto es = field->type()->asEnumStruct())
                 val.set_constval(es->array_size());
             else
@@ -2005,9 +1954,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     call->set_fun(fun);
 
-    if ((fun->decl().type.numdim() > 0 || fun->maybe_returns_array()) &&
-        !fun->return_array())
-    {
+    if (fun->return_type()->isArray() || fun->return_type()->isEnumStruct()) {
         // We need to know the size of the returned array. Recursively analyze
         // the function.
         if (fun->is_analyzing() || !CheckFunctionDecl(fun)) {
@@ -2021,11 +1968,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     auto& val = call->val();
     val.ident = iEXPRESSION;
     val.set_type(fun->return_type());
-    if (fun->return_array()) {
-        val.ident = iARRAY;
-        val.sym = fun->return_array()->var;
+    if (fun->return_array())
         NeedsHeapAlloc(call);
-    }
 
     // We don't have canonical decls yet, so get the one attached to the symbol.
     if (fun->deprecate())
@@ -2041,8 +1985,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             report(call->implicit_this(), 92);
             return false;
         }
-        if (!CheckArgument(call, arglist[0], call->implicit_this(), &ps, 0))
+        Expr* param = CheckArgument(call, arglist[0], call->implicit_this(), &ps, 0);
+        if (!param)
             return false;
+        ps.argv[0] = param;
         nargs++;
         argidx++;
     }
@@ -2080,20 +2026,16 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         }
 
         // Add the argument to |argv| and perform type checks.
-        if (!CheckArgument(call, arglist[argidx], param, &ps, argpos))
+        auto result = CheckArgument(call, arglist[argidx], param, &ps, argpos);
+        if (!result)
             return false;
+        ps.argv[argpos] = result;
 
-        assert(ps.argv[argpos] != nullptr);
         nargs++;
 
         // Don't iterate past terminators (0 or varargs).
-        switch (arglist[argidx]->type_info().ident) {
-            case iVARARGS:
-                break;
-            default:
-                argidx++;
-                break;
-        }
+        if (!arglist[argidx]->type_info().is_varargs)
+            argidx++;
     }
 
     if (!sc_->func()) {
@@ -2105,15 +2047,17 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     // arguments.
     for (unsigned int argidx = 0; argidx < arglist.size(); argidx++) {
         auto arg = arglist[argidx];
-        if (arg->type_info().ident == iVARARGS)
+        if (arg->type_info().is_varargs)
             break;
         if (argidx >= ps.argv.size() || !ps.argv[argidx]) {
-            if (!CheckArgument(call, arg, nullptr, &ps, argidx))
+            auto result = CheckArgument(call, arg, nullptr, &ps, argidx);
+            if (!result)
                 return false;
+            ps.argv[argidx] = result;
         }
 
         Expr* expr = ps.argv[argidx];
-        if (expr->as<DefaultArgExpr>() && arg->type_info().ident == iVARIABLE) {
+        if (expr->as<DefaultArgExpr>() && !IsReferenceType(iVARIABLE, arg->type())) {
             UserOperation userop;
             if (find_userop(*sc_, 0, arg->default_value()->type, arg->type(), 2, nullptr,
                             &userop))
@@ -2133,8 +2077,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     return true;
 }
 
-bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
-                              ParamState* ps, unsigned int pos)
+Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
+                               ParamState* ps, unsigned int pos)
 {
     while (pos >= ps->argv.size())
         ps->argv.push_back(nullptr);
@@ -2142,14 +2086,13 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     unsigned int visual_pos = call->implicit_this() ? pos : pos + 1;
 
     if (!param || param->as<DefaultArgExpr>()) {
-        assert(arg->type_info().ident != 0);
-        if (arg->type_info().ident == iVARARGS) {
+        if (arg->type_info().is_varargs) {
             report(call, 92); // argument count mismatch
-            return false;
+            return nullptr;
         }
         if (!arg->default_value()) {
             report(call, 34) << visual_pos; // argument has no default value
-            return false;
+            return nullptr;
         }
 
         if (!param)
@@ -2157,21 +2100,20 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         else
             param->as<DefaultArgExpr>()->set_arg(arg);
 
-        // The rest of the code to handle default values is in DoEmit.
-        ps->argv[pos] = param;
-
         if (arg->type()->isReference() ||
-            ((arg->type_info().ident == iARRAY || arg->type()->isEnumStruct()) &&
+            ((arg->type()->isArray() || arg->type()->isEnumStruct()) &&
              !arg->type_info().is_const && arg->default_value()->array))
         {
-            NeedsHeapAlloc(ps->argv[pos]);
+            NeedsHeapAlloc(param);
         }
-        return true;
+
+        // The rest of the code to handle default values is in DoEmit.
+        return param;
     }
 
     if (param != call->implicit_this()) {
         if (!CheckRvalue(param))
-            return false;
+            return nullptr;
     }
 
     AutoErrorPos aep(param->pos());
@@ -2180,165 +2122,80 @@ bool Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     if (param->val().ident == iACCESSOR) {
         if (!CheckRvalue(param->pos(), param->val()))
-            return false;
+            return nullptr;
         param = new RvalueExpr(param);
     }
 
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
-    switch (arg->type_info().ident) {
-        case iVARARGS:
-            assert(!handling_this);
+    if (arg->type_info().is_varargs) {
+        assert(!handling_this);
 
-            // Always pass by reference.
-            if (val->ident == iVARIABLE) {
-                if (val->sym->is_const() && !arg->type_info().is_const) {
-                    // Treat a "const" variable passed to a function with a
-                    // non-const "variable argument list" as a constant here.
-                    if (!lvalue) {
-                        report(param, 22); // need lvalue
-                        return false;
-                    }
-                    NeedsHeapAlloc(param);
-                } else if (!lvalue) {
-                    NeedsHeapAlloc(param);
+        // Always pass by reference.
+        if (val->ident == iVARIABLE) {
+            if (val->sym->is_const() && !arg->type_info().is_const) {
+                // Treat a "const" variable passed to a function with a
+                // non-const "variable argument list" as a constant here.
+                if (!lvalue) {
+                    report(param, 22); // need lvalue
+                    return nullptr;
                 }
-            } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
+                NeedsHeapAlloc(param);
+            } else if (!lvalue) {
                 NeedsHeapAlloc(param);
             }
-            if (!checktag_string(arg->type(), val) && !checktag(arg->type(), val->type()))
-                report(param, 213) << arg->type() << val->type();
-            break;
-        case iVARIABLE:
-        {
-            if (arg->type()->isReference()) {
-                assert(!handling_this);
-
-                if (!lvalue || val->ident == iARRAYCHAR) {
-                    report(param, 35) << visual_pos; // argument type mismatch
-                    return false;
-                }
-                if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
-                    report(param, 35) << visual_pos; // argument type mismatch
-                    return false;
-                }
-                checktag(arg->type()->inner(), val->type());
-                break;
-            }
-
-            if (val->ident == iFUNCTN || val->ident == iARRAY) {
-                report(param, 35) << visual_pos; // argument type mismatch
-                return false;
-            }
-
-            if (lvalue) {
-                param = new RvalueExpr(param);
-                val = &param->val();
-            }
-
-            // Do not allow user operators to transform |this|.
-            UserOperation userop;
-            if (!handling_this &&
-                find_userop(*sc_, 0, val->type(), arg->type(), 2, nullptr, &userop))
-            {
-                param = new CallUserOpExpr(userop, param);
-                val = &param->val();
-            }
-            if (!checktag_string(arg->type(), val))
-                checktag(arg->type(), val->type());
-            break;
+        } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
+            NeedsHeapAlloc(param);
         }
-        case iARRAY:
-            // Hack until arrays and types are unified: special case enum structs coercing to
-            // arrays.
-            if (val->ident == iVARIABLE && arg->type_info().type->isAny()) {
-                if (auto es = val->type()->asEnumStruct()) {
-                    if (arg->type_info().numdim() > 1) {
-                        report(param, 48);
-                        return false;
-                    }
-                    if (arg->type_info().dim(0) &&
-                        arg->type_info().dim(0) != es->array_size())
-                    {
-                        report(param, 48);
-                        return false;
-                    }
-                    break;
-                }
-            }
-            if (val->ident != iARRAY && val->ident != iARRAYCELL &&
-                val->ident != iARRAYCHAR)
-            {
-                report(param, 35) << visual_pos; // argument type mismatch
-                return false;
-            }
-            if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
-                report(param, 35) << visual_pos; // argument type mismatch
-                return false;
-            }
-            // Verify that the dimensions match those in |arg|. A literal array
-            // always has a single dimension. An iARRAYCELL parameter is also
-            // assumed to have a single dimension.
-            if (!val->sym) {
-                assert(val->ident == iARRAY);
-                if (arg->type_info().numdim() != 1) {
-                    report(param, 48); // array dimensions must match
-                    return false;
-                }
-                if (arg->type_info().dim(0) != 0) {
-                    assert(arg->type_info().dim(0) > 0);
-                    if (val->array_size() == 0) {
-                        report(param, 47);
-                        return false;
-                    }
-                    if (arg->type()->isChar()) {
-                        if (arg->type_info().dim(0) < val->array_size()) {
-                            report(param, 47); // array sizes must match
-                            return false;
-                        }
-                    } else if (arg->type_info().dim(0) != val->array_size()) {
-                        report(param, 47); // array sizes must match
-                        return false;
-                    }
-                }
-            } else {
-                if (val->array_dim_count() != arg->type_info().numdim()) {
-                    report(param, 48); // array dimensions must match
-                    return false;
-                }
-                // The lengths for all dimensions must match, unless the dimension
-                // length was defined at zero (which means "undefined").
-                for (int i = 0; i < arg->type_info().numdim(); i++) {
-                    if (arg->type_info().dim(i) != 0 &&
-                        val->array_dim(i) != arg->type_info().dim(i))
-                    {
-                        report(param, 47); // array sizes must match
-                        return false;
-                    }
-                }
-                auto sym = val->sym;
-                if (!matchtag(arg->type_info().type, val->type(), MATCHTAG_SILENT)) {
-                    // We allow enumstruct -> any[].
-                    if (!arg->type()->isAny() || !sym->type()->asEnumStruct())
-                        report(param, 229) << sym->name();
-                }
-            }
+        if (!checktag_string(arg->type(), val) && !checktag(arg->type(), val->type()))
+            report(param, 213) << arg->type() << val->type();
+    } else if (arg->type()->isReference()) {
+        assert(!handling_this);
 
-            checktag(arg->type(), val->type());
-            if ((!arg->type()->isChar() && val->type()->isChar()) ||
-                (arg->type()->isChar() && !val->type()->isChar()))
-            {
-                report(param, 178) << val->type() << arg->type();
-                return false;
-            }
-            break;
-        default:
-            assert(false);
-            break;
+        if (!lvalue || val->ident == iARRAYCHAR) {
+            report(param, 35) << visual_pos; // argument type mismatch
+            return nullptr;
+        }
+        if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
+            report(param, 35) << visual_pos; // argument type mismatch
+            return nullptr;
+        }
+        checktag(arg->type()->inner(), val->type());
+    } else if (arg->type()->isArray()) {
+        // If the input type is an index into an array, create an implicit
+        // array type to represent the slice.
+        Type* type = val->type();
+        if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR)
+            type = types_->defineArray(type, 0);
+
+        TypeChecker tc(param, arg->type(), type, TypeChecker::Argument);
+        if (!tc.Coerce())
+            return nullptr;
+
+        if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
+            report(param, 35) << visual_pos; // argument type mismatch
+            return nullptr;
+        }
+    } else {
+        if (lvalue) {
+            param = new RvalueExpr(param);
+            val = &param->val();
+        }
+
+        // Do not allow user operators to transform |this|.
+        UserOperation userop;
+        if (!handling_this &&
+            find_userop(*sc_, 0, arg->type(), val->type(), 2, nullptr, &userop))
+        {
+            param = new CallUserOpExpr(userop, param);
+            val = &param->val();
+        }
+
+        TypeChecker tc(param, arg->type(), val->type(), TypeChecker::Argument);
+        if (!tc.Coerce())
+            return nullptr;
     }
-
-    ps->argv[pos] = param;
-    return true;
+    return param;
 }
 
 void
@@ -2392,9 +2249,9 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     na->set_analysis_result(false);
 
     auto& val = na->val();
-    auto type = na->type();
-    val.ident = iARRAY;
-    val.set_type(type);
+    val.ident = iEXPRESSION;
+
+    PoolList<int> dims;
     for (auto& expr : na->exprs()) {
         if (!CheckRvalue(expr))
             return false;
@@ -2414,7 +2271,9 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             report(expr, 9);
             return false;
         }
+        dims.emplace_back(0);
     }
+    assert(na->type()->isArray());
 
     na->set_analysis_result(true);
     return true;
@@ -2633,85 +2492,44 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         return false;
     }
 
+    sc_->set_returns_value();
+
     const auto& v = expr->val();
-    if (v.ident == iARRAY && !v.sym) {
-        /* returning a literal string is not supported (it must be a variable) */
-        report(stmt, 39);
+
+    // Check that the return statement matches the declared return type.
+    TypeChecker tc(stmt, fun->return_type(), v.type(), TypeChecker::Return);
+    if (!tc.Coerce())
         return false;
-    }
-    /* see if this function already has a sub type (an array attached) */
-    auto sub = fun->return_array() ? fun->return_array()->var : nullptr;
-    if (sc_->returns_value()) {
-        int retarray = (v.ident == iARRAY);
-        /* there was an earlier "return" statement in this function */
-        if ((sub == nullptr && retarray) || (sub != nullptr && !retarray)) {
-            report(stmt, 79); /* mixing "return array;" and "return value;" */
-            return false;
-        }
-        if (retarray && fun->is_public()) {
-            report(stmt, 90) << sc_->func()->name(); /* public function may not return array */
-            return false;
-        }
-    } else {
-        sc_->set_returns_value();
-    }
 
-    /* check tagname with function tagname */
-    assert(fun != nullptr);
-    if (!matchtag_string(v.ident, v.type()))
-        matchtag(fun->return_type(), v.type(), TRUE);
-
-    if (v.ident == iARRAY || v.type()->isEnumStruct()) {
-        if (!CheckArrayReturnStmt(stmt))
+    if (v.type()->isArray() || v.type()->isEnumStruct()) {
+        if (!CheckCompoundReturnStmt(stmt))
             return false;
     }
     return true;
 }
 
-bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
+bool Semantics::CheckCompoundReturnStmt(ReturnStmt* stmt) {
     FunctionDecl* curfunc = sc_->func();
     assert(curfunc == curfunc->canonical());
 
     const auto& val = stmt->expr()->val();
 
-    auto& array = stmt->array();
-    array.set_type(val.type());
-    if (val.array_dim_count()) {
-        array.ident = iARRAY;
-        array.has_postdims = true;
-        for (int i = 0; i < val.array_dim_count(); i++) {
-            if (!val.array_dim(i)) {
-                report(stmt->expr(), 128);
+    if (auto iter = val.type()->as<ArrayType>()) {
+        do {
+            if (iter->size() == 0) {
+                report(stmt, 128);
                 return false;
             }
-            array.dim_.emplace_back(val.array_dim(i));
-        }
-    } else {
-        array.ident = iVARIABLE;
+            iter = iter->inner()->as<ArrayType>();
+        } while (iter);
     }
 
-    if (curfunc->return_array()) {
-        VarDecl* sub_decl = curfunc->return_array()->var;
+    if (curfunc->is_public()) {
+        report(stmt, 90);
+        return false;
+    }
 
-        // this function has an array attached already; check that the current
-        // "return" statement returns exactly the same array
-        if (sub_decl->type_info().numdim() != val.array_dim_count()) {
-            report(stmt, 48); /* array dimensions must match */
-            return false;
-        }
-
-        for (int i = 0; i < sub_decl->type_info().numdim(); i++) {
-            if (sub_decl->type_info().dim(i) != val.array_dim(i)) {
-                report(stmt, 47); /* array sizes must match */
-                return false;
-            }
-        }
-
-        if (curfunc->return_array()->var->type() != sub_decl->type()) {
-            report(stmt, 134) << curfunc->return_array()->var->type() << sub_decl->type();
-            return false;
-        }
-    } else {
+    if (!curfunc->return_array()) {
         // the address of the array is stored in a hidden parameter; the address
         // of this parameter is 1 + the number of parameters (times the size of
         // a cell) + the size of the stack frame and the return address
@@ -2722,22 +2540,12 @@ bool Semantics::CheckArrayReturnStmt(ReturnStmt* stmt) {
         //   ...
         //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
         //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
-        int argcount = (int)curfunc->args().size();
-
-        auto var = new VarDecl(stmt->pos(), sc_->func()->name(), array, sLOCAL, false,
-                               false, false, nullptr);
-        var->BindAddress((argcount + 3) * sizeof(cell));
-
         auto info = new FunctionDecl::ReturnArrayInfo;
-        info->var = var;
-        curfunc->set_return_array(info);
-    }
+        info->hidden_address = ((cell_t)curfunc->args().size() + 3) * sizeof(cell);
 
-    auto func_node = sc_->func();
-    if (func_node->type_info().numdim() == 0)
-        report(stmt, 246) << func_node->name();
-    else if (func_node->type_info().numdim() != array.numdim())
-        report(stmt, 413);
+        curfunc->set_return_array(info);
+        curfunc->update_return_type(val.type());
+    }
     return true;
 }
 
@@ -2757,12 +2565,14 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     const auto& v = expr->val();
     switch (v.ident) {
         case iFUNCTN:
-            report(expr, 167) << "functions";
+            report(expr, 167) << "function";
             return false;
 
-        case iARRAY:
-            report(expr, 167) << "arrays";
-            return false;
+        case iVARIABLE:
+            if (v.type()->isArray() || v.type()->isEnumStruct()) {
+                report(expr, 167) << v.type();
+                return false;
+            }
             break;
 
         case iACCESSOR:
@@ -2951,7 +2761,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
     bool tag_ok = CheckRvalue(expr);
     const auto& v = expr->val();
-    if (tag_ok && v.ident == iARRAY)
+    if (tag_ok && v.type()->isArray())
         report(expr, 33) << "-unknown-";
 
     if (expr->lvalue())
@@ -3043,7 +2853,7 @@ void ReportFunctionReturnError(FunctionDecl* decl) {
 bool
 FunctionDecl::IsVariadic() const
 {
-    return !args_.empty() && args_.back()->type_info().ident == iVARARGS;
+    return !args_.empty() && args_.back()->type_info().is_varargs;
 }
 
 bool Semantics::CheckFunctionDecl(FunctionDecl* info) {
@@ -3248,11 +3058,9 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
         decl->set_is_read();
 
-        switch (decl->ident()) {
-            case iVARIABLE:
-            case iARRAY:
-                decl->set_is_written();
-                break;
+        if (decl->ident() == iVARIABLE) {
+            decl->set_is_written();
+            break;
         }
     }
     return true;
@@ -3319,11 +3127,6 @@ void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
         report(144);
         return;
     }
-
-    if (type->numdim() > 0) {
-        report(145);
-        return;
-    }
 }
 
 void Semantics::CheckVoidDecl(const declinfo_t* decl, int variable) {
@@ -3334,8 +3137,6 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
     int result = 1;
 
     if (result)
-        result = a1->type_info().ident == a2->type_info().ident; /* type()/class */
-    if (result)
         result = a1->type_info().is_const == a2->type_info().is_const; /* "const" flag */
     if (result)
         result = a1->type() == a2->type();
@@ -3345,7 +3146,7 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
         result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
     if (auto a1_def = a1->default_value()) {
         auto a2_def = a2->default_value();
-        if (a1->type_info().ident == iARRAY) {
+        if (a1->type()->isArray()) {
             if (result)
                 result = !!a1_def->array == !!a2_def->array;
             if (result && a1_def->array)
@@ -3489,4 +3290,5 @@ void DeleteStmt::ProcessUses(SemaContext& sc) {
     markusage(map_->dtor(), uREAD);
 }
 
+} // namespace cc
 } // namespace sp

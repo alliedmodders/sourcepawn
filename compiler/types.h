@@ -35,8 +35,7 @@ typedef int32_t cell;
 typedef uint32_t ucell;
 
 namespace sp {
-
-using namespace cc;
+namespace cc {
 
 // Possible entries for "ident". These are used in the "symbol", "value"
 // and arginfo structures. Not every constant is valid for every use.
@@ -45,7 +44,6 @@ using namespace cc;
 enum IdentifierKind {
     iINVALID = 0,
     iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
-    iARRAY = 3,
     iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
     iARRAYCHAR = 6,     /* array element, character from cell from array */
     iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
@@ -128,17 +126,18 @@ struct typeinfo_t {
     typeinfo_t()
       : type_atom(nullptr),
         type(nullptr),
-        ident(iINVALID),
         is_const(false),
         is_new(false),
         has_postdims(false),
         is_label(false),
         reference(false),
-        resolved(false)
+        resolved(false),
+        resolved_array(false),
+        is_varargs(false)
     {}
 
     // Array information.
-    PoolList<int> dim_;
+    PoolArray<int> dim_;
 
     // Either null or an array of size |numdim|, pool-allocated.
     PoolArray<Expr*> dim_exprs;
@@ -147,19 +146,22 @@ struct typeinfo_t {
     Atom* type_atom;    // Parsed atom.
     Type* type;
 
-    IdentifierKind ident : 6;  // Either iREFERENCE, iARRAY, or iVARIABLE.
     bool is_const : 1;
     bool is_new : 1;        // New-style declaration.
     bool has_postdims : 1;  // Dimensions, if present, were in postfix position.
     bool is_label : 1;      // If type_atom came from a tLABEL.
     bool reference : 1;
     bool resolved : 1;
+    bool resolved_array : 1;
+    bool is_varargs : 1;
 
     TypenameInfo ToTypenameInfo() const;
 
     int numdim() const { return (int)dim_.size(); }
     int dim(int i) const { return dim_[i]; }
-    const PoolList<int>& dim_vec() const { return dim_; }
+    const PoolArray<int>& dim_vec() const { return dim_; }
+
+    bool bindable() const { return type_atom || type; }
 
     void set_type(const TypenameInfo& rt) {
         if (rt.has_type()) {
@@ -216,7 +218,7 @@ class Type : public PoolObject
     Atom* declName() const { return name_; }
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
-    const char* prettyName() const;
+    const char* prettyName();
     int type_index() const {
         return index_;
     }
@@ -242,11 +244,16 @@ class Type : public PoolObject
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
+    bool isCharArray() const;
+
+    bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
+
+    cell_t CellStorageSize();
 
     bool canOperatorOverload() const;
 
     bool coercesFromInt() const {
-        if (kind_ == TypeKind::Enum)
+        if (kind_ == TypeKind::Enum || kind_ == TypeKind::Methodmap)
             return true;
         if (kind_ != TypeKind::Builtin)
             return false;
@@ -371,23 +378,21 @@ class Type : public PoolObject
 };
 
 static inline bool IsReferenceType(IdentifierKind kind, Type* type) {
-    return kind == iARRAY ||
+    return type->isArray() ||
            type->isReference() ||
            (kind == iVARIABLE && type->isEnumStruct());
 }
 
 class ArrayType : public Type {
   public:
-    ArrayType(Type* inner, const PoolList<int>& dims, size_t depth);
+    ArrayType(Type* inner, int size);
 
-    int numdim() const { return numdim_; }
-    int dim(int at) const;
+    int size() const { return size_; }
 
     static bool is_a(Type* type) { return type->kind() == TypeKind::Array; }
 
   private:
-    int numdim_;
-    const int* dims_;
+    int size_;
 };
 
 class TypeManager
@@ -410,7 +415,10 @@ class TypeManager
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
     Type* defineReference(Type* inner);
-    ArrayType* defineArray(Type* element_type, const PoolList<int>& dims);
+    ArrayType* defineArray(Type* element_type, int dim);
+    ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
+    ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
+    ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
@@ -428,7 +436,6 @@ class TypeManager
     Type* add(Atom* name, TypeKind kind);
     void RegisterType(Type* type, bool unique_name = true);
     Type* defineBuiltin(const char* name, BuiltinType type);
-    ArrayType* LookupCachedArray(Type* element_type, const PoolList<int>& dims, size_t depth);
 
   private:
     CompileContext& cc_;
@@ -444,6 +451,20 @@ class TypeManager
     Type* type_float_ = nullptr;
     Type* type_bool_ = nullptr;
     Type* type_string_ = nullptr;
+
+    struct ArrayCachePolicy {
+        typedef ArrayType* Payload;
+
+        struct Lookup {
+            Type* type;
+            int size;
+        };
+
+        static bool matches(const Lookup& lookup, ArrayType* type);
+        static uint32_t hash(const Lookup& lookup);
+    };
+    ke::HashTable<ArrayCachePolicy> array_cache_;
 };
 
+} // namespace cc
 } // namespace sp

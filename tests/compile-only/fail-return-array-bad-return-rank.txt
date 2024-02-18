@@ -1,0 +1,2 @@
+(4) : error 450: no viable conversion from "char" to "char[4]"
+(9) : error 450: no viable conversion from "char[4]" to "char"

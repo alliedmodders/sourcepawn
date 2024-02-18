@@ -23,10 +23,12 @@
 #include "stl-allocator.h"
 
 namespace sp {
+namespace cc {
 namespace tr {
  
 template <typename T>
 using forward_list = std::forward_list<T, StlAllocator<T>>;
 
 } // namespace tr
+} // namespace cc
 } // namespace sp

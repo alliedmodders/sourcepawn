@@ -25,6 +25,7 @@
 #include "stl/stl-vector.h"
 
 namespace sp {
+namespace cc {
 
 struct ArrayData {
     tr::vector<cell_t> iv;
@@ -41,4 +42,5 @@ struct DefaultArrayData : public ArrayData {
     cell_t data_size;
 };
 
+} // namespace cc
 } // namespace sp

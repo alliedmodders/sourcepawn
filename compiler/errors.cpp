@@ -55,8 +55,7 @@
 #endif
 
 namespace sp {
-
-void report_error(ErrorReport&& report);
+namespace cc {
 
 AutoErrorPos::AutoErrorPos(const token_pos_t& pos)
   : reports_(CompileContext::get().reports()),
@@ -204,19 +203,16 @@ MessageBuilder::~MessageBuilder()
     }
 
     report.message = out.str();
-    report_error(std::move(report));
-}
 
-void
-report_error(ErrorReport&& report)
-{
-    auto& cc = CompileContext::get();
     cc.reports()->ReportError(std::move(report));
 }
 
-void
-ReportManager::ReportError(ErrorReport&& report)
-{
+void ReportManager::ReportError(ErrorReport&& report) {
+    if (!defers_.empty()) {
+        defers_.back()->AddDeferred(std::move(report));
+        return;
+    }
+
     /* errflag is reset on each semicolon.
      * In a two-pass compiler, an error should not be reported twice. Therefore
      * the error reporting is enabled only in the second pass (and only when
@@ -267,9 +263,32 @@ void DumpDiagnostic(FILE* fp, const ErrorReport& report) {
     while (!line.empty() && (line.back() == '\r' || line.back() == '\n'))
         line.pop_back();
 
-    fprintf(fp, "%6u | %s\n", report.lineno, line.c_str());
+    // Replace \t with eight spaces since terminals do weird stuff with tabs.
+    static constexpr char kPrintedTab[] = "        ";
 
-    uint32_t num_dashes = 9 + report.col - 1;
+    std::string printed_line;
+    for (size_t i = 0; i < line.size(); i++) {
+        if (line[i] == '\t')
+            printed_line += kPrintedTab;
+        else
+            printed_line += line[i];
+    }
+
+    fprintf(fp, "%6u | %s\n", report.lineno, printed_line.c_str());
+
+    // This should pass, but doesn't.
+    // Fails in tests/compile-only/fail-empty-preproc-expr.sp and :TODO: to
+    // investigate why.
+    // assert(report.col <= line.size());
+
+    uint32_t num_dashes = 9;
+    for (size_t i = 1; i <= std::min((size_t)report.col - 1, line.size()); i++) {
+        if (line[i - 1] == '\t')
+            num_dashes += 8;
+        else
+            num_dashes += 1;
+    }
+
     for (uint32_t i = 0; i < num_dashes; i++)
         fprintf(fp, "-");
     fprintf(fp, "^\n");
@@ -359,9 +378,7 @@ ReportManager::ReportManager(CompileContext& cc)
 {
 }
 
-unsigned int
-ReportManager::NumErrorMessages() const
-{
+unsigned int ReportManager::NumErrorMessages() const {
     unsigned int total = 0;
     for (const auto& report : error_list_) {
         if (report.type == ErrorType::Error)
@@ -370,9 +387,7 @@ ReportManager::NumErrorMessages() const
     return total;
 }
 
-unsigned int
-ReportManager::NumWarnMessages() const
-{
+unsigned int ReportManager::NumWarnMessages() const {
     unsigned int total = 0;
     for (const auto& report : error_list_) {
         if (report.type == ErrorType::Warning)
@@ -381,10 +396,18 @@ ReportManager::NumWarnMessages() const
     return total;
 }
 
-bool
-ReportManager::IsWarningDisabled(int number)
-{
+bool ReportManager::IsWarningDisabled(int number) {
     return warn_disable_.count(number) > 0;
+}
+
+void ReportManager::PushAutoDefer(AutoDeferReports* defer) {
+    defers_.emplace_back(defer);
+}
+
+void ReportManager::PopAutoDefer(AutoDeferReports* defer) {
+    assert(!defers_.empty());
+    assert(defers_.back() == defer);
+    defers_.pop_back();
 }
 
 AutoCountErrors::AutoCountErrors()
@@ -393,16 +416,44 @@ AutoCountErrors::AutoCountErrors()
 {
 }
 
-void
-AutoCountErrors::Reset()
-{
+void AutoCountErrors::Reset() {
     old_errors_ = reports_->total_errors();
 }
 
-bool
-AutoCountErrors::ok() const
-{
+bool AutoCountErrors::ok() const {
     return old_errors_ == reports_->total_errors();
 }
 
+AutoDeferReports::AutoDeferReports(CompileContext& cc)
+  : reports_(cc.reports())
+{
+    reports_->PushAutoDefer(this);
+}
+
+AutoDeferReports::~AutoDeferReports() {
+    if (reports_)
+        reports_->PopAutoDefer(this);
+}
+
+void AutoDeferReports::Report() {
+    if (!reports_)
+        return;
+
+    reports_->PopAutoDefer(this);
+
+    for (auto&& report : deferred_)
+        reports_->ReportError(std::move(report));
+    deferred_.clear();
+    reports_ = nullptr;
+}
+
+void AutoDeferReports::AddDeferred(ErrorReport&& report) {
+    if (report.type == ErrorType::Error)
+        has_errors_ = true;
+    else
+        has_warnings_ = true;
+    deferred_.emplace_back(std::move(report));
+}
+
+} // namespace cc
 } // namespace sp

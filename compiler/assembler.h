@@ -31,6 +31,7 @@
 #include "shared/string-pool.h"
 
 namespace sp {
+namespace cc {
 
 bool assemble(CompileContext& cc, CodeGenerator& cg, const char* outname,
               int compression_level);
@@ -47,4 +48,5 @@ class Assembler
     CodeGenerator& cg_;
 };
 
+} // namespace cc
 } // namespace sp

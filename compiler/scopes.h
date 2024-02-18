@@ -24,6 +24,7 @@
 #include "symbols.h"
 
 namespace sp {
+namespace cc {
 
 class Decl;
 
@@ -83,4 +84,5 @@ class SymbolScope final : public PoolObject
 Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found = nullptr);
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found = nullptr);
 
+} // namespace cc
 } // namespace sp

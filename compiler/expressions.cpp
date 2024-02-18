@@ -38,6 +38,7 @@
 #include "value-inl.h"
 
 namespace sp {
+namespace cc {
 
 /* Function addresses of binary operators for signed operations */
 static const int op1[17] = {
@@ -73,7 +74,7 @@ static inline bool MatchOperator(int oper, FunctionDecl* fun, Type* type1, Type*
     Type* types[2] = { type1, type2 };
 
     for (int i = 0; i < numparam; i++) {
-        if (args[i]->type_info().ident != iVARIABLE)
+        if (args[i]->type_info().is_varargs)
             return false;
         if (args[i]->type_info().type != types[i])
             return false;
@@ -197,7 +198,7 @@ bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numpar
 }
 
 bool checktag_string(Type* type, const value* sym1) {
-    if (sym1->ident == iARRAY)
+    if (sym1->type()->isArray())
         return false;
 
     if ((sym1->type()->isChar() && type->isInt()) ||
@@ -209,7 +210,7 @@ bool checktag_string(Type* type, const value* sym1) {
 }
 
 bool checkval_string(const value* sym1, const value* sym2) {
-    if (sym1->ident == iARRAY || sym2->ident == iARRAY)
+    if (sym1->type()->isArray() || sym2->type()->isArray())
         return false;
     if ((sym1->type()->isChar() && sym2->type()->isInt()) ||
         (sym1->type()->isInt() && sym2->type()->isChar()))
@@ -220,7 +221,7 @@ bool checkval_string(const value* sym1, const value* sym2) {
 }
 
 bool matchtag_string(int ident, Type* type) {
-    if (ident == iARRAY)
+    if (type->isArray())
         return false;
     return type->isChar();
 }
@@ -288,6 +289,8 @@ static bool matchreturntag(const functag_t* formal, const functag_t* actual) {
 static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
     // Dumb check for now. This should really do a deep type validation though.
     // Fix this when we overhaul types in 1.12.
+    formal = formal->to<ArrayType>()->inner();
+    actual = actual->to<ArrayType>()->inner();
     if ((formal->isAny() && !actual->isChar()) || (actual->isAny() && !formal->isChar())) {
         return true;
     }
@@ -296,13 +299,11 @@ static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
 
 static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) {
     // Check type.
-    if (actual.ident != formal.ident)
+    if (actual.is_varargs != formal.is_varargs)
         return false;
 
-    if (actual.ident == iARRAY) {
-        if (actual.dim_vec() != formal.dim_vec())
-            return false;
-    }
+    if (actual.dim_vec() != formal.dim_vec())
+        return false;
 
     // Do not allow casting between different array types, eg:
     //   any[] <. float[] is illegal.
@@ -317,7 +318,7 @@ static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) 
     return true;
 }
 
-static bool functag_compare(const functag_t* formal, const functag_t* actual) {
+bool functag_compare(const functag_t* formal, const functag_t* actual) {
     // Check return types.
     if (!matchreturntag(formal, actual))
         return false;
@@ -369,7 +370,7 @@ static bool matchfunctags(Type* formal, Type* actual) {
     return false;
 }
 
-static bool HasTagOnInheritanceChain(Type* type, Type* other) {
+bool HasTagOnInheritanceChain(Type* type, Type* other) {
     auto map = type->asMethodmap();
     if (!map)
         return false;
@@ -567,4 +568,5 @@ commutative(int oper)
     }
 }
 
+} // namespace cc
 } // namespace sp
