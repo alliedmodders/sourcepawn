@@ -304,5 +304,10 @@ bool TypeChecker::CheckFunctionSignature(functag_t* formal, functag_t* actual) {
     return true;
 }
 
+bool TypeChecker::DoCoerce(Type* formal, Expr* actual) {
+    TypeChecker tc(actual, formal, actual->val().type(), Generic);
+    return tc.Coerce();
+}
+
 } // namespace cc
 } // namespace sp

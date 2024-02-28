@@ -466,5 +466,15 @@ class TypeManager
     ke::HashTable<ArrayCachePolicy> array_cache_;
 };
 
+static inline bool IsValueKind(IdentifierKind kind) {
+    switch (kind) {
+        case iINVALID:
+        case iTYPENAME:
+            return false;
+        default:
+            return true;
+    }
+}
+
 } // namespace cc
 } // namespace sp

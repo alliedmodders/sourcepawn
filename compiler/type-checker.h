@@ -52,6 +52,8 @@ class TypeChecker {
     bool Check();
     bool Coerce();
 
+    static bool DoCoerce(Type* formal, Expr* actual);
+
   private:
     bool CheckImpl();
     bool CheckValueType(Type* formal, Type* actual);
