@@ -245,7 +245,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
 }
 
 bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
-                                const StructInitFieldExpr* field, std::vector<bool>* visited)
+                                StructInitFieldExpr* field, std::vector<bool>* visited)
 {
     auto arg = ps->FindField(field->name);
     if (!arg) {
@@ -258,60 +258,21 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
 
     visited->at(arg->offset()) = true;
 
-        // :TODO: use tc here
-#if 0
+    Type* actual = nullptr;
     if (auto expr = field->value->as<StringExpr>()) {
-        if (!arg->type()->isArray()) {
-            report(expr->pos(), 48);
-            return false;
-        }
-        if (!arg->type()->isCharArray())
-            report(expr->pos(), 213) << types_->type_char() << arg->type();
+        actual = types_->defineArray(types_->type_char(), 0);
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-        if (arg->type()->isArray()) {
-            report(expr->pos(), 23);
-            return false;
-        }
-
-        // Proper tag checks were missing in the old parser, and unfortunately
-        // adding them breaks older code. As a special case, we allow implicit
-        // coercion of constants 0 or 1 to bool.
-        if (!(arg->type()->isBool() && expr->type()->isInt() &&
-            (expr->value() == 0 || expr->value() == 1)))
-        {
-            matchtag(arg->type(), expr->type(), MATCHTAG_COERCE);
-        }
+        actual = expr->type();
     } else if (auto expr = field->value->as<SymbolExpr>()) {
-        auto var = expr->decl()->as<VarDecl>();
-        if (!var) {
-            report(expr->pos(), 405);
-            return false;
-        }
-
-        if (arg->type_info().ident == iVARIABLE) {
-            if (var->type_info().ident != iVARIABLE) {
-                report(expr->pos(), 405);
-                return false;
-            }
-            matchtag(arg->type(), var->type(), MATCHTAG_COERCE);
-        } else if (arg->type_info().type->isArray()) {
-            if (!var->type()->isArray()) {
-                report(expr->pos(), 405);
-                return false;
-            }
-            if (var->type_info().numdim() != 1) {
-                report(expr->pos(), 405);
-                return false;
-            }
-        } else {
-            report(expr->pos(), 405);
-            return false;
-        }
+        actual = expr->decl()->type();
     } else {
         assert(false);
         return false;
     }
-#endif
+
+    TypeChecker tc(field, arg->type(), actual, TypeChecker::Assignment);
+    if (!tc.Coerce())
+        return false;
     return true;
 }
 
