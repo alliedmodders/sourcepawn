@@ -1398,10 +1398,14 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array) {
             report(expr, 8);
             return false;
         }
-        if (!last_type)
+        if (!last_type) {
             last_type = val.type();
-        else
-            matchtag(last_type, val.type(), 0);
+            continue;
+        }
+
+        TypeChecker tc(array, last_type, val.type(), TypeChecker::Generic);
+        if (!tc.Check())
+            return false;
     }
 
     auto& val = array->val();
