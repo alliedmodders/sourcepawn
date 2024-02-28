@@ -1003,7 +1003,10 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         }
 
         if (field->type_info().numdim()) {
-            ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(), sENUMFIELD);
+            if (!ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(),
+                                  sENUMFIELD)) {
+                continue;
+            }
 
             if (field->type_info().numdim() > 1) {
                 error(field->pos(), 65);
@@ -1030,7 +1033,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         position += size;
     }
 
-    if (!position)
+    if (fields_.empty())
         report(pos_, 119) << name_;
 
     for (const auto& decl : methods_) {
