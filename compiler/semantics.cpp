@@ -2588,20 +2588,15 @@ bool Semantics::CheckExitStmt(ExitStmt* stmt) {
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
 
-    switch (expr->val().ident) {
-        case iEXPRESSION:
-        case iVARIABLE:
-        case iCONSTEXPR:
-        case iARRAYCHAR:
-        case iARRAYCELL: {
-            AutoErrorPos aep(expr->pos());
-            matchtag(types_->type_int(), expr->val().type(), MATCHTAG_COERCE);
-            break;
-        }
-        default:
-            report(expr, 106);
-            return false;
+    if (!IsValueKind(expr->val().ident)) {
+        report(expr, 106);
+        return false;
     }
+
+    AutoErrorPos aep(expr->pos());
+
+    if (!TypeChecker::DoCoerce(types_->type_int(), expr))
+        return false;
     return true;
 }
 
