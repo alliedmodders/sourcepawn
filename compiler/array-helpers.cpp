@@ -41,7 +41,7 @@ class ArrayTypeResolver
     bool Resolve();
 
   private:
-    void ResolveSize();
+    bool ResolveSize();
     bool ResolveDimExprs();
     void PrepareDimArray();
     void ResolveRank(int rank, Expr* init);
@@ -92,7 +92,7 @@ ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, const token_pos_t& pos, ty
 }
 
 bool ArrayTypeResolver::Resolve() {
-    ResolveSize();
+    bool resolved_size = ResolveSize();
 
     assert(!type_->resolved_array);
 
@@ -104,12 +104,12 @@ bool ArrayTypeResolver::Resolve() {
     auto types = CompileContext::get().types();
     type_->type = types->defineArray(type_->type, type_->dim_vec());
     type_->resolved_array = true;
-    return true;
+    return resolved_size;
 }
 
-void ArrayTypeResolver::ResolveSize() {
+bool ArrayTypeResolver::ResolveSize() {
     if (!type_->has_postdims)
-        return;
+        return true;
 
     // If the array has old-style dimensions, we analyze them now. This is
     // technically a violation of the normal parsing order. The experimental
@@ -120,14 +120,14 @@ void ArrayTypeResolver::ResolveSize() {
     // all usable symbols are already entered, and their types will not
     // change between binding and later analysis.
     if (!ResolveDimExprs())
-        return;
+        return false;
 
     PrepareDimArray();
 
     // If this is an implicit dynamic array (old syntax), the initializer
     // cannot be used for computing a size.
     if (decl_ && decl_->implicit_dynamic_array())
-        return;
+        return true;
 
     // Traverse the initializer if present. For arguments, initializers
     // don't participate in determining the fixed size.
@@ -137,7 +137,7 @@ void ArrayTypeResolver::ResolveSize() {
         // If we hit errors resolving the type, don't bother using any values
         // we computed along the way.
         if (!errors_.ok())
-            return;
+            return false;
     }
 
     // Any kind of indeterminate status gets forced back to 0. Semantic
@@ -171,10 +171,13 @@ void ArrayTypeResolver::ResolveSize() {
             // as the last dimension is filled.
         } else if (vclass_ == sLOCAL) {
             report(pos_, 159);
+            return false;
         } else {
             report(pos_, 183);
+            return false;
         }
     }
+    return true;
 }
 
 void
