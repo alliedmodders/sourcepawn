@@ -803,8 +803,16 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
                                   &boolresult));
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
+            Type* left_type = left_val.type();
+            if (left_type->isReference())
+                left_type = left_type->inner();
+
+            Type* right_type = right_val.type();
+            if (right_type->isReference())
+                right_type = right_type->inner();
+
             if (!checkval_string(&left_val, &right_val))
-                matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
+                matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
