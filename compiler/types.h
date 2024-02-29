@@ -75,6 +75,7 @@ enum class TypeKind : uint8_t {
     Enum,
     Reference,
     Array,
+    FunctionSignature
 };
 
 struct funcenum_t;
@@ -395,14 +396,31 @@ class Type : public PoolObject
         PstructDecl* pstruct_ptr_;
         BuiltinType builtin_type_;
         Type* inner_type_;
+        Type* return_type_;
     };
 };
 
-static inline bool IsReferenceType(IdentifierKind kind, Type* type) {
-    return type->isArray() ||
-           type->isReference() ||
-           (kind == iVARIABLE && type->isEnumStruct());
-}
+class FunctionType : public Type {
+  public:
+    FunctionType(Type* return_type, const std::vector<std::pair<QualType, sp::Atom*>>& args,
+                 bool variadic)
+      : Type(nullptr, TypeKind::FunctionSignature),
+        variadic_(variadic)
+    {
+        return_type_ = return_type;
+        new (&args_) decltype(args_)(args);
+    }
+
+    Type* return_type() const { return return_type_; }
+    unsigned int nargs() const { return (unsigned int)args_.size(); }
+    QualType arg_type(unsigned int i) { return args_[i].first; }
+    sp::Atom* arg_name(unsigned int i) { return args_[i].second; }
+    bool variadic() const { return variadic_; }
+
+  private:
+    PoolArray<std::pair<QualType, sp::Atom*>> args_;
+    bool variadic_;
+};
 
 class ArrayType : public Type {
   public:
@@ -415,6 +433,12 @@ class ArrayType : public Type {
   private:
     int size_;
 };
+
+static inline bool IsReferenceType(IdentifierKind kind, Type* type) {
+    return type->isArray() ||
+           type->isReference() ||
+           (kind == iVARIABLE && type->isEnumStruct());
+}
 
 class TypeManager
 {
@@ -440,6 +464,9 @@ class TypeManager
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
     ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
+    FunctionType* defineFunction(Type* return_type,
+                                 const std::vector<std::pair<QualType, sp::Atom*>>& args,
+                                 bool variadic);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
@@ -485,6 +512,20 @@ class TypeManager
         static uint32_t hash(const Lookup& lookup);
     };
     ke::HashTable<ArrayCachePolicy> array_cache_;
+
+    struct FunctionCachePolicy {
+        typedef FunctionType* Payload;
+
+        struct Lookup {
+            Type* return_type;
+            const std::vector<std::pair<QualType, sp::Atom*>>* args;
+            bool variadic;
+        };
+
+        static bool matches(const Lookup& lookup, FunctionType* type);
+        static uint32_t hash(const Lookup& lookup);
+    };
+    ke::HashTable<FunctionCachePolicy> function_cache_;
 };
 
 static inline bool IsValueKind(IdentifierKind kind) {

@@ -122,6 +122,7 @@ TypeManager::TypeManager(CompileContext& cc)
   : cc_(cc)
 {
     array_cache_.init(256);
+    function_cache_.init(512);
 }
 
 Type* TypeManager::find(Atom* atom) {
@@ -288,6 +289,21 @@ Type* TypeManager::defineReference(Type* inner) {
     return type;
 }
 
+FunctionType* TypeManager::defineFunction(Type* return_type,
+                                          const std::vector<std::pair<QualType, sp::Atom*>>& args,
+                                          bool variadic)
+{
+    FunctionCachePolicy::Lookup lookup{return_type, &args, variadic};
+    auto p = function_cache_.findForAdd(lookup);
+    if (!p.found()) {
+        auto ft = new FunctionType(return_type, args, variadic);
+        RegisterType(ft, false);
+
+        function_cache_.add(p, ft);
+    }
+    return *p;
+}
+
 bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
     return lookup.type == type->inner() && lookup.size == type->size();
 }
@@ -306,6 +322,30 @@ TypenameInfo typeinfo_t::ToTypenameInfo() const {
     if (type)
         return TypenameInfo(type);
     return TypenameInfo(type_atom, is_label);
+}
+
+bool TypeManager::FunctionCachePolicy::matches(const Lookup& lookup, FunctionType* fun) {
+    if (lookup.return_type != fun->return_type())
+        return false;
+    if (lookup.args->size() != fun->nargs())
+        return false;
+    for (unsigned int i = 0; i < fun->nargs(); i++) {
+        if (lookup.args->at(i).first != fun->arg_type(i))
+            return false;
+        if (lookup.args->at(i).second != fun->arg_name(i))
+            return false;
+    }
+    return true;
+}
+
+uint32_t TypeManager::FunctionCachePolicy::hash(const Lookup& lookup) {
+    uint32_t h = ke::HashPointer(lookup.return_type);
+    for (size_t i = 0; i < lookup.args->size(); i++) {
+        h = ke::HashCombine(h, lookup.args->at(i).first.hash());
+        h = ke::HashCombine(h, ke::HashPointer(lookup.args->at(i).second));
+    }
+    h = ke::HashCombine(h, ke::HashInt32(lookup.variadic));
+    return h;
 }
 
 } // namespace cc
