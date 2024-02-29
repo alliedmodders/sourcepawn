@@ -208,6 +208,42 @@ struct structarg_t : public PoolObject
     int index;
 };
 
+// Compact encoding of type + constness.
+class QualType {
+  public:
+    explicit QualType(Type* type) {
+        impl_ = type;
+    }
+    explicit QualType(Type* type, bool is_const) {
+        impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
+    }
+
+    static QualType FromVarargs(Type* type) {
+        return QualType{ke::SetPointerBits(type, 2)};
+    }
+
+    bool is_const() const {
+        return ke::GetPointerBits<2>(impl_) == 1;
+    }
+    bool is_varargs() const {
+        return ke::GetPointerBits<2>(impl_) == 2;
+    }
+
+    Type* operator *() const { return unqualified(); }
+    Type* operator ->() const { return unqualified(); }
+    Type* unqualified() const {
+        return ke::ClearPointerBits<2>(impl_);
+    }
+
+    uint32_t hash() const { return ke::HashPointer(impl_); }
+
+    bool operator ==(const QualType& other) const { return impl_ == other.impl_; }
+    bool operator !=(const QualType& other) const { return impl_ != other.impl_; }
+
+  private:
+    Type* impl_;
+};
+
 class Type : public PoolObject
 {
     friend class TypeManager;
