@@ -2852,12 +2852,12 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     if (info->is_public() || info->is_forward()) {
-        if (decl.type.numdim() > 0)
+        if (decl.type.dim_exprs.size() > 0)
             report(info->pos(), 141);
     }
 
     if (info->is_native()) {
-        if (decl.type.numdim() > 0) {
+        if (decl.type.dim_exprs.size() > 0) {
             report(info->pos(), 83);
             return false;
         }
@@ -3108,8 +3108,6 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
         result = a1->type_info().is_const == a2->type_info().is_const; /* "const" flag */
     if (result)
         result = a1->type() == a2->type();
-    if (result)
-        result = a1->type_info().dim_ == a2->type_info().dim_; /* array dimensions & index tags */
     if (result)
         result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
     if (auto a1_def = a1->default_value()) {

@@ -136,9 +136,6 @@ struct typeinfo_t {
         is_varargs(false)
     {}
 
-    // Array information.
-    PoolArray<int> dim_;
-
     // Either null or an array of size |numdim|, pool-allocated.
     PoolArray<Expr*> dim_exprs;
 
@@ -157,10 +154,6 @@ struct typeinfo_t {
 
     TypenameInfo ToTypenameInfo() const;
 
-    int numdim() const { return (int)dim_.size(); }
-    int dim(int i) const { return dim_[i]; }
-    const PoolArray<int>& dim_vec() const { return dim_; }
-
     bool bindable() const { return type_atom || type; }
 
     void set_type(const TypenameInfo& rt) {
@@ -175,12 +168,6 @@ struct typeinfo_t {
     }
 
     void set_type(Type* t) { type = t; }
-
-    bool isCharArray() const;
-    Expr* get_dim_expr(int i) {
-        assert(i < numdim());
-        return (size_t)i < dim_exprs.size() ? dim_exprs[i] : nullptr;
-    }
 };
 
 struct functag_t : public PoolObject

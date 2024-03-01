@@ -302,18 +302,40 @@ static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) 
     if (actual.is_varargs != formal.is_varargs)
         return false;
 
-    if (actual.dim_vec() != formal.dim_vec())
-        return false;
+    if (actual.type == formal.type)
+        return true;
 
-    // Do not allow casting between different array types, eg:
-    //   any[] <. float[] is illegal.
-    if (formal.numdim() &&
-        !IsValidImplicitArrayCast(formal.type, actual.type))
-    {
-        return false;
+    // :TODO: replace this mess with TypeChecker.
+
+    // Do not allow casting between different array strides, eg:
+    //   any[] to char[] is illegal.
+    Type* formal_type = formal.type;
+    Type* actual_type = actual.type;
+    if (formal_type->isArray()) {
+        if (!IsValidImplicitArrayCast(formal_type, actual_type))
+            return false;
+
+        for (;;) {
+            auto formal_iter = formal_type->as<ArrayType>();
+            auto actual_iter = actual_type->as<ArrayType>();
+            if (!formal_iter) {
+                if (actual_iter)
+                    return false;
+                // Neither is an array, this is ok.
+                break;
+            }
+            if (!actual_iter)
+                return false;
+
+            if (formal_iter->size() != actual_iter->size())
+                return false;
+
+            formal_type = formal_iter->inner();
+            actual_type = actual_iter->inner();
+        }
     }
 
-    if (!matchtag(formal.type, actual.type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
+    if (!matchtag(formal_type, actual_type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return false;
     return true;
 }

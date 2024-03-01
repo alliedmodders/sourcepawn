@@ -1244,23 +1244,16 @@ void
 Parser::parse_post_dims(typeinfo_t* type)
 {
     std::vector<Expr*> dim_exprs;
-    std::vector<int> dims;
-    bool has_dim_exprs = false;
     do {
-        dims.emplace_back(0);
-
         if (lexer_->match(']')) {
             dim_exprs.emplace_back(nullptr);
         } else {
-            has_dim_exprs = true;
             dim_exprs.emplace_back(hier14());
             lexer_->need(']');
         }
     } while (lexer_->match('['));
 
-    if (has_dim_exprs)
-        new (&type->dim_exprs) PoolArray<Expr*>(dim_exprs);
-    new (&type->dim_) PoolArray<int>(dims);
+    new (&type->dim_exprs) PoolArray<Expr*>(dim_exprs);
 }
 
 Stmt*
@@ -2178,10 +2171,8 @@ Parser::parse_decl(declinfo_t* decl, int flags)
             //    "y[],"  (old-style)
             parse_post_array_dims(decl, flags);
 
-            if (lexer_->match(tSYMBOL) || lexer_->match('&')) {
-                // This must be a newdecl, "x[] y" or "x[] &y", the latter of which
-                // is illegal, but we flow it through the right path anyway.
-                lexer_->lexpush();
+            if (lexer_->peek(tSYMBOL)) {
+                // This is a new-style declaration.
                 fix_mispredicted_postdims(decl);
                 return parse_new_decl(decl, &ident_tok, flags);
             }
@@ -2205,25 +2196,21 @@ Parser::parse_decl(declinfo_t* decl, int flags)
     return parse_new_decl(decl, NULL, flags);
 }
 
-void
-Parser::fix_mispredicted_postdims(declinfo_t* decl)
-{
+void Parser::fix_mispredicted_postdims(declinfo_t* decl) {
     assert(decl->type.has_postdims);
 
     decl->type.has_postdims = false;
 
-    if (!decl->type.dim_exprs.empty()) {
-        // We got a declaration like:
-        //      int[3] x;
-        //
-        // This is illegal, so report it now, and strip dim_exprs.
-        for (int i = 0; i < decl->type.dim_exprs.size(); i++) {
-            if (decl->type.dim_exprs[i]) {
-                report(decl->type.dim_exprs[i]->pos(), 101);
-                break;
-            }
+    // Check for a declaration like:
+    //
+    //      Blah[3] x;
+    //
+    // This is illegal, so report it now, and strip dim_exprs.
+    for (int i = 0; i < decl->type.dim_exprs.size(); i++) {
+        if (decl->type.dim_exprs[i]) {
+            report(decl->type.dim_exprs[i]->pos(), 101);
+            break;
         }
-        decl->type.dim_exprs = {};
     }
 }
 
@@ -2346,7 +2333,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
 
     if (flags & DECLMASK_NAMED_DECL) {
         if (lexer_->match('[')) {
-            if (decl->type.numdim() == 0)
+            if (decl->type.dim_exprs.empty())
                 parse_post_array_dims(decl, flags);
             else
                 report(121);
@@ -2410,14 +2397,12 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
     if (lexer_->match(tSYMBOL))
         decl->name = lexer_->current_token()->atom;
 
-    decl->type.dim_exprs = {};
-
     if (decl->type.has_postdims) {
         // We have something like:
         //    int x[], y...
         //
         // Reset the fact that we saw an array.
-        decl->type.dim_ = {};
+        decl->type.dim_exprs = {};
         decl->type.has_postdims = false;
         if (lexer_->match('[')) {
             // int x[], y[]
@@ -2426,7 +2411,7 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
         }
     } else {
         if (lexer_->match('[')) {
-            if (decl->type.numdim() > 0) {
+            if (!decl->type.dim_exprs.empty()) {
                 // int[] x, y[]
                 //           ^-- not allowed
                 report(121);
@@ -2435,13 +2420,13 @@ Parser::reparse_new_decl(declinfo_t* decl, int flags)
             // int x, y[]
             //         ^-- parse this
             parse_post_array_dims(decl, flags);
-        } else if (decl->type.numdim()) {
+        } else if (!decl->type.dim_exprs.empty()) {
             // int[] x, y
             //          ^-- still an array, because the type is int[]
             //
             // Dim count should be 0 but we zap it anyway.
-            for (auto& dim : decl->type.dim_)
-                dim = 0;
+            for (auto& expr : decl->type.dim_exprs)
+                expr = nullptr;
         }
     }
 
@@ -2497,10 +2482,10 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
 
     // Note: we could have already filled in the prefix array bits, so we check
     // whether we already have dimensions before parsing more.
-    if (type->dim_.empty() && lexer_->match('[')) {
-        std::vector<int> dims;
+    if (type->dim_exprs.empty() && lexer_->match('[')) {
+        std::vector<Expr*> dims;
         do {
-            dims.emplace_back(0);
+            dims.emplace_back(nullptr);
             if (!lexer_->match(']')) {
                 report(101);
 
@@ -2509,12 +2494,12 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
                 lexer_->match(']');
             }
         } while (lexer_->match('['));
-        new (&type->dim_) PoolArray<int>(dims);
+        new (&type->dim_exprs) PoolArray<Expr*>(dims);
     }
 
     if (flags & DECLFLAG_ARGUMENT) {
         if (lexer_->match('&')) {
-            if (type->numdim())
+            if (!type->dim_exprs.empty())
                 report(137);
             else
                 type->reference = true;
