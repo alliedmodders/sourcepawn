@@ -300,8 +300,6 @@ class Decl : public Stmt
     IdentifierKind ident_impl();
     char vclass();
     bool is_const();
-    int dim(int n);
-    int dim_count();
     virtual Type* type() const;
 
     Atom* name() const { return name_; }
