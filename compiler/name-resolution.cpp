@@ -256,18 +256,22 @@ PstructDecl::EnterNames(SemaContext& sc)
             return false;
         }
 
+        if (!sc.BindType(field->pos(), &field->mutable_type_info()))
+            return false;
+
         if (field->type_info().type->isEnumStruct()) {
             report(field, 446);
             return false;
         }
-        if (field->type_info().numdim() > 1 ||
-            (field->type_info().numdim() == 1 && field->type_info().dim(0) != 0))
-        {
-            report(field, 69);
-            return false;
-        }
-        if (field->type_info().numdim())
+        if (!field->type_info().dim_exprs.empty())
             ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(), sGLOBAL);
+
+        if (auto at = field->type()->as<ArrayType>()) {
+            if (at->inner()->isArray() || at->size() != 0) {
+                report(field, 69);
+                return false;
+            }
+        }
 
         field->set_offset(position);
 
@@ -320,7 +324,7 @@ TypedefInfo::Bind(SemaContext& sc)
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
 
-        if (arg->type.numdim())
+        if (!arg->type.dim_exprs.empty())
             ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
 
         ft_args.emplace_back(arg->type);
@@ -401,7 +405,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (!sc.BindType(pos(), &type_))
         return false;
 
-    if (type_.numdim()) {
+    if (!type_.dim_exprs.empty()) {
         if (!ResolveArrayType(sc.sema(), this))
             return false;
     }
@@ -726,7 +730,7 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
-    if (decl_.type.numdim())
+    if (!decl_.type.dim_exprs.empty())
         ResolveArrayType(outer_sc.sema(), pos_, &decl_.type, sLOCAL);
 
     // The forward's prototype is canonical. If this symbol has a forward, we
@@ -790,8 +794,11 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
             markusage(args_[0], uREAD);
     }
 
-    if ((is_native_ || is_public_ || is_forward_) && decl_.type.numdim() > 0)
+    if ((is_native_ || is_public_ || is_forward_) &&
+        (return_type()->isArray() || return_type()->isEnumStruct()))
+    {
         error(pos_, 141);
+    }
 
     ok &= BindArgs(sc);
 
@@ -1002,17 +1009,18 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
 
-        if (field->type_info().numdim()) {
+        if (!field->type_info().dim_exprs.empty()) {
             if (!ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(),
                                   sENUMFIELD)) {
                 continue;
             }
 
-            if (field->type_info().numdim() > 1) {
+            auto at = field->type()->as<ArrayType>();
+            if (at->inner()->isArray()) {
                 error(field->pos(), 65);
                 continue;
             }
-            if (!field->type_info().dim(0)) {
+            if (at->size() == 0) {
                 error(field->pos(), 81);
                 continue;
             }
@@ -1169,7 +1177,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
         if (!sc.BindType(prop->pos(), &prop->mutable_type_info()))
             return false;
 
-        if (prop->type_info().numdim() > 0) {
+        if (prop->type_info().dim_exprs.size() > 0) {
             report(prop, 82);
             continue;
         }

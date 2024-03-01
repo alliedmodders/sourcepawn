@@ -288,10 +288,6 @@ Type* TypeManager::defineReference(Type* inner) {
     return type;
 }
 
-bool typeinfo_t::isCharArray() const {
-    return numdim() == 1 && type->isChar();
-}
-
 bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
     return lookup.type == type->inner() && lookup.size == type->size();
 }

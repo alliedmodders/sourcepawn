@@ -427,10 +427,6 @@ RttiBuilder::add_enumstruct(Type* type)
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
         auto field = (*iter);
 
-        int dims[1], dimcount = 0;
-        if (field->type_info().numdim())
-            dims[dimcount++] = field->type_info().dim(0);
-
         smx_rtti_es_field info;
         info.name = names_->add(field->name());
         info.type_id = to_typeid(field->type());

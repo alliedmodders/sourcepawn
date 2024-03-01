@@ -43,8 +43,7 @@ class ArrayTypeResolver
   private:
     bool ResolveSize();
     bool ResolveDimExprs();
-    void PrepareDimArray();
-    void ResolveRank(int rank, Expr* init);
+    void ResolveRank(size_t rank, Expr* init);
     void SetRankSize(Expr* expr, int rank, int size);
     bool ResolveDimExpr(Expr* expr, value* v);
 
@@ -71,7 +70,7 @@ ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, VarDeclBase* decl)
     decl_(decl),
     type_(decl->mutable_type_info()),
     initializer_(decl->init_rhs()),
-    computed_(type_->numdim()),
+    computed_(type_->dim_exprs.size()),
     vclass_(decl->vclass()),
     es_(nullptr)
 {
@@ -86,7 +85,7 @@ ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, const token_pos_t& pos, ty
     pos_(pos),
     type_(type),
     initializer_(nullptr),
-    computed_(type_->numdim()),
+    computed_(type_->dim_exprs.size()),
     vclass_(vclass)
 {
 }
@@ -101,8 +100,16 @@ bool ArrayTypeResolver::Resolve() {
         return false;
     }
 
+    for (size_t i = 0; i < computed_.size(); i++) {
+        if (computed_[i] < 0) {
+            assert(!resolved_size);
+            computed_[i] = 0;
+        }
+    }
+
+    // Always build a Type, so we don't have a null type lying around.
     auto types = CompileContext::get().types();
-    type_->type = types->defineArray(type_->type, type_->dim_vec());
+    type_->type = types->defineArray(type_->type, computed_.data(), computed_.size());
     type_->resolved_array = true;
     return resolved_size;
 }
@@ -121,8 +128,6 @@ bool ArrayTypeResolver::ResolveSize() {
     // change between binding and later analysis.
     if (!ResolveDimExprs())
         return false;
-
-    PrepareDimArray();
 
     // If this is an implicit dynamic array (old syntax), the initializer
     // cannot be used for computing a size.
@@ -143,14 +148,15 @@ bool ArrayTypeResolver::ResolveSize() {
     // Any kind of indeterminate status gets forced back to 0. Semantic
     // analysis will catch type or other size errors in the initializer.
     bool indeterminate = false;
-    for (int i = 0; i < type_->numdim(); i++) {
-        if (type_->dim(i))
+    for (size_t i = 0; i < type_->dim_exprs.size(); i++) {
+        if (type_->dim_exprs[i])
             continue;
 
-        if (computed_[i] >= 0)
-            type_->dim_[i] = computed_[i];
-        else if (i != type_->numdim() - 1)
-            indeterminate = true;
+        if (computed_[i] < 0) {
+            if (i != type_->dim_exprs.size() - 1)
+                indeterminate = true;
+            computed_[i] = 0;
+        }
     }
 
     // If the declaration is new-style, like:
@@ -166,7 +172,7 @@ bool ArrayTypeResolver::ResolveSize() {
     // technical reason with our new array code to not support indeterminism.
     // But for now, we retain the old error.
     if (type_->is_new && indeterminate) {
-        if (vclass_ == sARGUMENT && type_->dim(type_->numdim() - 1)) {
+        if (vclass_ == sARGUMENT && type_->dim_exprs.back()) {
             // As noted in ResolveDimExprs, we allow this for arguments as long
             // as the last dimension is filled.
         } else if (vclass_ == sLOCAL) {
@@ -181,33 +187,10 @@ bool ArrayTypeResolver::ResolveSize() {
 }
 
 void
-ArrayTypeResolver::PrepareDimArray()
-{
-    for (int i = 0; i < type_->numdim(); i++) {
-        if (type_->dim(i) != 0) {
-            computed_[i] = type_->dim(i);
-        } else {
-            // If we're an array, we need an initializer and this will be
-            // checked later during size resolution. If we're an iREFARRAY,
-            // it means an ambiguous old-style array like:
-            //     new x[y][3];
-            //
-            // In this case, we'll verify that no initializer exists later
-            // during semantic analysis.
-            //
-            // In both cases, we don't need to check anything here. For non-
-            // local cases like global/static variables, arguments, or enum
-            // fields, we'd have errored in ResolveDimExprs().
-            computed_[i] = kSizeUnknown;
-        }
-    }
-}
-
-void
-ArrayTypeResolver::ResolveRank(int rank, Expr* init)
+ArrayTypeResolver::ResolveRank(size_t rank, Expr* init)
 {
     if (StringExpr* expr = init->as<StringExpr>()) {
-        if (rank != type_->numdim() - 1) {
+        if (rank != computed_.size() - 1) {
             // This is an error, but we'll let it get reported during semantic
             // analysis.
             return;
@@ -225,10 +208,10 @@ ArrayTypeResolver::ResolveRank(int rank, Expr* init)
 
     // This happens with structs. Don't bother checking for a struct though.
     // Just continue and let a later pass figure out if there's an error.
-    if (rank >= type_->numdim())
+    if (rank >= computed_.size())
         return;
 
-    if (!type_->dim(rank) && expr->ellipses())
+    if (!type_->dim_exprs[rank] && expr->ellipses())
         report(expr->pos(), 41);
 
     SetRankSize(expr, rank, expr->exprs().size());
@@ -247,11 +230,11 @@ ArrayTypeResolver::SetRankSize(Expr* expr, int rank, int size)
     if (computed_[rank] == size)
         return;
 
-    if (rank == type_->numdim() - 1) {
+    if (rank == computed_.size() - 1) {
         // The final rank is allowed to vary as long as the size was not
         // explicitly specified. If it was specified, we'll error during
         // semantic analysis, so there's no need to handle it now.
-        if (!type_->dim(rank))
+        if (!type_->dim_exprs[rank])
             computed_[rank] = kSizeIndeterminate;
     } else if (computed_[rank] > 0) {
         // Intermediate ranks must not vary in size.
@@ -261,8 +244,8 @@ ArrayTypeResolver::SetRankSize(Expr* expr, int rank, int size)
 }
 
 bool ArrayTypeResolver::ResolveDimExprs() {
-    for (int i = 0; i < type_->numdim(); i++) {
-        Expr* expr = type_->get_dim_expr(i);
+    for (size_t i = 0; i < type_->dim_exprs.size(); i++) {
+        Expr* expr = type_->dim_exprs[i];
         if (!expr) {
             // We allow something like:
             //    f(const String:blah[])
@@ -279,7 +262,7 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             //
             // And this seems like a perfectly valid thing to want (a dynamic
             // array of fixed-size arrays).
-            if (i == type_->numdim() - 1 && vclass_ == sARGUMENT && type_->is_new) {
+            if (i == type_->dim_exprs.size() - 1 && vclass_ == sARGUMENT && type_->is_new) {
                 report(pos_, 183);
                 return false;
             }
@@ -289,6 +272,19 @@ bool ArrayTypeResolver::ResolveDimExprs() {
                 report(pos_, 183);
                 return false;
             }
+
+            // If we're an array, we need an initializer and this will be
+            // checked later during size resolution. If we're an iREFARRAY,
+            // it means an ambiguous old-style array like:
+            //     new x[y][3];
+            //
+            // In this case, we'll verify that no initializer exists later
+            // during semantic analysis.
+            //
+            // In both cases, we don't need to check anything here. For non-
+            // local cases like global/static variables, arguments, or enum
+            // fields, we'd have errored in ResolveDimExprs().
+            computed_[i] = kSizeUnknown;
             continue;
         }
 
@@ -316,7 +312,7 @@ bool ArrayTypeResolver::ResolveDimExprs() {
                 report(expr->pos(), 162);
                 return false;
             }
-            assert(type_->dim(i) == 0);
+            computed_[i] = 0;
 
             // sLOCAL guarantees we have a decl.
             decl_->set_implicit_dynamic_array();
@@ -331,7 +327,7 @@ bool ArrayTypeResolver::ResolveDimExprs() {
                 report(expr->pos(), 9);
                 return false;
             }
-            type_->dim_[i] = v.constval();
+            computed_[i] = v.constval();
         }
     }
     return true;
@@ -789,8 +785,8 @@ bool Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl) {
     TypenameInfo ti = type->ToTypenameInfo();
 
     std::vector<Expr*> exprs;
-    for (int i = 0; i < type->numdim(); i++) {
-        Expr* expr = type->get_dim_expr(i);
+    for (size_t i = 0; i < type->dim_exprs.size(); i++) {
+        Expr* expr = type->dim_exprs[i];
         if (!expr) {
             report(decl->pos(), 184);
             return false;
