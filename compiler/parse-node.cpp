@@ -238,20 +238,6 @@ Type* Decl::type() const {
     return nullptr;
 }
 
-int Decl::dim(int n) {
-    auto var = as<VarDeclBase>();
-    assert(var);
-
-    return var->type_info().dim(n);
-}
-
-int Decl::dim_count() {
-    auto var = as<VarDeclBase>();
-    assert(var);
-
-    return (int)var->type_info().numdim();
-}
-
 bool Decl::is_const() {
     auto var = as<VarDeclBase>();
     assert(var);

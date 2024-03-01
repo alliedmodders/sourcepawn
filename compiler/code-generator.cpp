@@ -104,12 +104,6 @@ void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
     auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
                                    *addr, decl->type()->type_index(), symname, pc,
                                    asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
-    if (decl->type()->isArray()) {
-        string += " [ ";
-        for (int i = 0; i < decl->dim_count(); i++)
-            string += ke::StringPrintf("%x:%x ", decl->type()->type_index(), decl->dim(i));
-        string += "]";
-    }
 
     if (fun_) {
         auto data = fun_->cg();

@@ -298,6 +298,7 @@ RttiParser::validateFunction()
     if (offset_ >= length_)
       return false;
     // A by_ref indicator is allowed here.
+    match(cb::kConst);
     match(cb::kByRef);
     if (!validate())
       return false;
