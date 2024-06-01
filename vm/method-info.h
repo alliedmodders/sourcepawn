@@ -28,10 +28,17 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
   MethodInfo(PluginRuntime* rt, uint32_t codeOffset);
   ~MethodInfo();
 
-  ke::RefPtr<ControlFlowGraph> Validate() {
-    if (!checked_ || !graph_)
-      InternalValidate();
+  ke::RefPtr<ControlFlowGraph> BuildGraph() {
+    InternalValidate();
     return graph_.take();
+  }
+
+  // For interpreter validation, we throw away the unused graph.
+  bool Validate() {
+    if (!checked_)
+      InternalValidate();
+    graph_ = nullptr;
+    return validation_error_ == SP_ERROR_NONE;
   }
 
   int validationError() const {

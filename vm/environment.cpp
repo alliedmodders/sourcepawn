@@ -353,8 +353,7 @@ Environment::Invoke(PluginContext* cx,
 
   // The JIT performs its own validation. Handle the interpreter here.
   {
-    auto graph = method->Validate();
-    if (!graph) {
+    if (!method->Validate()) {
       cx->ReportErrorNumber(method->validationError());
       return false;
     }
