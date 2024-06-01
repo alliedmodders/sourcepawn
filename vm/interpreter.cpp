@@ -159,8 +159,7 @@ Interpreter::visitCALL(cell_t offset)
     return false;
   }
   {
-    auto graph = target->Validate();
-    if (!graph) {
+    if (!target->Validate()) {
       cx_->ReportErrorNumber(target->validationError());
       return false;
     }
