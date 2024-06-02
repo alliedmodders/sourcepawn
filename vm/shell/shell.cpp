@@ -125,6 +125,41 @@ static cell_t PrintNums(IPluginContext* cx, const cell_t* params)
   return 1;
 }
 
+static cell_t Printf(IPluginContext* cx, const cell_t* params) {
+  char* p;
+  cx->LocalToString(params[1], &p);
+
+  size_t index = 1;
+  while (*p) {
+    if (*p == '%') {
+      char next = *(p + 1);
+      if (next == 's' || next == 'd' || next == 'f') {
+        index++;
+        if (index > params[0])
+          return cx->ThrowNativeError("Wrong number of arguments");
+
+        cell_t* addr;
+        if (int err = cx->LocalToPhysAddr(params[index], &addr); err != SP_ERROR_NONE)
+          return cx->ThrowNativeErrorEx(err, "Could not read argument");
+
+        if (next == 's')
+          fputs(reinterpret_cast<const char*>(addr), stdout);
+        else if (next == 'f')
+          fprintf(stdout, "%f", *reinterpret_cast<float*>(addr));
+        else if (next == 'd')
+          fprintf(stdout, "%d", *addr);
+
+        p += 2;
+        continue;
+      }
+    }
+
+    fputc(*p, stdout);
+    p++;
+  }
+  return 1;
+}
+
 static cell_t DoNothing(IPluginContext* cx, const cell_t* params)
 {
   return 1;
@@ -330,6 +365,7 @@ static int Execute(const char* file)
   BindNative(rt, "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt, "call_with_string", CallWithString);
   BindNative(rt, "assert_eq", AssertEq);
+  BindNative(rt, "printf", Printf);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
