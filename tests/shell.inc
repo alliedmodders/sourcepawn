@@ -13,6 +13,9 @@ native void report_error();
 native void unbound_native();
 native int donothing();
 
+// dumb version of printf(), only supports %f, %d, %s.
+native void printf(const char[] fmt, any:...);
+
 // Return arg, but through a dynamically generated native.
 native int dynamic_native(int arg);
 

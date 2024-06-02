@@ -1172,7 +1172,10 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
         }
 
         if (arg->type_info().is_varargs) {
-            if (val.ident == iVARIABLE) {
+            if (val.type()->isArray()) {
+                if (lvalue)
+                    __ address(val.sym, sPRI);
+            } else if (val.ident == iVARIABLE) {
                 assert(val.sym);
                 assert(lvalue);
                 /* treat a "const" variable passed to a function with a non-const
