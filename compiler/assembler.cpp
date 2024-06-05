@@ -500,7 +500,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
 
     bytes.push_back((uint8_t)argc);
     if (fun->IsVariadic())
-        bytes.push_back(cb::kVariadic);
+        bytes.push_back(cb::kLegacyVariadic);
 
     encode_type_into(bytes, fun->return_type());
 
@@ -685,7 +685,7 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* 
     bytes.push_back((uint8_t)ft->args.size());
 
     if (!ft->args.empty() && ft->args[ft->args.size() - 1].is_varargs)
-        bytes.push_back(cb::kVariadic);
+        bytes.push_back(cb::kLegacyVariadic);
 
     encode_type_into(bytes, ft->ret_type);
 
