@@ -531,7 +531,7 @@ struct TypedefInfo : public PoolObject {
     TypenameInfo ret_type;
     PoolArray<declinfo_t*> args;
 
-    functag_t* Bind(SemaContext& sc);
+    FunctionType* Bind(SemaContext& sc);
 };
 
 class TypedefDecl : public Decl

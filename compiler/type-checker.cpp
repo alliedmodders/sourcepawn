@@ -258,7 +258,7 @@ bool TypeChecker::CheckFunction() {
     if (!actual_fe || actual_fe->entries.empty())
         return DiagnoseFailure();
 
-    functag_t* actualfn = actual_fe->entries.back();
+    FunctionType* actualfn = actual_fe->entries.back();
     if (!actualfn)
         return DiagnoseFailure();
 
@@ -274,24 +274,27 @@ bool TypeChecker::CheckFunction() {
     return DiagnoseFunctionFailure();
 }
 
-bool TypeChecker::CheckFunctionSignature(functag_t* formal, functag_t* actual) {
-    if (formal->ret_type != actual->ret_type) {
-        if (formal->ret_type->isVoid() && actual->ret_type->isInt())
+bool TypeChecker::CheckFunctionSignature(FunctionType* formal, FunctionType* actual) {
+    if (formal->return_type() != actual->return_type()) {
+        if (formal->return_type()->isVoid() && actual->return_type()->isInt())
             return true;
         return DiagnoseFunctionFailure();
     }
 
+    if (formal->variadic() != actual->variadic())
+        return DiagnoseFunctionFailure();
+
     // Make sure there are no trailing arguments.
-    if (actual->args.size() > formal->args.size())
+    if (actual->nargs() > formal->nargs())
         return DiagnoseFunctionFailure();
 
     // Check arguments.
-    for (size_t i = 0; i < formal->args.size(); i++) {
-        if (i >= actual->args.size())
+    for (size_t i = 0; i < formal->nargs(); i++) {
+        if (i >= actual->nargs())
             return DiagnoseFunctionFailure();
 
-        auto formal_type = formal->args[i];
-        auto actual_type = actual->args[i];
+        auto formal_type = formal->arg_type(i);
+        auto actual_type = actual->arg_type(i);
         TypeChecker tc(pos_, formal_type, actual_type, TypeChecker::Generic,
                        TypeChecker::FuncArg);
         if (!tc.Check())

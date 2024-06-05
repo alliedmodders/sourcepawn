@@ -299,27 +299,21 @@ TypedefDecl::EnterNames(SemaContext& sc)
     return true;
 }
 
-bool
-TypedefDecl::Bind(SemaContext& sc)
-{
+bool TypedefDecl::Bind(SemaContext& sc) {
     auto ft = type_->Bind(sc);
     if (!ft)
         return false;
 
-    new (&fe_->entries) PoolArray<functag_t*>({ft});
+    new (&fe_->entries) PoolArray<FunctionType*>({ft});
     return true;
 }
 
-functag_t*
-TypedefInfo::Bind(SemaContext& sc)
-{
+FunctionType* TypedefInfo::Bind(SemaContext& sc) {
     if (!sc.BindType(pos, &ret_type))
         return nullptr;
 
-    auto ft = new functag_t();
-    ft->ret_type = ret_type.type();
-
-    std::vector<QualType> ft_args;
+    bool variadic = false;
+    std::vector<std::pair<QualType, sp::Atom*>> ft_args;
     for (auto& arg : args) {
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
@@ -328,13 +322,12 @@ TypedefInfo::Bind(SemaContext& sc)
             ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
 
         if (arg->type.is_varargs)
-            ft->variadic = true;
+            variadic = true;
         else
-            ft_args.emplace_back(arg->type.qualified());
+            ft_args.emplace_back(arg->type.qualified(), arg->name);
     }
-    new (&ft->args) PoolArray<QualType>(ft_args);
 
-    return ft;
+    return sc.cc().types()->defineFunction(ret_type.type(), ft_args, variadic);
 }
 
 bool
@@ -354,7 +347,7 @@ TypesetDecl::Bind(SemaContext& sc)
 {
     bool ok = true;
 
-    std::vector<functag_t*> tags;
+    std::vector<FunctionType*> tags;
     for (const auto& type : types_) {
         auto ft = type->Bind(sc);
         if (!ft) {
@@ -364,7 +357,7 @@ TypesetDecl::Bind(SemaContext& sc)
         tags.emplace_back(ft);
     }
 
-    new (&fe_->entries) PoolArray<functag_t*>(tags);
+    new (&fe_->entries) PoolArray<FunctionType*>(tags);
     return ok;
 }
 
