@@ -373,6 +373,17 @@ MessageBuilder::operator <<(Type* type)
     return *this;
 }
 
+MessageBuilder&
+MessageBuilder::operator <<(QualType type)
+{
+    std::string message;
+    if (type.is_const())
+        message += "const ";
+    message += type->prettyName();
+    args_.emplace_back(message);
+    return *this;
+}
+
 ReportManager::ReportManager(CompileContext& cc)
   : cc_(cc)
 {

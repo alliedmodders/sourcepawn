@@ -205,15 +205,8 @@ class QualType {
         impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
     }
 
-    static QualType FromVarargs(Type* type) {
-        return QualType{ke::SetPointerBits(type, 2)};
-    }
-
     bool is_const() const {
         return ke::GetPointerBits<2>(impl_) == 1;
-    }
-    bool is_varargs() const {
-        return ke::GetPointerBits<2>(impl_) == 2;
     }
 
     Type* operator *() const { return unqualified(); }
