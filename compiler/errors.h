@@ -96,6 +96,7 @@ class MessageBuilder
         return *this;
     }
     MessageBuilder& operator <<(Type* type);
+    MessageBuilder& operator <<(QualType type);
 
     template <typename Integer,
               std::enable_if_t<std::is_integral<Integer>::value, bool> = true>

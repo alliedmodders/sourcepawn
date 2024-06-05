@@ -26,11 +26,7 @@
 namespace sp {
 namespace cc {
 
-TypeChecker::TypeChecker(ParseNode* node, Type* formal, Type* actual, Context why, int flags)
-  : TypeChecker(node->pos(), formal, actual, why, flags)
-{}
-
-TypeChecker::TypeChecker(const token_pos_t& pos, Type* formal, Type* actual, Context why,
+TypeChecker::TypeChecker(const token_pos_t& pos, QualType formal, QualType actual, Context why,
                          int flags)
   : pos_(pos),
     formal_(formal),
@@ -83,8 +79,8 @@ bool TypeChecker::CheckImpl() {
     if (auto formal_array = formal_->as<ArrayType>())
         return CheckArrays(formal_array, actual_->as<ArrayType>());
 
-    Type* formal = formal_;
-    Type* actual = actual_;
+    Type* formal = *formal_;
+    Type* actual = *actual_;
     if (flags_ & AllowCoerce) {
         if (formal->isReference())
             formal = formal->inner();
@@ -294,8 +290,8 @@ bool TypeChecker::CheckFunctionSignature(functag_t* formal, functag_t* actual) {
         if (i >= actual->args.size())
             return DiagnoseFunctionFailure();
 
-        Type* formal_type = formal->args[i].type;
-        Type* actual_type = actual->args[i].type;
+        auto formal_type = formal->args[i].type;
+        auto actual_type = actual->args[i].type;
         TypeChecker tc(pos_, formal_type, actual_type, TypeChecker::Generic,
                        TypeChecker::FuncArg);
         if (!tc.Check())

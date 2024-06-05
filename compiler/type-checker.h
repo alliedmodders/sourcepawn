@@ -44,9 +44,19 @@ class TypeChecker {
         Ternary = 0x10,
     };
 
+    TypeChecker(ParseNode* node, QualType formal, QualType actual, Context why,
+                int flags = None)
+      : TypeChecker(node->pos(), formal, actual, why, flags)
+    {}
     TypeChecker(ParseNode* node, Type* formal, Type* actual, Context why,
-                int flags = None);
+                int flags = None)
+      : TypeChecker(node->pos(), QualType(formal), QualType(actual), why, flags)
+    {}
     TypeChecker(const token_pos_t& pos, Type* formal, Type* actual, Context why,
+                int flags = None)
+      : TypeChecker(pos, QualType(formal), QualType(actual), why, flags)
+    {}
+    TypeChecker(const token_pos_t& pos, QualType formal, QualType actual, Context why,
                 int flags = None);
 
     bool Check();
@@ -65,8 +75,8 @@ class TypeChecker {
 
   private:
     const token_pos_t& pos_;
-    Type* formal_;
-    Type* actual_;
+    QualType formal_;
+    QualType actual_;
     Context why_;
     int flags_;
     AutoDeferReports defer_;
