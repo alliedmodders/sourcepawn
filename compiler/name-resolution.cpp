@@ -319,7 +319,7 @@ TypedefInfo::Bind(SemaContext& sc)
     auto ft = new functag_t();
     ft->ret_type = ret_type.type();
 
-    std::vector<typeinfo_t> ft_args;
+    std::vector<QualType> ft_args;
     for (auto& arg : args) {
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
@@ -327,9 +327,12 @@ TypedefInfo::Bind(SemaContext& sc)
         if (!arg->type.dim_exprs.empty())
             ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
 
-        ft_args.emplace_back(arg->type);
+        if (arg->type.is_varargs)
+            ft->variadic = true;
+        else
+            ft_args.emplace_back(arg->type.qualified());
     }
-    new (&ft->args) PoolArray<typeinfo_t>(ft_args);
+    new (&ft->args) PoolArray<QualType>(ft_args);
 
     return ft;
 }
