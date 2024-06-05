@@ -85,10 +85,10 @@ struct smx_rtti_method {
     uint32_t pcode_end;
 
     // Method signature; offset into rtti.data. The encoding at this offset is:
-    //    FormalArgs    uint8
-    //    Variadic?     uint8
-    //    ReturnType    <return-type>
-    //    Params*       <param>
+    //    FormalArgs      uint8
+    //    LegacyVariadic? uint8
+    //    ReturnType      <return-type>
+    //    Params*         <param>
     //
     // <return-type> must be kVoid or a <type>.
     // <param> must be: kByRef? <type>
@@ -252,8 +252,9 @@ static const uint8_t kEnumStruct = 0x46; // rtti.enumstructs
 
 // For function signatures, indicating no return value.
 static const uint8_t kVoid = 0x70;
-// For functions, indicating the last argument of a function is variadic.
-static const uint8_t kVariadic = 0x71;
+// For functions, indicating the last argument of a function is variadic, and is
+// unnamed and untyped.
+static const uint8_t kLegacyVariadic = 0x71;
 // For parameters, indicating pass-by-ref.
 static const uint8_t kByRef = 0x72;
 // For reference and compound types, indicating const.
