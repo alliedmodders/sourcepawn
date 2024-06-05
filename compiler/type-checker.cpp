@@ -290,8 +290,8 @@ bool TypeChecker::CheckFunctionSignature(functag_t* formal, functag_t* actual) {
         if (i >= actual->args.size())
             return DiagnoseFunctionFailure();
 
-        auto formal_type = formal->args[i].type;
-        auto actual_type = actual->args[i].type;
+        auto formal_type = formal->args[i];
+        auto actual_type = actual->args[i];
         TypeChecker tc(pos_, formal_type, actual_type, TypeChecker::Generic,
                        TypeChecker::FuncArg);
         if (!tc.Check())

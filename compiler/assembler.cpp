@@ -684,13 +684,13 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* 
     bytes.push_back(cb::kFunction);
     bytes.push_back((uint8_t)ft->args.size());
 
-    if (!ft->args.empty() && ft->args[ft->args.size() - 1].is_varargs)
+    if (ft->variadic)
         bytes.push_back(cb::kLegacyVariadic);
 
     encode_type_into(bytes, ft->ret_type);
 
     for (const auto& arg : ft->args)
-        encode_type_into(bytes, QualType(arg.type, arg.is_const));
+        encode_type_into(bytes, arg);
 }
 
 typedef SmxListSection<sp_file_natives_t> SmxNativeSection;

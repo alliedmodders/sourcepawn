@@ -60,10 +60,15 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     functag_t* ft = new functag_t;
     ft->ret_type = sym->type();
 
-    std::vector<typeinfo_t> args;
-    for (auto arg : fun->canonical()->args())
-        args.emplace_back(arg->type_info());
-    new (&ft->args) PoolArray<typeinfo_t>(args);
+    std::vector<QualType> args;
+    for (auto arg : fun->canonical()->args()) {
+        const auto& ti = arg->type_info();
+        if (ti.is_varargs)
+            ft->variadic = true;
+        else
+            args.emplace_back(ti.qualified());
+    }
+    new (&ft->args) PoolArray<QualType>(args);
 
     auto name = ke::StringPrintf("::ft:%s", fun->name()->chars());
     funcenum_t* fe = funcenums_add(cc, cc.atom(name), true);

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include <amtl/am-bits.h>
 #include <amtl/am-enum.h>
@@ -82,6 +83,36 @@ class Expr;
 class MethodmapDecl;
 class PstructDecl;
 class Type;
+
+// Compact encoding of type + constness.
+class QualType {
+  public:
+    explicit QualType(Type* type) {
+        impl_ = type;
+    }
+    explicit QualType(Type* type, bool is_const) {
+        impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
+    }
+
+    bool is_const() const {
+        return ke::GetPointerBits<2>(impl_) == 1;
+    }
+
+    Type* operator *() const { return unqualified(); }
+    Type* operator ->() const { return unqualified(); }
+    Type* unqualified() const {
+        return ke::ClearPointerBits<2>(impl_);
+    }
+
+    uint32_t hash() const { return ke::HashPointer(impl_); }
+
+    bool operator ==(const QualType& other) const { return impl_ == other.impl_; }
+    bool operator !=(const QualType& other) const { return impl_ != other.impl_; }
+
+  private:
+    Type* impl_;
+};
+
 
 struct TypenameInfo {
     static constexpr uintptr_t kAtomFlag = 0x1;
@@ -168,16 +199,8 @@ struct typeinfo_t {
     }
 
     void set_type(Type* t) { type = t; }
-};
 
-struct functag_t : public PoolObject
-{
-    functag_t()
-     : ret_type(nullptr),
-       args()
-    {}
-    Type* ret_type;
-    PoolArray<typeinfo_t> args;
+    QualType qualified() const { return QualType(type, is_const); }
 };
 
 struct structarg_t : public PoolObject
@@ -195,33 +218,15 @@ struct structarg_t : public PoolObject
     int index;
 };
 
-// Compact encoding of type + constness.
-class QualType {
-  public:
-    explicit QualType(Type* type) {
-        impl_ = type;
-    }
-    explicit QualType(Type* type, bool is_const) {
-        impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
-    }
-
-    bool is_const() const {
-        return ke::GetPointerBits<2>(impl_) == 1;
-    }
-
-    Type* operator *() const { return unqualified(); }
-    Type* operator ->() const { return unqualified(); }
-    Type* unqualified() const {
-        return ke::ClearPointerBits<2>(impl_);
-    }
-
-    uint32_t hash() const { return ke::HashPointer(impl_); }
-
-    bool operator ==(const QualType& other) const { return impl_ == other.impl_; }
-    bool operator !=(const QualType& other) const { return impl_ != other.impl_; }
-
-  private:
-    Type* impl_;
+struct functag_t : public PoolObject
+{
+    functag_t()
+     : ret_type(nullptr),
+       args()
+    {}
+    Type* ret_type;
+    PoolArray<QualType> args;
+    bool variadic;
 };
 
 class Type : public PoolObject

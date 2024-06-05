@@ -297,20 +297,17 @@ static bool IsValidImplicitArrayCast(Type* formal, Type* actual) {
     return formal == actual;
 }
 
-static bool funcarg_compare(const typeinfo_t& formal, const typeinfo_t& actual) {
+static bool funcarg_compare(QualType formal, QualType actual) {
     // Check type.
-    if (actual.is_varargs != formal.is_varargs)
-        return false;
-
-    if (actual.type == formal.type)
+    if (actual == formal)
         return true;
 
     // :TODO: replace this mess with TypeChecker.
 
     // Do not allow casting between different array strides, eg:
     //   any[] to char[] is illegal.
-    Type* formal_type = formal.type;
-    Type* actual_type = actual.type;
+    Type* formal_type = *formal;
+    Type* actual_type = *actual;
     if (formal_type->isArray()) {
         if (!IsValidImplicitArrayCast(formal_type, actual_type))
             return false;
@@ -348,15 +345,17 @@ bool functag_compare(const functag_t* formal, const functag_t* actual) {
     // Make sure there are no trailing arguments.
     if (actual->args.size() > formal->args.size())
         return false;
+    if (actual->variadic != formal->variadic)
+        return false;
 
     // Check arguments.
     for (size_t i = 0; i < formal->args.size(); i++) {
-        const typeinfo_t& formal_arg = formal->args[i];
+        auto formal_arg = formal->args[i];
 
         if (i >= actual->args.size())
             return false;
 
-        const typeinfo_t& actual_arg = actual->args[i];
+        auto actual_arg = actual->args[i];
         if (!funcarg_compare(formal_arg, actual_arg))
             return false;
     }
