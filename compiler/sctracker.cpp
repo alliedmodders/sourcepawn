@@ -57,22 +57,21 @@ funcenum_t* funcenums_add(CompileContext& cc, Atom* name, bool anonymous) {
 funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     FunctionDecl* fun = sym->as<FunctionDecl>();
 
-    functag_t* ft = new functag_t;
-    ft->ret_type = sym->type();
-
-    std::vector<QualType> args;
+    bool variadic = false;
+    std::vector<std::pair<QualType, sp::Atom*>> args;
     for (auto arg : fun->canonical()->args()) {
         const auto& ti = arg->type_info();
         if (ti.is_varargs)
-            ft->variadic = true;
+            variadic = true;
         else
-            args.emplace_back(ti.qualified());
+            args.emplace_back(ti.qualified(), arg->name());
     }
-    new (&ft->args) PoolArray<QualType>(args);
+
+    auto type = cc.types()->defineFunction(sym->type(), args, variadic);
 
     auto name = ke::StringPrintf("::ft:%s", fun->name()->chars());
     funcenum_t* fe = funcenums_add(cc, cc.atom(name), true);
-    new (&fe->entries) PoolArray<functag_t*>({ft});
+    new (&fe->entries) PoolArray<FunctionType*>({type});
 
     return fe;
 }

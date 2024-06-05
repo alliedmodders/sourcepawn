@@ -69,7 +69,7 @@ class TypeChecker {
     bool CheckValueType(Type* formal, Type* actual);
     bool CheckArrays(ArrayType* formal, ArrayType* actual);
     bool CheckFunction();
-    bool CheckFunctionSignature(functag_t* formal, functag_t* actual);
+    bool CheckFunctionSignature(FunctionType* formal, FunctionType* actual);
     bool DiagnoseFailure();
     bool DiagnoseFunctionFailure();
 

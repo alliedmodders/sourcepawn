@@ -275,12 +275,12 @@ static bool matchobjecttags(Type* formal, Type* actual, int flags) {
     return false;
 }
 
-static bool matchreturntag(const functag_t* formal, const functag_t* actual) {
-    if (formal->ret_type == actual->ret_type)
+static bool matchreturntag(const FunctionType* formal, const FunctionType* actual) {
+    if (formal->return_type() == actual->return_type())
         return true;
 
-    if (formal->ret_type->isVoid()) {
-        if (actual->ret_type->isInt())
+    if (formal->return_type()->isVoid()) {
+        if (actual->return_type()->isInt())
             return true;
     }
     return false;
@@ -337,25 +337,25 @@ static bool funcarg_compare(QualType formal, QualType actual) {
     return true;
 }
 
-bool functag_compare(const functag_t* formal, const functag_t* actual) {
+bool functag_compare(FunctionType* formal, FunctionType* actual) {
     // Check return types.
     if (!matchreturntag(formal, actual))
         return false;
 
     // Make sure there are no trailing arguments.
-    if (actual->args.size() > formal->args.size())
+    if (actual->nargs() > formal->nargs())
         return false;
-    if (actual->variadic != formal->variadic)
+    if (actual->variadic() != formal->variadic())
         return false;
 
     // Check arguments.
-    for (size_t i = 0; i < formal->args.size(); i++) {
-        auto formal_arg = formal->args[i];
+    for (size_t i = 0; i < formal->nargs(); i++) {
+        auto formal_arg = formal->arg_type(i);
 
-        if (i >= actual->args.size())
+        if (i >= actual->nargs())
             return false;
 
-        auto actual_arg = actual->args[i];
+        auto actual_arg = actual->arg_type(i);
         if (!funcarg_compare(formal_arg, actual_arg))
             return false;
     }
@@ -376,7 +376,7 @@ static bool matchfunctags(Type* formal, Type* actual) {
     if (!actual_fe || actual_fe->entries.empty())
         return false;
 
-    functag_t* actualfn = actual_fe->entries.back();
+    FunctionType* actualfn = actual_fe->entries.back();
     if (!actualfn)
         return false; 
 

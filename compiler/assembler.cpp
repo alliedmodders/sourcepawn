@@ -133,7 +133,7 @@ class RttiBuilder
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
     uint32_t encode_signature(FunctionDecl* decl);
-    void encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft);
+    void encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_type_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_type_into(std::vector<uint8_t>& bytes, QualType type);
@@ -680,17 +680,17 @@ RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funce
     }
 }
 
-void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, functag_t* ft) {
+void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft) {
     bytes.push_back(cb::kFunction);
-    bytes.push_back((uint8_t)ft->args.size());
+    bytes.push_back((uint8_t)ft->nargs());
 
-    if (ft->variadic)
+    if (ft->variadic())
         bytes.push_back(cb::kLegacyVariadic);
 
-    encode_type_into(bytes, ft->ret_type);
+    encode_type_into(bytes, ft->return_type());
 
-    for (const auto& arg : ft->args)
-        encode_type_into(bytes, arg);
+    for (size_t i = 0; i < ft->nargs(); i++)
+        encode_type_into(bytes, ft->arg_type(i));
 }
 
 typedef SmxListSection<sp_file_natives_t> SmxNativeSection;

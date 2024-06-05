@@ -62,7 +62,7 @@ bool checktag(Type* type, Type* expr_type);
 bool checktag_string(int tag, const value* sym1);
 bool checktag(int tag, int exprtag);
 bool HasTagOnInheritanceChain(Type* type, Type* other);
-bool functag_compare(const functag_t* formal, const functag_t* actual);
+bool functag_compare(FunctionType* formal, FunctionType* actual);
 
 } // namespace cc
 } // namespace sp

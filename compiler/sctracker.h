@@ -39,7 +39,7 @@ struct funcenum_t : public PoolObject
     {}
     Type* type;
     Atom* name;
-    PoolArray<functag_t*> entries;
+    PoolArray<FunctionType*> entries;
     bool anonymous;
 };
 

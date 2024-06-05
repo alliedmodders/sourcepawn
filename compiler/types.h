@@ -219,17 +219,6 @@ struct structarg_t : public PoolObject
     int index;
 };
 
-struct functag_t : public PoolObject
-{
-    functag_t()
-     : ret_type(nullptr),
-       args()
-    {}
-    Type* ret_type;
-    PoolArray<QualType> args;
-    bool variadic;
-};
-
 class Type : public PoolObject
 {
     friend class TypeManager;
