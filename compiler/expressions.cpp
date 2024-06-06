@@ -100,6 +100,11 @@ bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numpar
     size_t i;
     bool savepri, savealt;
 
+    if (type1->isReference())
+        type1 = type1->inner();
+    if (type2 && type2->isReference())
+        type2 = type2->inner();
+
     /* since user-defined operators on untagged operands are forbidden, we have
      * a quick exit.
      */
