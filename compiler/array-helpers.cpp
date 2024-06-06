@@ -585,11 +585,12 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             return false;
         }
 
-        auto cells = char_array_cells(str->text()->length() + 1);
+        auto bytes = str->text()->length() + 1;
+        auto cells = char_array_cells(bytes);
         if (!AddCells(cells))
             return false;
 
-        if (rank->size() && cells > rank->size()) {
+        if (rank->size() && bytes > rank->size()) {
             report(str->pos(), 47);
             return false;
         }
