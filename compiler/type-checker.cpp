@@ -37,7 +37,7 @@ TypeChecker::TypeChecker(const token_pos_t& pos, QualType formal, QualType actua
 {}
 
 bool TypeChecker::Coerce() {
-    flags_ = AllowCoerce;
+    flags_ |= AllowCoerce;
     return Check();
 }
 
@@ -129,7 +129,7 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
 
     // We allow this even on function signature checks as a convenient shorthand,
     // even though it violates standard contravariance rules.
-    if (formal->isAny())
+    if (formal->isAny() || ((flags_ & FuncArg) && actual->isAny()))
         return true;
 
     if (formal->isFunction())
@@ -305,6 +305,11 @@ bool TypeChecker::CheckFunctionSignature(FunctionType* formal, FunctionType* act
 
 bool TypeChecker::DoCoerce(Type* formal, Expr* actual) {
     TypeChecker tc(actual, formal, actual->val().type(), Generic);
+    return tc.Coerce();
+}
+
+bool TypeChecker::DoCoerce(const token_pos_t& pos, Type* formal, Type* actual, Flags flags) {
+    TypeChecker tc(pos, QualType(formal), QualType(actual), Generic, flags);
     return tc.Coerce();
 }
 
