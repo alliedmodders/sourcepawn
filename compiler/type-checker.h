@@ -63,6 +63,7 @@ class TypeChecker {
     bool Coerce();
 
     static bool DoCoerce(Type* formal, Expr* actual);
+    static bool DoCoerce(const token_pos_t& pos, Type* formal, Type* actual, Flags flags = None);
 
   private:
     bool CheckImpl();

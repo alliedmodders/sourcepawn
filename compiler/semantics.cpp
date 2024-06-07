@@ -797,7 +797,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             val.set_type(userop.sym->type());
         } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
             char boolresult = FALSE;
-            matchtag(left_val.type(), right_val.type(), FALSE);
+            TypeChecker::DoCoerce(expr->pos(), left_val.type(), right_val.type());
             val.ident = iCONSTEXPR;
             val.set_constval(calc(left_val.constval(), oper_tok, right_val.constval(),
                                   &boolresult));
@@ -811,8 +811,7 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             if (right_type->isReference())
                 right_type = right_type->inner();
 
-            if (!checkval_string(&left_val, &right_val))
-                matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
+            TypeChecker::DoCoerce(expr->pos(), left_type, right_type, TypeChecker::Commutative);
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
@@ -927,7 +926,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             auto es = left_val.type()->asEnumStruct();
             expr->set_array_copy_length(es->array_size());
         } else if (!left_val.type()->isArray()) {
-            matchtag(left_val.type(), right_val.type(), TRUE);
+            TypeChecker::DoCoerce(expr->pos(), left_val.type(), right_val.type());
         }
     }
     return true;
