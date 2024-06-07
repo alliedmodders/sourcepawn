@@ -1238,12 +1238,12 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     }
 
     if (ltype->isObject() || atype->isObject()) {
-        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
+        TypeChecker::DoCoerce(expr->pos(), atype, out_val.type());
     } else if (ltype->isFunction() != atype->isFunction()) {
         // Warn: unsupported cast.
         report(expr, 237);
     } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
+        TypeChecker::DoCoerce(expr->pos(), atype, out_val.type());
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (atype->isEnumStruct() || ltype->isEnumStruct()) {
