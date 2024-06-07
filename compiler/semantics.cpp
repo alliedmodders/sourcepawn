@@ -2762,7 +2762,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             }
             if (tag_ok) {
                 AutoErrorPos aep(expr->pos());
-                matchtag(v.type(), type, MATCHTAG_COERCE);
+                TypeChecker::DoCoerce(expr->pos(), v.type(), type);
             }
 
             if (!case_values.count(value))

@@ -1,0 +1,3 @@
+tests/compile-only/fail-switch-tag-mismatch.sp(21) : error 450: no viable conversion from "Bar" to "Foo"
+tests/compile-only/fail-switch-tag-mismatch.sp(22) : warning 253: implicit conversion from "int" to "Foo" is undefined
+tests/compile-only/fail-switch-tag-mismatch.sp(23) : error 450: no viable conversion from "float" to "Foo"
