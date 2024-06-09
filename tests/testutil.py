@@ -64,7 +64,10 @@ def parse_manifest(path, local_folder, source = {}):
 
   with open(path, 'r') as fp:
     cfg = configparser.ConfigParser()
-    cfg.readfp(fp)
+    try:
+      cfg.read_file(fp)
+    except AttributeError:
+      cfg.readfp(fp) # Removed as of configparser version 3.2
 
   for section in cfg.sections():
     if section not in manifest:
