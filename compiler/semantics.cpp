@@ -2355,9 +2355,14 @@ bool Semantics::TestSymbol(Decl* sym, bool testconst) {
         default: {
             auto var = sym->as<VarDeclBase>();
             /* a variable */
-            if (!var->is_used() && !var->is_public()) {
-                report(sym, 203) << sym->name(); /* symbol isn't used (and not public) */
-            } else if (!var->is_public() && !var->is_read()) {
+
+            // We ignore variables that are marked as public or stock.
+            if (var->is_public() || var->is_stock())
+                break;
+
+            if (!var->is_used()) {
+                report(sym, 203) << sym->name(); /* symbol isn't used (and not public/stock) */
+            } else if (!var->is_read()) {
                 report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
             }
         }
