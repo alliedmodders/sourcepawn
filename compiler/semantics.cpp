@@ -2876,6 +2876,10 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     if (info->as<MemberFunctionDecl>())
         maybe_used_.emplace_back(info);
 
+    // We never warn about unused stock functions.
+    if (info->is_stock())
+        maybe_used_.emplace_back(info);
+
     auto fwd = info->prototype();
     if (fwd && fwd->deprecate() && !info->is_stock())
         report(info->pos(), 234) << info->name() << fwd->deprecate();
