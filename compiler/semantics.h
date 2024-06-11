@@ -251,6 +251,11 @@ class Semantics final
 
     bool CheckScalarType(Expr* expr);
 
+    bool IsIncluded(Decl* expr);
+
+    template <typename DeclType>
+    bool IsIncludedStock(DeclType* expr);
+
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;

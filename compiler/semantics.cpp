@@ -2307,6 +2307,18 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     return true;
 }
 
+bool Semantics::IsIncluded(Decl* sym) {
+    const auto fileno = cc().sources()->GetSourceFileIndex(sym->pos());
+    if (fileno >= cc().sources()->opened_files().size()) { return false; }
+
+    return ! cc().sources()->opened_files()[fileno]->is_main_file();
+}
+
+template <typename DeclType>
+bool Semantics::IsIncludedStock(DeclType* sym) {
+    return sym->is_stock() && IsIncluded(sym);
+}
+
 /*  testsymbols - test for unused local or global variables
  *
  *  "Public" functions are excluded from the check, since these
@@ -2356,8 +2368,8 @@ bool Semantics::TestSymbol(Decl* sym, bool testconst) {
             auto var = sym->as<VarDeclBase>();
             /* a variable */
 
-            // We ignore variables that are marked as public or stock.
-            if (var->is_public() || var->is_stock())
+            // We ignore variables that are marked as public or stock that was included.
+            if (var->is_public() || IsIncludedStock(var))
                 break;
 
             if (!var->is_used()) {
