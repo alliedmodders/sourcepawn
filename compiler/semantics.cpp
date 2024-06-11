@@ -2307,6 +2307,18 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     return true;
 }
 
+bool Semantics::IsIncluded(Decl* sym) {
+    const auto fileno = cc().sources()->GetSourceFileIndex(sym->pos());
+    if (fileno >= cc().sources()->opened_files().size()) { return false; }
+
+    return ! cc().sources()->opened_files()[fileno]->is_main_file();
+}
+
+template <typename DeclType>
+bool Semantics::IsIncludedStock(DeclType* sym) {
+    return sym->is_stock() && IsIncluded(sym);
+}
+
 /*  testsymbols - test for unused local or global variables
  *
  *  "Public" functions are excluded from the check, since these
@@ -2355,9 +2367,14 @@ bool Semantics::TestSymbol(Decl* sym, bool testconst) {
         default: {
             auto var = sym->as<VarDeclBase>();
             /* a variable */
-            if (!var->is_used() && !var->is_public()) {
-                report(sym, 203) << sym->name(); /* symbol isn't used (and not public) */
-            } else if (!var->is_public() && !var->is_read()) {
+
+            // We ignore variables that are marked as public or stock that was included.
+            if (var->is_public() || IsIncludedStock(var))
+                break;
+
+            if (!var->is_used()) {
+                report(sym, 203) << sym->name(); /* symbol isn't used (and not public/stock) */
+            } else if (!var->is_read()) {
                 report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
             }
         }
