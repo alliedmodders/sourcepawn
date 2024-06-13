@@ -31,6 +31,7 @@
 #include "pool-objects.h"
 #include "shared/string-atom.h"
 #include "stl/stl-vector.h"
+#include "qualtype.h"
 
 typedef int32_t cell;
 typedef uint32_t ucell;
@@ -84,36 +85,6 @@ class Expr;
 class MethodmapDecl;
 class PstructDecl;
 class Type;
-
-// Compact encoding of type + constness.
-class QualType {
-  public:
-    explicit QualType(Type* type) {
-        impl_ = type;
-    }
-    explicit QualType(Type* type, bool is_const) {
-        impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
-    }
-
-    bool is_const() const {
-        return ke::GetPointerBits<2>(impl_) == 1;
-    }
-
-    Type* operator *() const { return unqualified(); }
-    Type* operator ->() const { return unqualified(); }
-    Type* unqualified() const {
-        return ke::ClearPointerBits<2>(impl_);
-    }
-
-    uint32_t hash() const { return ke::HashPointer(impl_); }
-
-    bool operator ==(const QualType& other) const { return impl_ == other.impl_; }
-    bool operator !=(const QualType& other) const { return impl_ != other.impl_; }
-
-  private:
-    Type* impl_;
-};
-
 
 struct TypenameInfo {
     static constexpr uintptr_t kAtomFlag = 0x1;
