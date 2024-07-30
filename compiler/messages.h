@@ -56,7 +56,7 @@ static const char* errmsg[] = {
     /*029*/ "invalid expression, assumed zero\n",
     /*030*/ "compound statement not closed at the end of file (started at line %d)\n",
     /*031*/ "unknown directive\n",
-    /*032*/ "array index out of bounds (variable \"%s\")\n",
+    /*032*/ "array index out of bounds\n",
     /*033*/ "array must be indexed (variable \"%s\")\n",
     /*034*/ "argument does not have a default value (argument %d)\n",
     /*035*/ "argument type mismatch (argument %d)\n",
@@ -214,7 +214,7 @@ static const char* errmsg[] = {
     /*176*/ "non-static method or property '%s' must be called with a value of type '%s'\n",
     /*177*/ "static method '%s' must be invoked via its type (try '%s.%s')\n",
     /*178*/ "cannot coerce %s[] to %s[]; storage classes differ\n",
-    /*179*/ "cannot assign %s[] to %s[], storage classes differ\n",
+    /*179*/ "unused179\n",
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",
     /*181*/ "function argument named '%s' differs from prototype\n",
     /*182*/ "functions that return arrays cannot be used as callbacks\n",
@@ -336,4 +336,8 @@ static const char* errmsg_ex[] = {
     /*450*/ "no viable conversion from \"%s\" to \"%s\"\n",
     /*451*/ "function %s returns an array but return type is not marked as an array\n",
     /*452*/ "multiple command-line source files are no longer supported\n",
+    /*453*/ "operator \"%s\" not defined for type \"%s\"\n",
+    /*454*/ "type \"%s\" is not a scalar type\n",
+    /*455*/ "expected an l-value\n",
+
 };

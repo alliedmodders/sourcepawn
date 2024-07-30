@@ -299,10 +299,11 @@ Parser::parse_unknown_decl(const full_token_t* tok)
     return nullptr;
 }
 
-bool Parser::PreprocExpr(cell* val, Type** type) {
+bool Parser::PreprocExpr(cell* val, QualType* type) {
     auto& cc = CompileContext::get();
 
-    Semantics sema(cc);
+    // :TODO: fix this so we don't use Sema.
+    Semantics sema(cc, nullptr);
     Parser parser(cc, &sema);
     auto expr = parser.hier14();
     if (!expr)
@@ -313,9 +314,20 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     sema.set_context(&sc);
 
-    if (!expr->Bind(sc) || !sema.CheckExpr(expr))
+    if (!expr->Bind(sc))
         return false;
-    return expr->EvalConst(val, type);
+
+    // :TODO: merge this with EvalConst
+    ir::Value* irv = sema.CheckRvalue(expr);
+    if (!irv)
+        return false;
+    if (auto cv = irv->as<ir::Const>()) {
+        *val = cv->value();
+        *type = cv->type();
+        return true;
+    }
+
+    return Expr::EvalConst(expr, val, type);
 }
 
 Stmt*
@@ -1587,9 +1599,10 @@ Parser::parse_for()
         lexer_->need(';');
     }
 
-    Expr* advance = nullptr;
+    ExprStmt* advance = nullptr;
     if (!lexer_->match(endtok)) {
-        advance = parse_expr(false);
+        if (auto expr = parse_expr(false))
+            advance = new ExprStmt(expr->pos(), expr);
         lexer_->need(endtok);
     }
 

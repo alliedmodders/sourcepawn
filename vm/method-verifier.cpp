@@ -86,6 +86,7 @@ MethodVerifier::verify()
     cip_ = reinterpret_cast<const cell_t*>(block_->start());
     while (cip_ < reinterpret_cast<const cell_t*>(block_->end())) {
       insn_ = cip_;
+      //SpewOpcode(stderr, rt_, method_, cip_);
       OPCODE op = (OPCODE)*cip_++;
       if (!verifyOp(op))
         return nullptr;

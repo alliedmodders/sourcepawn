@@ -30,11 +30,17 @@ class Type;
 // Compact encoding of type + constness.
 class QualType {
   public:
+    QualType() : impl_(nullptr) {}
     explicit QualType(Type* type) {
         impl_ = type;
     }
-    explicit QualType(Type* type, bool is_const) {
+    QualType(Type* type, bool is_const) {
         impl_ = ke::SetPointerBits(type, is_const ? 1 : 0);
+    }
+    QualType(QualType type, bool is_const)
+      : impl_(type.impl_)
+    {
+        impl_ = ke::SetPointerBits(impl_, is_const ? 1 : 0);
     }
 
     bool is_const() const {
@@ -50,6 +56,7 @@ class QualType {
 
     uint32_t hash() const { return ke::HashPointer(impl_); }
 
+    explicit operator bool() const { return impl_ != nullptr; }
     bool operator ==(const QualType& other) const { return impl_ == other.impl_; }
     bool operator !=(const QualType& other) const { return impl_ != other.impl_; }
 

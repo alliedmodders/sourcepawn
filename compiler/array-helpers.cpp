@@ -45,7 +45,7 @@ class ArrayTypeResolver
     bool ResolveDimExprs();
     void ResolveRank(size_t rank, Expr* init);
     void SetRankSize(Expr* expr, int rank, int size);
-    bool ResolveDimExpr(Expr* expr, value* v);
+    ir::Value* ResolveDimExpr(Expr* expr);
 
   private:
     Semantics* sema_;
@@ -288,16 +288,17 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             continue;
         }
 
-        value v;
-        if (!ResolveDimExpr(expr, &v))
+        ir::Value* val = ResolveDimExpr(expr);
+        if (!val)
             return false;
 
-        if (!IsValidIndexType(v.type())) {
-            report(expr->pos(), 77) << v.type();
+        if (!IsValidIndexType(*val->type())) {
+            report(expr->pos(), 77) << val->type();
             return false;
         }
 
-        if (v.ident != iCONSTEXPR) {
+        auto cv = val->as<ir::Const>();
+        if (!cv) {
             // Non-constant expressions in postdims is illegal for transitional
             // syntax:
             //     int blah[y];
@@ -316,27 +317,22 @@ bool ArrayTypeResolver::ResolveDimExprs() {
 
             // sLOCAL guarantees we have a decl.
             decl_->set_implicit_dynamic_array();
-        } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym &&
-                   v.sym->as<EnumDecl>())
-        {
-            report(expr->pos(), 153);
-            return false;
         } else {
             // Constant must be > 0.
-            if (v.constval() <= 0) {
+            if (cv->value() <= 0) {
                 report(expr->pos(), 9);
                 return false;
             }
-            computed_[i] = v.constval();
+            computed_[i] = cv->value();
         }
     }
     return true;
 }
 
-bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, value* v) {
+ir::Value* ArrayTypeResolver::ResolveDimExpr(Expr* expr) {
     auto& sc = *sema_->context();
     if (!expr->Bind(sc))
-        return false;
+        return nullptr;
 
     if (auto sym_expr = expr->as<SymbolExpr>()) {
         // Special case this:
@@ -345,19 +341,11 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, value* v) {
         //
         // For backward compatibility with a huge number of plugins.
         auto decl = sym_expr->decl();
-        if (auto ed = decl->as<EnumDecl>()) {
-            *v = {};
-            v->set_constval(ed->array_size());
-            v->set_type(sc.cc().types()->type_int());
-            return true;
-        }
+        if (auto ed = decl->as<EnumDecl>())
+            return new ir::Const(expr, sc.cc().types()->get_int(), ed->array_size());
     }
 
-    if (!sema_->CheckExpr(expr))
-        return false;
-
-    *v = expr->val();
-    return true;
+    return sema_->CheckRvalue(expr);
 }
 
 bool ResolveArrayType(Semantics* sema, VarDeclBase* decl) {
@@ -394,14 +382,14 @@ class ArrayValidator final
         es_(nullptr)
     {}
 
-    bool Validate();
+    bool Validate(ir::Value** new_init);
 
   private:
-    bool ValidateInitializer();
-    bool ValidateRank(ArrayType* rank, Expr* init);
-    bool ValidateEnumStruct(EnumStructDecl* es, Expr* init);
+    ir::Value* ValidateInitializer();
+    ir::Value* ValidateRank(ArrayType* rank, Expr* init);
+    ir::Value* ValidateEnumStruct(EnumStructDecl* es, Expr* init);
+    ir::Value* CheckArgument(SymbolExpr* init);
     bool AddCells(size_t ncells);
-    bool CheckArgument(SymbolExpr* init);
 
   private:
     Semantics* sema_;
@@ -415,22 +403,36 @@ class ArrayValidator final
     EnumStructDecl* es_;
 };
 
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init) {
+bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init,
+                              ir::Value** new_init)
+{
     ArrayValidator av(sema, type, init);
 
     AutoCountErrors errors;
-    return av.Validate() && errors.ok();
+
+    if (!av.Validate(new_init)) {
+        // Make sure all fail paths return an error.
+        assert(!errors.ok());
+        return false;
+    }
+
+    // Make sure there were no implicit errors. This should go away when
+    // matchtag() goes away.
+    assert(errors.ok());
+    return true;
 }
 
-bool ArrayValidator::Validate() {
+bool ArrayValidator::Validate(ir::Value** new_init) {
     es_ = type_->asEnumStruct();
     at_ = type_->as<ArrayType>();
 
     if (init_) {
-        if (!ValidateInitializer())
-            return false;
-        return true;
+        *new_init = ValidateInitializer();
+        return *new_init != nullptr;
     }
+
+    *new_init = nullptr;
+
     if (!at_)
         return true;
 
@@ -440,7 +442,7 @@ bool ArrayValidator::Validate() {
     do {
         if (!iter->size() && decl_ && decl_->vclass() != sARGUMENT) {
             report(decl_->pos(), 46) << decl_->name();
-            return true;
+            return false;
         }
         iter = iter->inner()->as<ArrayType>();
     } while (iter);
@@ -474,7 +476,7 @@ bool ArrayValidator::Validate() {
     return true;
 }
 
-bool ArrayValidator::ValidateInitializer() {
+ir::Value* ArrayValidator::ValidateInitializer() {
     // As a special exception, array arguments can be initialized with a global
     // reference.
     if (decl_ && decl_->vclass() == sARGUMENT) {
@@ -484,12 +486,11 @@ bool ArrayValidator::ValidateInitializer() {
 
     // Handle enum structs here (gross, yes).
     if (es_) {
-        if (auto array = init_->as<ArrayExpr>()) {
-            ValidateEnumStruct(es_, array);
-            return true;
-        }
+        if (auto array = init_->as<ArrayExpr>())
+            return ValidateEnumStruct(es_, array);
+
         report(448);
-        return false;
+        return nullptr;
     }
 
     // Check for dynamic initializers.
@@ -502,11 +503,9 @@ bool ArrayValidator::ValidateInitializer() {
 
         TypeChecker tc(ctor, at_, ctor->type(), TypeChecker::Assignment);
         if (!tc.Check())
-            return false;
+            return nullptr;
 
-        if (!sema_->CheckNewArrayExprForArrayInitializer(ctor))
-            return false;
-        return true;
+        return sema_->CheckNewArrayExprForArrayInitializer(ctor);
     }
 
     // Probably not a dynamic array, check for a fixed initializer.
@@ -539,62 +538,68 @@ cell CalcArraySize(Type* type) {
     return size;
 }
 
-bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
+ir::Value* ArrayValidator::CheckArgument(SymbolExpr* expr) {
     Decl* decl = expr->decl();
     if (!decl)
-        return false;
+        return nullptr;
 
     VarDecl* var = decl->as<VarDecl>();
     if (!var)
-        return false;
+        return nullptr;
 
     assert(var->vclass() == sGLOBAL);
 
     TypeChecker tc(expr, type_, var->type(), TypeChecker::Argument);
     if (!tc.Check())
-        return false;
+        return nullptr;
 
-    return true;
+    // :TODO: make VariableRef
+    assert(false);
+    return nullptr;
 }
 
-bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
+ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     if (auto next_rank = rank->inner()->as<ArrayType>()) {
         ArrayExpr* array = init->as<ArrayExpr>();
         if (!array) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
         if ((cell)array->exprs().size() != rank->size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
         if (!AddCells(array->exprs().size()))
-            return false;
+            return nullptr;
 
+        std::vector<ir::Value*> values;
         for (const auto& expr : array->exprs()) {
-            if (!ValidateRank(next_rank, expr))
-                return false;
+            auto val = ValidateRank(next_rank, expr);
+            if (!val)
+                return nullptr;
+            values.emplace_back(val);
         }
-        return true;
+        return new ir::ArrayInitializer(array, QualType(rank), std::move(values));
     }
 
     if (StringExpr* str = init->as<StringExpr>()) {
         if (!rank->isCharArray()) {
             report(init->pos(), 134) << str->val().type() << rank;
-            return false;
+            return nullptr;
         }
 
         auto bytes = str->text()->length() + 1;
         auto cells = char_array_cells(bytes);
         if (!AddCells(cells))
-            return false;
+            return nullptr;
 
         if (rank->size() && bytes > rank->size()) {
             report(str->pos(), 47);
-            return false;
+            return nullptr;
         }
-        return true;
+
+        return new ir::CharArrayLiteral(str, QualType(rank));
     }
 
     cell rank_size = 0;
@@ -613,15 +618,15 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         //    int x[10] = 0;
         if (rank->inner()->isEnumStruct() || !decl_ || at_->inner()->isArray() || !at_->size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
-        if (!sema_->CheckExpr(init))
-            return false;
+        if (!sema_->CheckRvalue(init))
+            return nullptr;
 
         if (init->val().ident != iCONSTEXPR) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
         report(init->pos(), 241);
@@ -634,17 +639,20 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     }
 
     if (auto es = rank->inner()->asEnumStruct()) {
+        std::vector<ir::Value*> values;
         for (const auto& expr : array->exprs()) {
-            if (!ValidateEnumStruct(es, expr))
-                return false;
+            auto val = ValidateEnumStruct(es, expr);
+            if (!val)
+                return nullptr;
+            values.emplace_back(val);
         }
-        return true;
+        return new ir::ArrayInitializer(array, QualType(rank), std::move(values));
     }
 
     if (rank_size) {
         if (rank_size < (cell)array->exprs().size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
     } else {
         // There is no actual reason to forbid this, as it works fine in the
@@ -652,74 +660,78 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         // of worms yet.
         if (decl_ && decl_->vclass() != sARGUMENT && !decl_->type_info().has_postdims) {
             report(init->pos(), 160);
-            return false;
+            return nullptr;
         }
     }
 
     ke::Maybe<cell> prev1, prev2;
+    std::vector<ir::Value*> values;
     for (const auto& expr : array->exprs()) {
-        if (!sema_->CheckExpr(expr))
-            continue;
-
-        AutoErrorPos pos(expr->pos());
-
         if (expr->as<StringExpr>()) {
-            report(47);
+            report(expr, 47);
             continue;
         }
 
-        const auto& v = expr->val();
-        if (v.ident != iCONSTEXPR) {
-            report(8);
+        auto val = sema_->CheckRvalue(expr);
+        if (!val)
+            return nullptr;
+
+        auto cv = val->as<ir::Const>();
+        if (!cv) {
+            report(expr, 8);
             continue;
         }
 
-        matchtag(rank->inner(), v.type(), MATCHTAG_COERCE);
+        matchtag(rank->inner(), val->type().ptr(), MATCHTAG_COERCE);
 
         prev2 = prev1;
-        prev1 = ke::Some(v.constval());
+        prev1 = ke::Some(cv->value());
+
+        values.emplace_back(cv);
     }
 
     cell ncells = rank_size ? rank_size : array->exprs().size();
     if (!AddCells(ncells))
-        return false;
+        return nullptr;
 
     if (array->ellipses()) {
         if (array->exprs().empty()) {
             // Invalid ellipses, array size unknown.
             report(array->pos(), 41);
-            return true;
+            return nullptr;
         }
         if (prev1.isValid() && prev2.isValid() && !rank->inner()->isInt()) {
             // Unknown stepping type.
             report(array->exprs().back()->pos(), 68) << rank->inner();
-            return false;
+            return nullptr;
         }
         if (!rank_size ||
             (rank_size == (cell)array->exprs().size() && !array->synthesized_for_compat()))
         {
             // Initialization data exceeds declared size.
             report(array->exprs().back()->pos(), 18);
-            return false;
+            return nullptr;
         }
     }
-    return true;
+
+    return new ir::ArrayInitializer(array, QualType(rank), std::move(values));
 }
 
-bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
+ir::Value* ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {
         report(init->pos(), 47);
-        return false;
+        return nullptr;
     }
 
     const auto& field_list = es->fields();
     auto field_iter = field_list.begin();
 
+    std::vector<ir::Value*> values;
     for (const auto& expr : array->exprs()) {
         if (field_iter == field_list.end()) {
             report(expr->pos(), 91);
-            return false;
+            return nullptr;
         }
 
         auto field = (*field_iter);
@@ -729,29 +741,33 @@ bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
 
         const auto& type = field->type_info();
         if (type.type->isArray()) {
-            if (!CheckArrayInitialization(sema_, type, expr))
-                continue;
+            ir::Value* val;
+            if (!CheckArrayInitialization(sema_, type, expr, &val))
+                return nullptr;
+
+            assert(val);
+            values.emplace_back(val);
         } else {
             AutoErrorPos pos(expr->pos());
 
-            if (!sema_->CheckExpr(expr))
-                continue;
+            auto val = sema_->CheckRvalue(expr);
+            if (!val)
+                return nullptr;
 
-            const auto& v = expr->val();
-            if (v.ident != iCONSTEXPR) {
-                report(8);
-                continue;
+            if (!val->as<ir::Const>()) {
+                report(expr, 8);
+                return nullptr;
             }
 
-            matchtag(type.type, v.type(), MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            matchtag(type.type, val->type().ptr(), MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
         }
     }
 
     if (array->ellipses()) {
         report(array->pos(), 80);
-        return false;
+        return nullptr;
     }
-    return true;
+    return new ir::ArrayInitializer(array, QualType(es->type()), std::move(values));
 }
 
 bool ArrayValidator::AddCells(size_t ncells) {
@@ -768,7 +784,7 @@ bool ArrayValidator::AddCells(size_t ncells) {
     return true;
 }
 
-bool Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl) {
+ir::Value* Semantics::BuildImplicitDynamicInitializer(VarDeclBase* decl) {
     // Enum structs should be impossible here.
     typeinfo_t* type = decl->mutable_type_info();
     assert(!type->type->asEnumStruct());
@@ -783,46 +799,54 @@ bool Semantics::AddImplicitDynamicInitializer(VarDeclBase* decl) {
     //
     // Note that these declarations use old tag-based syntax, and therefore
     // do not work with enum structs, which create implicit dimensions.
-    TypenameInfo ti = type->ToTypenameInfo();
 
     std::vector<Expr*> exprs;
     for (size_t i = 0; i < type->dim_exprs.size(); i++) {
         Expr* expr = type->dim_exprs[i];
         if (!expr) {
             report(decl->pos(), 184);
-            return false;
+            return nullptr;
         }
         exprs.emplace_back(expr);
     }
 
     assert(!decl->init_rhs());
 
+    assert(false);
+#if 0
+    TypenameInfo ti = type->ToTypenameInfo();
     auto init = new NewArrayExpr(decl->pos(), ti, exprs);
-    decl->set_init(init);
     if (!decl->autozero())
         init->set_no_autozero();
-    return true;
+    return init;
+#endif
+    return nullptr;
 }
 
-bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
+bool Semantics::CheckArrayDeclaration(VarDeclBase* decl, ir::Value** new_init) {
     AutoCountErrors errors;
 
     if (decl->implicit_dynamic_array()) {
+        assert(false);
         assert(!decl->init_rhs());
-        if (!AddImplicitDynamicInitializer(decl))
-            return false;
+        *new_init = BuildImplicitDynamicInitializer(decl);
+        return *new_init != nullptr;
     }
 
     ArrayValidator validator(this, decl);
-    if (!validator.Validate() || !errors.ok())
+    if (!validator.Validate(new_init)) {
+        assert(!errors.ok());
         return false;
+    }
+
+    assert(errors.ok());
     return true;
 }
 
 class CompoundEmitter final
 {
   public:
-    CompoundEmitter(Type* type, Expr* init)
+    CompoundEmitter(QualType type, ir::Value* init)
       : type_(type),
         init_(init),
         pending_zeroes_(0)
@@ -847,17 +871,17 @@ class CompoundEmitter final
   private:
     static const int kDataFlag = 0x80000000;
 
-    cell Emit(ArrayType* type, Expr* expr);
+    cell Emit(ArrayType* type, ir::Value* expr);
 
-    size_t AddString(StringExpr* expr);
-    void AddInlineArray(LayoutFieldDecl* field, ArrayExpr* expr);
-    void AddInlineEnumStruct(EnumStructDecl* es, ArrayExpr* expr);
-    void EmitPadding(size_t rank_size, Type* type, size_t emitted, bool ellipses,
+    size_t AddString(ir::CharArrayLiteral* init);
+    void AddInlineArray(LayoutFieldDecl* field, ir::ArrayInitializer* init);
+    void AddInlineEnumStruct(EnumStructDecl* es, ir::ArrayInitializer* init);
+    void EmitPadding(size_t rank_size, QualType type, size_t emitted, bool ellipses,
                      const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2);
 
   private:
-    Type* type_;
-    Expr* init_;
+    QualType type_;
+    ir::Value* init_;
     tr::vector<cell> iv_;
     tr::vector<cell> data_;
     size_t pending_zeroes_;
@@ -866,7 +890,7 @@ class CompoundEmitter final
 void CompoundEmitter::Emit() {
     if (auto es = type_->asEnumStruct()) {
         if (init_)
-            AddInlineEnumStruct(es, init_->as<ArrayExpr>());
+            AddInlineEnumStruct(es, init_->to<ir::ArrayInitializer>());
         EmitPadding(1, type_, data_size(), false, {}, {});
     } else {
         Emit(type_->to<ArrayType>(), init_);
@@ -883,7 +907,7 @@ void CompoundEmitter::Emit() {
     }
 }
 
-cell CompoundEmitter::Emit(ArrayType* rank, Expr* init) {
+cell CompoundEmitter::Emit(ArrayType* rank, ir::Value* init) {
     if (rank->inner()->isArray()) {
         assert(rank->size());
 
@@ -892,13 +916,13 @@ cell CompoundEmitter::Emit(ArrayType* rank, Expr* init) {
 
         iv_.resize(start + rank->size());
 
-        ArrayExpr* array = init ? init->as<ArrayExpr>() : nullptr;
-        assert(!array || (array->exprs().size() == size_t(rank->size())));
+        auto array = init ? init->as<ir::ArrayInitializer>() : nullptr;
+        assert(!array || (array->values().size() == size_t(rank->size())));
 
         // :TODO: test when sizeof(array) < sizeof(rank)
         auto inner = rank->inner()->to<ArrayType>();
         for (int i = 0; i < rank->size(); i++) {
-            Expr* child = array ? array->exprs().at(i) : nullptr;
+            auto child = array ? array->values().at(i) : nullptr;
 
             // Note: use a temporary to store the result of Emit(), since
             // the address of iv_[start+i] could be evaluated and cached,
@@ -916,23 +940,23 @@ cell CompoundEmitter::Emit(ArrayType* rank, Expr* init) {
     ke::Maybe<cell> prev1, prev2;
     if (!init) {
         assert(rank->size());
-    } else if (ArrayExpr* array = init->as<ArrayExpr>()) {
-        for (const auto& item : array->exprs()) {
-            if (ArrayExpr* expr = item->as<ArrayExpr>()) {
+    } else if (auto array = init->as<ir::ArrayInitializer>()) {
+        for (const auto& item : array->values()) {
+            if (auto inner = item->as<ir::ArrayInitializer>()) {
                 // Subarrays can only appear in an enum struct. Normal 2D cases
                 // would flow through the check at the start of this function.
                 auto es = rank->inner()->asEnumStruct();
-                AddInlineEnumStruct(es, expr);
+                AddInlineEnumStruct(es, inner);
             } else {
-                assert(item->val().ident == iCONSTEXPR);
-                add_data(item->val().constval());
+                auto cv = item->as<ir::Const>();
+                add_data(cv->value());
                 prev2 = prev1;
-                prev1 = ke::Some(item->val().constval());
+                prev1 = ke::Some(cv->value());
             }
         }
-        ellipses = array->ellipses();
-    } else if (StringExpr* expr = init->as<StringExpr>()) {
-        AddString(expr);
+        ellipses = array->expr()->ellipses();
+    } else if (auto inner = init->as<ir::CharArrayLiteral>()) {
+        AddString(inner);
     } else {
         assert(false);
     }
@@ -948,34 +972,34 @@ cell CompoundEmitter::Emit(ArrayType* rank, Expr* init) {
     // This only works because enum structs are flattened and don't support
     // internal IVs. No plans to change this as it would greatly increase
     // complexity unless we radically changed arrays.
-    EmitPadding(rank->size(), rank->inner(), emitted, ellipses, prev1, prev2);
+    EmitPadding(rank->size(), QualType(rank->inner()), emitted, ellipses, prev1, prev2);
 
     return (start * sizeof(cell)) | kDataFlag;
 }
 
-void CompoundEmitter::AddInlineEnumStruct(EnumStructDecl* es, ArrayExpr* array) {
+void CompoundEmitter::AddInlineEnumStruct(EnumStructDecl* es, ir::ArrayInitializer* init) {
     auto field_list = &es->fields();
     auto field_iter = field_list->begin();
 
-    for (const auto& item : array->exprs()) {
-        if (StringExpr* expr = item->as<StringExpr>()) {
+    for (const auto& item : init->values()) {
+        if (auto inner = item->as<ir::CharArrayLiteral>()) {
             // Substrings can only appear in an enum struct. Normal 2D
             // cases would flow through the outer string check.
-            size_t emitted = AddString(expr);
+            size_t emitted = AddString(inner);
 
             auto field = (*field_iter);
             assert(field);
 
             auto rank_type = field->type()->to<ArrayType>();
-            EmitPadding(rank_type->size(), rank_type->inner(), emitted, false, {}, {});
-        } else if (ArrayExpr* expr = item->as<ArrayExpr>()) {
+            EmitPadding(rank_type->size(), QualType(rank_type->inner()), emitted, false, {}, {});
+        } else if (auto inner = item->as<ir::ArrayInitializer>()) {
             // Subarrays can only appear in an enum struct. Normal 2D cases
             // would flow through the check at the start of this function.
             auto field = (*field_iter);
-            AddInlineArray(field, expr);
+            AddInlineArray(field, inner);
         } else {
-            assert(item->val().ident == iCONSTEXPR);
-            add_data(item->val().constval());
+            auto cv = item->as<ir::Const>();
+            add_data(cv->value());
         }
 
         assert(field_iter != field_list->end());
@@ -983,23 +1007,23 @@ void CompoundEmitter::AddInlineEnumStruct(EnumStructDecl* es, ArrayExpr* array) 
     }
 }
 
-void CompoundEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
+void CompoundEmitter::AddInlineArray(LayoutFieldDecl* field, ir::ArrayInitializer* array) {
     ke::Maybe<cell> prev1, prev2;
 
-    for (const auto& item : array->exprs()) {
-        assert(item->val().ident == iCONSTEXPR);
-        add_data(item->val().constval());
+    for (const auto& item : array->values()) {
+        auto cv = item->as<ir::Const>();
+        add_data(cv->value());
         prev2 = prev1;
-        prev1 = ke::Some(item->val().constval());
+        prev1 = ke::Some(cv->value());
     }
 
     auto rank_size = field->type()->to<ArrayType>()->size();
-    EmitPadding(rank_size, field->type(), array->exprs().size(),
-                array->ellipses(), prev1, prev2);
+    EmitPadding(rank_size, QualType(field->type()), array->values().size(),
+                array->expr()->ellipses(), prev1, prev2);
 }
 
 void
-CompoundEmitter::EmitPadding(size_t rank_size, Type* type, size_t emitted, bool ellipses,
+CompoundEmitter::EmitPadding(size_t rank_size, QualType type, size_t emitted, bool ellipses,
                              const ke::Maybe<cell> prev1, const ke::Maybe<cell> prev2)
 {
     // Pad remainder to zeroes if the array was explicitly sized.
@@ -1026,11 +1050,9 @@ CompoundEmitter::EmitPadding(size_t rank_size, Type* type, size_t emitted, bool 
     }
 }
 
-size_t
-CompoundEmitter::AddString(StringExpr* expr)
-{
+size_t CompoundEmitter::AddString(ir::CharArrayLiteral* init) {
     std::vector<cell> out;
-    litadd_str(expr->text()->chars(), expr->text()->length(), &out);
+    litadd_str(init->expr()->text()->chars(), init->expr()->text()->length(), &out);
 
     for (const auto& val : out)
         add_data(val);
@@ -1053,20 +1075,20 @@ CompoundEmitter::add_data(cell value)
     data_.emplace_back(value);
 }
 
-void BuildCompoundInitializer(Type* type, Expr* init, ArrayData* array) {
+void BuildCompoundInitializer(QualType type, ir::Value* init, ArrayData* array,
+                              std::optional<cell_t> base_address)
+{
     CompoundEmitter emitter(type, init);
     emitter.Emit();
 
     array->iv = std::move(emitter.iv());
     array->data = std::move(emitter.data());
     array->zeroes = emitter.pending_zeroes();
-}
 
-void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell base_address) {
-    BuildCompoundInitializer(decl->type(), decl->init_rhs(), array);
-
-    for (auto& v : array->iv)
-        v += base_address;
+    if (base_address) {
+        for (auto& v : array->iv)
+            v += *base_address;
+    }
 }
 
 } // namespace cc
