@@ -306,6 +306,11 @@ class Type : public PoolObject
         return pstruct_ptr_;
     }
 
+    // Reference here refers to heap allocation, versus value types.
+    bool isReferenceType() const {
+        return isArray() || isEnumStruct();
+    }
+
     Type* inner() const {
         assert(isReference() || isArray());
         return inner_type_;
@@ -438,6 +443,17 @@ class TypeManager
     Type* type_string() const { return type_string_; }
     Type* type_char() const { return type_string_; }
     Type* type_int() const { return type_int_; }
+
+    QualType get_object() const { return QualType(type_object_); }
+    QualType get_null() const { return QualType(type_null_); }
+    QualType get_function() const { return QualType(type_function_); }
+    QualType get_any() const { return QualType(type_any_); }
+    QualType get_void() const { return QualType(type_void_); }
+    QualType get_float() const { return QualType(type_float_); }
+    QualType get_bool() const { return QualType(type_bool_); }
+    QualType get_string() const { return QualType(type_string_); }
+    QualType get_char() const { return QualType(type_string_); }
+    QualType get_int() const { return QualType(type_int_); }
 
   private:
     Type* add(const char* name, TypeKind kind);

@@ -63,23 +63,6 @@ ParseNode::error(const token_pos_t& pos, int number)
     report(pos, number);
 }
 
-void
-Expr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    out->push_back(this);
-}
-
-void
-LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    if (token_ == token) {
-        left_->FlattenLogical(token, out);
-        right_->FlattenLogical(token, out);
-    } else {
-        Expr::FlattenLogical(token, out);
-    }
-}
-
 bool Stmt::IsTerminal() const {
     switch (flow_type()) {
         case Flow_Break:

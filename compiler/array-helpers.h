@@ -20,7 +20,10 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <optional>
+
 #include "array-data.h"
+#include "ir.h"
 #include "parse-node.h"
 
 namespace sp {
@@ -36,10 +39,14 @@ bool ResolveArrayType(Semantics* sema, VarDeclBase* decl);
 bool ResolveArrayType(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
 // Perform type and size checks of an array and its initializer if present.
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
+//
+// Returns a new initializer (or null if no initializer was present) on success.
+// Returns std::nullopt on failure.
+bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init,
+                              ir::Value** new_init);
 
-void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
-void BuildCompoundInitializer(Type* type, Expr* init, ArrayData* array);
+void BuildCompoundInitializer(QualType type, ir::Value* init, ArrayData* array,
+                              std::optional<cell_t> base_address = {});
 
 cell_t CalcArraySize(Type* type);
 
