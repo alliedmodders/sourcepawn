@@ -135,6 +135,8 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
         setcaption();
     setconfig(argv[0]); /* the path to the include files */
 
+    auto mod = std::make_shared<ir::Module>();
+
     if (options->source_files.size() > 1) {
         report(452);
         goto cleanup;
@@ -168,7 +170,7 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
     cc.lexer()->Init();
 
     {
-        Semantics sema(cc);
+        Semantics sema(cc, mod);
         Parser parser(cc, &sema);
 
         AutoCountErrors errors;
@@ -192,8 +194,10 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
             sema.set_context(nullptr);
 
             errors.Reset();
-            if (!sema.Analyze(tree) || !errors.ok())
+            if (!sema.Analyze(tree))
                 goto cleanup;
+
+            assert(errors.ok());
 
             tree->stmts()->ProcessUses(sc);
             ok = true;
@@ -211,7 +215,7 @@ cleanup:
     cc.set_shutting_down();
     cc.reports()->DumpErrorReport(true);
 
-    CodeGenerator cg(cc, tree);
+    CodeGenerator cg(cc, mod);
     if (tree && compile_ok)
         compile_ok = cg.Generate();
 

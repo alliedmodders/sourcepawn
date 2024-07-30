@@ -38,7 +38,7 @@ class Parser
     Parser(CompileContext& cc, Semantics* sema);
     ~Parser();
 
-    static bool PreprocExpr(cell* val, Type** type);
+    static bool PreprocExpr(cell* val, QualType* type);
 
     ParseTree* Parse();
 
@@ -73,6 +73,7 @@ class Parser
         bool autozero = true;
         bool is_arg = false;
         bool struct_init = false;
+        bool is_local = false;
     };
     Stmt* parse_var(declinfo_t* decl, VarParams& params);
     void parse_post_dims(typeinfo_t* type);

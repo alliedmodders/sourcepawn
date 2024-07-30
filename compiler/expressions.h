@@ -18,8 +18,6 @@
  *  2.  Altered source versions must be plainly marked as such, and must not be
  *      misrepresented as being the original software.
  *  3.  This notice may not be removed or altered from any source distribution.
- *
- *  Version: $Id$
  */
 #pragma once
 
@@ -44,10 +42,8 @@ int NextExprOp(Lexer* lexer, int* opidx, int* list);
 struct UserOperation;
 bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
                  const value* lval, UserOperation* op);
-bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
-                 const value* lval, UserOperation* op);
 
-int commutative(int oper);
+bool IsOperTokenCommutative(int oper);
 cell calc(cell left, int oper_tok, cell right, char* boolresult);
 bool IsValidIndexType(Type* type);
 bool matchtag(int formaltag, int actualtag, int flags);
@@ -57,7 +53,7 @@ bool matchtag_commutative(int formaltag, int actualtag, int flags);
 bool matchtag_string(int ident, int tag);
 bool matchtag_string(int ident, Type* type);
 bool checkval_string(const value* sym1, const value* sym2);
-bool checktag_string(Type* type, const value* sym1);
+bool checktag_string(Type* type, Type* type2);
 bool checktag(Type* type, Type* expr_type);
 bool checktag_string(int tag, const value* sym1);
 bool checktag(int tag, int exprtag);

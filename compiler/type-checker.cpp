@@ -309,7 +309,11 @@ bool TypeChecker::DoCoerce(Type* formal, Expr* actual) {
 }
 
 bool TypeChecker::DoCoerce(const token_pos_t& pos, Type* formal, Type* actual, Flags flags) {
-    TypeChecker tc(pos, QualType(formal), QualType(actual), Generic, flags);
+    return DoCoerce(pos, QualType(formal), QualType(actual), flags);
+}
+
+bool TypeChecker::DoCoerce(const token_pos_t& pos, QualType formal, QualType actual, Flags flags) {
+    TypeChecker tc(pos, formal, actual, Generic, flags);
     return tc.Coerce();
 }
 

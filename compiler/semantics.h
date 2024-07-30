@@ -20,10 +20,12 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
 #include "compile-context.h"
+#include "ir.h"
 #include "sc.h"
 #include "scopes.h"
 #include "parse-node.h"
@@ -40,17 +42,19 @@ class SemaContext
     explicit SemaContext(Semantics* sema)
       : cc_(CompileContext::get()),
         sema_(sema),
-        func_(nullptr)
+        func_(nullptr),
+        fun_(nullptr)
     {
         cc_prev_sc_ = cc_.sema();
         cc_.set_sema(this);
         scope_ = cc_.globals();
     }
-    SemaContext(SemaContext& parent, FunctionDecl* func)
+    SemaContext(SemaContext& parent, FunctionDecl* decl)
       : cc_(parent.cc_),
         sema_(parent.sema()),
         scope_(parent.scope_),
-        func_(func),
+        func_(decl),
+        fun_(nullptr),
         preprocessing_(parent.preprocessing())
     {
         cc_prev_sc_ = cc_.sema();
@@ -66,6 +70,8 @@ class SemaContext
     bool BindType(const token_pos_t& pos, TypenameInfo* ti);
     bool BindType(const token_pos_t& pos, typeinfo_t* ti);
     bool BindType(const token_pos_t& pos, Atom* atom, bool is_label, Type** type);
+
+    void set_fun(ir::Function* fun) { fun_ = fun; }
 
     Stmt* void_return() const { return void_return_; }
     void set_void_return(Stmt* stmt) { void_return_ = stmt; }
@@ -97,11 +103,13 @@ class SemaContext
     bool& loop_has_break() { return loop_has_break_; }
     bool& loop_has_continue() { return loop_has_continue_; }
     bool& loop_has_return() { return loop_has_return_; }
+    FlowType& flow_type() { return flow_type_; }
 
     bool warned_unreachable() const { return warned_unreachable_; }
     void set_warned_unreachable() { warned_unreachable_ = true; }
 
     FunctionDecl* func() const { return func_; }
+    ir::Function* fun() const { return fun_; }
     Semantics* sema() const { return sema_; }
 
     SymbolScope* ScopeForAdd();
@@ -118,6 +126,10 @@ class SemaContext
     bool preprocessing() const { return preprocessing_; }
 
     std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
+    std::unordered_map<VarDeclBase*, ir::Variable*>& local_vars() { return local_vars_; }
+
+    uint32_t AllocTempSlot();
+    void FreeTempSlot(uint32_t slot);
 
   private:
     CompileContext& cc_;
@@ -125,6 +137,7 @@ class SemaContext
     SymbolScope* scope_ = nullptr;
     AutoCreateScope* scope_creator_ = nullptr;
     FunctionDecl* func_ = nullptr;
+    ir::Function* fun_ = nullptr;
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
@@ -135,7 +148,11 @@ class SemaContext
     bool warned_unreachable_ = false;
     bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
+    FlowType flow_type_ = Flow_None;
     std::unordered_set<SymbolScope*> static_scopes_;
+    std::unordered_map<VarDeclBase*, ir::Variable*> local_vars_;
+    std::vector<uint32_t> free_local_slots_;
+    std::vector<std::vector<uint32_t>> temp_slots_;
 };
 
 class Semantics final
@@ -148,7 +165,7 @@ class Semantics final
     friend class Parser;
 
   public:
-    explicit Semantics(CompileContext& cc);
+    Semantics(CompileContext& cc, std::shared_ptr<ir::Module> mod);
 
     bool Analyze(ParseTree* tree);
 
@@ -156,6 +173,15 @@ class Semantics final
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }
+
+    enum class ExprFlags : unsigned int {
+        DEFAULT = 0,
+        RESULT_UNUSED = 0x1,
+        ALLOW_TYPES = 0x2,
+        WANT_RVALUE = 0x4,
+        ALLOW_BOUND_FUNCTIONS = 0x8,
+        SIZEOF = 0x10,
+    };
 
   private:
     enum StmtFlags {
@@ -171,75 +197,101 @@ class Semantics final
     bool CheckEnumStructDecl(EnumStructDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
+    bool CheckFunctionArgument(ir::Argument* arg);
     void CheckFunctionReturnUsage(FunctionDecl* info);
-    bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
-    bool CheckSwitchStmt(SwitchStmt* stmt);
-    bool CheckForStmt(ForStmt* stmt);
-    bool CheckDoWhileStmt(DoWhileStmt* stmt);
-    bool CheckBreakStmt(BreakStmt* stmt);
-    bool CheckContinueStmt(ContinueStmt* stmt);
-    bool CheckExitStmt(ExitStmt* stmt);
-    bool CheckDeleteStmt(DeleteStmt* stmt);
-    bool CheckAssertStmt(AssertStmt* stmt);
-    bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
-    bool CheckReturnStmt(ReturnStmt* stmt);
-    bool CheckCompoundReturnStmt(ReturnStmt* stmt);
-    bool CheckExprStmt(ExprStmt* stmt);
-    bool CheckIfStmt(IfStmt* stmt);
-    bool CheckConstDecl(ConstDecl* decl);
     bool CheckVarDecl(VarDeclBase* decl);
-    bool CheckConstDecl(VarDecl* decl);
+    bool CheckVarDeclCommon(VarDeclBase* decl, ir::Value** init);
     bool CheckPstructDecl(VarDeclBase* decl);
     bool CheckPstructArg(VarDeclBase* decl, PstructDecl* ps, StructInitFieldExpr* field,
                          std::vector<bool>* visited);
 
-    // Expressions.
-    bool CheckExpr(Expr* expr);
-    bool CheckNewArrayExpr(NewArrayExpr* expr);
-    bool CheckArrayExpr(ArrayExpr* expr);
-    bool CheckStringExpr(StringExpr* expr);
-    bool CheckTaggedValueExpr(TaggedValueExpr* expr);
-    bool CheckNullExpr(NullExpr* expr);
-    bool CheckThisExpr(ThisExpr* expr);
-    bool CheckCommaExpr(CommaExpr* expr);
-    bool CheckIndexExpr(IndexExpr* expr);
-    bool CheckCallExpr(CallExpr* expr);
-    bool CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
-    bool CheckSizeofExpr(SizeofExpr* expr);
-    bool CheckCastExpr(CastExpr* expr);
-    bool CheckIncDecExpr(IncDecExpr* expr);
-    bool CheckTernaryExpr(TernaryExpr* expr);
-    bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
-    bool CheckLogicalExpr(LogicalExpr* expr);
-    bool CheckBinaryExpr(BinaryExpr* expr);
-    bool CheckUnaryExpr(UnaryExpr* expr);
-    bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
-    bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
-    bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
-                                        bool from_call);
-    bool CheckRvalue(Expr* expr);
-    bool CheckRvalue(const token_pos_t& pos, const value& val);
+    // Ported to IR.
+    bool CheckAssertStmt(AssertStmt* stmt);
+    bool CheckBreakStmt(BreakStmt* stmt);
+    bool CheckCompoundReturnStmt(ReturnStmt* stmt, ir::Value* val);
+    bool CheckContinueStmt(ContinueStmt* stmt);
+    bool CheckDeleteStmt(DeleteStmt* stmt);
+    bool CheckDoWhileStmt(DoWhileStmt* stmt);
+    bool CheckExitStmt(ExitStmt* stmt);
+    bool CheckExprStmt(ExprStmt* stmt);
+    bool CheckForStmt(ForStmt* stmt);
+    bool CheckIfStmt(IfStmt* stmt);
+    bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
+    bool CheckReturnStmt(ReturnStmt* stmt);
+    bool CheckSwitchStmt(SwitchStmt* stmt);
+    bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
 
-    bool CheckAssignmentLHS(BinaryExpr* expr);
-    bool CheckAssignmentRHS(BinaryExpr* expr);
-    bool AddImplicitDynamicInitializer(VarDeclBase* decl);
+    // Expressions.
+    ir::Value* CheckExpr(Expr* expr, ExprFlags flags);
+    ir::Value* CheckNewArrayExpr(NewArrayExpr* expr);
+    ir::Value* CheckArrayExpr(ArrayExpr* expr);
+    ir::Value* CheckStringExpr(StringExpr* expr);
+    ir::Value* CheckTaggedValueExpr(TaggedValueExpr* expr);
+    ir::Value* CheckNullExpr(NullExpr* expr);
+    ir::Value* CheckThisExpr(ThisExpr* expr);
+    ir::Value* CheckCommaExpr(CommaExpr* expr, ExprFlags flags);
+    ir::Value* CheckIndexExpr(IndexExpr* expr);
+    ir::Value* CheckCallExpr(CallExpr* expr);
+    ir::Value* CheckSymbolExpr(SymbolExpr* expr, ExprFlags flags);
+    ir::Value* CheckSizeofExpr(SizeofExpr* expr);
+    ir::Value* CheckCastExpr(CastExpr* expr, ExprFlags flags);
+    ir::Value* CheckIncDecExpr(IncDecExpr* expr, ExprFlags flags);
+    ir::Value* CheckTernaryExpr(TernaryExpr* expr);
+    ir::Value* CheckChainedCompareExpr(ChainedCompareExpr* expr);
+    ir::Value* CheckLogicalExpr(LogicalExpr* expr);
+    ir::Value* CheckBinaryExpr(BinaryExpr* expr);
+    ir::Value* CheckUnaryExpr(UnaryExpr* expr);
+    ir::Value* CheckFieldAccessExpr(FieldAccessExpr* expr, ExprFlags flags);
+    ir::Value* CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
+                                          ExprFlags flags);
+    ir::Value* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
+                                              EnumStructDecl* root, ExprFlags);
+    ir::Value* CheckRvalue(Expr* expr, ExprFlags flags = ExprFlags::DEFAULT);
+
+    // Check an ir::Value as conforming to an l/r-value, binding IR as needed.
+    //
+    // If |out_usage| is non-null, errors are not reported. Instead the effective
+    // usage is returned and the l-value is bound as possible.
+    ir::Value* BindRvalue(Expr* expr, ir::Value* val);
+    ir::Lvalue* BindLvalue(ir::Value* val, uint8_t usage);
+    bool BindLvalue(ir::Lvalue* val, uint8_t usage);
+
+    // Manually build an r-value. These are infallible. Note that BuildRvalue
+    // can ONLY be called if BindLvalue has been called. Failure to do so will
+    // cause codegen assertions.
+    ir::Value* BuildRvalue(Expr* expr, ir::Lvalue* val);
+    QualType BuildRvalueType(QualType type);
+
+    ir::FunctionRef* BuildFunctionRef(Expr* expr, ir::Function* fun);
+    ir::FunctionRef* BuildFunctionRef(Expr* expr, FunctionDecl* decl);
+
+    bool CheckAssignmentLHS(BinaryExpr* expr, ir::Lvalue* lval);
+    bool CheckAssignmentRHS(BinaryExpr* expr, ir::Lvalue* lval, ir::Value* rval);
+    ir::Value* BuildImplicitDynamicInitializer(VarDeclBase* decl);
 
     struct ParamState {
-        std::vector<Expr*> argv;
+        std::vector<ir::Value*> argv;
     };
 
-    bool CheckArrayDeclaration(VarDeclBase* decl);
-    bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    Expr* CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
-                        ParamState* ps, unsigned int argpos);
-    bool CheckWrappedExpr(Expr* outer, Expr* inner);
-    FunctionDecl* BindNewTarget(Expr* target);
-    FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
+    bool CheckArrayDeclaration(VarDeclBase* decl, ir::Value** new_init);
+    ir::Value* CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
+    ir::Value* CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr, ParamState* ps,
+                             unsigned int argpos);
+    ir::FunctionRef* BindNewTarget(Expr* target);
+    ir::FunctionRef* BindCallTarget(CallExpr* call, Expr* target);
 
     void NeedsHeapAlloc(Expr* expr);
     void AssignHeapOwnership(ParseNode* node);
 
-    Expr* AnalyzeForTest(Expr* expr);
+    ir::Value* AnalyzeForTest(Expr* expr);
+    ir::Function* BuildFunction(FunctionDecl* decl);
+
+    struct UserOp {
+        ir::Function* target = nullptr;
+        bool swapparams = false;
+    };
+    UserOp FindUserOp(Expr* expr, int token, QualType first, QualType second);
+    ir::Value* MaybeCallUserOp(Expr* expr, int token, ir::Value* first, ir::Value* second);
 
     void DeduceLiveness();
     void DeduceMaybeUsed();
@@ -250,15 +302,27 @@ class Semantics final
     void CheckVoidDecl(const declinfo_t* decl, int variable);
 
     bool CheckScalarType(Expr* expr);
+    bool CheckScalarType(Expr* expr, QualType type);
+
+    uint32_t AllocTempSlot();
 
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
+    std::optional<SemaContext> global_sc_;
     SemaContext* sc_ = nullptr;
+    ir::Function* fun_ = nullptr;
+    std::shared_ptr<ir::Module> mod_;
+    std::unordered_map<FunctionDecl*, ir::Function*> functions_;
+    std::unordered_map<VarDeclBase*, ir::Variable*> global_vars_;
     bool pending_heap_allocation_ = false;
+    ir::NodeListBuilder* ir_ = nullptr;
+    std::vector<uint32_t>* temp_slots_ = nullptr;
 };
+
+KE_DEFINE_ENUM_OPERATORS(Semantics::ExprFlags)
 
 class AutoEnterScope final
 {

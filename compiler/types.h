@@ -248,6 +248,10 @@ class Type : public PoolObject
         return false;
     }
 
+    bool hasTrivialViewAsCast() const {
+        return coercesFromInt() || isFloat();
+    }
+
     void setMethodmap(MethodmapDecl* map) {
         assert(kind_ == TypeKind::Methodmap || kind_ == TypeKind::Enum);
         kind_ = TypeKind::Methodmap;
@@ -304,6 +308,11 @@ class Type : public PoolObject
         if (!isPstruct())
             return nullptr;
         return pstruct_ptr_;
+    }
+
+    // Reference here refers to heap allocation, versus value types.
+    bool isReferenceType() const {
+        return isArray() || isEnumStruct();
     }
 
     Type* inner() const {
@@ -387,6 +396,12 @@ class ArrayType : public Type {
     ArrayType(Type* inner, int size);
 
     int size() const { return size_; }
+    Type* innermost() {
+        ArrayType* iter = this;
+        while (iter->inner()->isArray())
+            iter = iter->inner()->to<ArrayType>();
+        return iter->inner();
+    }
 
     static bool is_a(Type* type) { return type->kind() == TypeKind::Array; }
 
@@ -438,6 +453,17 @@ class TypeManager
     Type* type_string() const { return type_string_; }
     Type* type_char() const { return type_string_; }
     Type* type_int() const { return type_int_; }
+
+    QualType get_object() const { return QualType(type_object_); }
+    QualType get_null() const { return QualType(type_null_); }
+    QualType get_function() const { return QualType(type_function_); }
+    QualType get_any() const { return QualType(type_any_); }
+    QualType get_void() const { return QualType(type_void_); }
+    QualType get_float() const { return QualType(type_float_); }
+    QualType get_bool() const { return QualType(type_bool_); }
+    QualType get_string() const { return QualType(type_string_); }
+    QualType get_char() const { return QualType(type_string_); }
+    QualType get_int() const { return QualType(type_int_); }
 
   private:
     Type* add(const char* name, TypeKind kind);

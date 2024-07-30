@@ -80,7 +80,7 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
             return false;
     }
 
-    if (auto enum_type = ti->type->asEnumStruct()) {
+    if (ti->type->asEnumStruct()) {
         if (ti->reference) {
             report(pos, 136);
             return false;
@@ -201,12 +201,20 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
     for (const auto& field : fields_ ) {
         AutoErrorPos error_pos(field->pos());
 
-        if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
-            Type* field_type = nullptr;
-            if (field->value()->EvalConst(&value, &field_type))
-                matchtag(type_, field_type, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
-            else
-                error(field->pos(), 80);
+        if (field->value() && field->value()->Bind(sc)) {
+            auto val = sc.sema()->CheckRvalue(field->value());
+            if (!val)
+                return false;
+
+            auto cv = val->as<ir::Const>();
+            if (!cv) {
+                report(field->value(), 8);
+                return false;
+            }
+
+            matchtag(type_, *cv->type(), MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+
+            value = cv->value();
         }
 
         field->set_type(type_);
@@ -368,9 +376,7 @@ bool ConstDecl::EnterNames(SemaContext& sc) {
     return true;
 }
 
-bool
-ConstDecl::Bind(SemaContext& sc)
-{
+bool ConstDecl::Bind(SemaContext& sc) {
     if (sc.func() && !EnterNames(sc))
         return false;
 
@@ -379,17 +385,20 @@ ConstDecl::Bind(SemaContext& sc)
 
     if (!expr_->Bind(sc))
         return false;
-    if (!sc.sema()->CheckExpr(expr_))
+    auto val = sc.sema()->CheckRvalue(expr_);
+    if (!val)
         return false;
 
-    Type* type;
-    if (!expr_->EvalConst(&value_, &type)) {
+    auto cv = val->as<ir::Const>();
+    if (!cv) {
         report(expr_, 8);
         return false;
     }
 
     AutoErrorPos aep(pos_);
-    matchtag(type_.type, type, 0);
+    matchtag(type_.type, *cv->type(), 0);
+
+    value_ = cv->value();
     return true;
 }
 
@@ -401,40 +410,24 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (!sc.BindType(pos(), &type_))
         return false;
 
+    if (type_.type->isVoid())
+        report(pos(), 144);
+
+    bool ok = true;
     if (!type_.dim_exprs.empty()) {
-        if (!ResolveArrayType(sc.sema(), this))
-            return false;
+        for (const auto& dim_expr : type_.dim_exprs) {
+            if (dim_expr)
+                ok &= dim_expr->Bind(sc);
+        }
     }
 
-    if (type()->isVoid())
-        error(pos_, 144);
-
-    bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
-
-    if (type_.type->isArray() && (!type_.has_postdims || implicit_dynamic_array())) {
-        if (vclass_ == sGLOBAL)
-            error(pos_, 162);
-        else if (vclass_ == sSTATIC)
-            error(pos_, 165);
-    }
-
-    if (type()->isPstruct()) {
-        type_.is_const = true;
-    } else {
-        if (type_.is_varargs)
-            markusage(this, uREAD);
-    }
-
-    if (is_public_)
-        is_read_ = true;
-
-    if (def_ok)
+    if (CheckNameRedefinition(sc, name_, pos_, vclass_))
         DefineSymbol(sc, this, vclass_);
 
     // LHS bind should now succeed.
     if (init_)
         init_->left()->BindLval(sc);
-    return true;
+    return ok;
 }
 
 bool VarDeclBase::BindType(SemaContext& sc) {
@@ -808,33 +801,24 @@ FunctionDecl::BindArgs(SemaContext& sc)
 {
     AutoCountErrors errors;
 
-    size_t arg_index = 0;
     for (auto& var : args_) {
         const auto& typeinfo = var->type_info();
 
         AutoErrorPos pos(var->pos());
 
-        if (typeinfo.is_varargs) {
-            /* redimension the argument list, add the entry iVARARGS */
-            var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
+        if (typeinfo.is_varargs)
             break;
-        }
 
+#if 0
         Type* type = typeinfo.type;
+#endif
 
-        /* Stack layout:
-         *   base + 0*sizeof(cell)  == previous "base"
-         *   base + 1*sizeof(cell)  == function return address
-         *   base + 2*sizeof(cell)  == number of arguments
-         *   base + 3*sizeof(cell)  == first argument of the function
-         * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
-         *
-         * Since arglist has an empty terminator at the end, we actually add 2.
-         */
-        var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
-        arg_index++;
+        if (var->init())
+            var->init()->Bind(sc);
 
-        if (type->isArray() || typeinfo.type->isEnumStruct()) {
+#if 0
+        if (type->isArray() || type->isEnumStruct()) {
+            assert(false);
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(sc.cc(), var);
         } else {
@@ -846,25 +830,26 @@ FunctionDecl::BindArgs(SemaContext& sc)
                 var->set_default_value(new DefaultArg());
 
                 cell val;
-                Type* type;
-                if (!init->EvalConst(&val, &type)) {
+                QualType type;
+                if (!Expr::EvalConst(init, &val, &type)) {
                     error(var->pos(), 8);
 
                     // Populate to avoid errors.
                     val = 0;
-                    type = typeinfo.type;
+                    type = QualType(typeinfo.type);
                 }
-                var->default_value()->type = type;
+                var->default_value()->type = *type;
                 var->default_value()->val = ke::Some(val);
 
-                matchtag(var->type(), type, MATCHTAG_COERCE);
+                matchtag(var->type(), *type, MATCHTAG_COERCE);
             }
         }
 
-        if (var->type()->isReference())
+        if (type->isReference())
             var->set_is_read();
         if (is_callback_ || is_public_)
             var->set_is_read();
+#endif
 
         /* arguments of a public function may not have a default value */
         if (is_public_ && var->default_value())
@@ -892,6 +877,8 @@ FunctionDecl::BindArgs(SemaContext& sc)
         canonical()->checked_one_signature = true;
         return errors.ok();
     }
+
+    // :TODO: check that we don't have two defargs.
     if (!canonical()->compared_prototype_args) {
         auto impl_fun = impl();
         auto proto_fun = prototype();

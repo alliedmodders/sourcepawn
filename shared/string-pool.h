@@ -19,6 +19,7 @@
 #define _include_jitcraft_string_pool_h_
 
 #include <string>
+#include <string_view>
 
 #include <amtl/am-hashtable.h>
 #include <amtl/am-hashset.h>
@@ -30,33 +31,6 @@
 namespace sp {
 
 using namespace ke;
-
-class CharsAndLength
-{
- public:
-  CharsAndLength()
-   : str_(nullptr),
-     length_(0)
-  {
-  }
-
-  CharsAndLength(const char* str, size_t length)
-   : str_(str),
-     length_(length)
-  {
-  }
-
-  const char* str() const {
-    return str_;
-  }
-  size_t length() const {
-    return length_;
-  }
-
- private:
-  const char* str_;
-  size_t length_;
-};
 
 class StringPool
 {
@@ -75,16 +49,16 @@ class StringPool
       delete* i;
   }
 
-  Atom* add(const std::string& str) {
-    return add(str.c_str(), str.size());
-  }
-
   Atom* add(const char* str, size_t length) {
-    CharsAndLength chars(str, length);
+    std::string_view chars(str, length);
     Table::Insert p = table_.findForAdd(chars);
     if (!p.found() && !table_.add(p, new Atom(str, length)))
       return nullptr;
     return *p;
+  }
+
+  Atom* add(std::string_view sv) {
+    return add(sv.data(), sv.size());
   }
 
   Atom* add(const char* str) {
@@ -99,14 +73,14 @@ class StringPool
       return HashCharSequence(key, strlen(key));
     }
 
-    static uint32_t hash(const CharsAndLength& key) {
-      return HashCharSequence(key.str(), key.length());
+    static uint32_t hash(const std::string_view& key) {
+      return HashCharSequence(key.data(), key.size());
     }
 
-    static bool matches(const CharsAndLength& key, const Payload& e) {
-      if (key.length() != e->length())
+    static bool matches(const std::string_view& key, const Payload& e) {
+      if (key.size() != e->length())
         return false;
-      return strncmp(key.str(), e->chars(), key.length()) == 0;
+      return strncmp(key.data(), e->chars(), key.size()) == 0;
     }
   };
 

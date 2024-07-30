@@ -65,7 +65,7 @@ struct function_entry {
     function_entry(const function_entry& other) = delete;
     function_entry& operator =(const function_entry& other) = delete;
 
-    FunctionDecl* decl = nullptr;
+    ir::Function* fun;
     std::string name;
 };
 
@@ -123,7 +123,7 @@ class RttiBuilder
     RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
-    void add_method(FunctionDecl* fun);
+    void add_method(ir::Function* fun);
     void add_native(FunctionDecl* sym);
 
   private:
@@ -360,17 +360,19 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
     var.type_id = type_id;
 }
 
-void RttiBuilder::add_method(FunctionDecl* fun) {
+void RttiBuilder::add_method(ir::Function* fun) {
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
-    method.name = names_->add(fun->name());
-    method.pcode_start = fun->cg()->label.offset();
-    method.pcode_end = fun->cg()->pcode_end;
-    method.signature = encode_signature(fun->canonical());
+    method.name = names_->add(fun->decl()->name());
+    method.pcode_start = fun->label().offset();
+    method.pcode_end = fun->pcode_end();
+    method.signature = encode_signature(fun->decl()->canonical());
 
-    if (!fun->cg()->dbgstrs)
+    (void)index;
+#if 0
+    if (!fun->dbgstrs)
         return;
 
     smx_rtti_debug_method debug;
@@ -392,6 +394,7 @@ void RttiBuilder::add_method(FunctionDecl* fun) {
     // Only add a method table entry if we actually had locals.
     if (debug.first_local != dbg_locals_->count())
         dbg_methods_->add(debug);
+#endif
 }
 
 void RttiBuilder::add_native(FunctionDecl* fun) {
@@ -721,52 +724,36 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     std::vector<function_entry> functions;
     std::unordered_set<Decl*> symbols;
 
-    // Sort globals.
-    std::vector<Decl*> global_symbols;
-    cc_.globals()->ForEachSymbol([&](Decl* decl) -> void {
-        global_symbols.push_back(decl);
+    auto mod = cg_.mod();
 
-        // This is only to assert that we embedded pointers properly in the assembly buffer.
-        symbols.emplace(decl);
+    // Sort globals.
+    std::sort(mod->functions().begin(), mod->functions().end(),
+              [](const ir::Function* a, const ir::Function* b) {
+        return a->decl()->name()->str() < b->decl()->name()->str();
     });
-    for (const auto& decl : cc_.functions()) {
-        if (symbols.count(decl))
+
+    for (const auto& fun : mod->functions()) {
+        auto decl = fun->decl();
+
+        if (decl->is_native() || !fun->body())
             continue;
-        if (decl->canonical() != decl)
-            continue;
-        global_symbols.push_back(decl);
-        symbols.emplace(decl);
+
+        function_entry entry;
+        entry.fun = fun;
+        if (decl->is_public()) {
+            entry.name = decl->name()->str();
+        } else {
+            // Create a private name.
+            entry.name = ke::StringPrintf(".%d.%s", fun->label().offset(), decl->name()->chars());
+        }
+
+        functions.emplace_back(std::move(entry));
     }
 
-    std::sort(global_symbols.begin(), global_symbols.end(),
-              [](const Decl* a, const Decl *b) -> bool {
-        return a->name()->str() < b->name()->str();
-    });
-
+#if 0
     // Build the easy symbol tables.
     for (const auto& decl : global_symbols) {
-        if (auto fun = decl->as<FunctionDecl>()) {
-            if (fun->is_native())
-                continue;
-
-            if (!fun->body())
-                continue;
-            if (!fun->is_live())
-                continue;
-            if (fun->canonical() != fun)
-                continue;
-
-            function_entry entry;
-            entry.decl = fun;
-            if (fun->is_public()) {
-                entry.name = fun->name()->str();
-            } else {
-                // Create a private name.
-                entry.name = ke::StringPrintf(".%d.%s", fun->cg()->label.offset(), fun->name()->chars());
-            }
-
-            functions.emplace_back(std::move(entry));
-        } else if (auto var = decl->as<VarDecl>()) {
+        if (auto var = decl->as<VarDecl>()) {
             if (var->is_public() || (var->is_used() && !var->as<ConstDecl>())) {
                 sp_file_pubvars_t& pubvar = pubvars->add();
                 pubvar.address = var->addr();
@@ -774,6 +761,7 @@ Assembler::Assemble(SmxByteBuffer* buffer)
             }
         }
     }
+#endif
 
     // The public list must be sorted.
     std::sort(functions.begin(), functions.end(),
@@ -783,31 +771,27 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     for (size_t i = 0; i < functions.size(); i++) {
         function_entry& f = functions[i];
 
-        assert(f.decl->cg()->label.offset() > 0);
-        assert(f.decl->impl());
-        assert(f.decl->cg()->pcode_end > f.decl->cg()->label.offset());
-
         sp_file_publics_t& pubfunc = publics->add();
-        pubfunc.address = f.decl->cg()->label.offset();
+        pubfunc.address = f.fun->label().offset();
         pubfunc.name = names->add(*cc_.atoms(), f.name.c_str());
 
         auto id = (uint32_t(i) << 1) | 1;
         if (!Label::ValueFits(id))
             report(421);
-        cg_.LinkPublicFunction(f.decl, id);
+        cg_.LinkPublicFunction(f.fun, id);
 
-        rtti.add_method(f.decl);
+        rtti.add_method(f.fun);
     }
 
     // Populate the native table.
     for (size_t i = 0; i < cg_.native_list().size(); i++) {
-        FunctionDecl* sym = cg_.native_list()[i];
-        assert(size_t(sym->cg()->label.offset()) == i);
+        ir::Function* sym = cg_.native_list()[i];
+        assert(size_t(sym->label().offset()) == i);
 
         sp_file_natives_t& entry = natives->add();
-        entry.name = names->add(sym->name());
+        entry.name = names->add(sym->decl()->name());
 
-        rtti.add_native(sym);
+        rtti.add_native(sym->decl());
     }
 
     // Set up the code section.

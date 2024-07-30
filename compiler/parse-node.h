@@ -37,6 +37,10 @@
 namespace sp {
 namespace cc {
 
+namespace ir {
+  class Value;
+} // namespace ir
+
 class FunctionDecl;
 
 struct UserOperation
@@ -337,7 +341,11 @@ class VarDeclBase : public Decl
                node->kind() == StmtKind::ConstDecl;
     }
 
-    BinaryExpr* init() const { return init_; }
+    BinaryExpr* init() const {
+      if (implicit_dynamic_array_)
+        return nullptr;
+      return init_;
+    }
     Expr* init_rhs() const;
     int vclass() const { return vclass_; }
     const typeinfo_t& type_info() const { return type_; }
@@ -352,19 +360,30 @@ class VarDeclBase : public Decl
     bool is_written() const { return is_written_; }
     void set_is_written() { is_written_ = true; }
     bool implicit_dynamic_array() const { return implicit_dynamic_array_; }
-    void set_implicit_dynamic_array() { implicit_dynamic_array_ = true; }
+    void set_implicit_dynamic_array(std::vector<ir::Value*>&& dims);
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
     Type* type() const override { return type_.type; }
+    bool is_local_static() const { return is_local_static_; }
+    void set_is_local_static() { is_local_static_ = true; }
 
     bool is_used() const { return is_read_ || is_written_; }
 
+    PoolArray<ir::Value*>* implicit_dims() const {
+      assert(implicit_dynamic_array_);
+      return implicit_dims_;
+    }
+
   protected:
     typeinfo_t type_;
-    BinaryExpr* init_ = nullptr;
+    union {
+      BinaryExpr* init_;
+      PoolArray<ir::Value*>* implicit_dims_;
+    };
     uint8_t vclass_ : 4; // This will be implied by scope, when we get there.
     bool is_public_ : 1;
     bool is_static_ : 1;
+    bool is_local_static_ : 1;
     bool is_stock_ : 1;
     bool autozero_ : 1;
     bool is_read_ : 1;
@@ -588,26 +607,13 @@ class Expr : public ParseNode
         can_alloc_heap_(false)
     {}
 
-    // Flatten a series of binary expressions into a single list.
-    virtual void FlattenLogical(int token, std::vector<Expr*>* out);
-
-    // Fold the expression into a constant. The expression must have been
-    // bound and analyzed. False indicates the expression is non-constant.
-    //
-    // If an expression folds constants during analysis, it can return false
-    // here. ExprToConst handles both cases.
-    virtual bool FoldToConstant() {
-        return false;
-    }
-
     // Process any child nodes whose value is consumed.
     virtual void ProcessUses(SemaContext& sc) = 0;
     // Process any child nodes whose value is not consumed.
     virtual void ProcessDiscardUses(SemaContext& sc) { ProcessUses(sc); }
 
-    // Evaluate as a constant. Returns false if non-const. This is a wrapper
-    // around FoldToConstant().
-    bool EvalConst(cell* value, Type** type);
+    // Evaluate as a constant. Returns false if non-const.
+    static bool EvalConst(Expr* expr, cell* value, QualType* type);
 
     // Return whether or not the expression is idempotent (eg has side effects).
     bool HasSideEffects();
@@ -700,7 +706,7 @@ class BinaryExpr final : public BinaryExprBase
   public:
     BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right);
 
-    bool FoldToConstant() override;
+    bool ConstantFold(cell* value, QualType* type);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
@@ -730,8 +736,6 @@ class LogicalExpr final : public BinaryExprBase
     LogicalExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
       : BinaryExprBase(ExprKind::LogicalExpr, pos, token, left, right)
     {}
-
-    void FlattenLogical(int token, std::vector<Expr*>* out) override;
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::LogicalExpr; }
 };
@@ -787,7 +791,6 @@ class TernaryExpr final : public Expr
         ok &= third_->Bind(sc);
         return ok;
     }
-    bool FoldToConstant() override;
     void ProcessUses(SemaContext& sc) override;
     void ProcessDiscardUses(SemaContext& sc) override;
 
@@ -863,6 +866,7 @@ class CastExpr final : public Expr
 
     bool Bind(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
+    bool ConstantFold(cell* value, QualType* type);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::CastExpr; }
 
@@ -927,17 +931,21 @@ class NamedArgExpr : public Expr
   public:
     NamedArgExpr(const token_pos_t& pos, Atom* name, Expr* expr)
       : Expr(ExprKind::NamedArgExpr, pos),
-        name(name),
-        expr(expr)
+        name_(name),
+        expr_(expr)
     {}
 
-    bool Bind(SemaContext& sc) override { return expr->Bind(sc); }
-    void ProcessUses(SemaContext& sc) override { expr->ProcessUses(sc); }
+    bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
+    void ProcessUses(SemaContext& sc) override { expr_->ProcessUses(sc); }
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::NamedArgExpr; }
 
-    Atom* name;
-    Expr* expr;
+    Atom* name() const { return name_; }
+    Expr* expr() const { return expr_; }
+
+  private:
+    Atom* name_;
+    Expr* expr_;
 };
 
 class CallExpr final : public Expr
@@ -959,8 +967,6 @@ class CallExpr final : public Expr
     PoolArray<Expr*>& args() { return args_; }
     Expr* target() const { return target_; }
     int token() const { return token_; }
-    Expr* implicit_this() const { return implicit_this_; }
-    void set_implicit_this(Expr* expr) { implicit_this_ = expr; }
     FunctionDecl* fun() const { return fun_; }
     void set_fun(FunctionDecl* fun) { fun_ = fun; }
 
@@ -971,7 +977,6 @@ class CallExpr final : public Expr
     Expr* target_;
     PoolArray<Expr*> args_;
     FunctionDecl* fun_ = nullptr;
-    Expr* implicit_this_ = nullptr;
 };
 
 class EmitOnlyExpr : public Expr
@@ -1249,12 +1254,9 @@ class ArrayExpr final : public Expr
     PoolArray<Expr*>& exprs() { return exprs_; }
     bool ellipses() const { return ellipses_; }
     void set_ellipses() { ellipses_ = true; }
-    bool synthesized_for_compat() const { return synthesized_for_compat_; }
-    void set_synthesized_for_compat() { synthesized_for_compat_ = true; }
 
   private:
     bool ellipses_ = false;
-    bool synthesized_for_compat_ = false;
     PoolArray<Expr*> exprs_;
 };
 
@@ -1401,7 +1403,7 @@ class DeleteStmt : public Stmt
 
     bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
 
-    void ProcessUses(SemaContext& sc) override;
+    void ProcessUses(SemaContext& sc) override {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::DeleteStmt; }
 
@@ -1469,7 +1471,7 @@ class DoWhileStmt : public Stmt
 class ForStmt : public Stmt
 {
   public:
-    explicit ForStmt(const token_pos_t& pos, Stmt* init, Expr* cond, Expr* advance, Stmt* body)
+    explicit ForStmt(const token_pos_t& pos, Stmt* init, Expr* cond, ExprStmt* advance, Stmt* body)
       : Stmt(StmtKind::ForStmt, pos),
         scope_(nullptr),
         init_(init),
@@ -1487,7 +1489,7 @@ class ForStmt : public Stmt
     Stmt* init() const { return init_; }
     Expr* cond() const { return cond_; }
     Expr* set_cond(Expr* cond) { return cond_ = cond; }
-    Expr* advance() const { return advance_; }
+    ExprStmt* advance() const { return advance_; }
     Stmt* body() const { return body_; }
     bool always_taken() const { return always_taken_; }
     void set_always_taken(bool val) { always_taken_ = val; }
@@ -1500,7 +1502,7 @@ class ForStmt : public Stmt
     SymbolScope* scope_;
     Stmt* init_;
     Expr* cond_;
-    Expr* advance_;
+    ExprStmt* advance_;
     Stmt* body_;
     bool always_taken_ = false;
     bool never_taken_ = false;
@@ -1676,15 +1678,6 @@ class FunctionDecl : public Decl
     void CheckReturnUsage();
     bool IsVariadic();
 
-    struct ReturnArrayInfo : public PoolObject {
-        cell_t hidden_address = 0;
-        cell_t iv_size = 0;
-        cell_t dat_addr = 0;
-        cell_t zeroes = 0;
-    };
-    ReturnArrayInfo* return_array() const { return return_array_; }
-    void set_return_array(ReturnArrayInfo* base) { return_array_ =  base; }
-
     const PoolForwardList<FunctionDecl*>* refers_to() const {
         return refers_to_;
     }
@@ -1714,7 +1707,6 @@ class FunctionDecl : public Decl
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
-    ReturnArrayInfo* return_array_ = nullptr;
 
     // Other symbols that this symbol refers to.
     PoolForwardList<FunctionDecl*>* refers_to_ = nullptr;

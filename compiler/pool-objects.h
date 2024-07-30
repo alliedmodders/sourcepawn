@@ -18,6 +18,7 @@
 #pragma once
 
 #include <forward_list>
+#include <string_view>
 
 #include "compile-context.h"
 
@@ -137,13 +138,13 @@ template <typename T>
 using PoolForwardList = std::forward_list<T, StlPoolAllocator<T>>;
 
 struct KeywordTablePolicy {
-    static bool matches(const sp::CharsAndLength& a, const sp::CharsAndLength& b) {
-        if (a.length() != b.length())
+    static bool matches(const std::string_view& a, const std::string_view& b) {
+        if (a.size() != b.size())
             return false;
-        return strncmp(a.str(), b.str(), a.length()) == 0;
+        return strncmp(a.data(), b.data(), a.size()) == 0;
     }
-    static uint32_t hash(const sp::CharsAndLength& key) {
-        return ke::HashCharSequence(key.str(), key.length());
+    static uint32_t hash(const std::string_view& key) {
+        return ke::HashCharSequence(key.data(), key.size());
     }
 };
 

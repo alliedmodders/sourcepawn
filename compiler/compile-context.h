@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include "array-data.h"
@@ -74,14 +75,14 @@ class CompileContext final
     TypeManager* types() const { return types_.get(); }
     StringPool* atoms() { return &atoms_; }
 
-    Atom* atom(const std::string& str) {
-        return atoms_.add(str);
-    }
     Atom* atom(const char* str, size_t length) {
         return atoms_.add(str, length);
     }
     Atom* atom(const char* str) {
         return atoms_.add(str);
+    }
+    Atom* atom(std::string_view sv) {
+        return atoms_.add(sv);
     }
 
     const std::string& default_include() const { return default_include_; }
