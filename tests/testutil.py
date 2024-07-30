@@ -64,7 +64,7 @@ def parse_manifest(path, local_folder, source = {}):
 
   with open(path, 'r') as fp:
     cfg = configparser.ConfigParser()
-    cfg.readfp(fp)
+    cfg.read_file(fp)
 
   for section in cfg.sections():
     if section not in manifest:

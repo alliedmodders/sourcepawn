@@ -26,6 +26,7 @@
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"
+#include "ir.h"
 #include "sc.h"
 #include "shared/byte-buffer.h"
 #include "shared/string-pool.h"

@@ -35,49 +35,46 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
    is_stock_(is_stock),
    autozero_(true),
    is_read_(false),
-   is_written_(false)
+   is_written_(false),
+   implicit_dynamic_array_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)
         set_init(initializer);
+    else
+        init_ = nullptr;
 }
 
 void VarDeclBase::set_init(Expr* expr) {
+    assert(!implicit_dynamic_array_);
     init_ = new BinaryExpr(pos(), '=', new SymbolExpr(pos(), name()), expr);
     init_->set_initializer();
 }
 
 Expr* VarDeclBase::init_rhs() const {
-    if (!init_)
+    if (implicit_dynamic_array_ || !init_)
         return nullptr;
-    return init_->right();
+    return init()->right();
 }
 
 void VarDeclBase::BindAddress(cell addr) {
     addr_.bind(addr);
 }
 
+void VarDeclBase::set_implicit_dynamic_array(std::vector<ir::Value*>&& dims) {
+    auto& cc = CompileContext::get();
+
+    assert(!implicit_dynamic_array_);
+    assert(!implicit_dims_);
+    implicit_dynamic_array_ = true;
+    implicit_dims_ = cc.allocator().alloc<PoolArray<ir::Value*>>();
+    new (implicit_dims_) PoolArray<ir::Value*>(std::move(dims));
+}
+
 void
 ParseNode::error(const token_pos_t& pos, int number)
 {
     report(pos, number);
-}
-
-void
-Expr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    out->push_back(this);
-}
-
-void
-LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
-{
-    if (token_ == token) {
-        left_->FlattenLogical(token, out);
-        right_->FlattenLogical(token, out);
-    } else {
-        Expr::FlattenLogical(token, out);
-    }
 }
 
 bool Stmt::IsTerminal() const {

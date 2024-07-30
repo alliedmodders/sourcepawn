@@ -12,6 +12,7 @@ module.sources += [
   'data-queue.cpp',
   'errors.cpp',
   'expressions.cpp',
+  'ir.cpp',
   'lexer.cpp',
   'main.cpp',
   'name-resolution.cpp',

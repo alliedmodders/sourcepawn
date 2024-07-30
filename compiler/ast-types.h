@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <stdint.h>
+
 #define AST_STMT_TYPE_LIST(FOR_EACH) \
     FOR_EACH(StmtList) \
     FOR_EACH(BlockStmt) \
@@ -79,6 +81,56 @@
     FOR_EACH(StructExpr) \
     FOR_EACH(StructInitFieldExpr)
 
+#define IR_NODE_TYPE_LIST(FOR_EACH) \
+    /* Decls */ \
+    FOR_EACH(Function) \
+    FOR_EACH(Variable) \
+    FOR_EACH(Argument) \
+    /* Statements */ \
+    FOR_EACH(Return) \
+    FOR_EACH(ValueInsn) \
+    FOR_EACH(Exit) \
+    FOR_EACH(Break) \
+    FOR_EACH(Continue) \
+    FOR_EACH(Assert) \
+    FOR_EACH(If) \
+    FOR_EACH(DoWhile) \
+    FOR_EACH(Delete) \
+    FOR_EACH(ForLoop) \
+    FOR_EACH(Switch) \
+    FOR_EACH(FunctionDef) \
+    /* Values */ \
+    FOR_EACH(ConstVal) \
+    FOR_EACH(CharArrayLiteral) \
+    FOR_EACH(VariableRef) \
+    FOR_EACH(TypeRef) \
+    FOR_EACH(FunctionRef) \
+    FOR_EACH(IndexOp) \
+    FOR_EACH(Load) \
+    FOR_EACH(TernaryOp) \
+    FOR_EACH(BinaryOp) \
+    FOR_EACH(CommaOp) \
+    FOR_EACH(CallOp) \
+    FOR_EACH(PropertyRef) \
+    FOR_EACH(FieldRef) \
+    FOR_EACH(UnaryOp) \
+    FOR_EACH(CallUserOp) \
+    FOR_EACH(Store) \
+    FOR_EACH(StackRef) \
+    FOR_EACH(AddressOf) \
+    FOR_EACH(ArrayInitializer) \
+    FOR_EACH(StoreWithTemp) \
+    FOR_EACH(IncDec) \
+    FOR_EACH(IncDecUserOp) \
+    FOR_EACH(TempValueRef) \
+    FOR_EACH(BoundFunction) \
+    FOR_EACH(CastOp) \
+    FOR_EACH(NewArray) \
+    FOR_EACH(SliceArray)
+
+namespace sp {
+namespace cc {
+
 enum class ExprKind : uint8_t
 {
 #define _(Name) Name,
@@ -92,3 +144,13 @@ enum class StmtKind : uint8_t
     AST_STMT_TYPE_LIST(_)
 #undef _
 };
+
+enum class IrKind : uint8_t
+{
+#define _(Name) Name,
+    IR_NODE_TYPE_LIST(_)
+#undef _
+};
+
+} // namespace cc
+} // namespace sp

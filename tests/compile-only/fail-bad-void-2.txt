@@ -1,1 +1,1 @@
-(1) : error 145: invalid type expression
+(1) : error 039: void is not a valid array type

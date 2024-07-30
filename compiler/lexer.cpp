@@ -299,7 +299,7 @@ void Lexer::lex_float(full_token_t* tok, cell_t whole) {
     tok->id = tRATIONAL;
 }
 
-int Lexer::preproc_expr(cell* val, Type** type) {
+int Lexer::preproc_expr(cell* val, QualType* type) {
     ke::SaveAndSet<bool> forbid_const(&cc_.in_preprocessor(), true);
     return Parser::PreprocExpr(val, type); /* get value (or 0 on error) */
 }
@@ -330,8 +330,11 @@ void Lexer::HandleDirectives() {
             ifstack_.emplace_back(0);
             skiplevel_ = ifstack_.size();
 
+            auto loc = pos();
             cell val = 0;
-            preproc_expr(&val, NULL); /* get value (or 0 on error) */
+            QualType ignore_type;
+            if (!preproc_expr(&val, &ignore_type))
+                report(loc, 8);
             CheckLineEmpty();
 
             ifstack_.back() = (char)(val ? PARSEMODE : SKIPMODE);

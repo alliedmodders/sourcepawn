@@ -17,12 +17,14 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
-#include "shared/byte-buffer.h"
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 
 #include "label.h"
+#include "ir.h"
+#include "parse-node.h"
 #include "sctracker.h"
+#include "shared/byte-buffer.h"
 #include "symbols.h"
 
 namespace sp {
@@ -111,8 +113,8 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_POP_ALT);
   }
 
-  void load_hidden_arg(FunctionDecl* fun, bool save_pri) {
-    if (!fun->IsVariadic()) {
+  void load_hidden_arg(ir::Function* fun, bool save_pri) {
+    if (!fun->decl()->IsVariadic()) {
       emit(OP_LOAD_S_ALT, fun->return_array()->hidden_address);
       return;
     }
@@ -171,14 +173,15 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
   }
 
-  void copyarray(VarDeclBase* sym, cell size) {
-    if (sym->type()->isArray()) {
-      assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
-      emit(OP_LOAD_S_ALT, sym->addr());
-    } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-      emit(OP_ADDR_ALT, sym->addr());
+  void copyarray(ir::Variable* var, cell size) {
+    auto decl = var->decl();
+    if (decl->type()->isArray()) {
+      assert(decl->vclass() == sLOCAL || decl->vclass() == sARGUMENT); // symbol must be stack relative
+      emit(OP_LOAD_S_ALT, var->addr());
+    } else if (decl->vclass() == sLOCAL || decl->vclass() == sARGUMENT) {
+      emit(OP_ADDR_ALT, var->addr());
     } else {
-      emit(OP_CONST_ALT, sym->addr());
+      emit(OP_CONST_ALT, var->addr());
     }
     emit(OP_MOVS, size);
   }

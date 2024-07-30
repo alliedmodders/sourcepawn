@@ -40,174 +40,12 @@
 namespace sp {
 namespace cc {
 
-/* Function addresses of binary operators for signed operations */
-static const int op1[17] = {
-    // hier3
-    '*', '/', '%',
-    // hier4
-    '+', '-',
-    // hier5
-    tSHL, tSHR, tSHRU,
-    // hier6
-    '&',
-    // hier7
-    '^',
-    // hier8
-    '|',
-    // hier9
-    tlLE, tlGE, '<', '>',
-    // hier10
-    tlEQ, tlNE
-};
-
-static inline bool MatchOperator(int oper, FunctionDecl* fun, Type* type1, Type* type2,
-                                 int numparam)
-{
-    if (!oper)
-        numparam = 1;
-
-    const auto& args = fun->args();
-    if (args.size() != size_t(numparam))
+bool checktag_string(Type* type, Type* type2) {
+    if (type2->isArray())
         return false;
 
-    assert(numparam == 1 || numparam == 2);
-    Type* types[2] = { type1, type2 };
-
-    for (int i = 0; i < numparam; i++) {
-        if (args[i]->type_info().is_varargs)
-            return false;
-        if (args[i]->type_info().type != types[i])
-            return false;
-    }
-
-    if (!oper && fun->type() != type2)
-        return false;
-    return true;
-}
-
-bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
-                 const value* lval, UserOperation* op)
-{
-    static const char* binoperstr[] = {"*", "/", "%",  "+",  "-", "",  "",   "",  "",
-                                       "",  "",  "<=", ">=", "<", ">", "==", "!="};
-    static const bool binoper_savepri[] = {false, false, false, false, false, false, false, false,
-                                           false, false, false, true,  true,  true,  true,  false,
-                                           false};
-    static const char* unoperstr[] = {"!", "-", "++", "--"};
-    static const int unopers[] = {'!', '-', tINC, tDEC};
-
-    char opername[4] = "";
-    size_t i;
-    bool savepri, savealt;
-
-    if (type1->isReference())
-        type1 = type1->inner();
-    if (type2 && type2->isReference())
-        type2 = type2->inner();
-
-    /* since user-defined operators on untagged operands are forbidden, we have
-     * a quick exit.
-     */
-    assert(numparam == 1 || numparam == 2);
-    if (sc.cc().in_preprocessor())
-        return false;
-    if (type1->isInt() && (numparam == 1 || type2->isInt()))
-        return false;
-
-    savepri = savealt = false;
-    /* find the name with the operator */
-    if (numparam == 2) {
-        if (oper == 0) {
-            /* assignment operator: a special case */
-            strcpy(opername, "=");
-            if (lval != NULL && (lval->ident == iARRAYCELL || lval->ident == iARRAYCHAR))
-                savealt = true;
-        } else {
-            assert((sizeof binoperstr / sizeof binoperstr[0]) == (sizeof op1 / sizeof op1[0]));
-            for (i = 0; i < sizeof op1 / sizeof op1[0]; i++) {
-                if (oper == op1[i]) {
-                    strcpy(opername, binoperstr[i]);
-                    savepri = binoper_savepri[i];
-                    break;
-                }
-            }
-        }
-    } else {
-        assert(oper);
-        assert(numparam == 1);
-        /* try a select group of unary operators */
-        assert((sizeof unoperstr / sizeof unoperstr[0]) == (sizeof unopers / sizeof unopers[0]));
-        if (opername[0] == '\0') {
-            for (i = 0; i < sizeof unopers / sizeof unopers[0]; i++) {
-                if (oper == unopers[i]) {
-                    strcpy(opername, unoperstr[i]);
-                    break;
-                }
-            }
-        }
-    }
-    /* if not found, quit */
-    if (opername[0] == '\0')
-        return false;
-
-    // :TODO: restrict this to globals.
-    auto opername_atom = sc.cc().atom(opername);
-    Decl* chain = FindSymbol(sc, opername_atom);
-    if (!chain)
-        return false;
-
-    FunctionDecl* decl = nullptr;
-    bool swapparams;
-    bool is_commutative = commutative(oper);
-    for (auto iter = chain; iter; iter = iter->next) {
-        auto fun = iter->as<FunctionDecl>();
-        if (!fun)
-            continue;
-        fun = fun->canonical();
-
-        bool matched = MatchOperator(oper, fun, type1, type2, numparam);
-        bool swapped = false;
-        if (!matched && is_commutative && type1 != type2 && oper) {
-            matched = MatchOperator(oper, fun, type2, type1, numparam);
-            swapped = true;
-        }
-        if (matched) {
-            decl = fun;
-            swapparams = swapped;
-            break;
-        }
-    }
-
-    if (!decl)
-        return false;
-
-    /* we don't want to use the redefined operator in the function that
-     * redefines the operator itself, otherwise the snippet below gives
-     * an unexpected recursion:
-     *    fixed:operator+(fixed:a, fixed:b)
-     *        return a + b
-     */
-    if (decl == sc.func()) {
-        report(408);
-    }
-
-    markusage(decl, uREAD);
-
-    op->sym = decl;
-    op->oper = oper;
-    op->paramspassed = (oper == 0) ? 1 : numparam;
-    op->savepri = savepri;
-    op->savealt = savealt;
-    op->swapparams = swapparams;
-    return true;
-}
-
-bool checktag_string(Type* type, const value* sym1) {
-    if (sym1->type()->isArray())
-        return false;
-
-    if ((sym1->type()->isChar() && type->isInt()) ||
-        (sym1->type()->isInt() && type->isChar()))
+    if ((type2->isChar() && type->isInt()) ||
+        (type2->isInt() && type->isChar()))
     {
         return true;
     }
@@ -577,9 +415,7 @@ bool checktag(Type* type, Type* expr_type) {
  *  precautionary "push" of the primary register is scrapped and the constant
  *  is read into the secondary register immediately.
  */
-int
-commutative(int oper)
-{
+bool IsOperTokenCommutative(int oper) {
     switch (oper) {
         case '+':
         case '*':
