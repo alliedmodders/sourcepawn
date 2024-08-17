@@ -94,7 +94,7 @@ class PluginRuntime
   bool UsesHeapScopes();
 
   // Mark builtin natives as bound.
-  void InstallBuiltinNatives();
+  virtual void InstallBuiltinNatives();
 
   // Return the method if it was previously analyzed; null otherwise.
   RefPtr<MethodInfo> GetMethod(cell_t pcode_offset) const;
