@@ -327,6 +327,24 @@ static cell_t PrintTestStruct(IPluginContext* cx, const cell_t* params) {
   return 0;
 }
 
+static cell_t AddTestStructs(IPluginContext* cx, const cell_t* params) {
+  TestStruct* a;
+  TestStruct* b;
+  TestStruct* out;
+
+  int err;
+  if ((err = cx->LocalToPhysAddr(params[1], reinterpret_cast<cell_t**>(&out))) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read out argument");
+  if ((err = cx->LocalToPhysAddr(params[2], reinterpret_cast<cell_t**>(&a))) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument 1");
+  if ((err = cx->LocalToPhysAddr(params[3], reinterpret_cast<cell_t**>(&b))) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument 2");
+
+  out->x = a->x + b->x;
+  out->y = a->y + b->y;
+  return params[1];
+}
+
 class DynamicNative : public INativeCallback
 {
   public:
@@ -352,6 +370,16 @@ class DynamicNative : public INativeCallback
   private:
     uintptr_t refcount_ = 0;
 };
+
+#pragma pack(push, 1)
+struct LayoutVerifier {
+  char message[CharArraySize<50>::bytes];
+  int x;
+};
+#pragma pack(pop)
+
+static_assert(offsetof(LayoutVerifier, message) == 0);
+static_assert(offsetof(LayoutVerifier, x) == 52);
 
 static int Execute(const char* file)
 {
@@ -386,6 +414,7 @@ static int Execute(const char* file)
   BindNative(rt, "assert_eq", AssertEq);
   BindNative(rt, "printf", Printf);
   BindNative(rt, "print_test_struct", PrintTestStruct);
+  BindNative(rt, "add_test_structs", AddTestStructs);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

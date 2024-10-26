@@ -184,6 +184,7 @@ class Semantics final
     bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
     bool CheckReturnStmt(ReturnStmt* stmt);
     bool CheckCompoundReturnStmt(ReturnStmt* stmt);
+    bool CheckNativeCompoundReturn(FunctionDecl* info);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);

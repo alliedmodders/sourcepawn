@@ -2522,6 +2522,24 @@ bool Semantics::CheckCompoundReturnStmt(ReturnStmt* stmt) {
     return true;
 }
 
+bool Semantics::CheckNativeCompoundReturn(FunctionDecl* info) {
+    auto rt = info->return_type();
+    if (auto root = rt->as<ArrayType>()) {
+        for (auto it = root; it; it = it->inner()->as<ArrayType>()) {
+            if (it->size() == 0) {
+                report(info, 39);
+                return false;
+            }
+        }
+    }
+
+    // For native calls, the implicit arg is first, not last.
+    auto rai = new FunctionDecl::ReturnArrayInfo;
+    rai->hidden_address = sizeof(cell_t) * 3;
+    info->set_return_array(rai);
+    return true;
+}
+
 bool Semantics::CheckAssertStmt(AssertStmt* stmt) {
     if (Expr* expr = AnalyzeForTest(stmt->expr())) {
         stmt->set_expr(expr);
@@ -2857,10 +2875,9 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     }
 
     if (info->is_native()) {
-        if (decl.type.dim_exprs.size() > 0) {
-            report(info->pos(), 83);
+        auto rt = info->return_type();
+        if ((rt->isArray() || rt->isEnumStruct()) && !CheckNativeCompoundReturn(info))
             return false;
-        }
         return true;
     }
 

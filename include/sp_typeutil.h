@@ -77,4 +77,10 @@ sp_ctof(cell_t val)
     return sp::FloatCellUnion(val).f32;
 }
 
+template <size_t Size>
+struct CharArraySize {
+    static constexpr size_t cells = (Size + sizeof(cell_t) - 1) / sizeof(cell_t);
+    static constexpr size_t bytes = cells * sizeof(cell_t);
+};
+
 #endif //_INCLUDE_SOURCEPAWN_VM_TYPEUTIL_H_

@@ -790,12 +790,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
             markusage(args_[0], uREAD);
     }
 
-    if ((is_native_ || is_public_ || is_forward_) &&
-        (return_type()->isArray() || return_type()->isEnumStruct()))
-    {
-        error(pos_, 141);
-    }
-
     ok &= BindArgs(sc);
 
     if (body_)

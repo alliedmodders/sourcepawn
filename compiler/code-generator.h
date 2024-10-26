@@ -90,6 +90,7 @@ class CodeGenerator final
     void EmitIndexExpr(IndexExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
     void EmitCallExpr(CallExpr* expr);
+    void EmitNativeCallHiddenArg(CallExpr* expr);
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
     void EmitCallUserOpExpr(CallUserOpExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
