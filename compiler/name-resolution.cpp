@@ -821,10 +821,6 @@ FunctionDecl::BindArgs(SemaContext& sc)
         }
 
         Type* type = typeinfo.type;
-        if (type->isEnumStruct()) {
-            if (is_native_)
-                report(var->pos(), 135) << type;
-        }
 
         /* Stack layout:
          *   base + 0*sizeof(cell)  == previous "base"

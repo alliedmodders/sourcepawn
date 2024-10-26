@@ -308,6 +308,25 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+#pragma pack(push, 1)
+struct TestStruct {
+  cell_t x;
+  cell_t y;
+};
+#pragma pack(pop)
+
+static cell_t PrintTestStruct(IPluginContext* cx, const cell_t* params) {
+  TestStruct* ts;
+
+  int err;
+  if ((err = cx->LocalToPhysAddr(params[1], reinterpret_cast<cell_t**>(&ts))) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument 1");
+
+  printf("x: %d\n", ts->x);
+  printf("y: %d\n", ts->y);
+  return 0;
+}
+
 class DynamicNative : public INativeCallback
 {
   public:
@@ -366,6 +385,7 @@ static int Execute(const char* file)
   BindNative(rt, "call_with_string", CallWithString);
   BindNative(rt, "assert_eq", AssertEq);
   BindNative(rt, "printf", Printf);
+  BindNative(rt, "print_test_struct", PrintTestStruct);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

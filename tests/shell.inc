@@ -2,6 +2,11 @@
 #include <float>
 #include <handles>
 
+enum struct TestStruct {
+    int x;
+    int y;
+}
+
 native void printnum(int n);
 native void writenum(int n);
 native void printfloat(float n);
@@ -45,3 +50,5 @@ native void copy_2d_array_to_callback(const int[] flat_array, int length, int st
                                       Array2dCallback callback);
 
 native void assert_eq(any a1, any a2);
+
+native void print_test_struct(TestStruct x);
