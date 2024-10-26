@@ -1139,7 +1139,7 @@ CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
 
 void CodeGenerator::EmitCallExpr(CallExpr* call) {
     // If returning an array, push a hidden parameter.
-    if (call->fun()->return_array()) {
+    if (call->fun()->return_array() && !call->fun()->is_native()) {
         cell retsize = call->fun()->return_type()->CellStorageSize();
         assert(retsize);
 
@@ -1208,10 +1208,56 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
         __ emit(OP_PUSH_PRI);
     }
 
-    EmitCall(call->fun(), (cell)argv.size());
+    cell_t hidden_args = 0;
+    if (call->fun()->return_array() && call->fun()->is_native()) {
+        EmitNativeCallHiddenArg(call);
+        hidden_args++;
+    }
 
-    if (call->fun()->return_array())
+    EmitCall(call->fun(), (cell)argv.size() + hidden_args);
+
+    if (call->fun()->return_array() && !call->fun()->is_native())
         __ emit(OP_POP_PRI);
+}
+
+void CodeGenerator::EmitNativeCallHiddenArg(CallExpr* call) {
+    TrackTempHeapAlloc(call, 1);
+
+    auto fun = call->fun();
+
+    ArrayData array;
+    BuildCompoundInitializer(fun->return_type(), nullptr, &array);
+
+    cell retsize = call->fun()->return_type()->CellStorageSize();
+    assert(retsize);
+
+    __ emit(OP_HEAP, retsize * sizeof(cell));
+
+    auto info = fun->return_array();
+    if (array.iv.empty()) {
+        __ emit(OP_CONST_PRI, 0);
+        __ emit(OP_FILL, retsize);
+    } else {
+        if (!info->iv_size) {
+            // No initializer, so we should have no data.
+            assert(array.data.empty());
+            assert(array.zeroes);
+
+            info->iv_size = (cell_t)array.iv.size();
+            info->dat_addr = data_.dat_address();
+            info->zeroes = array.zeroes;
+            data_.Add(std::move(array.iv));
+        }
+
+        cell dat_addr = info->dat_addr;
+        cell iv_size = info->iv_size;
+        assert(iv_size);
+        assert(info->zeroes);
+
+        __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, info->zeroes, 0);
+    }
+
+    __ emit(OP_PUSH_ALT);
 }
 
 void

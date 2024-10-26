@@ -52,3 +52,4 @@ native void copy_2d_array_to_callback(const int[] flat_array, int length, int st
 native void assert_eq(any a1, any a2);
 
 native void print_test_struct(TestStruct x);
+native TestStruct add_test_structs(TestStruct a, TestStruct b);
