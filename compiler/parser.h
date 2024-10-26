@@ -38,7 +38,7 @@ class Parser
     Parser(CompileContext& cc, Semantics* sema);
     ~Parser();
 
-    static bool PreprocExpr(cell* val, Type** type);
+    static bool PreprocExpr(cell* val, QualType* type);
 
     ParseTree* Parse();
 
