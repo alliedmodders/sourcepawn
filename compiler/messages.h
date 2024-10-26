@@ -159,7 +159,7 @@ static const char* errmsg[] = {
     /*132*/ "cannot coerce non-object type %s to object type %s\n",
     /*133*/ "cannot coerce unrelated object types %s and %s\n",
     /*134*/ "type mismatch (expected \"%s\", got \"%s\")\n",
-    /*135*/ "cannot use enum struct type \"%s\" in natives\n",
+    /*135*/ "unused135\n",
     /*136*/ "reference is redundant, enum struct types are array-like\n",
     /*137*/ "cannot mix reference and array types\n",
     /*138*/ "const was specified twice\n",
