@@ -239,6 +239,8 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
         }
         if (formal_elt->isAny() && actual_elt->hasCellSize())
             return true;
+        if (actual_elt->isAny() && formal_elt->hasCellSize())
+            return true;
     }
 
     return DiagnoseFailure();
