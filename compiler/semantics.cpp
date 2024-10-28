@@ -2138,7 +2138,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         // If the input type is an index into an array, create an implicit
         // array type to represent the slice.
         Type* type = val->type();
-        if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR)
+        if ((val->ident == iARRAYCELL || val->ident == iARRAYCHAR) && !type->isEnumStruct())
             type = types_->defineArray(type, 0);
 
         TypeChecker tc(param, arg->type(), type, TypeChecker::Argument);
