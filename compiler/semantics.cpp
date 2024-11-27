@@ -3170,7 +3170,7 @@ void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
 
     if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
         Decl* sym = expr->decl();
-        assert(sym->vclass() == sGLOBAL);
+        assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
         assert(sym->as<VarDecl>());
 
         def->sym = sym->as<VarDecl>();
