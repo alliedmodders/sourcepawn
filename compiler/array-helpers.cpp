@@ -548,7 +548,7 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     if (!var)
         return false;
 
-    assert(var->vclass() == sGLOBAL);
+    assert(var->vclass() == sGLOBAL || var->vclass() == sSTATIC);
 
     TypeChecker tc(expr, type_, var->type(), TypeChecker::Argument);
     if (!tc.Check())
