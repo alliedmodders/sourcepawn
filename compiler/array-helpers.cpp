@@ -957,6 +957,7 @@ void CompoundEmitter::AddInlineEnumStruct(EnumStructDecl* es, ArrayExpr* array) 
     auto field_list = &es->fields();
     auto field_iter = field_list->begin();
 
+    size_t start_pos = data_size();
     for (const auto& item : array->exprs()) {
         if (StringExpr* expr = item->as<StringExpr>()) {
             // Substrings can only appear in an enum struct. Normal 2D
@@ -981,6 +982,12 @@ void CompoundEmitter::AddInlineEnumStruct(EnumStructDecl* es, ArrayExpr* array) 
         assert(field_iter != field_list->end());
         field_iter++;
     }
+
+    size_t emitted = data_size() - start_pos;
+    if (emitted < es->array_size())
+        pending_zeroes_ += es->array_size() - emitted;
+
+    assert(data_size() - start_pos == es->array_size());
 }
 
 void CompoundEmitter::AddInlineArray(LayoutFieldDecl* field, ArrayExpr* array) {
