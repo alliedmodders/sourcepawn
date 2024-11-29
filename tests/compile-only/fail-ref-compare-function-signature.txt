@@ -1,0 +1,4 @@
+(8) : error 100: function prototypes do not match
+(11) : error 100: function prototypes do not match
+(14) : error 100: function prototypes do not match
+(17) : error 100: function prototypes do not match
