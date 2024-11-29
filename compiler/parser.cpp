@@ -1962,11 +1962,18 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     if (!lexer_->need('{'))
         return nullptr;
 
+    AutoCountErrors errors;
+
     MemberFunctionDecl* getter = nullptr;
     MemberFunctionDecl* setter = nullptr;
     while (!lexer_->match('}')) {
         if (!parse_methodmap_property_accessor(map, ident, type, &getter, &setter))
             lexer_->lexclr(TRUE);
+        if (!lexer_->freading()) {
+            if (errors.ok())
+                lexer_->need('}');
+            break;
+        }
     }
 
     lexer_->require_newline(TerminatorPolicy::Newline);
