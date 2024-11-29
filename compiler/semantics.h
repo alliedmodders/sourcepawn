@@ -251,6 +251,7 @@ class Semantics final
     void CheckVoidDecl(const declinfo_t* decl, int variable);
 
     bool CheckScalarType(Expr* expr);
+    bool IsThisAtom(sp::Atom* atom);
 
   private:
     CompileContext& cc_;
@@ -259,6 +260,7 @@ class Semantics final
     tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;
     bool pending_heap_allocation_ = false;
+    sp::Atom* this_atom_ = nullptr;
 };
 
 class AutoEnterScope final
