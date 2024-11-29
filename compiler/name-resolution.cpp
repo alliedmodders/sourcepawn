@@ -1138,8 +1138,8 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
 
     auto& cc = sc.cc();
     if (extends_) {
-        auto parent = FindSymbol(cc.globals(), extends_);
-        parent_ = MethodmapDecl::LookupMethodmap(parent);
+        if (auto parent = FindSymbol(cc.globals(), extends_))
+            parent_ = MethodmapDecl::LookupMethodmap(parent);
         if (!parent_)
             report(pos_, 102) << "methodmap" << extends_;
     }
