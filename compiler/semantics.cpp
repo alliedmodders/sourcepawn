@@ -177,6 +177,8 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (type->isArray() || type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
             return false;
+        if (type->isEnumStruct() && IsThisAtom(decl->name()))
+            decl->mutable_type_info()->is_const = false;
         if (decl->vclass() == sLOCAL)
             pending_heap_allocation_ = true;
         return true;
@@ -3270,6 +3272,12 @@ bool Semantics::CheckRvalue(const token_pos_t& pos, const value& val) {
         }
     }
     return true;
+}
+
+bool Semantics::IsThisAtom(sp::Atom* atom) {
+    if (!this_atom_)
+        this_atom_ = cc_.atom("this");
+    return atom == this_atom_;
 }
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {
