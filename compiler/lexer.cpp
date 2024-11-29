@@ -651,7 +651,7 @@ void Lexer::HandleSkippedSection() {
 
                     if (!IsSkipping())
                         return;
-                    break;
+                    continue;
 
                 default:
                     continue;
