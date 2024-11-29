@@ -337,6 +337,9 @@ static bool funcarg_compare(QualType formal, QualType actual) {
         }
     }
 
+    if (formal_type->isReference() != actual_type->isReference())
+        return false;
+
     if (!matchtag(formal_type, actual_type, MATCHTAG_SILENT | MATCHTAG_FUNCARG))
         return false;
     return true;
