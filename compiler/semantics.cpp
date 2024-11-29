@@ -730,7 +730,9 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
             // If it's an outparam, also mark it as read.
             if (sym->vclass() == sARGUMENT &&
-                (sym->type()->isReference() || sym->type()->isArray()))
+                (sym->type()->isReference() ||
+                 sym->type()->isArray() ||
+                 sym->type()->isEnumStruct()))
             {
                 markusage(sym, uREAD);
             }
