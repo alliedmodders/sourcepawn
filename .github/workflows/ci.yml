@@ -23,12 +23,6 @@ jobs:
         include:
           - os: windows-latest
             build_type: optimize
-            build_target: arm
-          - os: windows-latest
-            build_type: debug
-            build_target: arm
-          - os: windows-latest
-            build_type: optimize
             build_target: arm64
           - os: windows-latest
             build_type: debug
