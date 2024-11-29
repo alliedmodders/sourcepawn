@@ -1501,7 +1501,7 @@ CodeGenerator::EmitRvalue(value* lval)
             auto var = lval->sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
               __ emit(OP_LOAD_S_PRI, var->addr());
-            else
+            else if (!(var->type()->isArray() || var->type()->isEnumStruct()))
               __ emit(OP_LOAD_PRI, var->addr());
             break;
         }
