@@ -253,6 +253,9 @@ class Semantics final
     bool CheckScalarType(Expr* expr);
     bool IsThisAtom(sp::Atom* atom);
 
+    bool IsIncluded(Decl* expr);
+    bool IsIncludedStock(VarDeclBase* expr);
+
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;
