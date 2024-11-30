@@ -1403,7 +1403,7 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         EmitExpr(stmt->expr());
 
         const auto& v = stmt->expr()->val();
-        if (v.type()->isArray())
+        if (v.type()->isArray() || v.type()->isEnumStruct())
             EmitReturnArrayStmt(stmt);
     } else {
         /* this return statement contains no expression */
