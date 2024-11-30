@@ -210,3 +210,7 @@ This release contains a number of language changes.
  - The `__nullable__` and destructor syntax for handles have been re-introduced.
  - Built-in defines and constants are now defined by an in-memory implicit include.
  - `#endinput` is no longer necessary. `#include` will no longer double-include.
+
+### SourcePawn 1.13
+
+SourcePawn 1.13 is currently in development.
