@@ -361,7 +361,7 @@ static void setconfig(const char* root) {
 void setcaption() {
     printf("SourcePawn Compiler %s\n", SM_VERSION_STRING);
     printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-    printf("Copyright (c) 2004-2021 AlliedModders LLC\n\n");
+    printf("Copyright (c) 2004-2024 AlliedModders LLC\n\n");
 }
 
 } // namespace cc
