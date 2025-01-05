@@ -1060,6 +1060,28 @@ SmxV1Image::GetFileName(size_t index) const
   return debug_names_ + debug_files_[index].name;
 }
 
+size_t
+SmxV1Image::NumFunctions() const {
+  if (rtti_methods_) {
+    return rtti_methods_->row_count;
+  }
+  return 0;
+}
+
+const char*
+SmxV1Image::GetFunctionName(size_t index, const char** filename) const {
+  if (rtti_methods_) {
+    if (index >= rtti_methods_->row_count)
+      return nullptr;
+
+    const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, index);
+    if (filename)
+      *filename = LookupFile(method->pcode_start);
+    return names_ + method->name;
+  }
+  return nullptr;
+}
+
 template <typename SymbolType, typename DimType>
 bool
 SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr, uint32_t& index) const
