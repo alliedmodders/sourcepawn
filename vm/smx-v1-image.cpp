@@ -715,8 +715,6 @@ SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table)
     const smx_rtti_debug_var* debug_var = getRttiRow<smx_rtti_debug_var>(rtti_table, i);
     if (debug_var->vclass > kVarClass_Max)
       return error("invalid debug variable class");
-    if (!validateSymbolAddress(debug_var->address, debug_var->vclass))
-      return false;
     if (!validateName(debug_var->name))
       return error("invalid debug variable name");
     if (debug_var->code_start > debug_var->code_end)
@@ -727,6 +725,9 @@ SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table)
       return error("invalid debug variable code end");
     if (!rtti_data_->validateType(debug_var->type_id))
       return error("invalid debug variable type");
+    std::shared_ptr<const sp::debug::Rtti> rtti_type = std::shared_ptr<const sp::debug::Rtti>(rtti_data_->typeFromTypeId(debug_var->type_id));
+    if (!rtti_type->isConst() && !validateSymbolAddress(debug_var->address, debug_var->vclass))
+      return false;
   }
   return true;
 }
