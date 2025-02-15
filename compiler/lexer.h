@@ -404,6 +404,10 @@ class Lexer
     bool lex_number(full_token_t* tok);
     void lex_float(full_token_t* tok, cell whole);
     cell litchar(int flags, bool* is_codepoint = nullptr);
+    void multilinestring(full_token_t* tok, std::string* data);
+    bool multilinestring_scan_whitespace(std::string& whitespace, const unsigned char** last_char, int quote_count);
+    void multilinestring_multi(full_token_t* tok, std::string* data, int quote_count);
+    void multilinestring_single(full_token_t* tok, std::string* data, int quote_count);
     void packedstring(full_token_t* tok, char term);
     void packedstring_char(std::string* data);
 
