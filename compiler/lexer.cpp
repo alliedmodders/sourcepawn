@@ -988,40 +988,48 @@ void Lexer::HandleMultiLineComment() {
     }
 }
 
-// Initial parse through the multiline string so we can find the whitespace that preceeds the closing quotes...
-bool Lexer::multilinestring_scan_whitespace(std::string& whitespace, const unsigned char** last_char, int quote_count)
+// Minimal multiline string verification, mainly targeting closing quotes.
+bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsigned char*& end, int quote_count)
 {
-    auto saved_pos = char_stream();
-    auto line_start_pos = char_stream();
-    bool only_whitespace_so_far = true;
+    auto start_pos = char_stream();
+    auto line_pos = char_stream();
+    end = char_stream();
+
+    bool only_whitespace = true;
     int current_quotes = 0;
-    *last_char = char_stream();
 
     while (true) {
         char c = peek();
         if (c == 0)
             return false;
+
         if (c == '\"') {
             if (++current_quotes == quote_count) {
-                if (!only_whitespace_so_far)
+                if (!only_whitespace)
                     return false;
                 break;
             }
-        } else {
-            current_quotes = 0;
+            advance();
+            continue;
         }
+
+        current_quotes = 0;
+
         if (IsNewline(c)) {
             if (advance() == '\r' && !match_char('\n'))
                 return false;
-            line_start_pos = char_stream();
-            *last_char = char_stream();
-            only_whitespace_so_far = true;
+            line_pos = char_stream();
+            end = char_stream();
+            only_whitespace = true;
             continue;
+        } else {
+            only_whitespace = only_whitespace && IsSpace(c);
         }
+
         advance();
     }
 
-    backtrack(line_start_pos);
+    backtrack(line_pos);
 
     while (true) {
         char c = peek();
@@ -1033,103 +1041,109 @@ bool Lexer::multilinestring_scan_whitespace(std::string& whitespace, const unsig
         }
     }
 
-    backtrack(saved_pos);
+    backtrack(start_pos);
     return true;
 }
 
-void Lexer::multilinestring_multi(full_token_t* tok, std::string* data, int quote_count) {
-    const unsigned char* last_char;
+void Lexer::multilinestring_multi(std::string* data, int quote_count) {
+    const unsigned char* end = nullptr;
     std::string whitespace;
-    if (!multilinestring_scan_whitespace(whitespace, &last_char, quote_count)) {
+    if (!multilinestring_get_whitespace(whitespace, end, quote_count)) {
         report(37);
         return;
     }
-    printf("whitespace = '%s'\n", whitespace.c_str());
 
-    const unsigned char* quote_start_pos = nullptr;
-    bool eat_whitespace = true;
+    const unsigned char* quote_pos = nullptr;
+    bool ate_whitespace = false;
+    bool only_whitespace = true;
 
-    //__debugbreak();
     while (true) {
         char c = peek();
         assert(c != 0);
-        printf("mc = '%c'\n", c);
-        if (eat_whitespace) {
-            eat_whitespace = false;
-            for (char w : whitespace) {
-                printf("eating whitespace... %d %d\n", w, c);
-                if (w != c) {
-                    report(37);
-                    return;
+
+        if (!ate_whitespace) {
+            ate_whitespace = true;
+            if (!IsNewline(c)) {
+                for (char w : whitespace) {
+                    if (w != c) {
+                        report(37);
+                        return;
+                    }
+                    c = advance();
                 }
-                c = advance();
+                c = peek();
             }
-            c = peek();
-            printf("mc = '%c'\n", c);
         }
+
         if (c == '\"') {
-            printf("quote found!\n");
-            if (quote_start_pos) {
-                if (char_stream() - quote_start_pos == quote_count-1) {
-                    printf("found enough quotes; breaking!\n");
+            if (quote_pos) {
+                if (char_stream() - quote_pos == quote_count-1) {
                     break;
                 }
             } else {
-                quote_start_pos = char_stream();
+                quote_pos = char_stream();
             }
             advance();
             continue;
         } else {
-            if (quote_start_pos) {
-                for (int i = 0; i < (char_stream() - quote_start_pos); i++) {
+            if (quote_pos) {
+                for (int i = 0; i < (char_stream() - quote_pos); i++) {
                     data->push_back('\"');
                 }
-                quote_start_pos = nullptr;
+                quote_pos = nullptr;
             }
+            only_whitespace = only_whitespace && (IsSpace(c) || IsNewline(c));
         }
+
         if (IsNewline(c)) {
             if (advance() == '\r' && !match_char('\n'))
                 return;
-            if (char_stream() == last_char) {
+            if (char_stream() == end) {
+                if (only_whitespace) {
+                    // A fix for empty lines...
+                    data->push_back('\n');
+                }
+                // skip any whitespace....
                 for (int i = whitespace.length() + quote_count - 1; i; --i) {
                     advance();
                 }
-                break;
+                return;
             }
             data->push_back('\n');
-            eat_whitespace = true;
-            quote_start_pos = nullptr;
+            ate_whitespace = false;
+            only_whitespace = true;
+            quote_pos = nullptr;
             continue;
         }
+
         packedstring_char(data);
     }
 }
 
-void Lexer::multilinestring_single(full_token_t* tok, std::string* data, int quote_count) {
-    const unsigned char* quote_start_pos = nullptr;
+void Lexer::multilinestring_single(std::string* data, int quote_count) {
+    const unsigned char* quote_pos = nullptr;
     while (true) {
         char c = peek();
-        printf("c = '%c'\n", c);
         if (c == 0)
             return;
         if (c == '\"') {
-            printf("quote found!\n");
-            if (quote_start_pos) {
-                if (char_stream() - quote_start_pos == quote_count-1) {
-                    printf("found enough quotes; breaking!\n");
-                    break;
+            if (quote_pos) {
+                if (char_stream() - quote_pos == quote_count - 1) {
+                    // we peek()'d the last quote!
+                    return;
                 }
             } else {
-                quote_start_pos = char_stream();
+                quote_pos = char_stream();
             }
             advance();
             continue;
         } else {
-            if (quote_start_pos) {
-                for (int i = 0; i < (char_stream() - quote_start_pos); i++) {
+            if (quote_pos) {
+                // push those quotes we were skipping since it's not the end...
+                for (int i = 0, count = (char_stream() - quote_pos); i < count; i++) {
                     data->push_back('\"');
                 }
-                quote_start_pos = nullptr;
+                quote_pos = nullptr;
             }
         }
         if (c == '\\') {
@@ -1140,14 +1154,11 @@ void Lexer::multilinestring_single(full_token_t* tok, std::string* data, int quo
             break;
         packedstring_char(data);
     }
-    tok->atom = cc_.atom(*data);
 }
 
-void Lexer::multilinestring(full_token_t* tok, std::string* data) {
-    // We have passed the first '\"' so eat at least two more...
-    assert(peek() == '\"' && peek2() == '\"');
-    match_char('\"');
-    match_char('\"');
+// On success, char_stream() will be pointing to the last double-quote character.  This is so we don't have to edit LexStringLiteral() 😇
+void Lexer::multilinestring(std::string* data) {
+    assert(match_char('\"') && match_char('\"'));
 
     int quote_count = 3;
 
@@ -1161,23 +1172,13 @@ void Lexer::multilinestring(full_token_t* tok, std::string* data) {
         advance();
     }
 
-    printf("quote_count = %d\n", quote_count);
-
     if (IsNewline(peek())) {
         if (advance() == '\r' && !match_char('\n'))
             return;
-        multilinestring_multi(tok, data, quote_count);
+        multilinestring_multi(data, quote_count);
     } else {
-        multilinestring_single(tok, data, quote_count);
+        multilinestring_single(data, quote_count);
     }
-    /*
-    // Leave one quote for the match_char() on return in LexStringLiteral...
-    while (quote_count-- > 1) {
-        if (!match_char('\"')) {
-            report(37);
-        }
-    }
-    */
 }
 
 void Lexer::packedstring(full_token_t* tok, char term) {
@@ -1185,10 +1186,12 @@ void Lexer::packedstring(full_token_t* tok, char term) {
     bool might_be_multiline = true;
     while (true) {
         char c = peek();
-        if (c == term && might_be_multiline) {
+        if (might_be_multiline && c == term) {
+            // packedstring() starts at the character after the opening-quote
+            // so first peek() found the second quote...
+            // and maybe peek2() will find a third...
             if (peek2() == term) {
-                printf("wow! multi found!\n");
-                multilinestring(tok, &data);
+                multilinestring(&data);
                 break;
             }
         }
