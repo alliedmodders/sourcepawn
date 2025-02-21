@@ -1158,7 +1158,9 @@ void Lexer::multilinestring_single(std::string* data, int quote_count) {
 
 // On success, char_stream() will be pointing to the last double-quote character.  This is so we don't have to edit LexStringLiteral() 😇
 void Lexer::multilinestring(std::string* data) {
-    assert(match_char('\"') && match_char('\"'));
+    assert(peek() == '\"' && peek2() == '\"');
+    advance();
+    advance();
 
     int quote_count = 3;
 
