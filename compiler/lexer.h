@@ -405,7 +405,7 @@ class Lexer
     void lex_float(full_token_t* tok, cell whole);
     cell litchar(int flags, bool* is_codepoint = nullptr);
     void multilinestring(std::string* data);
-    bool multilinestring_get_whitespace(std::string& whitespace, const unsigned char*& end, int quote_count);
+    bool multilinestring_get_indent(std::string& indent, const unsigned char*& end, int quote_count);
     void multilinestring_multi(std::string* data, int quote_count);
     void multilinestring_single(std::string* data, int quote_count);
     void packedstring(full_token_t* tok, char term);
