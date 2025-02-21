@@ -989,13 +989,13 @@ void Lexer::HandleMultiLineComment() {
 }
 
 // Minimal multiline string verification, mainly targeting closing quotes.
-bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsigned char*& end, int quote_count)
+bool Lexer::multilinestring_get_indent(std::string& indent, const unsigned char*& end, int quote_count)
 {
     auto start_pos = char_stream();
     auto line_pos = char_stream();
     end = char_stream();
 
-    bool only_whitespace = true;
+    bool only_indent = true;
     int current_quotes = 0;
 
     while (true) {
@@ -1005,7 +1005,7 @@ bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsign
 
         if (c == '\"') {
             if (++current_quotes == quote_count) {
-                if (!only_whitespace)
+                if (!only_indent)
                     return false;
                 break;
             }
@@ -1020,10 +1020,10 @@ bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsign
                 return false;
             line_pos = char_stream();
             end = char_stream();
-            only_whitespace = true;
+            only_indent = true;
             continue;
         } else {
-            only_whitespace = only_whitespace && IsSpace(c);
+            only_indent = only_indent && IsSpace(c);
         }
 
         advance();
@@ -1034,7 +1034,7 @@ bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsign
     while (true) {
         char c = peek();
         if (IsSpace(c)) {
-            whitespace.push_back(c);
+            indent.push_back(c);
             advance();
         } else {
             break;
@@ -1047,24 +1047,24 @@ bool Lexer::multilinestring_get_whitespace(std::string& whitespace, const unsign
 
 void Lexer::multilinestring_multi(std::string* data, int quote_count) {
     const unsigned char* end = nullptr;
-    std::string whitespace;
-    if (!multilinestring_get_whitespace(whitespace, end, quote_count)) {
+    std::string indent;
+    if (!multilinestring_get_indent(indent, end, quote_count)) {
         report(37);
         return;
     }
 
     const unsigned char* quote_pos = nullptr;
-    bool ate_whitespace = false;
-    bool only_whitespace = true;
+    bool ate_indent = false;
+    bool only_indent = true;
 
     while (true) {
         char c = peek();
         assert(c != 0);
 
-        if (!ate_whitespace) {
-            ate_whitespace = true;
+        if (!ate_indent) {
+            ate_indent = true;
             if (!IsNewline(c)) {
-                for (char w : whitespace) {
+                for (char w : indent) {
                     if (w != c) {
                         report(37);
                         return;
@@ -1092,26 +1092,26 @@ void Lexer::multilinestring_multi(std::string* data, int quote_count) {
                 }
                 quote_pos = nullptr;
             }
-            only_whitespace = only_whitespace && (IsSpace(c) || IsNewline(c));
+            only_indent = only_indent && (IsSpace(c) || IsNewline(c));
         }
 
         if (IsNewline(c)) {
             if (advance() == '\r' && !match_char('\n'))
                 return;
             if (char_stream() == end) {
-                if (only_whitespace) {
+                if (only_indent) {
                     // A fix for empty lines...
                     data->push_back('\n');
                 }
                 // skip any whitespace....
-                for (int i = whitespace.length() + quote_count - 1; i; --i) {
+                for (int i = indent.length() + quote_count - 1; i; --i) {
                     advance();
                 }
                 return;
             }
             data->push_back('\n');
-            ate_whitespace = false;
-            only_whitespace = true;
+            ate_indent = false;
+            only_indent = true;
             quote_pos = nullptr;
             continue;
         }
