@@ -1510,22 +1510,21 @@ Compiler::visitSWITCH(cell_t defaultOffset,
     }
   }
 
-  // First check whether the bounds are correct: if (a < LOW || a > HIGH);
-  // this check is valid whether or not we emit a sequential-optimized switch.
   cell_t low = cases[0].value;
-  if (low != 0) {
-    // negate it so we'll get a lower bound of 0.
-    low = -low;
-    __ lea(tmp, Operand(pri, low));
-  } else {
-    __ movl(tmp, pri);
-  }
+  if (low != INT_MIN && sequential) {
+    // First check whether the bounds are correct: if (a < LOW || a > HIGH);
+    if (low != 0) {
+      // negate it so we'll get a lower bound of 0.
+      low = -low;
+      __ lea(tmp, Operand(pri, low));
+    } else {
+      __ movl(tmp, pri);
+    }
 
-  cell_t high = abs(cases[0].value - cases[ncases - 1].value);
-  __ cmpl(tmp, high);
-  __ j(above, defaultCase->label());
+    cell_t high = abs(cases[0].value - cases[ncases - 1].value);
+    __ cmpl(tmp, high);
+    __ j(above, defaultCase->label());
 
-  if (sequential) {
     // Optimized table version. The tomfoolery below is because we only have
     // one free register... it seems unlikely pri or alt will be used given
     // that we're at the end of a control-flow point, but we'll play it safe.
