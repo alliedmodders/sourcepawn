@@ -261,7 +261,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     visited->at(arg->offset()) = true;
 
     Type* actual = nullptr;
-    if (auto expr = field->value->as<StringExpr>()) {
+    if (field->value->as<StringExpr>()) {
         actual = types_->defineArray(types_->type_char(), 0);
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         actual = expr->type();
@@ -878,7 +878,7 @@ bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
             report(expr, 226) << left_val.sym->name(); // self-assignment
     }
 
-    if (auto left_array = left_val.type()->as<ArrayType>()) {
+    if (left_val.type()->as<ArrayType>()) {
         TypeChecker tc(expr, left_val.type(), right_val.type(), TypeChecker::Assignment);
         if (!tc.Coerce())
             return false;
