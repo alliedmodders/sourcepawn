@@ -29,6 +29,7 @@ LIB-Debug/
 
 # AMBuild build directories
 build/
+objdir/
 obj-*/
 *~
 *.rej

@@ -149,8 +149,10 @@ RttiParser::decodeNew()
 Rtti*
 RttiParser::decode()
 {
+  Rtti* result = nullptr;
   is_const_ = match(cb::kConst) || is_const_;
 
+  bool by_ref = match(cb::kByRef);
   uint8_t type = bytes_[offset_++];
   switch (type) {
   case cb::kBool:
@@ -159,18 +161,21 @@ RttiParser::decode()
   case cb::kChar8:
   case cb::kAny:
   case cb::kTopFunction:
-    return new Rtti(type);
+    result = new Rtti(type);
+    break;
 
   case cb::kFixedArray:
   {
     uint32_t size = decodeUint32();
     Rtti* inner = decode();
-    return new Rtti(type, size, inner);
+    result = new Rtti(type, size, inner);
+    break;
   }
   case cb::kArray:
   {
     Rtti* inner = decode();
-    return new Rtti(type, inner);
+    result = new Rtti(type, inner);
+    break;
   }
   case cb::kEnum:
   case cb::kTypedef:
@@ -179,12 +184,16 @@ RttiParser::decode()
   case cb::kEnumStruct:
   {
     uint32_t index = decodeUint32();
-    return new Rtti(type, index);
+    result = new Rtti(type, index);
+    break;
   }
   case cb::kFunction:
-    return decodeFunction();
+    result = decodeFunction();
+    break;
   }
-  return nullptr;
+  if (by_ref)
+    result->setByRef();
+  return result;
 }
 
 Rtti*
@@ -236,6 +245,10 @@ RttiParser::validate()
     return false;
   // A type can start with a |const| indicator.
   match(cb::kConst);
+  if (offset_ >= length_)
+    return false;
+  // Argument types in .dbg.locals can be passed by reference.
+  match(cb::kByRef);
   if (offset_ >= length_)
     return false;
   uint8_t type = bytes_[offset_++];
@@ -299,6 +312,8 @@ RttiParser::validateFunction()
       return false;
     // A by_ref indicator is allowed here.
     match(cb::kConst);
+    if (offset_ >= length_)
+      return false;
     match(cb::kByRef);
     if (!validate())
       return false;
