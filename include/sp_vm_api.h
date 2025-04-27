@@ -24,7 +24,7 @@
 
 /** SourcePawn Engine API Versions */
 #define SOURCEPAWN_ENGINE2_API_VERSION 0x10
-#define SOURCEPAWN_API_VERSION 0x0213
+#define SOURCEPAWN_API_VERSION 0x0214
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -365,6 +365,20 @@ class IPluginDebugInfo
      * @return        Full file name of source file or NULL if not found.
      */
     virtual const char* GetFileName(size_t index) = 0;
+
+    /**
+     * @brief Returns the number of functions defined in this plugin.
+     */
+    virtual size_t NumFunctions() = 0;
+
+    /**
+     * @brief Returns the function name at the given index.
+     *
+     * @param index   Index of the function in the list of functions.
+     * @param file    Output pointer to store filename where the function is defined in.
+     * @return        Name of the function or NULL if not found.
+     */
+    virtual const char* GetFunctionName(size_t index, const char** file) = 0;
 };
 
 class ICompilation;

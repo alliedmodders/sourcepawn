@@ -59,6 +59,8 @@ class LegacyImage
   virtual bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const = 0;
   virtual size_t NumFiles() const = 0;
   virtual const char* GetFileName(size_t index) const = 0;
+  virtual size_t NumFunctions() const = 0;
+  virtual const char* GetFunctionName(size_t index, const char** filename) const = 0;
   virtual bool HasRtti() const = 0;
   virtual const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const = 0;
 };
@@ -140,6 +142,12 @@ class EmptyImage : public LegacyImage
   }
   const char* GetFileName(size_t index) const override {
     return nullptr;
+  }
+  size_t NumFunctions() const override {
+      return 0;
+  }
+  const char* GetFunctionName(size_t index, const char** filename) const override {
+      return nullptr;
   }
   const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const override {
     return nullptr;

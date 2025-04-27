@@ -598,6 +598,16 @@ PluginRuntime::GetFileName(size_t index)
   return image_->GetFileName(index);
 }
 
+size_t
+PluginRuntime::NumFunctions() {
+    return image_->NumFunctions();
+}
+
+const char*
+PluginRuntime::GetFunctionName(size_t index, const char** filename) {
+    return image_->GetFunctionName(index, filename);
+}
+
 int
 PluginRuntime::LookupFunctionAddress(const char* function, const char* file, ucell_t* addr)
 {
