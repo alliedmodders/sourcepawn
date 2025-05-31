@@ -1293,29 +1293,27 @@ CodeGenerator::EmitCallUserOpExpr(CallUserOpExpr* expr)
 }
 
 void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
-    int numdim = 0;
-    auto& exprs = expr->exprs();
     const auto& type = expr->type();
-    for (size_t i = 0; i < exprs.size(); i++) {
-        EmitExpr(exprs[i]);
-
-        if (i == exprs.size() - 1 && type->isChar())
-            __ emit(OP_STRADJUST_PRI);
-
-        __ emit(OP_PUSH_PRI);
-        numdim++;
-    }
-
     auto innermost = type;
     while (innermost->isArray())
         innermost = innermost->to<ArrayType>()->inner();
 
-    if (auto es = innermost->asEnumStruct()) {
-        // The last dimension is implicit in the size of the enum struct. Note
-        // that when synthesizing a NewArrayExpr for old-style declarations,
-        // it is impossible to have an enum struct.
-        // :TODO: test this
-        __ emit(OP_PUSH_C, es->array_size());
+    int numdim = 0;
+    auto& exprs = expr->exprs();
+    for (size_t i = 0; i < exprs.size(); i++) {
+        EmitExpr(exprs[i]);
+
+        if (i == exprs.size() - 1) {
+            if (innermost->isChar()) {
+                __ emit(OP_STRADJUST_PRI);
+            } else if (auto es = innermost->asEnumStruct(); es && es->array_size() > 1) {
+                cell_t max_size = kMaxCells / es->array_size();
+                __ emit(OP_BOUNDS, max_size);
+                __ emit(OP_SMUL_C, es->array_size());
+            }
+        }
+
+        __ emit(OP_PUSH_PRI);
         numdim++;
     }
 

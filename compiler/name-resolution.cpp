@@ -80,7 +80,7 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
             return false;
     }
 
-    if (auto enum_type = ti->type->asEnumStruct()) {
+    if (ti->type->asEnumStruct()) {
         if (ti->reference) {
             report(pos, 136);
             return false;
