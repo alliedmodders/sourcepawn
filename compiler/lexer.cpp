@@ -1087,7 +1087,7 @@ void Lexer::multilinestring_multi(std::string* data, int quote_count) {
             continue;
         } else {
             if (quote_pos) {
-                for (int i = 0; i < (char_stream() - quote_pos); i++) {
+                for (int i = 0, count = (char_stream() - quote_pos); i < count; i++) {
                     data->push_back('\"');
                 }
                 quote_pos = nullptr;
