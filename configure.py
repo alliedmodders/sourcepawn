@@ -28,11 +28,12 @@ except:
 		sys.stderr.write('AMBuild must be installed to build this project.\n')
 		sys.stderr.write('http://www.alliedmods.net/ambuild\n')
 	sys.exit(1)
-from pkg_resources import parse_version
+
+from ambuild2.frontend.version import Version
 
 # Hack to show a decent upgrade message, which wasn't done until 2.2.
 ambuild_version = getattr(run, 'CURRENT_API', '2.1')
-if parse_version(ambuild_version) < parse_version("2.2.3"):
+if Version.parse(ambuild_version) < Version.parse("2.2.3"):
 	sys.stderr.write("AMBuild 2.2.3 or higher is required; please update\n")
 	sys.exit(1)
 

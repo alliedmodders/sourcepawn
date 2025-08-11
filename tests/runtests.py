@@ -376,7 +376,7 @@ class Test(object):
     if not line.startswith('//'):
       return False
 
-    m = re.match("// ([^:]+): (.+)\s*$", line)
+    m = re.match("// ([^:]+): (.+)\\s*$", line)
     if m is None:
       return False
 
