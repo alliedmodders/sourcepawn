@@ -1,4 +1,0 @@
-// egg
-stock Egg()
-{
-}
