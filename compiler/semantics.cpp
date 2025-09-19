@@ -235,7 +235,12 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (visited[i])
             continue;
         auto arg = ps->fields()[i];
+        
+#ifdef NDEBUG
+        if (arg->type()->as<ArrayType>() != nullptr) {
+#else
         if (auto at = arg->type()->as<ArrayType>()) {
+#endif
             assert(at->inner()->isChar());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
