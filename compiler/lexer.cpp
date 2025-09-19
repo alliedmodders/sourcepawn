@@ -1202,7 +1202,16 @@ void Lexer::packedstring(full_token_t* tok, char term) {
         might_be_multiline = false;
         if (c == '\\') {
             if (MaybeHandleLineContinuation())
+            {
+                // New line was escaped, eat all leading whitespace to match previous behavior
+                while (true) {
+                    char c = peek();
+                    if (!IsSpace(c))
+                        break;
+                    advance();
+                }
                 continue;
+            }
         }
         if (IsNewline(c))
             break;
