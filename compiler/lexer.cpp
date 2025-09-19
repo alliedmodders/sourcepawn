@@ -926,7 +926,16 @@ void Lexer::HandleNewline(char c, char continuation) {
     if (continuation != '\\') {
         state_.tokline++;
         tokens_on_line_ = 0;
+    } else {
+        // New line was escaped, eat all leading whitespace
+        while (true) {
+            char c = peek();
+            if (!IsSpace(c))
+                break;
+            advance();
+        }
     }
+
     state_.line_start = char_stream();
 }
 
