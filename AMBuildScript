@@ -393,7 +393,6 @@ class SourcePawn(object):
         vars = self.vars.copy()
         vars['binary'] = binary
 
-        builder.Build('compiler/AMBuilder', vars)
         builder.Build('libsmx/AMBuilder', vars)
         builder.Build('vm/AMBuilder', vars)
 
@@ -427,6 +426,10 @@ class SourcePawn(object):
         binary = self.root.Program(builder, 'spcomp')
         
         self.SetupBinForArch(binary, builder)
+
+        vars = self.vars.copy()
+        vars['binary'] = binary
+        builder.Build('compiler/AMBuilder', vars)
 
         binary.sources = [
             'compiler/driver.cpp',
