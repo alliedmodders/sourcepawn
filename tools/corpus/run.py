@@ -2,7 +2,10 @@
 import argparse
 import multiprocessing as mp
 import os
-import progressbar2 as progressbar
+try:
+    import progressbar2 as progressbar
+except:
+    import progressbar
 import queue
 import re
 import shutil
