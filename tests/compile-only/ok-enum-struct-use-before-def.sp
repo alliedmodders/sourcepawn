@@ -5,8 +5,6 @@
 
 #define BASE_EFFECTOR_CYCLE 1.0
 
-Effector g_UserEffectorData[MAXPLAYERS+1][MAX_EFFECTOR_CONCURRENT];
-
 enum struct Interface_Effector
 {
 	float cycle;
@@ -23,6 +21,8 @@ enum struct Effector
 	int index;
 	any data[MAX_EFFECTOR_PARAMETER];
 }
+
+Effector g_UserEffectorData[MAXPLAYERS+1][MAX_EFFECTOR_CONCURRENT];
 
 public void OnPluginStart(){
 

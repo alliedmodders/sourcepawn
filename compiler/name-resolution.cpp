@@ -365,12 +365,19 @@ bool ConstDecl::EnterNames(SemaContext& sc) {
     if (!CheckNameRedefinition(sc, name(), pos(), vclass()))
         return false;
     DefineSymbol(sc, this, vclass());
+
+    // Bind early to make the constant value available during name-binding.
+    if (!sc.func() && !Bind(sc))
+        return false;
     return true;
 }
 
 bool
 ConstDecl::Bind(SemaContext& sc)
 {
+    if (already_bound_)
+        return true;
+
     if (sc.func() && !EnterNames(sc))
         return false;
 
@@ -390,10 +397,15 @@ ConstDecl::Bind(SemaContext& sc)
 
     AutoErrorPos aep(pos_);
     matchtag(type_.type, type, 0);
+
+    already_bound_ = true;
     return true;
 }
 
 bool VarDeclBase::Bind(SemaContext& sc) {
+    if (already_bound_)
+        return true;
+
     // |int x = x| should bind to outer x, not inner.
     if (init_)
         init_rhs()->Bind(sc);
@@ -434,6 +446,17 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     // LHS bind should now succeed.
     if (init_)
         init_->left()->BindLval(sc);
+    return true;
+}
+
+bool VarDeclBase::EnterNames(SemaContext& sc) {
+    if (vclass_ != sGLOBAL && vclass_ != sSTATIC)
+        return true;
+
+    if (!Bind(sc))
+        return false;
+
+    already_bound_ = true;
     return true;
 }
 

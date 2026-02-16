@@ -324,6 +324,7 @@ class VarDeclBase : public Decl
                 int vclass, bool is_public, bool is_static, bool is_stock, Expr* initializer);
 
     bool Bind(SemaContext& sc) override;
+    bool EnterNames(SemaContext& sc) override;
     void ProcessUses(SemaContext& sc) override;
 
     // Bind only the typeinfo.
@@ -370,6 +371,7 @@ class VarDeclBase : public Decl
     bool is_read_ : 1;
     bool is_written_ : 1;
     bool implicit_dynamic_array_ : 1;
+    bool already_bound_ : 1;
     Label addr_;
 };
 
@@ -416,7 +418,8 @@ class ConstDecl : public VarDecl
     ConstDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
               Expr* expr)
       : VarDecl(StmtKind::ConstDecl, pos, name, type, vclass, false, false, false, nullptr),
-        expr_(expr)
+        expr_(expr),
+        already_bound_(false)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -429,6 +432,7 @@ class ConstDecl : public VarDecl
   private:
     Expr* expr_;
     cell value_;
+    bool already_bound_ : 1;
 };
 
 class EnumFieldDecl : public Decl

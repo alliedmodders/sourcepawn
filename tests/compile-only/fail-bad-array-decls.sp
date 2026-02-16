@@ -1,5 +1,3 @@
-int[] gInvalid = {1};
-
 public OnPluginStart()
 {
   int v = 10;

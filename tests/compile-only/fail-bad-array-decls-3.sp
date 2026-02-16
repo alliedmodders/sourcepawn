@@ -1,0 +1,1 @@
+int[] gInvalid = {1};

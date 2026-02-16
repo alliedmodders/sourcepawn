@@ -1,0 +1,1 @@
+(1) : error 162: cannot create dynamic arrays here - did you mean to create a fixed-length array?
