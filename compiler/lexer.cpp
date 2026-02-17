@@ -2713,10 +2713,17 @@ std::string Lexer::SkimMacroArgument() {
 
     const unsigned char* start = nullptr;
     int nparens = 0;
+    char closer = 0;
     while (freading()) {
         char c = peek();
         if (c == '\0')
             break;
+        if (closer) {
+            if (c == closer)
+                closer = 0;
+            advance();
+            continue;
+        }
         if (c == '/' && peek2() == '/') {
             AddText(&text, &start, char_stream(), ' ');
             HandleSingleLineComment();
@@ -2741,6 +2748,8 @@ std::string Lexer::SkimMacroArgument() {
             if (nparens == 0)
                 break;
             nparens--;
+        } else if (c == '"') {
+            closer = c;
         } else if (c == ',' && !nparens) {
             break;
         }

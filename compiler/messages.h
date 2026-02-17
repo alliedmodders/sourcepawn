@@ -336,4 +336,5 @@ static const char* errmsg_ex[] = {
     /*450*/ "no viable conversion from \"%s\" to \"%s\"\n",
     /*451*/ "function %s returns an array but return type is not marked as an array\n",
     /*452*/ "multiple command-line source files are no longer supported\n",
+    /*453*/ "unexpected end of token stream\n",
 };

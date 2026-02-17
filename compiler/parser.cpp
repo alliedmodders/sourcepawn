@@ -833,6 +833,11 @@ Expr*
 Parser::hier2()
 {
     int tok = lexer_->lex();
+    if (tok == 0) {
+        report(453);
+        return nullptr;
+    }
+
     auto pos = lexer_->pos();
     switch (tok) {
         case tINC: /* ++lval */
