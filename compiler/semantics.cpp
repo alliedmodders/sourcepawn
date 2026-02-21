@@ -890,28 +890,32 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     }
 
     int oper_tok = NormalizeBinaryToken(expr_->token());
-    if (!oper_tok &&
-        !checkval_string(&left_val, &right_val) &&
-        !expr_->assignop().sym)
+    if (oper_tok) {
+        // This is a compound assignment, the binary operation is checked later.
+        return true;
+    }
+
+    // If assignment is operator overloaded, assume the assignment is valid.
+    if (expr_->assignop().sym)
+        return true;
+
+    // Allow trivial conversion between char/int.
+    if ((left_val.type()->isChar() && right_val.type()->isInt()) ||
+        (left_val.type()->isInt() && right_val.type()->isInt()))
     {
-        if (left_val.type()->isArray() &&
-            ((left_val.type()->isChar() && !right_val.type()->isChar()) ||
-             (!left_val.type()->isChar() && right_val.type()->isChar())))
-        {
-            report(expr_, 179) << left_val.type() << right_val.type();
+        return true;
+    }
+
+    if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
+        if (left_val.type() != right_val.type()) {
+            report(expr_, 134) << left_val.type() << right_val.type();
             return false;
         }
-        if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
-            if (left_val.type() != right_val.type()) {
-                report(expr_, 134) << left_val.type() << right_val.type();
-                return false;
-            }
 
-            auto es = left_val.type()->asEnumStruct();
-            expr_->set_array_copy_length(es->array_size());
-        } else if (!left_val.type()->isArray()) {
-            matchtag(left_val.type(), right_val.type(), TRUE);
-        }
+        auto es = left_val.type()->asEnumStruct();
+        expr_->set_array_copy_length(es->array_size());
+    } else if (!left_val.type()->isArray()) {
+        matchtag(left_val.type(), right_val.type(), TRUE);
     }
     return true;
 }
