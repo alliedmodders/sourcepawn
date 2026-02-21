@@ -33,24 +33,23 @@
 using namespace sp;
 using namespace SourcePawn;
 
-const char* OpcodeNames[] = {
-#define G(op, text, cells) text,
-#define U(op, text) text,
-  OPCODE_LIST(G, U)
-#undef U
-#undef G
-  NULL
-};
+const char* GetOpcodeName(OPCODE op) {
+    static std::vector<const char *> names(OPCODES_LAST, nullptr);
+#define FOR_EACH_OPCODE(op, val, text, cells) names[OP_##op] = text;
+    OPCODE_LIST(FOR_EACH_OPCODE)
+#undef FOR_EACH_OPCODE
+    return names[op];
+}
 
 namespace sp {
 
-const int kOpcodeSizes[] = {
-#define G(op, text, cells) cells,
-#define U(op, text) 0,
-  OPCODE_LIST(G, U)
-#undef U
-#undef G
-};
+int GetOpcodeSize(OPCODE op) {
+    static std::vector<int> sizes(OPCODES_LAST, 0);
+#define FOR_EACH_OPCODE(op, val, text, cells) sizes[OP_##op] = cells;
+    OPCODE_LIST(FOR_EACH_OPCODE)
+#undef FOR_EACH_OPCODE
+    return sizes[op];
+}
 
 int
 GetCaseTableSize(const uint8_t* cip)
@@ -71,7 +70,7 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
   }
 
   OPCODE op = (OPCODE)*cip;
-  fprintf(fp, " %s ", OpcodeNames[op]);
+  fprintf(fp, " %s ", GetOpcodeName(op));
 
   switch (op) {
     case OP_PUSH_C:

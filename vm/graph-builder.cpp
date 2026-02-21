@@ -323,7 +323,7 @@ GraphBuilder::prescan()
     if (op == OP_PROC || op == OP_ENDPROC)
       break;
 
-    if (op <= 0 || op >= OP_UNGEN_FIRST_FAKE)
+    if (op <= 0 || op >= OPCODES_LAST)
       return error(SP_ERROR_INVALID_INSTRUCTION);
 
     // Mark the bitmap.
@@ -342,7 +342,7 @@ GraphBuilder::prescan()
         return error(SP_ERROR_INVALID_INSTRUCTION);
       opcode_params = (ncases * 2) + 1;
     } else {
-      int opcode_size = kOpcodeSizes[op];
+      int opcode_size = GetOpcodeSize(op);
       if (opcode_size == 0) {
         // This opcode is not generated, and is therefore illegal.
         return error(SP_ERROR_INVALID_INSTRUCTION);
