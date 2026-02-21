@@ -436,6 +436,11 @@ bool matchtag(Type* formal, Type* actual, int flags) {
         return false;
     }
 
+    if ((actual->isInt64() || formal->isInt64()) && actual != formal) {
+        report(450) << actual << formal;
+        return false;
+    }
+
     if (formal->asEnumStruct() || actual->asEnumStruct()) {
         if (formal != actual) {
             report(134) << given_formal << given_actual;
@@ -536,6 +541,18 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
                 return 0;
             }
             return left / right;
+        case '<':
+            *boolresult = true;
+            return left < right;
+        case '>':
+            *boolresult = true;
+            return left > right;
+        case tlGE:
+            *boolresult = true;
+            return left >= right;
+        case tlLE:
+            *boolresult = true;
+            return left <= right;
         case '%':
             if (right == 0) {
                 report(29);

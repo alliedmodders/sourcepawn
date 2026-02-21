@@ -110,6 +110,29 @@ static cell_t PrintNum(IPluginContext* cx, const cell_t* params)
   return printf("%d\n", params[1]);
 }
 
+static cell_t PrintNum64(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[1], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  return printf("%" PRIi64 "\n", *reinterpret_cast<int64_t*>(addr));
+}
+
+static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* out;
+  cell_t* num1;
+  cell_t* num2;
+  if (int err = cx->LocalToPhysAddr(params[1], &out); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[2], &num1); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[3], &num2); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  *reinterpret_cast<int64_t*>(out) = *reinterpret_cast<int64_t*>(num1) + *reinterpret_cast<int64_t*>(num2);
+  return 0;
+}
+
 static cell_t PrintNums(IPluginContext* cx, const cell_t* params)
 {
   for (size_t i = 1; i <= size_t(params[0]); i++) {
@@ -397,6 +420,7 @@ static int Execute(const char* file)
   rt->InstallBuiltinNatives();
   BindNative(rt, "print", Print);
   BindNative(rt, "printnum", PrintNum);
+  BindNative(rt, "printnum64", PrintNum64);
   BindNative(rt, "writenum", WriteNum);
   BindNative(rt, "printnums", PrintNums);
   BindNative(rt, "printfloat", PrintFloat);
@@ -415,6 +439,7 @@ static int Execute(const char* file)
   BindNative(rt, "printf", Printf);
   BindNative(rt, "print_test_struct", PrintTestStruct);
   BindNative(rt, "add_test_structs", AddTestStructs);
+  BindNative(rt, "add_int64", AddInt64);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
@@ -476,9 +501,8 @@ int main(int argc, char** argv)
   if (show_version.value()) {
     fprintf(stdout, "SourcePawn version: %s\n", SM_VERSION_STRING);
     fprintf(stdout, "API version: %x/%x\n", SOURCEPAWN_API_VERSION, SOURCEPAWN_ENGINE2_API_VERSION);
-#if defined(SP_HAS_JIT)
-    fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
-#endif
+    if (sEnv->IsJitAvailable())
+      fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
     return 0;
   }
 

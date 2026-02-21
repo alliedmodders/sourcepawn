@@ -25,7 +25,7 @@
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 #include "control-flow.h"
-#include "bitset.h"
+#include <utils/bitset.h>
 
 namespace sp {
 

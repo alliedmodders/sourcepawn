@@ -1,0 +1,1 @@
+(1) : error 449: cannot use type "int64" in an operator overload

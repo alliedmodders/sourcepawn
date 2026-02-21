@@ -384,6 +384,11 @@ ConstDecl::Bind(SemaContext& sc)
     if (!sc.BindType(pos_, &type_))
         return false;
 
+    if (type_.type->isInt64()) {
+        report(this, 459) << type_.type;
+        return false;
+    }
+
     if (!expr_->Bind(sc))
         return false;
     if (!sc.sema()->CheckExpr(expr_))

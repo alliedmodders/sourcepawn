@@ -21,6 +21,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include "tokens.h"
+
 namespace sp {
 namespace cc {
 
@@ -73,6 +75,58 @@ static inline int NormalizeBinaryToken(int token) {
         default:
             assert(false);
             return 0;
+    }
+}
+
+static inline bool IsBitwise(int token) {
+    switch (token) {
+        case '|':
+        case '^':
+        case '&':
+        case tSHL:
+        case tSHR:
+        case tSHRU:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static inline bool IsCompare(int token) {
+    switch (token) {
+        case tlEQ:
+        case tlNE:
+        case tlLE:
+        case tlGE:
+        case '>':
+        case '<':
+            return true;
+        default:
+            return false;
+    }
+}
+
+static inline bool IsArithmetic(int token) {
+    switch (token) {
+        case tlEQ:
+        case tlNE:
+        case tlLE:
+        case tlGE:
+        case '<':
+        case '>':
+        case '*':
+        case '/':
+        case '%':
+        case '+':
+        case '-':
+        case taMULT:
+        case taDIV:
+        case taMOD:
+        case taADD:
+        case taSUB:
+            return true;
+        default:
+            return false;
     }
 }
 

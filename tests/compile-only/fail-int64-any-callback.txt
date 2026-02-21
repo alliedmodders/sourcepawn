@@ -1,0 +1,2 @@
+(12) : error 100: function prototypes do not match
+(13) : error 100: function prototypes do not match

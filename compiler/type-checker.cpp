@@ -118,6 +118,11 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
         return DiagnoseFailure();
     }
 
+    if ((formal->isInt64() || actual->isInt64()) && (formal != actual)) {
+        report(pos_, 450) << actual << formal;
+        return DiagnoseFailure();
+    }
+
     if (flags_ & AllowCoerce) {
         if ((formal->isInt() || formal->isAny()) && actual->coercesFromInt())
             return true;

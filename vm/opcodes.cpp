@@ -96,6 +96,20 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
     case OP_ADDR_PRI:
     case OP_ADDR_ALT:
     case OP_MOVS:
+    case OP_CVT_I64:
+    case OP_INVERT_I64:
+    case OP_NEG_I64:
+    case OP_SMUL_I64:
+    case OP_ADD_I64:
+    case OP_SUB_ALT_I64:
+    case OP_SHL_I64:
+    case OP_SSHR_I64:
+    case OP_SHR_I64:
+    case OP_EQ_I64:
+    case OP_NEQ_I64:
+    case OP_OR_I64:
+    case OP_AND_I64:
+    case OP_XOR_I64:
       fprintf(fp, "%d", cip[1]);
       break;
 
@@ -130,6 +144,7 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
     case OP_PUSH2:
     case OP_PUSH2_S:
     case OP_PUSH2_ADR:
+    case OP_SDIV_ALT_I64:
       fprintf(fp, "%d, %d", cip[1], cip[2]);
       break;
 
@@ -137,6 +152,7 @@ SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* 
     case OP_PUSH3:
     case OP_PUSH3_S:
     case OP_PUSH3_ADR:
+    case OP_STOR_S_I64_C:
       fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
       break;
 

@@ -264,6 +264,9 @@ class PcodeReader
       return visitor_->visitPUSH_S(vec, n);
     }
 
+    case OP_PUSH_I_I64:
+      return visitor_->visitPUSH_I_I64();
+
     case OP_POP_PRI:
     case OP_POP_ALT:
     {
@@ -281,6 +284,71 @@ class PcodeReader
     {
       cell_t amount = readCell();
       return visitor_->visitHEAP(amount);
+    }
+
+    case OP_CVT_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitCVT_I64(slot);
+    }
+    case OP_TRUNCATE_I64:
+      return visitor_->visitTRUNCATE_I64();
+    case OP_TEST_I64:
+      return visitor_->visitTEST_I64();
+
+    case OP_INVERT_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitINVERT_I64(slot);
+    }
+    case OP_NEG_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitNEG_I64(slot);
+    }
+    case OP_SMUL_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitSMUL_I64(slot);
+    }
+    case OP_SDIV_ALT_I64: {
+      cell_t pri_slot = readCell();
+      cell_t alt_slot = readCell();
+      return visitor_->visitSDIV_ALT_I64(pri_slot, alt_slot);
+    }
+    case OP_ADD_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitADD_I64(slot);
+    }
+    case OP_SUB_ALT_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitSUB_ALT_I64(slot);
+    }
+    case OP_SHL_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitSHL_I64(slot);
+    }
+    case OP_SSHR_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitSSHR_I64(slot);
+    }
+    case OP_SHR_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitSHR_I64(slot);
+    }
+    case OP_OR_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitOR_I64(slot);
+    }
+    case OP_AND_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitAND_I64(slot);
+    }
+    case OP_XOR_I64: {
+      cell_t slot = readCell();
+      return visitor_->visitXOR_I64(slot);
+    }
+    case OP_STOR_S_I64_C: {
+      cell_t slot = readCell();
+      cell_t cell0 = readCell();
+      cell_t cell1 = readCell();
+      return visitor_->visitSTOR_S_I64_C(slot, cell0, cell1);
     }
 
     case OP_RETN:
@@ -399,6 +467,19 @@ class PcodeReader
     case OP_SGEQ:
       return visitor_->visitCompareOp(CompareOp::Sgeq);
 
+    case OP_EQ_I64:
+      return visitor_->visitCompareOp64(CompareOp::Eq);
+    case OP_NEQ_I64:
+      return visitor_->visitCompareOp64(CompareOp::Neq);
+    case OP_SLESS_I64:
+      return visitor_->visitCompareOp64(CompareOp::Sless);
+    case OP_SLEQ_I64:
+      return visitor_->visitCompareOp64(CompareOp::Sleq);
+    case OP_SGRTR_I64:
+      return visitor_->visitCompareOp64(CompareOp::Sgrtr);
+    case OP_SGEQ_I64:
+      return visitor_->visitCompareOp64(CompareOp::Sgeq);
+
     case OP_EQ_C_PRI:
     case OP_EQ_C_ALT:
     {
@@ -452,6 +533,9 @@ class PcodeReader
       cell_t val = readCell();
       return visitor_->visitMOVS(val);
     }
+
+    case OP_MOVE_I64:
+      return visitor_->visitMOVE_I64();
 
     case OP_FILL:
     {

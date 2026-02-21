@@ -529,6 +529,8 @@ cell CalcArraySize(Type* type) {
                 length = char_array_cells(length);
             else if (auto es = array->inner()->asEnumStruct())
                 length *= es->array_size();
+            else if (array->inner()->isInt64())
+                length *= 2;
         }
 
         last_size *= length;
@@ -664,20 +666,27 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         AutoErrorPos pos(expr->pos());
 
         if (expr->as<StringExpr>()) {
-            report(47);
+            report(expr, 47);
             continue;
         }
 
         const auto& v = expr->val();
-        if (v.ident != iCONSTEXPR) {
-            report(8);
+        if (v.ident != iCONSTEXPR && !expr->as<Number64Expr>()) {
+            report(expr, 8);
             continue;
         }
 
-        matchtag(rank->inner(), v.type(), MATCHTAG_COERCE);
+        // We manually run int64 checks until the feature has had time to settle.
+        if (rank->inner()->isInt64()) {
+            if (!v.type()->isInt() && !v.type()->isInt64())
+                report(expr, 450) << v.type() << rank->inner();
+        } else {
+            matchtag(rank->inner(), v.type(), MATCHTAG_COERCE);
+        }
 
         prev2 = prev1;
-        prev1 = ke::Some(v.constval());
+        if (v.ident == iCONSTEXPR)
+            prev1 = ke::Some(v.constval());
     }
 
     cell ncells = rank_size ? rank_size : array->exprs().size();
@@ -923,9 +932,19 @@ cell CompoundEmitter::Emit(ArrayType* rank, Expr* init) {
                 // would flow through the check at the start of this function.
                 auto es = rank->inner()->asEnumStruct();
                 AddInlineEnumStruct(es, expr);
+            } else if (Number64Expr* n64 = item->as<Number64Expr>()) {
+                Int64CellUnion data(*n64->ToInt64());
+                add_data(data.cells[0]);
+                add_data(data.cells[1]);
             } else {
                 assert(item->val().ident == iCONSTEXPR);
-                add_data(item->val().constval());
+                if (rank->inner()->isInt64()) {
+                    Int64CellUnion data(item->val().constval());
+                    add_data(data.cells[0]);
+                    add_data(data.cells[1]);
+                } else {
+                    add_data(item->val().constval());
+                }
                 prev2 = prev1;
                 prev1 = ke::Some(item->val().constval());
             }

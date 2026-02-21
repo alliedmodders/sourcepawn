@@ -1,1 +1,1 @@
-(4) : error 450: no viable conversion from "bool" to "bool[2]"
+(4) : error 450: no viable conversion from 'bool' to 'bool[2]'

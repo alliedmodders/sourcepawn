@@ -78,7 +78,9 @@
     FOR_EACH(NewArrayExpr) \
     FOR_EACH(ArrayExpr) \
     FOR_EACH(StructExpr) \
-    FOR_EACH(StructInitFieldExpr)
+    FOR_EACH(StructInitFieldExpr) \
+    FOR_EACH(SimpleCastExpr) \
+
 
 enum class ExprKind : uint8_t
 {

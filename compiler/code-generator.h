@@ -25,6 +25,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <utils/bitset.h>
 #include "stl/stl-unordered-map.h"
 #include "data-queue.h"
 #include "errors.h"
@@ -82,7 +83,8 @@ class CodeGenerator final
     void EmitUnary(UnaryExpr* expr);
     void EmitIncDec(IncDecExpr* expr);
     void EmitBinary(BinaryExpr* expr);
-    void EmitBinaryInner(int oper_tok, const UserOperation& in_user_op, Expr* left, Expr* right);
+    void EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in_user_op, Expr* left,
+                         Expr* right);
     void EmitLogicalExpr(LogicalExpr* expr);
     void EmitChainedCompareExpr(ChainedCompareExpr* expr);
     void EmitTernaryExpr(TernaryExpr* expr);
@@ -95,12 +97,13 @@ class CodeGenerator final
     void EmitCallUserOpExpr(CallUserOpExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
     void EmitNumber64Expr(Number64Expr* expr);
+    void EmitSimpleCastExpr(SimpleCastExpr* expr);
+    void EmitCastExpr(CastExpr* expr);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
     void EmitLogicalExprTest(LogicalExpr* expr, bool jump_on_true, sp::Label* target);
-    bool EmitChainedCompareExprTest(ChainedCompareExpr* expr, bool jump_on_true,
-                                    sp::Label* target);
+    bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitUserOp(const UserOperation& user_op, value* lval);
@@ -110,8 +113,9 @@ class CodeGenerator final
     void InvokeGetter(MethodmapPropertyDecl* method);
     void InvokeSetter(MethodmapPropertyDecl* method, bool save);
     void EmitRvalue(value* lval);
-    void EmitStore(const value* lval);
+    void EmitStore(const value* lval, bool save_pri = true);
     void EmitBreak();
+    void EmitBinaryOp(Expr* expr, BuiltinType type, OPCODE op);
 
     void EmitRvalue(const value& lval) {
         value tmp = lval;
@@ -203,6 +207,10 @@ class CodeGenerator final
     bool ComputeStackUsage();
     bool ComputeStackUsage(CallGraph::iterator caller_iter);
 
+    void EnterInt64SlotScope();
+    void LeaveInt64SlotScope();
+    cell_t AcquireInt64Slot(Expr* expr);
+
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;
 
@@ -249,8 +257,13 @@ class CodeGenerator final
     int current_memory_ = 0;
     int max_func_memory_ = 0;
     CallGraph callgraph_;
+    cell_t int64_slot_region_ = 0;
 
     AutoCountErrors errors_;
+
+    // Stack slot management.
+    std::vector<std::optional<BitSet>> used_int64_slots_;
+    BitSet free_int64_slots_;
 };
 
 } // namespace cc

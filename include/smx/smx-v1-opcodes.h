@@ -183,6 +183,38 @@ namespace sp {
     FOR_EACH(FLOAT_NE, 189, "float.ne", 1) \
     FOR_EACH(FLOAT_EQ, 190, "float.eq", 1) \
     FOR_EACH(FLOAT_NOT, 191, "float.not", 1) \
+    /* The _I64 opcodes assume registers are pointers to at least two cells \
+     * of memory representing an int64. Since the stack and registers are \
+     * not designed to accomodate 64-bit temporaries, some of these opcodes \
+     * take a stack slot parameter. This must be a 64-bit entry in the stack. \
+     * As a convenience, these opcodes set PRI to the address of the given \
+     * stack slot (as if ADDR.PRI were used).
+     */ \
+    FOR_EACH(MOVE_I64, 192, "move.i64", 1) \
+    FOR_EACH(PUSH_I_I64, 193, "push.i.i64", 1) \
+    FOR_EACH(CVT_I64, 194, "cvt.i64", 2) \
+    FOR_EACH(TRUNCATE_I64, 195, "truncate.i64", 1) \
+    FOR_EACH(TEST_I64, 196, "test.i64", 1) \
+    FOR_EACH(INVERT_I64, 197, "invert.i64", 2) \
+    FOR_EACH(NEG_I64, 198, "neg.i64", 2) \
+    FOR_EACH(SMUL_I64, 199, "smul.i64", 2) \
+    FOR_EACH(SDIV_ALT_I64, 200, "sdiv.alt.i64", 3) \
+    FOR_EACH(ADD_I64, 201, "add.i64", 2) \
+    FOR_EACH(SUB_ALT_I64, 202, "sub_alt.i64", 2) \
+    FOR_EACH(SHL_I64, 203, "shl.i64", 2) \
+    FOR_EACH(SSHR_I64, 204, "sshr.i64", 2) \
+    FOR_EACH(SHR_I64, 205, "shr.i64", 2) \
+    FOR_EACH(EQ_I64, 206, "eq.i64", 1) \
+    FOR_EACH(NEQ_I64, 207, "neq.i64", 1) \
+    FOR_EACH(OR_I64, 208, "or.i64", 2) \
+    FOR_EACH(AND_I64, 209, "and.i64", 2) \
+    FOR_EACH(XOR_I64, 210, "neq.i64", 2) \
+    FOR_EACH(STOR_S_I64_C, 211, "stor.s.i64.c", 4) \
+    FOR_EACH(SLESS_I64, 212, "sless.i64", 1) \
+    FOR_EACH(SLEQ_I64, 213, "sleq.i64", 1) \
+    FOR_EACH(SGRTR_I64, 214, "sgrtr.i64", 1) \
+    FOR_EACH(SGEQ_I64, 215, "sgeq.i64", 1) \
+
 
 enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,

@@ -118,6 +118,8 @@ class SemaContext
     bool preprocessing() const { return preprocessing_; }
 
     std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
+    uint32_t& temp_int64_slots() { return temp_int64_slots_; }
+    uint32_t& max_int64_slots() { return max_int64_slots_; }
 
   private:
     CompileContext& cc_;
@@ -136,6 +138,8 @@ class SemaContext
     bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
+    uint32_t temp_int64_slots_ = 0;
+    uint32_t max_int64_slots_ = 0;
 };
 
 class Semantics final
@@ -224,6 +228,7 @@ class Semantics final
     bool CheckRvalue(const token_pos_t& pos, const value& val);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
+    Expr* BuildSimpleCast(Expr* from, BuiltinType type);
 
     struct ParamState {
         std::vector<Expr*> argv;
@@ -236,8 +241,10 @@ class Semantics final
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     FunctionDecl* BindNewTarget(Expr* target);
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
+    bool CheckOperatorOverloadSignature(FunctionDecl* info);
 
     void NeedsHeapAlloc(Expr* expr);
+    void NeedsInt64Slot(Expr* expr, unsigned int count = 1);
     void AssignHeapOwnership(ParseNode* node);
 
     Expr* AnalyzeForTest(Expr* expr);

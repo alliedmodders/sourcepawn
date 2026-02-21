@@ -79,6 +79,7 @@ class Interpreter final : public PcodeVisitor
   bool visitRETN() override;
   bool visitSTACK(cell_t amount) override;
   bool visitPUSH_S(const cell_t* offsets, size_t nvals) override;
+  bool visitPUSH_I_I64() override;
   bool visitCONST(PawnReg dest, cell_t imm) override;
   bool visitCONST(cell_t offset, cell_t value) override;
   bool visitCONST_S(cell_t offset, cell_t value) override;
@@ -119,6 +120,7 @@ class Interpreter final : public PcodeVisitor
   bool visitCompareOp(CompareOp op) override;
   bool visitADDR(PawnReg dest, cell_t offset) override;
   bool visitMOVS(uint32_t amount) override;
+  bool visitMOVE_I64() override;
   bool visitFILL(uint32_t amount) override;
   bool visitIDXADDR() override;
   bool visitLIDX() override;
@@ -154,6 +156,23 @@ class Interpreter final : public PcodeVisitor
                       cell_t data_fill_size, cell_t fill_value) override;
   bool visitHEAP_SAVE() override;
   bool visitHEAP_RESTORE() override;
+  bool visitCVT_I64(cell_t slot) override;
+  bool visitTRUNCATE_I64() override;
+  bool visitTEST_I64() override;
+  bool visitINVERT_I64(cell_t slot) override;
+  bool visitNEG_I64(cell_t slot) override;
+  bool visitSMUL_I64(cell_t slot) override;
+  bool visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) override;
+  bool visitADD_I64(cell_t slot) override;
+  bool visitSUB_ALT_I64(cell_t slot) override;
+  bool visitSHL_I64(cell_t slot) override;
+  bool visitSSHR_I64(cell_t slot) override;
+  bool visitSHR_I64(cell_t slot) override;
+  bool visitOR_I64(cell_t slot) override;
+  bool visitAND_I64(cell_t slot) override;
+  bool visitXOR_I64(cell_t slot) override;
+  bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) override;
+  bool visitCompareOp64(CompareOp op) override;
 
  private:
   Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);

@@ -141,6 +141,7 @@ class PluginContext final : public BasePluginContext
   bool getCellValue(cell_t address, cell_t* out);
   bool setCellValue(cell_t address, cell_t value);
   bool heapAlloc(cell_t amount, cell_t* out);
+  cell_t* heapAllocEx(cell_t amount, cell_t* out);
   cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
   bool initArray(cell_t array_addr,
                  cell_t dat_addr,
@@ -150,6 +151,19 @@ class PluginContext final : public BasePluginContext
                  cell_t fill_value);
 
   cell_t* throwIfBadAddress(cell_t addr);
+
+  int64_t* acquireInt64Addr(cell_t address) {
+    cell_t* addr = acquireAddrRange(address, sizeof(int64_t));
+    if (!addr)
+      return nullptr;
+    return reinterpret_cast<int64_t*>(addr);
+  }
+
+  int64_t* acquireInt64Slot(cell_t slot) {
+    cell_t* addr = throwIfBadAddress(frm_ + slot);
+    assert(addr);
+    return reinterpret_cast<int64_t*>(addr);
+  }
 
  private:
   PluginRuntime* m_pRuntime;

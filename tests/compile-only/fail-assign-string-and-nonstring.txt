@@ -1,2 +1,2 @@
-(5) : error 450: no viable conversion from "any[40]" to "char[40]"
-(6) : error 450: no viable conversion from "char[40]" to "any[40]"
+(5) : error 450: no viable conversion from 'any[40]' to 'char[40]'
+(6) : error 450: no viable conversion from 'char[40]' to 'any[40]'

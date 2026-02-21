@@ -67,6 +67,7 @@ class PcodeVisitor
   virtual bool visitPUSH_C(const cell_t* vals, size_t nvals) = 0;
   virtual bool visitPUSH(const cell_t* addresses, size_t nvals) = 0;
   virtual bool visitPUSH_S(const cell_t* offsets, size_t nvals) = 0;
+  virtual bool visitPUSH_I_I64() = 0;
   virtual bool visitPOP(PawnReg dest) = 0;
   virtual bool visitSTACK(cell_t amount) = 0;
   virtual bool visitHEAP(cell_t amount) = 0;
@@ -105,6 +106,7 @@ class PcodeVisitor
   virtual bool visitDEC_S(cell_t offset) = 0;
   virtual bool visitDEC_I() = 0;
   virtual bool visitMOVS(uint32_t amount) = 0;
+  virtual bool visitMOVE_I64() = 0;
   virtual bool visitFILL(uint32_t amount) = 0;
   virtual bool visitBOUNDS(uint32_t limit) = 0;
   virtual bool visitSYSREQ_C(uint32_t native_index) = 0;
@@ -138,6 +140,23 @@ class PcodeVisitor
                               cell_t data_fill_size, cell_t fill_value) = 0;
   virtual bool visitHEAP_SAVE() = 0;
   virtual bool visitHEAP_RESTORE() = 0;
+  virtual bool visitCVT_I64(cell_t slot) = 0;
+  virtual bool visitTRUNCATE_I64() = 0;
+  virtual bool visitTEST_I64() = 0;
+  virtual bool visitINVERT_I64(cell_t slot) = 0;
+  virtual bool visitNEG_I64(cell_t slot) = 0;
+  virtual bool visitSMUL_I64(cell_t slot) = 0;
+  virtual bool visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) = 0;
+  virtual bool visitADD_I64(cell_t slot) = 0;
+  virtual bool visitSUB_ALT_I64(cell_t slot) = 0;
+  virtual bool visitSHL_I64(cell_t slot) = 0;
+  virtual bool visitSSHR_I64(cell_t slot) = 0;
+  virtual bool visitSHR_I64(cell_t slot) = 0;
+  virtual bool visitOR_I64(cell_t slot) = 0;
+  virtual bool visitAND_I64(cell_t slot) = 0;
+  virtual bool visitXOR_I64(cell_t slot) = 0;
+  virtual bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) = 0;
+  virtual bool visitCompareOp64(CompareOp op) = 0;
 };
 
 class IncompletePcodeVisitor : public PcodeVisitor
@@ -224,6 +243,10 @@ class IncompletePcodeVisitor : public PcodeVisitor
     return false;
   }
   virtual bool visitPUSH_S(const cell_t* offsets, size_t nvals) override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitPUSH_I_I64() override {
     assert(false);
     return false;
   }
@@ -505,6 +528,14 @@ class IncompletePcodeVisitor : public PcodeVisitor
     return false;
   }
   virtual bool visitHEAP_RESTORE() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitTRUNCATE_I64() override {
+    assert(false);
+    return false;
+  }
+  virtual bool visitTEST_I64() override {
     assert(false);
     return false;
   }

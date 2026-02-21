@@ -176,6 +176,15 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_DEC_ALT:
   case OP_DEC_I:
   case OP_STRADJUST_PRI:
+  case OP_MOVE_I64:
+  case OP_TRUNCATE_I64:
+  case OP_TEST_I64:
+  case OP_SLESS_I64:
+  case OP_SLEQ_I64:
+  case OP_SGRTR_I64:
+  case OP_SGEQ_I64:
+  case OP_EQ_I64:
+  case OP_NEQ_I64:
     return true;
 
   case OP_TRACKER_POP_SETHEAP:
@@ -254,6 +263,42 @@ MethodVerifier::verifyOp(OPCODE op)
   {
     cell_t offset = readCell();
     return verifyStackOffset(offset);
+  }
+
+  case OP_INVERT_I64:
+  case OP_CVT_I64:
+  case OP_NEG_I64:
+  case OP_SMUL_I64:
+  case OP_ADD_I64:
+  case OP_SUB_ALT_I64:
+  case OP_SHL_I64:
+  case OP_SSHR_I64:
+  case OP_SHR_I64:
+  case OP_OR_I64:
+  case OP_AND_I64:
+  case OP_XOR_I64:
+  {
+    cell_t offset = readCell();
+    return verifyStackOffset(offset) && verifyStackOffset(offset + 4);
+  }
+
+  case OP_SDIV_ALT_I64:
+  {
+    cell_t pri_slot = readCell();
+    cell_t alt_slot = readCell();
+    if (!verifyStackOffset(pri_slot) || !verifyStackOffset(pri_slot + 4))
+      return false;
+    if (!verifyStackOffset(alt_slot) || !verifyStackOffset(alt_slot + 4))
+      return false;
+    return true;
+  }
+
+  case OP_STOR_S_I64_C:
+  {
+    cell_t offset = readCell();
+    readCell();
+    readCell();
+    return verifyStackOffset(offset) && verifyStackOffset(offset + 4);
   }
 
   case OP_LOAD_PRI:
@@ -346,6 +391,9 @@ MethodVerifier::verifyOp(OPCODE op)
     }
     return pushStack(n);
   }
+
+  case OP_PUSH_I_I64:
+    return pushStack(2);
 
   case OP_CALL:
   {

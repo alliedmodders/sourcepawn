@@ -108,6 +108,8 @@ cell_t Type::CellStorageSize() {
         return CalcArraySize(at);
     if (auto es = asEnumStruct())
         return es->array_size();
+    if (isInt64())
+        return 2;
     return 1;
 }
 
@@ -159,6 +161,12 @@ void TypeManager::RegisterType(Type* type, bool unique_name) {
 Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
     Type* ptr = add(name, TypeKind::Builtin);
     ptr->setBuiltinType(type);
+
+    uint32_t index = (uint32_t)type;
+    if (index >= builtin_types_.size())
+        builtin_types_.resize(index + 1);
+    builtin_types_[index] = ptr;
+
     return ptr;
 }
 
@@ -219,6 +227,8 @@ void TypeManager::init() {
 
     type_function_ = defineFunction(cc_.atom("Function"), nullptr);
     type_object_ = defineObject("object");
+
+    type_int64_ = defineBuiltin("int64", BuiltinType::Int64);
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {

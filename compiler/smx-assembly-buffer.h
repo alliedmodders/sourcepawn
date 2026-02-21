@@ -113,7 +113,12 @@ class SmxAssemblyBuffer : public ByteBuffer
 
   void load_hidden_arg(FunctionDecl* fun, bool save_pri) {
     if (!fun->IsVariadic()) {
-      emit(OP_LOAD_S_ALT, fun->return_array()->hidden_address);
+      if (fun->return_array()) {
+        emit(OP_LOAD_S_ALT, fun->return_array()->hidden_address);
+      } else {
+        cell_t hidden_address = ((cell_t)fun->args().size() + 3) * sizeof(cell_t);
+        emit(OP_LOAD_S_ALT, hidden_address);
+      }
       return;
     }
 
@@ -158,10 +163,14 @@ class SmxAssemblyBuffer : public ByteBuffer
         assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
 
       if (reg == sPRI) {
-        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
-          emit(OP_ADDR_PRI, sym->addr());
-        else
+        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
+          if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
+            emit(OP_LOAD_S_PRI, sym->addr());
+          else
+            emit(OP_ADDR_PRI, sym->addr());
+        } else {
           emit(OP_CONST_PRI, sym->addr());
+        }
       } else {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_ALT, sym->addr());

@@ -306,6 +306,9 @@ std::optional<int64_t> Number64Expr::ToInt64(Expr* expr) {
 }
 
 std::optional<int64_t> Number64Expr::ToInt64() {
+    if (value_)
+        return value_;
+
     char* endptr;
     int64_t value = strtoll(atom_->chars(), &endptr, 10);
     if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
@@ -313,7 +316,21 @@ std::optional<int64_t> Number64Expr::ToInt64() {
 
     assert(!*endptr);
 
-    return {value};
+    value_ = {value};
+    return value_;
+}
+
+SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
+  : EmitOnlyExpr(ExprKind::SimpleCastExpr, from->pos()),
+    from_(from),
+    to_(to)
+{
+    val_.ident = iEXPRESSION;
+    val_.set_type(to);
+}
+
+void SimpleCastExpr::ProcessUses(SemaContext& sc) {
+    from_->ProcessUses(sc);
 }
 
 } // namespace cc

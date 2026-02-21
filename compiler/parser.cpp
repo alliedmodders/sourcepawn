@@ -747,6 +747,11 @@ Parser::plnge_rel(const int* opstr, NewHierFn hier)
         ops.push_back(CompareOp(pos, opstr[opidx], right));
     } while (nextop(&opidx, opstr));
 
+    if (ops.size() == 1) {
+        // Devolve this to BinaryExpr which is much saner.
+        return new BinaryExpr(chain_pos, ops[0].token, first, ops[0].expr);
+    }
+
     return new ChainedCompareExpr(chain_pos, first, ops);
 }
 

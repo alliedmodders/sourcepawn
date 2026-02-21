@@ -51,6 +51,20 @@ union FloatCellUnion {
     float f32;
     cell_t cell;
 };
+
+union Int64CellUnion {
+    explicit Int64CellUnion(int64_t i64)
+      : i64(i64)
+    {}
+
+    Int64CellUnion(cell_t a, cell_t b) {
+        cells[0] = a;
+        cells[1] = b;
+    }
+
+    int64_t i64;
+    cell_t cells[2];
+};
 } // namespace sp
 
 /**

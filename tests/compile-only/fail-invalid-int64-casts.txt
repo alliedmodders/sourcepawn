@@ -1,0 +1,4 @@
+(5) : warning 219: local variable "a" shadows a variable at a preceding level
+(7) : error 460: cannot use view_as to cast type 'int[10]' to type 'int64'
+(8) : error 460: cannot use view_as to cast type 'int64' to type 'float'
+(9) : error 460: cannot use view_as to cast type 'float' to type 'int64'

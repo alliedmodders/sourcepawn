@@ -19,6 +19,7 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include <limits>
 #include <utility>
 
 #include "interpreter.h"
@@ -134,6 +135,17 @@ Interpreter::visitPUSH_ADR(const cell_t* offsets, size_t nvals)
     if (!cx_->pushStack(address))
       return false;
   }
+  return true;
+}
+
+bool Interpreter::visitPUSH_I_I64() {
+  cell_t* src = cx_->acquireAddrRange(regs_.pri(), sizeof(cell_t) * 2);
+  if (!src)
+    return false;
+  if (!cx_->pushStack(src[1]))
+    return false;
+  if (!cx_->pushStack(src[0]))
+    return false;
   return true;
 }
 
@@ -537,8 +549,9 @@ Interpreter::visitSMUL()
 bool
 Interpreter::visitSDIV(PawnReg dest)
 {
-  PawnReg dividendReg = dest;
+  PawnReg dividendReg = dest; // ALT
   PawnReg divisorReg = (dest == PawnReg::Pri) ? PawnReg::Alt : PawnReg::Pri;
+    // PRI
 
   cell_t divisor = regs_[divisorReg];
   cell_t dividend = regs_[dividendReg];
@@ -642,6 +655,17 @@ Interpreter::visitMOVS(uint32_t amount)
   if (!dest)
     return false;
   memmove(dest, src, amount);
+  return true;
+}
+
+bool Interpreter::visitMOVE_I64() {
+  cell_t* src = cx_->acquireAddrRange(regs_.pri(), sizeof(cell_t) * 2);
+  if (!src)
+    return false;
+  cell_t* dest = cx_->acquireAddrRange(regs_.alt(), sizeof(cell_t) * 2);
+  if (!dest)
+    return false;
+  *reinterpret_cast<int64_t*>(dest) = *reinterpret_cast<int64_t*>(src);
   return true;
 }
 
@@ -1080,5 +1104,247 @@ Interpreter::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t dat
 {
   return cx_->initArray(regs_[reg], addr, iv_size, data_copy_size, data_fill_size, fill_value);
 }
+
+bool Interpreter::visitCVT_I64(cell_t slot) {
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = regs_.pri();
+
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitTRUNCATE_I64() {
+  int64_t* src = cx_->acquireInt64Addr(regs_.pri());
+  if (!src)
+    return false;
+
+  regs_.pri() = static_cast<int32_t>(*src);
+  return true;
+}
+
+bool Interpreter::visitTEST_I64() {
+  int64_t* src = cx_->acquireInt64Addr(regs_.pri());
+  if (!src)
+    return false;
+
+  regs_.pri() = !!*src;
+  return true;
+}
+
+bool Interpreter::visitINVERT_I64(cell_t slot) {
+  int64_t* src = cx_->acquireInt64Addr(regs_.pri());
+  if (!src)
+    return false;
+
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = ~*src;
+
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitNEG_I64(cell_t slot) {
+  int64_t* src = cx_->acquireInt64Addr(regs_.pri());
+  if (!src)
+    return false;
+
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = -*src;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSMUL_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri * *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* pri_dest = cx_->acquireInt64Slot(pri_slot);
+  int64_t* alt_dest = cx_->acquireInt64Slot(alt_slot);
+
+  int err = Int64Div(pri, alt, pri_dest, alt_dest);
+  if (err != SP_ERROR_NONE) {
+    cx_->ReportErrorNumber(err);
+    return false;
+  }
+
+  regs_.pri() = cx_->frm() + pri_slot;
+  regs_.alt() = cx_->frm() + alt_slot;
+  return true;
+}
+
+bool Interpreter::visitADD_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri + *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSUB_ALT_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *alt - *pri;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSHL_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri << *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSSHR_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri >> *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSHR_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = (uint64_t)*pri >> (uint64_t)*alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitOR_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri | *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitAND_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri & *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitXOR_I64(cell_t slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  *dest = *pri ^ *alt;
+  regs_.pri() = cx_->frm() + slot;
+  return true;
+}
+
+bool Interpreter::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
+  int64_t* dest = cx_->acquireInt64Slot(slot);
+
+  Int64CellUnion u(cell0, cell1);
+  *dest = u.i64;
+  return true;
+}
+
+bool Interpreter::visitCompareOp64(CompareOp op) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+
+  switch (op) {
+  case CompareOp::Sgrtr:
+    regs_.pri() = (*pri > *alt) ? 1 : 0;
+    break;
+  case CompareOp::Sgeq:
+    regs_.pri() = (*pri >= *alt) ? 1 : 0;
+    break;
+  case CompareOp::Sleq:
+    regs_.pri() = (*pri <= *alt) ? 1 : 0;
+    break;
+  case CompareOp::Sless:
+    regs_.pri() = (*pri < *alt) ? 1 : 0;
+    break;
+  case CompareOp::Eq:
+    regs_.pri() = (*pri == *alt) ? 1 : 0;
+    break;
+  case CompareOp::Neq:
+    regs_.pri() = (*pri != *alt) ? 1 : 0;
+    break;
+  default:
+    assert(false);
+  }
+  return true;
+}
+
 
 } // namespace sp

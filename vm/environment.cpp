@@ -566,6 +566,14 @@ Environment::leaveInvoke()
   top_ = top_->prev();
 }
 
+bool Environment::IsJitAvailable() {
+#if defined(SP_HAS_JIT)
+  return true;
+#else
+  return false;
+#endif
+}
+
 ISourcePawnEnvironment*
 ISourcePawnEnvironment::New()
 {

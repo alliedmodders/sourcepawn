@@ -1,0 +1,2 @@
+(6) : error 454: implicit truncation converting from int64 to int
+(7) : error 455: no conversion available from 'float' to 'int64'

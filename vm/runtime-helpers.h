@@ -21,10 +21,10 @@
 
 namespace sp {
 
+int Int64Div(int64_t* pri, int64_t* alt, int64_t* pri_dest, int64_t* alt_dest);
 void ReportOutOfBoundsError(cell_t index, cell_t bounds);
 void ReportUnboundNative();
 
 } // namespace sp
 
 #endif // _include_sourcepawn_runtime_helpers_h_
-

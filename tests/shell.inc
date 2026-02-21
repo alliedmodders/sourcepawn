@@ -8,15 +8,17 @@ enum struct TestStruct {
 }
 
 native void printnum(int n);
+native void printnum64(int64 n);
 native void writenum(int n);
 native void printfloat(float n);
 native void writefloat(float n);
-native void printnums(any:...);
+native void printnums(any:...); // note: int only, no int64
 native void print(const char[] str);
 native void dump_stack_trace();
 native void report_error();
 native void unbound_native();
 native int donothing();
+native int64 add_int64(int64 a, int64 b);
 
 // dumb version of printf(), only supports %f, %d, %s.
 native void printf(const char[] fmt, any:...);

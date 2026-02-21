@@ -14,6 +14,7 @@
 #include <stddef.h>
 
 #include <functional>
+#include <optional>
 #include <utility>
 
 #include <amtl/am-bits.h>
@@ -28,7 +29,7 @@ class BitSet
   BitSet()
   {}
   explicit BitSet(size_t max_bits)
-   : max_bits_(ke::Some(max_bits))
+   : max_bits_({max_bits})
   {}
   explicit BitSet(BitSet&& other)
    : words_(std::move(other.words_)),
@@ -50,6 +51,26 @@ class BitSet
     words_[word] |= (uintptr_t(1) << pos_in_word(bit));
   }
 
+  void unset(uintptr_t bit) {
+    assert(!max_bits_  || bit <= *max_bits_);
+    size_t word = word_for_bit(bit);
+    if (word < words_.size())
+      words_[word] &= ~(uintptr_t(1) << pos_in_word(bit));
+  }
+
+  std::optional<uintptr_t> take_any() {
+    while (!words_.empty()) {
+      if (words_.back() != 0) {
+        size_t index = words_.size() - 1;
+        size_t bit = ke::FindRightmostBit(words_.back());
+        words_.back() &= ~(uintptr_t(1) << bit);
+        return {index * kBitsPerWord + bit};
+      }
+      words_.pop_back();
+    }
+    return {};
+  }
+
   void for_each(const std::function<void(uintptr_t)>& callback) {
     for (size_t i = 0; i < words_.size(); i++) {
       uintptr_t word = words_[i];
@@ -60,6 +81,21 @@ class BitSet
         callback(i * kBitsPerWord + bit);
       }
     }
+  }
+
+  BitSet& or_with(const BitSet& other) {
+    for (size_t i = 0; i < words_.size(); i++) {
+      if (i >= other.words_.size())
+        break;
+      words_[i] |= other.words_[i];
+    }
+    for (size_t i = words_.size(); i < other.words_.size(); i++) {
+      if (!other.words_[i])
+        continue;
+      words_.resize(i + 1);
+      words_[i] = other.words_[i];
+    }
+    return *this;
   }
 
   BitSet& operator =(BitSet&& other) {
@@ -80,7 +116,7 @@ class BitSet
 
  private:
   std::vector<uintptr_t> words_;
-  ke::Maybe<size_t> max_bits_;
+  std::optional<size_t> max_bits_;
 };
 
 } // namespace sp

@@ -920,27 +920,29 @@ PluginContext::setCellValue(cell_t address, cell_t value)
   return true;
 }
 
-bool
-PluginContext::heapAlloc(cell_t amount, cell_t* out)
-{
+bool PluginContext::heapAlloc(cell_t amount, cell_t* out) {
+  return heapAllocEx(amount, out) != nullptr;
+}
+
+cell_t* PluginContext::heapAllocEx(cell_t amount, cell_t* out) {
   cell_t new_hp = hp_ + amount;
 
   if (amount < 0) {
     // Note: signed compare, in case new_hp is negative.
     if (new_hp < cell_t(data_size_)) {
       ReportErrorNumber(SP_ERROR_HEAPMIN);
-      return false;
+      return nullptr;
     }
   } else {
     if (new_hp + STACK_MARGIN > sp_) {
       ReportErrorNumber(SP_ERROR_HEAPLOW);
-      return false;
+      return nullptr;
     }
   }
 
   *out = hp_;
   hp_ = new_hp;
-  return true;
+  return reinterpret_cast<cell_t*>(memory_ + *out);
 }
 
 cell_t*

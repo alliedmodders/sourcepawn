@@ -1630,6 +1630,377 @@ Compiler::emitFloatCmp(ConditionCode cc)
   __ addl(stk, 8);
 }
 
+bool Compiler::visitPUSH_I_I64() {
+  emitCheckAddress(pri);
+  __ movl(alt, Operand(dat, pri, NoScale, 4));
+  __ movl(Operand(stk, -4), alt);
+  __ movl(alt, Operand(dat, pri, NoScale, 0));
+  __ movl(Operand(stk, -8), alt);
+  __ subl(stk, 8);
+  return true;
+}
+
+bool Compiler::visitMOVE_I64() {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ movl(tmp, Operand(dat, pri, NoScale, 0));
+  __ movl(Operand(dat, alt, NoScale, 0), tmp);
+  __ movl(tmp, Operand(dat, pri, NoScale, 4));
+  __ movl(Operand(dat, alt, NoScale, 4), tmp);
+  return true;
+}
+
+bool Compiler::visitCVT_I64(cell_t slot) {
+  __ movl(tmp, alt);
+  __ cdq();
+  __ movl(Operand(frm, slot), eax);
+  __ movl(Operand(frm, slot + 4), edx);
+  __ movl(alt, tmp);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitTRUNCATE_I64() {
+  emitCheckAddress(pri);
+  __ movl(pri, Operand(dat, pri, NoScale, 0));
+  return true;
+}
+
+bool Compiler::visitTEST_I64() {
+  emitCheckAddress(pri);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ orl(ecx, Operand(dat, pri, NoScale, 0));
+  __ set(not_equal, ecx);
+  __ movzxb(pri, ecx);
+  return true;
+}
+
+bool Compiler::visitINVERT_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ notl(ecx);
+  __ movl(Operand(frm, slot), ecx);
+  __ movl(ecx, Operand(dat, pri, NoScale, 4));
+  __ notl(ecx);
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitNEG_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ movl(Operand(frm, slot), ecx);
+  __ movl(ecx, Operand(dat, pri, NoScale, 4));
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ xorl(ecx, ecx);
+  __ negl(Operand(frm, slot));
+  __ sbbl(ecx, Operand(frm, slot + 4));
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSMUL_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ push(ebx);
+  __ movl(ebx, Operand(dat, pri, NoScale, 4)); // clobbers frm
+  __ movl(ecx, Operand(dat, alt, NoScale, 4));
+  __ imull(ebx, Operand(dat, alt, NoScale, 0));
+  __ imull(ecx, Operand(dat, pri, NoScale, 0));
+  __ movl(eax, Operand(dat, pri, NoScale, 0)); // clobbers pri
+  __ mull(Operand(dat, alt, NoScale, 0)); // output in eax
+  __ addl(ecx, ebx);
+  __ addl(edx, ecx);
+  __ pop(ebx);
+
+  __ movl(Operand(frm, slot), eax);
+  __ movl(Operand(frm, slot + 4), edx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+// This is not trivially possible to inline, so we need to call a helper.
+bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  // Sync |sp|.
+  __ subl(stk, dat);
+  __ movl(Operand(spAddr()), stk);
+  __ addl(stk, dat);
+
+  static const size_t kStackNeeded = 4 * sizeof(void *);
+  static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+  __ subl(esp, kStackReserve);
+
+  __ lea(ecx, Operand(frm, alt_slot));
+  __ movl(Operand(esp, 3 * sizeof(void*)), ecx);
+
+  __ lea(ecx, Operand(frm, pri_slot));
+  __ movl(Operand(esp, 2 * sizeof(void*)), ecx);
+
+  __ lea(alt, Operand(dat, alt, NoScale, 0));
+  __ movl(Operand(esp, 1 * sizeof(void*)), alt);
+  __ lea(pri, Operand(dat, pri, NoScale, 0));
+  __ movl(Operand(esp, 0 * sizeof(void*)), pri);
+  __ callWithABI(ExternalAddress((void*)Int64Div));
+  __ addl(esp, kStackReserve);
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, pri_slot);
+  __ movl(alt, Operand(frmAddr()));
+  __ addl(alt, alt_slot);
+  return true;
+}
+
+bool Compiler::visitADD_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ movq(xmm1, Operand(dat, pri, NoScale, 0));
+  __ movq(xmm0, Operand(dat, alt, NoScale, 0));
+  __ paddq(xmm0, xmm1);
+  __ movq(Operand(frm, slot), xmm0);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSUB_ALT_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ movq(xmm1, Operand(dat, pri, NoScale, 0));
+  __ movq(xmm0, Operand(dat, alt, NoScale, 0));
+  __ psubq(xmm0, xmm1);
+  __ movq(Operand(frm, slot), xmm0);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSHL_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ lea(ecx, Operand(dat, alt, NoScale, 0));
+  __ push(ecx);
+  __ lea(ecx, Operand(dat, pri, NoScale, 0));
+  __ push(ecx);
+
+  Label done;
+  __ movl(eax, Operand(esp, 4));
+  __ movl(ecx, Operand(eax, 0)); // low 32-bits of alt
+  __ movl(eax, Operand(esp, 0));
+  __ movl(edx, Operand(eax, 4)); // hi 32-bits of pri
+  __ movl(eax, Operand(eax, 0)); // lo 32-bits of pri
+  __ shld(edx, eax);
+  __ shll_cl(eax);
+  __ testb(ecx, 0x20);
+  __ j(equal, &done);
+  __ movl(edx, eax);
+  __ xorl(eax, eax);
+  __ bind(&done);
+  __ addl(esp, 8);
+
+  __ movl(Operand(frm, slot), eax);
+  __ movl(Operand(frm, slot + 4), edx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSSHR_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ lea(ecx, Operand(dat, alt, NoScale, 0));
+  __ push(ecx);
+  __ lea(ecx, Operand(dat, pri, NoScale, 0));
+  __ push(ecx);
+
+  Label done;
+  __ movl(eax, Operand(esp, 4));
+  __ movl(ecx, Operand(eax, 0)); // low 32-bits of alt
+  __ movl(eax, Operand(esp, 0));
+  __ movl(edx, Operand(eax, 4)); // hi 32-bits of pri
+  __ movl(eax, Operand(eax, 0)); // lo 32-bits of pri
+  __ shrd(eax, edx);
+  __ sarl_cl(edx);
+  __ testb(ecx, 0x20);
+  __ j(equal, &done);
+  __ movl(eax, edx);
+  __ sarl(edx, 0x1f);
+  __ bind(&done);
+  __ addl(esp, 8);
+
+  __ movl(Operand(frm, slot), eax);
+  __ movl(Operand(frm, slot + 4), edx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSHR_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ lea(ecx, Operand(dat, alt, NoScale, 0));
+  __ push(ecx);
+  __ lea(ecx, Operand(dat, pri, NoScale, 0));
+  __ push(ecx);
+
+  Label done;
+  __ movl(eax, Operand(esp, 4));
+  __ movl(ecx, Operand(eax, 0)); // low 32-bits of alt
+  __ movl(eax, Operand(esp, 0));
+  __ movl(edx, Operand(eax, 4)); // hi 32-bits of pri
+  __ movl(eax, Operand(eax, 0)); // lo 32-bits of pri
+  __ shrd(eax, edx);
+  __ shrl_cl(edx);
+  __ testb(ecx, 0x20);
+  __ j(equal, &done);
+  __ movl(eax, edx);
+  __ xorl(edx, edx);
+  __ bind(&done);
+  __ addl(esp, 8);
+
+  __ movl(Operand(frm, slot), eax);
+  __ movl(Operand(frm, slot + 4), edx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitOR_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ orl(ecx, Operand(dat, alt, NoScale, 0));
+  __ movl(Operand(frm, slot), ecx);
+  __ movl(ecx, Operand(dat, pri, NoScale, 4));
+  __ orl(ecx, Operand(dat, alt, NoScale, 4));
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitAND_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ andl(ecx, Operand(dat, alt, NoScale, 0));
+  __ movl(Operand(frm, slot), ecx);
+  __ movl(ecx, Operand(dat, pri, NoScale, 4));
+  __ andl(ecx, Operand(dat, alt, NoScale, 4));
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitXOR_I64(cell_t slot) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+  __ movl(ecx, Operand(dat, pri, NoScale, 0));
+  __ xorl(ecx, Operand(dat, alt, NoScale, 0));
+  __ movl(Operand(frm, slot), ecx);
+  __ movl(ecx, Operand(dat, pri, NoScale, 4));
+  __ xorl(ecx, Operand(dat, alt, NoScale, 4));
+  __ movl(Operand(frm, slot + 4), ecx);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, slot);
+  return true;
+}
+
+bool Compiler::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
+  __ movl(Operand(frm, slot), cell0);
+  __ movl(Operand(frm, slot + 4), cell1);
+  return true;
+}
+
+bool Compiler::visitCompareOp64(CompareOp op) {
+  emitCheckAddress(pri);
+  emitCheckAddress(alt);
+
+  __ push(ebx);
+
+  switch (op) {
+    case CompareOp::Eq:
+    case CompareOp::Neq:
+      __ lea(edx, Operand(dat, alt, NoScale, 0));
+      __ lea(ecx, Operand(dat, pri, NoScale, 0));
+      __ movl(eax, Operand(edx, 0));
+      __ movl(edx, Operand(edx, 4));
+      __ xorl(eax, Operand(ecx, 0));
+      __ xorl(edx, Operand(ecx, 4));
+      __ orl(eax, edx);
+      __ set(equal, eax);
+      __ set(op == CompareOp::Eq ? equal : not_equal, eax);
+      break;
+    case CompareOp::Sless:
+    case CompareOp::Sgrtr:
+      if (op == CompareOp::Sless) {
+        __ lea(ecx, Operand(dat, pri, NoScale, 0));
+        __ lea(edx, Operand(dat, alt, NoScale, 0));
+      } else {
+        __ lea(ecx, Operand(dat, alt, NoScale, 0));
+        __ lea(edx, Operand(dat, pri, NoScale, 0));
+      }
+      __ movl(eax, Operand(ecx, 4));
+      __ movl(ebx, Operand(edx, 0));
+      __ cmpl(Operand(ecx, 0), ebx);
+      __ sbbl(eax, Operand(edx, 4));
+      __ set(less, eax);
+      break;
+    case CompareOp::Sleq:
+    case CompareOp::Sgeq:
+      if (op == CompareOp::Sleq) {
+        __ lea(ecx, Operand(dat, alt, NoScale, 0));
+        __ lea(edx, Operand(dat, pri, NoScale, 0));
+      } else {
+        __ lea(ecx, Operand(dat, pri, NoScale, 0));
+        __ lea(edx, Operand(dat, alt, NoScale, 0));
+      }
+      __ movl(ebx, Operand(edx, 0));
+      __ movl(eax, Operand(ecx, 4));
+      __ cmpl(Operand(ecx, 0), ebx);
+      __ sbbl(eax, Operand(edx, 4));
+      __ set(greater_equal, eax);
+      break;
+    default:
+      assert(false);
+  }
+
+  __ pop(ebx);
+  __ movzxb(eax, eax);
+  return true;
+}
+
 void
 Compiler::jumpOnError(ConditionCode cc, int err)
 {

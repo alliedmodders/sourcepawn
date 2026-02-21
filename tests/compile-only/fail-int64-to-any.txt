@@ -1,0 +1,2 @@
+(3) : error 450: no viable conversion from 'any' to 'int64'
+(8) : error 450: no viable conversion from 'int64' to 'any'

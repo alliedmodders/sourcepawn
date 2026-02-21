@@ -625,6 +625,8 @@ class Expr : public ParseNode
     void set_lvalue(bool lvalue) { lvalue_ = lvalue; }
     bool can_alloc_heap() const { return can_alloc_heap_; }
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
+    bool can_alloc_int64_slot() const { return can_alloc_int64_slot_; }
+    void set_can_alloc_int64_slot(bool b) { can_alloc_int64_slot_ = b; }
 
     void MarkAndProcessUses(SemaContext& sc) {
         MarkUsed(sc);
@@ -649,6 +651,7 @@ class Expr : public ParseNode
     ExprKind kind_ : 8;
     bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
+    bool can_alloc_int64_slot_ : 1;
 };
 
 class UnaryExpr final : public Expr
@@ -745,7 +748,6 @@ struct CompareOp
     token_pos_t pos;
     int token;
     Expr* expr;
-    int oper_tok;
     UserOperation userop = {};
 };
 
@@ -869,6 +871,7 @@ class CastExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::CastExpr; }
 
     Expr* expr() const { return expr_; }
+    Expr* set_expr(Expr* expr) { return expr_ = expr; }
     const auto& type_info() const { return type_; }
     Type* type() const { return type_.type(); }
 
@@ -1098,6 +1101,23 @@ class RvalueExpr final : public EmitOnlyExpr
     Expr* expr_;
 };
 
+class SimpleCastExpr final : public EmitOnlyExpr
+{
+  public:
+    SimpleCastExpr(Expr* from, Type* to);
+
+    void ProcessUses(SemaContext& sc) override;
+
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::SimpleCastExpr; }
+
+    Expr* from() const { return from_; }
+    Type* to() const { return to_; }
+
+  private:
+    Expr* from_;
+    Type* to_;
+};
+
 class CommaExpr final : public Expr
 {
   public:
@@ -1190,6 +1210,10 @@ class Number64Expr final : public Expr
       : Expr(ExprKind::Number64Expr, pos),
         atom_(atom)
     {}
+    Number64Expr(const token_pos_t& pos, int64_t value)
+      : Expr(ExprKind::Number64Expr, pos),
+        value_(value)
+    {}
 
     void ProcessUses(SemaContext&) override {}
 
@@ -1201,6 +1225,7 @@ class Number64Expr final : public Expr
 
   private:
     sp::Atom* atom_;
+    std::optional<int64_t> value_;
 };
 
 class StringExpr final : public Expr
@@ -1707,6 +1732,9 @@ class FunctionDecl : public Decl
     ReturnArrayInfo* return_array() const { return return_array_; }
     void set_return_array(ReturnArrayInfo* base) { return_array_ =  base; }
 
+    int32_t num_int64_slots() const { return num_int64_slots_; }
+    void set_num_int64_slots(int32_t num_int64_slots) { num_int64_slots_ = num_int64_slots; }
+
     const PoolForwardList<FunctionDecl*>* refers_to() const {
         return refers_to_;
     }
@@ -1743,6 +1771,8 @@ class FunctionDecl : public Decl
 
     // Set during codegen.
     CGInfo* cg_ = nullptr;
+
+    int32_t num_int64_slots_ = 0;
 
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);

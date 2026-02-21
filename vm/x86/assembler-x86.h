@@ -274,6 +274,10 @@ struct Operand
     modrm(kModeReg, reg.code);
   }
 
+  explicit Operand(FloatRegister reg) {
+    modrm(kModeReg, reg.code);
+  }
+
   void modrm(uint8_t mode, uint8_t rm) {
     assert(mode <= 3);
     assert(rm <= 7);
@@ -390,6 +394,24 @@ class Assembler : public AssemblerBase
   void movaps(const Operand& dest, FloatRegister src) {
     emit2(0x0f, 0x29, src.code, dest);
   }
+  void movq(FloatRegister dest, const Operand& src) {
+    emit3(0xf3, 0x0f, 0x7e, dest.code, src);
+  }
+  void movq(const Operand& dest, FloatRegister src) {
+    emit3(0x66, 0x0f, 0xd6, src.code, dest);
+  }
+  void paddq(FloatRegister dest, FloatRegister src) {
+    emit3(0x66, 0x0f, 0xd4, dest.code, Operand(src));
+  }
+  void paddq(FloatRegister dest, const Operand& src) {
+    emit3(0x66, 0x0f, 0xd4, dest.code, src);
+  }
+  void psubq(FloatRegister dest, FloatRegister src) {
+    emit3(0x66, 0x0f, 0xfb, dest.code, Operand(src));
+  }
+  void psubq(FloatRegister dest, const Operand& src) {
+    emit3(0x66, 0x0f, 0xfb, dest.code, src);
+  }
 
   void lea(Register dest, const Operand& src) {
     emit1(0x8d, dest.code, src);
@@ -412,6 +434,12 @@ class Assembler : public AssemblerBase
   }
   void shll(const Operand& dest, uint8_t imm) {
     shift_imm(dest, 4, imm);
+  }
+  void shld(const Operand& dest, Register src) {
+    emit2(0x0f, 0xa5, src.code, dest);
+  }
+  void shld(Register dest, Register src) {
+    emit2(0x0f, 0xa5, src.code, Operand(dest));
   }
   void shrl_cl(Register dest) {
     shift_cl(dest.code, 5);
@@ -438,6 +466,12 @@ class Assembler : public AssemblerBase
   void shrd(const Operand& dest, Register src, uint8_t imm) {
     emit2(0x0f, 0xac, src.code, dest);
     *pos_++ = imm;
+  }
+  void shrd(const Operand& dest, Register src) {
+    emit2(0x0f, 0xad, src.code, dest);
+  }
+  void shrd(const Register dest, Register src) {
+    emit2(0x0f, 0xad, src.code, Operand(dest));
   }
 
   void cmpb(Register left, int8_t imm8) {
@@ -550,6 +584,9 @@ class Assembler : public AssemblerBase
   void imull(Register dest, Register src, int32_t imm) {
     imull(dest, Operand(src), imm);
   }
+  void mull(const Operand& src) {
+    emit1(0xf7, 4, src);
+  }
 
   void testl(const Operand& op1, Register op2) {
     emit1(0x85, op2.code, op1);
@@ -564,6 +601,10 @@ class Assembler : public AssemblerBase
       emit1(0xf7, 0, op1.code);
     writeInt32(imm);
   }
+  void testb(Register left, int8_t imm) {
+    emit1(0xf6, 0, Operand(left));
+    *pos_++ = imm;
+  }
   void set(ConditionCode cc, const Operand& dest) {
     emit2(0x0f, 0x90 + uint8_t(cc), 0, dest);
   }
@@ -575,6 +616,12 @@ class Assembler : public AssemblerBase
   }
   void negl(const Operand& srcdest) {
     emit1(0xf7, 3, srcdest);
+  }
+  void sbbl(const Operand& dest, Register src) {
+    emit1(0x19, src.code, dest);
+  }
+  void sbbl(Register dest, const Operand& src) {
+    emit1(0x1b, dest.code, src);
   }
   void notl(Register srcdest) {
     emit1(0xf7, 2, srcdest.code);
@@ -823,6 +870,9 @@ class Assembler : public AssemblerBase
     emit2(0x0f, 0xa2);
   }
 
+  void cdq() {
+    emit1(0x99);
+  }
 
   // SSE operations can only be used if the feature detection function has
   // been run *and* detected the appropriate level of functionality.

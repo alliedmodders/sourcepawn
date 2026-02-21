@@ -121,6 +121,7 @@ class Environment : public ISourcePawnEnvironment
   bool IsJitEnabled() const {
     return jit_enabled_;
   }
+  bool IsJitAvailable();
   void SetDebugger(IDebugListener* debugger) {
     debugger_ = debugger;
   }

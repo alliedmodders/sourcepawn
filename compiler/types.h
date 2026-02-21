@@ -55,7 +55,7 @@ enum IdentifierKind {
     iTYPENAME = 14,     /* symbol defining a type */
 };
 
-enum class BuiltinType {
+enum class BuiltinType : uint8_t {
     Bool,
     Char,
     Int,
@@ -63,6 +63,7 @@ enum class BuiltinType {
     Null,
     Any,
     Void,
+    Int64,
 };
 
 enum class TypeKind : uint8_t {
@@ -247,6 +248,7 @@ class Type : public PoolObject
     bool isBuiltin() const { return kind_ == TypeKind::Builtin; }
     bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
     bool isInt() const { return isBuiltin(BuiltinType::Int); }
+    bool isInt64() const { return isBuiltin(BuiltinType::Int64); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
@@ -256,6 +258,9 @@ class Type : public PoolObject
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
     bool isCharArray() const;
+
+    // True if a value representation can be > 1 cell.
+    bool isComposite() const { return isArray() || isEnumStruct() || isInt64(); }
 
     bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
 
@@ -467,6 +472,9 @@ class TypeManager
     Type* type_string() const { return type_string_; }
     Type* type_char() const { return type_string_; }
     Type* type_int() const { return type_int_; }
+    Type* type_int64() const { return type_int64_; }
+
+    Type* GetBuiltin(BuiltinType type) const { return builtin_types_[(int)type]; }
 
   private:
     Type* add(const char* name, TypeKind kind);
@@ -478,6 +486,7 @@ class TypeManager
     CompileContext& cc_;
     tr::unordered_map<Atom*, Type*> types_;
     tr::unordered_map<Type*, Type*> ref_types_;
+    tr::vector<Type*> builtin_types_;
     std::vector<Type*> by_index_;
     Type* type_int_ = nullptr;
     Type* type_object_ = nullptr;
@@ -488,6 +497,7 @@ class TypeManager
     Type* type_float_ = nullptr;
     Type* type_bool_ = nullptr;
     Type* type_string_ = nullptr;
+    Type* type_int64_ = nullptr;
 
     struct ArrayCachePolicy {
         typedef ArrayType* Payload;

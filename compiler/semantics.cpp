@@ -26,6 +26,7 @@
 #include <amtl/am-raii.h>
 #include "array-helpers.h"
 #include "code-generator.h"
+#include "coercion-rules.h"
 #include "errors.h"
 #include "expressions.h"
 #include "lexer.h"
@@ -97,6 +98,8 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
         if (flags & STMT_OWNS_HEAP)
             AssignHeapOwnership(stmt);
     });
+
+    ke::SaveRestore<uint32_t> int64_slot_scope(sc_->temp_int64_slots());
 
     switch (stmt->kind()) {
         case StmtKind::ChangeScopeNode:
@@ -200,6 +203,10 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
         if (!init_rhs->EvalConst(nullptr, nullptr)) {
             if (vclass == sARGUMENT && init_rhs->is(ExprKind::SymbolExpr))
                 return true;
+            if ((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>())
+                return true;
+
+            // Make a special exception for int64 lits.
             report(init_rhs->pos(), 8);
         }
     }
@@ -350,10 +357,8 @@ bool Semantics::CheckWrappedExpr(Expr* outer, Expr* inner) {
 CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
   : pos(pos),
     token(token),
-    expr(expr),
-    oper_tok(NormalizeBinaryToken(token))
-{
-}
+    expr(expr)
+{}
 
 bool Expr::EvalConst(cell* value, Type** type) {
     if (val_.ident != iCONSTEXPR) {
@@ -455,7 +460,7 @@ bool Semantics::CheckScalarType(Expr* expr) {
     const auto& val = expr->val();
     if (val.type()->isArray()) {
         if (val.sym)
-            report(expr, 33) << val.sym->name();
+            report(expr, 456) << val.type();
         else
             report(expr, 29);
         return false;
@@ -491,6 +496,9 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
             expr->val().set_type(types_->type_bool());
             return expr;
         }
+
+        if (val.type()->isInt64())
+            return BuildSimpleCast(expr, BuiltinType::Bool);
     }
 
     if (val.ident == iCONSTEXPR) {
@@ -554,6 +562,8 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     UserOperation userop;
     switch (unary->token()) {
         case '~':
+            if (out_val.type()->isInt64())
+                NeedsInt64Slot(unary);
             if (out_val.ident == iCONSTEXPR)
                 out_val.set_constval(~out_val.constval());
             break;
@@ -568,6 +578,8 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             out_val.set_type(types_->type_bool());
             break;
         case '-':
+            if (out_val.type()->isInt64())
+                NeedsInt64Slot(unary);
             if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
                 float f = sp::FloatCellUnion(out_val.constval()).f32;
                 out_val.set_constval(sp::FloatCellUnion(-f).cell);
@@ -640,6 +652,13 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
 
     find_userop(*sc_, incdec->token(), type, 0, 1, &expr_val, &incdec->userop());
 
+    if (type->isInt64()) {
+        if (incdec->prefix())
+            NeedsInt64Slot(incdec, 1);
+        else
+            NeedsInt64Slot(incdec, 2);
+    }
+
     // :TODO: more type checks
     auto& val = incdec->val();
     val.ident = iEXPRESSION;
@@ -669,6 +688,17 @@ BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* righ
 {
 }
 
+static inline bool SupportsOperators(Type* type) {
+    if (type->isVoid() || type->isArray() || type->isEnumStruct()) {
+        return false;
+    }
+    return true;
+}
+
+static inline bool CanPromoteToInt64(Type* type) {
+    return type->isInt();
+}
+
 class BinaryExprChecker final
 {
   public:
@@ -687,6 +717,7 @@ class BinaryExprChecker final
   private:
     bool CheckAssignmentLHS();
     bool CheckAssignmentRHS();
+    bool CheckOperatorTypes();
 
   private:
     CompileContext& cc_;
@@ -747,6 +778,12 @@ bool BinaryExprChecker::Check() {
     if (right_->lvalue())
         right_ = expr_->set_right(new RvalueExpr(right_));
 
+    // The assignment operator is overloaded separately.
+    if (IsAssignOp(token)) {
+        if (!CheckAssignmentRHS())
+            return false;
+    }
+
     auto* left_val = &left_->val();
     auto* right_val = &right_->val();
 
@@ -754,23 +791,14 @@ bool BinaryExprChecker::Check() {
     if (oper_tok) {
         assert(token != '=');
 
-        if (left_val->type()->isArray()) {
-            const char* ptr = (left_val->sym != nullptr) ? left_val->sym->name()->chars() : "-unknown-";
-            report(expr_, 33) << ptr; /* array must be indexed */
+        if (!SupportsOperators(left_val->type())) {
+            report(left_, 33) << left_val->type();
             return false;
         }
-        if (right_val->type()->isArray()) {
-            const char* ptr = (right_val->sym != nullptr) ? right_val->sym->name()->chars() : "-unknown-";
-            report(expr_, 33) << ptr; /* array must be indexed */
+        if (!SupportsOperators(right_val->type())) {
+            report(right_, 33) << right_val->type();
             return false;
         }
-        /* ??? ^^^ should do same kind of error checking with functions */
-    }
-
-    // The assignment operator is overloaded separately.
-    if (IsAssignOp(token)) {
-        if (!CheckAssignmentRHS())
-            return false;
     }
 
     auto& val = expr_->val();
@@ -794,23 +822,54 @@ bool BinaryExprChecker::Check() {
             val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
                                   &boolresult));
         } else {
-            // For the purposes of tag matching, we consider the order to be irrelevant.
-            Type* left_type = left_val->type();
-            if (left_type->isReference())
-                left_type = left_type->inner();
-
-            Type* right_type = right_val->type();
-            if (right_type->isReference())
-                right_type = right_type->inner();
-
-            if (!checkval_string(left_val, right_val))
-                matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
+            if (!CheckOperatorTypes())
+                return false;
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
             val.set_type(types_->type_bool());
     }
 
+    if (val.type()->isInt64()) {
+        unsigned int temp_slots = 1;
+        if (oper_tok == '/')
+            temp_slots = 2;
+        sema_.NeedsInt64Slot(expr_, temp_slots);
+    }
+
+    return true;
+}
+
+bool BinaryExprChecker::CheckOperatorTypes() {
+    auto* left_val = &left_->val();
+    auto* right_val = &right_->val();
+
+    // For the purposes of tag matching, we consider the order to be irrelevant.
+    Type* left_type = left_val->type();
+    if (left_type->isReference())
+        left_type = left_type->inner();
+
+    Type* right_type = right_val->type();
+    if (right_type->isReference())
+        right_type = right_type->inner();
+
+    if (auto cr = FindBinaryCoercionRule(left_type, right_type, expr_->token()); cr) {
+        if (*cr == BuiltinType::Void) {
+            report(expr_, 461) << get_token_string(expr_->token()) << left_type << right_type;
+            return false;
+        }
+
+        if (!left_type->isBuiltin(*cr))
+            left_ = expr_->set_left(sema_.BuildSimpleCast(left_, *cr));
+        if (!right_type->isBuiltin(*cr))
+            right_ = expr_->set_right(sema_.BuildSimpleCast(right_, *cr));
+
+        expr_->val().set_type(left_->val().type());
+        return true;
+    }
+
+    if (!checkval_string(left_val, right_val))
+        matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
     return true;
 }
 
@@ -896,6 +955,29 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
         // Userop tag will be propagated by the caller.
         find_userop(*sema_.context(), 0, right_val.type(), left_val.type(), 2, &left_val,
                     &expr_->assignop());
+    }
+
+    // int64 handling (gross, yes).
+    auto left_type = left_val.type();
+    if (left_type->isReference())
+        left_type = left_type->inner();
+
+    if (left_type->isInt64() || right_val.type()->isInt64()) {
+        if (!left_type->isInt64()) {
+            if (left_type->isInt())
+                report(expr_, 454);
+            else
+                report(expr_, 455) << left_type << right_val.type();
+            return false;
+        }
+        if (!right_val.type()->isInt64()) {
+            if (!CanPromoteToInt64(right_val.type())) {
+                report(expr_, 455) << left_type << right_val.type();
+                return false;
+            }
+            right_ = expr_->set_right(sema_.BuildSimpleCast(right_, BuiltinType::Int64));
+        }
+        return true;
     }
 
     int oper_tok = NormalizeBinaryToken(expr_->token());
@@ -1073,18 +1155,17 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         const auto& left_val = left->val();
         const auto& right_val = right->val();
 
-        if (left_val.type()->isArray()) {
-            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
-            report(left, 33) << ptr; /* array must be indexed */
+        if (!SupportsOperators(left_val.type())) {
+            report(left, 33) << left_val.type();
             return false;
         }
-        if (right_val.type()->isArray()) {
-            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
-            report(right, 33) << ptr; /* array must be indexed */
+        if (!SupportsOperators(right_val.type())) {
+            report(right, 33) << right_val.type();
             return false;
         }
 
-        if (find_userop(*sc_, op.oper_tok, left_val.type(), right_val.type(), 2, nullptr,
+        int oper_tok = NormalizeBinaryToken(op.token);
+        if (find_userop(*sc_, oper_tok, left_val.type(), right_val.type(), 2, nullptr,
                         &op.userop))
         {
             if (!op.userop.sym->type()->isBool()) {
@@ -1219,13 +1300,14 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         return false;
     }
 
-    if (!CheckExpr(expr->expr()))
+    auto inner = expr->expr();
+    if (!CheckExpr(inner))
         return false;
 
     auto& out_val = expr->val();
 
-    out_val = expr->expr()->val();
-    expr->set_lvalue(expr->expr()->lvalue());
+    out_val = inner->val();
+    expr->set_lvalue(inner->lvalue());
 
     Type* ltype = out_val.type();
 
@@ -1260,6 +1342,27 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         }
         atype = types_->defineReference(atype);
     }
+    if (atype->isInt64()) {
+        report(expr, 460) << out_val.type() << atype;
+        return false;
+    }
+    if (actual_array && ltype->isInt64()) {
+        report(expr, 460) << actual_array << atype;
+        return false;
+    }
+
+    if (out_val.type()->isInt64()) {
+        if (!atype->isInt()) {
+            report(expr, 460) << ltype << atype;
+            return false;
+        }
+        if (inner->lvalue()) {
+            expr->set_expr(new RvalueExpr(inner));
+            expr->set_lvalue(false);
+        }
+        out_val.ident = iEXPRESSION;
+    }
+
     if (actual_array)
         atype = types_->redefineArray(atype, actual_array);
     out_val.set_type(atype);
@@ -1542,7 +1645,8 @@ bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
 
     auto& val = expr->val();
     val.ident = iEXPRESSION;
-    val.set_type(types_->type_int());
+    val.set_type(types_->type_int64());
+    NeedsInt64Slot(expr);
     return true;
 }
 
@@ -1926,6 +2030,14 @@ DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, ArgDecl* arg)
     // accurately construct it.
 }
 
+static inline bool IsValidInt64RefArg(Type* param) {
+    if (param->isInt64())
+        return true;
+    if (param->isReference() && param->inner()->isInt64())
+        return true;
+    return false;
+}
+
 bool Semantics::CheckCallExpr(CallExpr* call) {
     AutoErrorPos aep(call->pos());
 
@@ -1959,6 +2071,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     val.set_type(fun->return_type());
     if (fun->return_array())
         NeedsHeapAlloc(call);
+    else if (fun->return_type()->isInt64())
+        NeedsInt64Slot(call);
 
     // We don't have canonical decls yet, so get the one attached to the symbol.
     if (fun->deprecate())
@@ -2096,6 +2210,9 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             NeedsHeapAlloc(param);
         }
 
+        if (param->val().type())
+            assert(!param->val().type()->isInt64());
+
         // The rest of the code to handle default values is in DoEmit.
         return param;
     }
@@ -2119,6 +2236,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     bool lvalue = param->lvalue();
     if (arg->type_info().is_varargs) {
         assert(!handling_this);
+        assert(!param->val().type()->isInt64());
 
         // Always pass by reference.
         if (val->ident == iVARIABLE) {
@@ -2149,8 +2267,21 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
-        checktag(arg->type()->inner(), val->type());
+
+        if (arg->type()->inner()->isInt64()) {
+            if (!IsValidInt64RefArg(val->type())) {
+                report(param, 134) << arg->type() << val->type();
+                return nullptr;
+            }
+        } else {
+            if (IsValidInt64RefArg(val->type())) {
+                report(param, 134) << arg->type() << val->type();
+                return nullptr;
+            }
+            checktag(arg->type()->inner(), val->type());
+        }
     } else if (arg->type()->isArray()) {
+        assert(!param->val().type()->isInt64());
         // If the input type is an index into an array, create an implicit
         // array type to represent the slice.
         Type* type = val->type();
@@ -2178,7 +2309,17 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         {
             param = new CallUserOpExpr(userop, param);
             val = &param->val();
+            assert(!val->type()->isInt64());
         }
+
+        if (val->type()->isInt() && arg->type()->isInt64()) {
+            param = BuildSimpleCast(param, BuiltinType::Int64);
+            val = &param->val();
+        }
+
+        // Needed for copy.
+        if (val->type()->isInt64())
+            NeedsInt64Slot(param);
 
         TypeChecker tc(param, arg->type(), val->type(), TypeChecker::Argument);
         if (!tc.Coerce())
@@ -2497,6 +2638,11 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     sc_->set_returns_value();
 
+    if (fun->return_type()->isInt64() && CanPromoteToInt64(expr->val().type())) {
+        expr = stmt->set_expr(BuildSimpleCast(expr, BuiltinType::Int64));
+        return true;
+    }
+
     const auto& v = expr->val();
 
     // Check that the return statement matches the declared return type.
@@ -2777,8 +2923,8 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
     bool tag_ok = CheckRvalue(expr);
     const auto& v = expr->val();
-    if (tag_ok && v.type()->isArray())
-        report(expr, 33) << "-unknown-";
+    if (tag_ok && (v.type()->isComposite() || v.type()->isVoid()))
+        report(455) << v.type() << types_->type_int();
 
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
@@ -2891,13 +3037,8 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
     auto& decl = info->decl();
-    {
-        AutoErrorPos error_pos(info->pos());
-        CheckVoidDecl(&decl, FALSE);
-
-        if (decl.opertok)
-            check_operatortag(decl.opertok, decl.type.type, decl.name->chars());
-    }
+    if (decl.opertok && !CheckOperatorOverloadSignature(info))
+        return false;
 
     if (info->is_public() || info->is_forward()) {
         if (decl.type.dim_exprs.size() > 0)
@@ -2933,6 +3074,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
+    info->set_num_int64_slots(sc.max_int64_slots());
     info->set_returns_value(sc_->returns_value());
     info->set_always_returns(sc_->always_returns());
 
@@ -2968,6 +3110,23 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     if (info->is_public())
         cc_.publics().emplace(info->canonical());
     return ok;
+}
+
+bool Semantics::CheckOperatorOverloadSignature(FunctionDecl* info) {
+    AutoErrorPos error_pos(info->pos());
+
+    const auto& decl = info->decl();
+    check_operatortag(decl.opertok, decl.type.type, decl.name->chars());
+
+    for (const auto& arg : info->args()) {
+        Type* type = arg->type();
+        if (type->isInt64() || type->isEnumStruct() || type->isArray()) {
+            report(arg->pos(), 457) << type;
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
@@ -3115,6 +3274,13 @@ bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
 void Semantics::NeedsHeapAlloc(Expr* expr) {
     expr->set_can_alloc_heap(true);
     pending_heap_allocation_ = true;
+}
+
+void Semantics::NeedsInt64Slot(Expr* expr, unsigned int count) {
+    expr->set_can_alloc_int64_slot(true);
+    sc_->temp_int64_slots() += count;
+    if (sc_->temp_int64_slots() > sc_->max_int64_slots())
+        sc_->max_int64_slots() = sc_->temp_int64_slots();
 }
 
 void Semantics::AssignHeapOwnership(ParseNode* node) {
@@ -3306,6 +3472,28 @@ bool Semantics::IsThisAtom(sp::Atom* atom) {
     if (!this_atom_)
         this_atom_ = cc_.atom("this");
     return atom == this_atom_;
+}
+
+Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
+    if (from->lvalue())
+        from = new RvalueExpr(from);
+
+    // Half-assed constant folding for int->int64 casts for global assignment to work.
+    Expr* to;
+    if (from->val().ident == iCONSTEXPR && from->val().type()->isInt() &&
+        type == BuiltinType::Int64)
+    {
+        to = new Number64Expr(from->pos(), from->val().constval());
+    } else {
+        to = new SimpleCastExpr(from, types_->GetBuiltin(type));
+    }
+
+    to->val().ident = iEXPRESSION;
+    to->val().set_type(types_->GetBuiltin(type));
+
+    if (type == BuiltinType::Int64 && sc_->func())
+        NeedsInt64Slot(to);
+    return to;
 }
 
 void DeleteStmt::ProcessUses(SemaContext& sc) {

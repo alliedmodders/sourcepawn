@@ -21,6 +21,19 @@ namespace sp {
 
 using namespace SourcePawn;
 
+int Int64Div(int64_t* pri, int64_t* alt, int64_t* pri_dest, int64_t* alt_dest) {
+  if (*pri == 0)
+    return SP_ERROR_DIVIDE_BY_ZERO;
+
+  // -INT_MIN / -1 is an overflow.
+  if (*pri == -1 && *alt == std::numeric_limits<int64_t>::min())
+    return SP_ERROR_INTEGER_OVERFLOW;
+
+  *pri_dest = *alt / *pri;
+  *alt_dest = *alt % *pri;
+  return SP_ERROR_NONE;
+}
+
 void
 ReportOutOfBoundsError(cell_t index, cell_t bounds)
 {
