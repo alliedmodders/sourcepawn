@@ -201,6 +201,7 @@ class Semantics final
     bool CheckArrayExpr(ArrayExpr* expr);
     bool CheckStringExpr(StringExpr* expr);
     bool CheckTaggedValueExpr(TaggedValueExpr* expr);
+    bool CheckNumber64Expr(Number64Expr* expr);
     bool CheckNullExpr(NullExpr* expr);
     bool CheckThisExpr(ThisExpr* expr);
     bool CheckCommaExpr(CommaExpr* expr);

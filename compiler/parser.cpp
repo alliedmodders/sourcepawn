@@ -1022,6 +1022,8 @@ Parser::constant()
         case tCHAR_LITERAL:
         case tNUMBER:
             return new NumberExpr(pos, types_->type_int(), lexer_->current_token()->value());
+        case tNUMBER64:
+            return new Number64Expr(pos, lexer_->current_token()->atom);
         case tRATIONAL:
             return new FloatExpr(cc_, pos, lexer_->current_token()->value());
         case tSTRING: {

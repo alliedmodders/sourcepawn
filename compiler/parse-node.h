@@ -1183,6 +1183,26 @@ class FloatExpr final : public TaggedValueExpr
     FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value);
 };
 
+class Number64Expr final : public Expr
+{
+  public:
+    Number64Expr(const token_pos_t& pos, sp::Atom* atom)
+      : Expr(ExprKind::Number64Expr, pos),
+        atom_(atom)
+    {}
+
+    void ProcessUses(SemaContext&) override {}
+
+    static std::optional<int64_t> ToInt64(Expr* expr);
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::Number64Expr; }
+
+    sp::Atom* atom() const { return atom_; }
+    std::optional<int64_t> ToInt64();
+
+  private:
+    sp::Atom* atom_;
+};
+
 class StringExpr final : public Expr
 {
   public:

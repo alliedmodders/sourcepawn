@@ -94,6 +94,7 @@ class CodeGenerator final
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
     void EmitCallUserOpExpr(CallUserOpExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
+    void EmitNumber64Expr(Number64Expr* expr);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);

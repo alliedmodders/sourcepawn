@@ -529,6 +529,9 @@ CodeGenerator::EmitExpr(Expr* expr)
         case ExprKind::NamedArgExpr:
             EmitExpr(expr->to<NamedArgExpr>()->expr);
             break;
+        case ExprKind::Number64Expr:
+            EmitNumber64Expr(expr->to<Number64Expr>());
+            break;
 
         default:
             assert(false);
@@ -2069,6 +2072,10 @@ void CodeGenerator::EmitDec(const value* lval)
             break;
         }
     }
+}
+
+void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
+    report(expr, 135);
 }
 
 void

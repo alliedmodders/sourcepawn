@@ -255,7 +255,7 @@ Lexer::SynthesizeIncludePathToken()
  *  o  at least one digit must follow the period; "6." is not a valid number,
  *     you should write "6.0"
  */
-void Lexer::lex_float(full_token_t* tok, cell_t whole) {
+void Lexer::lex_float(full_token_t* tok, double whole) {
     double fnum = whole;
 
     double ffrac = 0.0;
@@ -1406,6 +1406,7 @@ const char* sc_tokens[] = {"*=",
                            ";",
                            ";",
                            "-integer value-",
+                           "-number value-",
                            "-float value-",
                            "-identifier-",
                            "-label-",
@@ -1855,7 +1856,7 @@ void Lexer::LexIntoToken(full_token_t* tok) {
 }
 
 bool Lexer::lex_number(full_token_t* tok) {
-    cell value = 0;
+    uint64_t value = 0;
 
     int base = 10;
     int ndigits = 0;
@@ -1899,7 +1900,18 @@ bool Lexer::lex_number(full_token_t* tok) {
         if (c == '_')
             continue;
 
-        value = (value * base) + digit;
+        if (!IsUint64MultiplySafe(value, base)) {
+            report(135);
+            break;
+        }
+        value *= base;
+
+        if (!IsUint64AddSafe(value, digit)) {
+            report(135);
+            break;
+        }
+        value += digit;
+
         ndigits++;
     }
 
@@ -1921,8 +1933,13 @@ bool Lexer::lex_number(full_token_t* tok) {
         backtrack();
     }
 
-    tok->id = tNUMBER;
-    tok->numeric_value = value;
+    if (value > UINT_MAX) {
+        tok->id = tNUMBER64;
+        tok->atom = cc_.atom(std::to_string(value));
+    } else {
+        tok->id = tNUMBER;
+        tok->numeric_value = value;
+    }
     return true;
 }
 

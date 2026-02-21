@@ -73,6 +73,7 @@
     FOR_EACH(ThisExpr) \
     FOR_EACH(NullExpr) \
     FOR_EACH(TaggedValueExpr) \
+    FOR_EACH(Number64Expr) \
     FOR_EACH(StringExpr) \
     FOR_EACH(NewArrayExpr) \
     FOR_EACH(ArrayExpr) \

@@ -323,6 +323,8 @@ bool Semantics::CheckExpr(Expr* expr) {
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
         case ExprKind::TaggedValueExpr:
             return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
+        case ExprKind::Number64Expr:
+            return CheckNumber64Expr(expr->to<Number64Expr>());
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
@@ -576,6 +578,13 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             } else if (out_val.ident == iCONSTEXPR) {
                 /* the negation of a fixed point number is just an integer negation */
                 out_val.set_constval(-out_val.constval());
+            } else {
+                // Special case for -INT_MIN, since we can't eat the '-' during lexing.
+                if (auto num64 = Number64Expr::ToInt64(expr); num64) {
+                    int64_t value = -*num64;
+                    if (value >= INT_MIN && value <= INT_MAX)
+                        out_val.set_constval(value);
+                }
             }
             break;
         default:
@@ -1521,6 +1530,19 @@ bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
     auto& val = expr->val();
     val.set_type(expr->type());
     val.set_constval(expr->value());
+    return true;
+}
+
+bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
+    auto num64 = expr->ToInt64();
+    if (!num64) {
+        report(expr, 135);
+        return false;
+    }
+
+    auto& val = expr->val();
+    val.ident = iEXPRESSION;
+    val.set_type(types_->type_int());
     return true;
 }
 

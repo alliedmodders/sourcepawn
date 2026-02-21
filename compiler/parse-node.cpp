@@ -19,6 +19,9 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include "parse-node.h"
 
+#include <errno.h>
+#include <stdlib.h>
+
 #include "errors.h"
 
 namespace sp {
@@ -293,6 +296,24 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
+}
+
+std::optional<int64_t> Number64Expr::ToInt64(Expr* expr) {
+    auto e = expr->as<Number64Expr>();
+    if (!e)
+        return {};
+    return e->ToInt64();
+}
+
+std::optional<int64_t> Number64Expr::ToInt64() {
+    char* endptr;
+    int64_t value = strtoll(atom_->chars(), &endptr, 10);
+    if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
+        return {};
+
+    assert(!*endptr);
+
+    return {value};
 }
 
 } // namespace cc

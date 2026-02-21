@@ -211,6 +211,7 @@ enum TokenKind {
     tENDEXPR, /* forced end of expression */
     /* other recognized tokens */
     tNUMBER,   /* integer number */
+    tNUMBER64,
     tRATIONAL, /* rational number */
     tSYMBOL,
     tLABEL,
@@ -402,7 +403,7 @@ class Lexer
     bool substpattern(unsigned char* line, size_t buffersize, const char* pattern,
                       const char* substitution, int& patternLen, int& substLen);
     bool lex_number(full_token_t* tok);
-    void lex_float(full_token_t* tok, cell whole);
+    void lex_float(full_token_t* tok, double whole);
     cell litchar(int flags, bool* is_codepoint = nullptr);
     void multilinestring(std::string* data);
     bool multilinestring_get_indent(std::string& indent, const unsigned char*& end, int quote_count);
