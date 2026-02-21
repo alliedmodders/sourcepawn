@@ -712,25 +712,49 @@ BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* righ
     oper_tok_ = GetOperToken(token_);
 }
 
-bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
-    AutoErrorPos aep(expr->pos());
+class BinaryExprChecker final
+{
+  public:
+    BinaryExprChecker(CompileContext& cc, Semantics& sema, BinaryExpr* expr)
+      : cc_(cc),
+        sema_(sema),
+        expr_(expr),
+        types_(cc_.types()),
+        left_(expr_->left()),
+        right_(expr_->right())
+    {
+    }
 
-    auto left = expr->left();
-    auto right = expr->right();
-    if (!CheckExpr(left) || !CheckRvalue(right))
+    bool Check();
+
+  private:
+    bool CheckAssignmentLHS();
+    bool CheckAssignmentRHS();
+
+  private:
+    CompileContext& cc_;
+    Semantics& sema_;
+    BinaryExpr* expr_;
+    TypeManager* types_;
+    Expr* left_;
+    Expr* right_;
+};
+
+bool BinaryExprChecker::Check() {
+    if (!sema_.CheckExpr(left_) || !sema_.CheckRvalue(right_))
         return false;
 
-    int token = expr->token();
+    int token = expr_->token();
     if (token != '=') {
-        if (!CheckScalarType(left))
+        if (!sema_.CheckScalarType(left_))
             return false;
-        if (!CheckScalarType(right))
+        if (!sema_.CheckScalarType(right_))
             return false;
     }
 
     if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
-        if (Decl* sym = left->val().sym) {
+        if (Decl* sym = left_->val().sym) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
@@ -741,9 +765,9 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
             {
                 markusage(sym, uREAD);
             }
-        } else if (auto* accessor = left->val().accessor()) {
+        } else if (auto* accessor = left_->val().accessor()) {
             if (!accessor->setter()) {
-                report(expr, 152) << accessor->name();
+                report(expr_, 152) << accessor->name();
                 return false;
             }
             markusage(accessor->setter(), uREAD);
@@ -751,36 +775,36 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
                 markusage(accessor->getter(), uREAD);
         }
 
-        if (!CheckAssignmentLHS(expr))
+        if (!CheckAssignmentLHS())
             return false;
-        if (token != '=' && !CheckRvalue(left->pos(), left->val()))
+        if (token != '=' && !sema_.CheckRvalue(left_->pos(), left_->val()))
             return false;
-    } else if (left->lvalue()) {
-        if (!CheckRvalue(left->pos(), left->val()))
+    } else if (left_->lvalue()) {
+        if (!sema_.CheckRvalue(left_->pos(), left_->val()))
             return false;
-        left = expr->set_left(new RvalueExpr(left));
+        left_ = expr_->set_left(new RvalueExpr(left_));
     }
 
     // RHS is always loaded. Note we do this after validating the left-hand side,
     // so ValidateAssignment has an original view of RHS.
-    if (right->lvalue())
-        right = expr->set_right(new RvalueExpr(right));
+    if (right_->lvalue())
+        right_ = expr_->set_right(new RvalueExpr(right_));
 
-    const auto& left_val = left->val();
-    const auto& right_val = right->val();
+    auto* left_val = &left_->val();
+    auto* right_val = &right_->val();
 
-    auto oper_tok = expr->oper();
+    auto oper_tok = expr_->oper();
     if (oper_tok) {
         assert(token != '=');
 
-        if (left_val.type()->isArray()) {
-            const char* ptr = (left_val.sym != nullptr) ? left_val.sym->name()->chars() : "-unknown-";
-            report(expr, 33) << ptr; /* array must be indexed */
+        if (left_val->type()->isArray()) {
+            const char* ptr = (left_val->sym != nullptr) ? left_val->sym->name()->chars() : "-unknown-";
+            report(expr_, 33) << ptr; /* array must be indexed */
             return false;
         }
-        if (right_val.type()->isArray()) {
-            const char* ptr = (right_val.sym != nullptr) ? right_val.sym->name()->chars() : "-unknown-";
-            report(expr, 33) << ptr; /* array must be indexed */
+        if (right_val->type()->isArray()) {
+            const char* ptr = (right_val->sym != nullptr) ? right_val->sym->name()->chars() : "-unknown-";
+            report(expr_, 33) << ptr; /* array must be indexed */
             return false;
         }
         /* ??? ^^^ should do same kind of error checking with functions */
@@ -788,39 +812,41 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 
     // The assignment operator is overloaded separately.
     if (IsAssignOp(token)) {
-        if (!CheckAssignmentRHS(expr))
+        if (!CheckAssignmentRHS())
             return false;
     }
 
-    auto& val = expr->val();
+    auto& val = expr_->val();
     val.ident = iEXPRESSION;
-    val.set_type(left_val.type());
+    val.set_type(left_val->type());
 
-    auto& assignop = expr->assignop();
+    auto& assignop = expr_->assignop();
     if (assignop.sym)
         val.set_type(assignop.sym->type());
 
     if (oper_tok) {
-        auto& userop = expr->userop();
-        if (find_userop(*sc_, oper_tok, left_val.type(), right_val.type(), 2, nullptr, &userop)) {
+        auto& userop = expr_->userop();
+        if (find_userop(*sema_.context(), oper_tok, left_val->type(), right_val->type(), 2, nullptr,
+                        &userop))
+        {
             val.set_type(userop.sym->type());
-        } else if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
+        } else if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR) {
             char boolresult = FALSE;
-            matchtag(left_val.type(), right_val.type(), FALSE);
+            matchtag(left_val->type(), right_val->type(), FALSE);
             val.ident = iCONSTEXPR;
-            val.set_constval(calc(left_val.constval(), oper_tok, right_val.constval(),
+            val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
                                   &boolresult));
         } else {
             // For the purposes of tag matching, we consider the order to be irrelevant.
-            Type* left_type = left_val.type();
+            Type* left_type = left_val->type();
             if (left_type->isReference())
                 left_type = left_type->inner();
 
-            Type* right_type = right_val.type();
+            Type* right_type = right_val->type();
             if (right_type->isReference())
                 right_type = right_type->inner();
 
-            if (!checkval_string(&left_val, &right_val))
+            if (!checkval_string(left_val, right_val))
                 matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
         }
 
@@ -831,115 +857,120 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     return true;
 }
 
-bool Semantics::CheckAssignmentLHS(BinaryExpr* expr) {
-    auto left = expr->left();
-    int left_ident = left->val().ident;
+bool BinaryExprChecker::CheckAssignmentLHS() {
+    int left_ident = left_->val().ident;
     if (left_ident == iARRAYCHAR) {
         // This is a special case, assigned to a packed character in a cell
         // is permitted.
         return true;
     }
 
-    int oper_tok = expr->oper();
-    if (auto left_array = left->val().type()->as<ArrayType>()) {
+    int oper_tok = expr_->oper();
+    if (auto left_array = left_->val().type()->as<ArrayType>()) {
         // array assignment is permitted too (with restrictions)
         if (oper_tok) {
-            report(expr, 23);
+            report(expr_, 23);
             return false;
         }
 
         for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
             if (!iter->size()) {
-                report(left, 46);
+                report(left_, 46);
                 return false;
             }
         }
         return true;
     }
-    if (!left->lvalue()) {
-        report(expr, 22);
+    if (!left_->lvalue()) {
+        report(expr_, 22);
         return false;
     }
 
-    const auto& left_val = left->val();
+    const auto& left_val = left_->val();
 
     // may not change "constant" parameters
-    if (!expr->initializer() && left_val.sym && left_val.sym->is_const()) {
-        report(expr, 22);
+    if (!expr_->initializer() && left_val.sym && left_val.sym->is_const()) {
+        report(expr_, 22);
         return false;
     }
     return true;
 }
 
-bool Semantics::CheckAssignmentRHS(BinaryExpr* expr) {
-    auto left = expr->left();
-    auto right = expr->right();
-    const auto& left_val = left->val();
-    const auto& right_val = right->val();
+bool BinaryExprChecker::CheckAssignmentRHS() {
+    const auto& left_val = left_->val();
+    const auto& right_val = right_->val();
 
     if (left_val.ident == iVARIABLE) {
-        const auto& right_val = right->val();
-        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !expr->oper())
-            report(expr, 226) << left_val.sym->name(); // self-assignment
+        const auto& right_val = right_->val();
+        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !expr_->oper())
+            report(expr_, 226) << left_val.sym->name(); // self-assignment
     }
 
     if (left_val.type()->as<ArrayType>()) {
-        TypeChecker tc(expr, left_val.type(), right_val.type(), TypeChecker::Assignment);
+        TypeChecker tc(expr_, left_val.type(), right_val.type(), TypeChecker::Assignment);
         if (!tc.Coerce())
             return false;
 
         auto right_array = right_val.type()->to<ArrayType>();
         if (right_array->inner()->isArray()) {
-            report(expr, 23);
+            report(expr_, 23);
             return false;
         }
 
         if (right_array->size() == 0) {
-            report(expr, 9);
+            report(expr_, 9);
             return false;
         }
 
-        expr->set_array_copy_length(CalcArraySize(right_array));
+        expr_->set_array_copy_length(CalcArraySize(right_array));
     } else {
         if (right_val.type()->isArray()) {
             // Hack. Special case array literals assigned to an enum struct,
             // since we don't have the infrastructure to deduce an RHS type
             // yet.
-            if (!left_val.type()->isEnumStruct() || !right->as<ArrayExpr>()) {
-                report(expr, 6); // must be assigned to an array
+            if (!left_val.type()->isEnumStruct() || !right_->as<ArrayExpr>()) {
+                report(expr_, 6); // must be assigned to an array
                 return false;
             }
             return true;
         }
 
         // Userop tag will be propagated by the caller.
-        find_userop(*sc_, 0, right_val.type(), left_val.type(), 2, &left_val, &expr->assignop());
+        find_userop(*sema_.context(), 0, right_val.type(), left_val.type(), 2, &left_val,
+                    &expr_->assignop());
     }
 
-    if (!expr->oper() &&
+    if (!expr_->oper() &&
         !checkval_string(&left_val, &right_val) &&
-        !expr->assignop().sym)
+        !expr_->assignop().sym)
     {
         if (left_val.type()->isArray() &&
             ((left_val.type()->isChar() && !right_val.type()->isChar()) ||
              (!left_val.type()->isChar() && right_val.type()->isChar())))
         {
-            report(expr, 179) << left_val.type() << right_val.type();
+            report(expr_, 179) << left_val.type() << right_val.type();
             return false;
         }
         if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
             if (left_val.type() != right_val.type()) {
-                report(expr, 134) << left_val.type() << right_val.type();
+                report(expr_, 134) << left_val.type() << right_val.type();
                 return false;
             }
 
             auto es = left_val.type()->asEnumStruct();
-            expr->set_array_copy_length(es->array_size());
+            expr_->set_array_copy_length(es->array_size());
         } else if (!left_val.type()->isArray()) {
             matchtag(left_val.type(), right_val.type(), TRUE);
         }
     }
     return true;
+}
+
+bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
+    AutoErrorPos aep(expr->pos());
+
+    BinaryExprChecker checker(cc_, *this, expr);
+    return checker.Check();
 }
 
 static inline bool

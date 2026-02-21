@@ -142,6 +142,7 @@ class Semantics final
 {
     friend class ArrayTypeResolver;
     friend class ArrayValidator;
+    friend class BinaryExprChecker;
     friend class ConstDecl;
     friend class EnumDecl;
     friend class FunctionDecl;
@@ -221,8 +222,6 @@ class Semantics final
     bool CheckRvalue(Expr* expr);
     bool CheckRvalue(const token_pos_t& pos, const value& val);
 
-    bool CheckAssignmentLHS(BinaryExpr* expr);
-    bool CheckAssignmentRHS(BinaryExpr* expr);
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
 
     struct ParamState {
