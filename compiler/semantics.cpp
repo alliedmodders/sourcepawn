@@ -31,6 +31,7 @@
 #include "lexer.h"
 #include "parse-node.h"
 #include "sctracker.h"
+#include "semantics-inl.h"
 #include "symbols.h"
 #include "type-checker.h"
 #include "value-inl.h"
@@ -283,58 +284,6 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     return true;
 }
 
-static inline int GetOperToken(int token) {
-    switch (token) {
-        case tlEQ:
-        case tlNE:
-        case tlLE:
-        case tlGE:
-        case '<':
-        case '>':
-        case '|':
-        case '^':
-        case '&':
-        case '*':
-        case '/':
-        case '%':
-        case '+':
-        case '-':
-        case tSHL:
-        case tSHR:
-        case tSHRU:
-            return token;
-        case taMULT:
-            return '*';
-        case taDIV:
-            return '/';
-        case taMOD:
-            return '%';
-        case taADD:
-            return '+';
-        case taSUB:
-            return '-';
-        case taSHL:
-            return tSHL;
-        case taSHR:
-            return tSHR;
-        case taSHRU:
-            return tSHRU;
-        case taAND:
-            return '&';
-        case taXOR:
-            return '^';
-        case taOR:
-            return '|';
-        case '=':
-        case tlOR:
-        case tlAND:
-            return 0;
-        default:
-            assert(false);
-            return 0;
-    }
-}
-
 bool Semantics::CheckExpr(Expr* expr) {
     AutoErrorPos aep(expr->pos());
     switch (expr->kind()) {
@@ -400,7 +349,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
   : pos(pos),
     token(token),
     expr(expr),
-    oper_tok(GetOperToken(token))
+    oper_tok(NormalizeBinaryToken(token))
 {
 }
 
@@ -709,7 +658,6 @@ BinaryExprBase::ProcessUses(SemaContext& sc)
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
   : BinaryExprBase(ExprKind::BinaryExpr, pos, token, left, right)
 {
-    oper_tok_ = GetOperToken(token_);
 }
 
 class BinaryExprChecker final
@@ -793,7 +741,7 @@ bool BinaryExprChecker::Check() {
     auto* left_val = &left_->val();
     auto* right_val = &right_->val();
 
-    auto oper_tok = expr_->oper();
+    auto oper_tok = NormalizeBinaryToken(expr_->token());
     if (oper_tok) {
         assert(token != '=');
 
@@ -865,7 +813,7 @@ bool BinaryExprChecker::CheckAssignmentLHS() {
         return true;
     }
 
-    int oper_tok = expr_->oper();
+    int oper_tok = NormalizeBinaryToken(expr_->token());
     if (auto left_array = left_->val().type()->as<ArrayType>()) {
         // array assignment is permitted too (with restrictions)
         if (oper_tok) {
@@ -902,7 +850,8 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
 
     if (left_val.ident == iVARIABLE) {
         const auto& right_val = right_->val();
-        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !expr_->oper())
+        int oper_tok = NormalizeBinaryToken(expr_->token());
+        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !oper_tok)
             report(expr_, 226) << left_val.sym->name(); // self-assignment
     }
 
@@ -940,7 +889,8 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
                     &expr_->assignop());
     }
 
-    if (!expr_->oper() &&
+    int oper_tok = NormalizeBinaryToken(expr_->token());
+    if (!oper_tok &&
         !checkval_string(&left_val, &right_val) &&
         !expr_->assignop().sym)
     {

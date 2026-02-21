@@ -33,6 +33,7 @@
 #include "errors.h"
 #include "expressions.h"
 #include "sctracker.h"
+#include "semantics-inl.h"
 #include "symbols.h"
 #include "value-inl.h"
 
@@ -687,7 +688,7 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
     auto token = expr->token();
     auto left = expr->left();
     auto right = expr->right();
-    auto oper = expr->oper();
+    auto oper = NormalizeBinaryToken(expr->token());
 
     assert(!IsChainedOp(token));
 

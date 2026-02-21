@@ -708,7 +708,6 @@ class BinaryExpr final : public BinaryExprBase
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
-    int oper() const { return oper_tok_; }
     UserOperation& userop() { return userop_; }
     UserOperation& assignop() { return assignop_; }
     void set_initializer() { initializer_ = true; }
@@ -725,7 +724,6 @@ class BinaryExpr final : public BinaryExprBase
     UserOperation assignop_;
     cell array_copy_length_ = 0;
     bool initializer_ = false;
-    int oper_tok_ = 0;
 };
 
 class LogicalExpr final : public BinaryExprBase
