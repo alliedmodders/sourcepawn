@@ -21,12 +21,6 @@
 
 namespace sp {
 
-bool
-CodeStubs::InitializeFeatureDetection()
-{
-  return true;
-}
-
 #if 0
 bool
 CodeStubs::CompileInvokeStub()

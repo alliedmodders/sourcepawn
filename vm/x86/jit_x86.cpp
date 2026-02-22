@@ -25,8 +25,6 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
 
 #include <string.h>
@@ -44,6 +42,7 @@
 #include "method-info.h"
 #include "runtime-helpers.h"
 #include "debugging.h"
+#include "features-x86.h"
 
 #define __ masm.
 
@@ -721,15 +720,8 @@ Compiler::visitFABS()
 bool
 Compiler::visitFLOAT()
 {
-  if (MacroAssembler::Features().sse2) {
-    __ cvtsi2ss(xmm0, Operand(edi, 0));
-    __ movd(pri, xmm0);
-  } else {
-    __ fild32(Operand(edi, 0));
-    __ subl(esp, 4);
-    __ fstp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ cvtsi2ss(xmm0, Operand(edi, 0));
+  __ movd(pri, xmm0);
   __ addl(stk, 4);
   return true;
 }
@@ -737,17 +729,9 @@ Compiler::visitFLOAT()
 bool
 Compiler::visitFLOATADD()
 {
-  if (MacroAssembler::Features().sse2) {
-    __ movss(xmm0, Operand(stk, 0));
-    __ addss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-  } else {
-    __ subl(esp, 4);
-    __ fld32(Operand(stk, 0));
-    __ fadd32(Operand(stk, 4));
-    __ fstp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ movss(xmm0, Operand(stk, 0));
+  __ addss(xmm0, Operand(stk, 4));
+  __ movd(pri, xmm0);
   __ addl(stk, 8);
   return true;
 }
@@ -755,17 +739,9 @@ Compiler::visitFLOATADD()
 bool
 Compiler::visitFLOATSUB()
 {
-  if (MacroAssembler::Features().sse2) {
-    __ movss(xmm0, Operand(stk, 0));
-    __ subss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-  } else {
-    __ subl(esp, 4);
-    __ fld32(Operand(stk, 0));
-    __ fsub32(Operand(stk, 4));
-    __ fstp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ movss(xmm0, Operand(stk, 0));
+  __ subss(xmm0, Operand(stk, 4));
+  __ movd(pri, xmm0);
   __ addl(stk, 8);
   return true;
 }
@@ -773,17 +749,9 @@ Compiler::visitFLOATSUB()
 bool
 Compiler::visitFLOATMUL()
 {
-  if (MacroAssembler::Features().sse2) {
-    __ movss(xmm0, Operand(stk, 0));
-    __ mulss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-  } else {
-    __ subl(esp, 4);
-    __ fld32(Operand(stk, 0));
-    __ fmul32(Operand(stk, 4));
-    __ fstp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ movss(xmm0, Operand(stk, 0));
+  __ mulss(xmm0, Operand(stk, 4));
+  __ movd(pri, xmm0);
   __ addl(stk, 8);
   return true;
 }
@@ -791,17 +759,9 @@ Compiler::visitFLOATMUL()
 bool
 Compiler::visitFLOATDIV()
 {
-  if (MacroAssembler::Features().sse2) {
-    __ movss(xmm0, Operand(stk, 0));
-    __ divss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-  } else {
-    __ subl(esp, 4);
-    __ fld32(Operand(stk, 0));
-    __ fdiv32(Operand(stk, 4));
-    __ fstp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ movss(xmm0, Operand(stk, 0));
+  __ divss(xmm0, Operand(stk, 4));
+  __ movd(pri, xmm0);
   __ addl(stk, 8);
   return true;
 }
@@ -811,14 +771,7 @@ Compiler::visitRND_TO_NEAREST()
 {
   // Docs say that MXCSR must be preserved across function calls, so we
   // assume that we'll always get the defualt round-to-nearest.
-  if (MacroAssembler::Features().sse) {
-    __ cvtss2si(pri, Operand(stk, 0));
-  } else {
-    __ fld32(Operand(stk, 0));
-    __ subl(esp, 4);
-    __ fistp32(Operand(esp, 0));
-    __ pop(pri);
-  }
+  __ cvtss2si(pri, Operand(stk, 0));
   __ addl(stk, 4);
   return true;
 }
@@ -858,19 +811,7 @@ Compiler::visitRND_TO_CEIL()
 bool
 Compiler::visitRND_TO_ZERO() 
 {
-  if (MacroAssembler::Features().sse) {
-    __ cvttss2si(pri, Operand(stk, 0));
-  } else {
-    __ fld32(Operand(stk, 0));
-    __ subl(esp, 8);
-    __ fstcw(Operand(esp, 4));
-    __ movl(Operand(esp, 0), 0xfff);
-    __ fldcw(Operand(esp, 0));
-    __ fistp32(Operand(esp, 0));
-    __ pop(pri);
-    __ fldcw(Operand(esp, 0));
-    __ addl(esp, 4);
-  }
+  __ cvttss2si(pri, Operand(stk, 0));
   __ addl(stk, 4);
   return true;
 }
@@ -899,15 +840,8 @@ Compiler::visitFLOATCMP()
   //
   // Note that the checks here are inverted: the test is |rhs OP lhs|.
   Label bl, ab, done;
-  if (MacroAssembler::Features().sse) {
-    __ movss(xmm0, Operand(stk, 4));
-    __ ucomiss(Operand(stk, 0), xmm0);
-  } else {
-    __ fld32(Operand(stk, 0));
-    __ fld32(Operand(stk, 4));
-    __ fucomip(st1);
-    __ fstp(st0);
-  }
+  __ movss(xmm0, Operand(stk, 4));
+  __ ucomiss(Operand(stk, 0), xmm0);
   __ j(above, &ab);
   __ j(below, &bl);
   __ xorl(pri, pri);
@@ -957,15 +891,8 @@ Compiler::visitFLOAT_CMP_OP(CompareOp op)
 bool
 Compiler::visitFLOAT_NOT()
 {
-  if (MacroAssembler::Features().sse) {
-    __ xorps(xmm0, xmm0);
-    __ ucomiss(Operand(stk, 0), xmm0);
-  } else {
-    __ fld32(Operand(stk, 0));
-    __ fldz();
-    __ fucomip(st1);
-    __ fstp(st0);
-  }
+  __ xorps(xmm0, xmm0);
+  __ ucomiss(Operand(stk, 0), xmm0);
 
   // See emitFloatCmp() - this is a shorter version.
   Label done;
@@ -1599,15 +1526,8 @@ Compiler::emitFloatCmp(ConditionCode cc)
     lhs = 0;
   }
 
-  if (MacroAssembler::Features().sse) {
-    __ movss(xmm0, Operand(stk, rhs));
-    __ ucomiss(Operand(stk, lhs), xmm0);
-  } else {
-    __ fld32(Operand(stk, rhs));
-    __ fld32(Operand(stk, lhs));
-    __ fucomip(st1);
-    __ fstp(st0);
-  }
+  __ movss(xmm0, Operand(stk, rhs));
+  __ ucomiss(Operand(stk, lhs), xmm0);
 
   // An equal or not-equal needs special handling for the parity bit.
   if (cc == equal || cc == not_equal) {
@@ -2134,6 +2054,12 @@ void
 CompilerBase::PatchCallThunk(uint8_t* pc, void* target)
 {
   *(intptr_t*)(pc - 4) = intptr_t(target) - intptr_t(pc);
+}
+
+bool CompilerBase::IsSupported() {
+    return FeaturesX86::Get().fpu &&
+           FeaturesX86::Get().sse &&
+           FeaturesX86::Get().sse2;
 }
 
 } // namespace sp

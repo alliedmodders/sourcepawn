@@ -41,15 +41,11 @@ Environment::Environment()
    exception_code_(SP_ERROR_NONE),
    debug_metadata_flags_(JIT_DEBUG_DELETE_ON_EXIT | JIT_DEBUG_PERF_BASIC),
    profiler_(nullptr),
-#if defined(SP_HAS_JIT)
-   jit_enabled_(true),
-#else
-   jit_enabled_(false),
-#endif
    profiling_enabled_(false),
    code_stubs_(nullptr),
    top_(nullptr)
 {
+   jit_enabled_ = IsJitAvailable();
 }
 
 Environment::~Environment()
@@ -111,7 +107,7 @@ Environment::Shutdown()
 void
 Environment::SetJitEnabled(bool enabled)
 {
-  jit_enabled_ = enabled;
+  jit_enabled_ = enabled && IsJitAvailable();
 }
 
 bool
@@ -568,7 +564,7 @@ Environment::leaveInvoke()
 
 bool Environment::IsJitAvailable() {
 #if defined(SP_HAS_JIT)
-  return true;
+  return CompilerBase::IsSupported();
 #else
   return false;
 #endif

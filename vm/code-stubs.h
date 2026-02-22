@@ -40,7 +40,6 @@ class CodeStubs
   }
 
  private:
-  bool InitializeFeatureDetection();
 #if defined(SP_HAS_JIT)
   bool CompileInvokeStub();
 #endif

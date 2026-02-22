@@ -214,3 +214,8 @@ This release contains a number of language changes.
 ### SourcePawn 1.13
 
 SourcePawn 1.13 is currently in development.
+
+This release adds int64 as a new primitive data type for 64-bit arithmetic. Plugins using int64
+will require a newer SourcePawn VM to run.
+
+The x86 JIT will now only run on processors supporting SSE2 and higher.

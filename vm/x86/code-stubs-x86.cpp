@@ -23,19 +23,6 @@ using namespace SourcePawn;
 #define __ masm.
 
 bool
-CodeStubs::InitializeFeatureDetection()
-{
-  MacroAssembler masm;
-  MacroAssembler::GenerateFeatureDetection(masm);
-  CodeChunk code = LinkCode(env_, masm, "<cpu feature detection>", {});
-  if (!code.address())
-    return false;
-  MacroAssembler::RunFeatureDetection(code.address());
-  return true;
-}
-
-
-bool
 CodeStubs::CompileInvokeStub()
 {
   MacroAssembler masm;

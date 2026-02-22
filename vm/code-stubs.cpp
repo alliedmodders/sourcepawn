@@ -25,8 +25,6 @@ bool
 CodeStubs::Initialize()
 {
 #if defined(SP_HAS_JIT)
-  if (!InitializeFeatureDetection())
-    return false;
   if (!CompileInvokeStub())
     return false;
 #endif

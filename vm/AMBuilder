@@ -61,8 +61,8 @@ if is_emscripten:
   ]
 elif module.compiler.target.arch == 'x86':
   module.sources += [
-    'x86/assembler-x86.cpp',
     'x86/code-stubs-x86.cpp',
+    'x86/features-x86.cpp',
     'x86/jit_x86.cpp',
   ]
 elif module.compiler.target.arch == 'x86_64':

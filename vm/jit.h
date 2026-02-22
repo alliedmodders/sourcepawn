@@ -66,6 +66,8 @@ class CompilerBase : public PcodeVisitor
     return error_;
   }
 
+  static bool IsSupported();
+
  protected:
   CompiledFunction* emit();
 
