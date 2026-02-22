@@ -1127,12 +1127,10 @@ Compiler::visitBOUNDS(uint32_t limit)
   return true;
 }
 
-void
-Compiler::emitCheckAddress(Register reg)
-{
+void Compiler::emitCheckAddress(Register reg, size_t read_size) {
   // Check if we're in memory bounds.
-  __ cmpl(reg, context_->HeapSize());
-  jumpOnError(not_below, SP_ERROR_MEMACCESS);
+  __ cmpl(reg, context_->HeapSize() - read_size + 1);
+  jumpOnError(above_equal, SP_ERROR_MEMACCESS);
 
   // Check if we're in the invalid region between hp and sp.
   Label done;
@@ -1551,7 +1549,7 @@ Compiler::emitFloatCmp(ConditionCode cc)
 }
 
 bool Compiler::visitPUSH_I_I64() {
-  emitCheckAddress(pri);
+  emitCheckAddress(pri, sizeof(int64_t));
   __ movl(alt, Operand(dat, pri, NoScale, 4));
   __ movl(Operand(stk, -4), alt);
   __ movl(alt, Operand(dat, pri, NoScale, 0));
@@ -1561,8 +1559,8 @@ bool Compiler::visitPUSH_I_I64() {
 }
 
 bool Compiler::visitMOVE_I64() {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ movl(tmp, Operand(dat, pri, NoScale, 0));
   __ movl(Operand(dat, alt, NoScale, 0), tmp);
@@ -1584,13 +1582,13 @@ bool Compiler::visitCVT_I64(cell_t slot) {
 }
 
 bool Compiler::visitTRUNCATE_I64() {
-  emitCheckAddress(pri);
+  emitCheckAddress(pri, sizeof(int64_t));
   __ movl(pri, Operand(dat, pri, NoScale, 0));
   return true;
 }
 
 bool Compiler::visitTEST_I64() {
-  emitCheckAddress(pri);
+  emitCheckAddress(pri, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ orl(ecx, Operand(dat, pri, NoScale, 0));
   __ set(not_equal, ecx);
@@ -1599,7 +1597,7 @@ bool Compiler::visitTEST_I64() {
 }
 
 bool Compiler::visitINVERT_I64(cell_t slot) {
-  emitCheckAddress(pri);
+  emitCheckAddress(pri, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ notl(ecx);
   __ movl(Operand(frm, slot), ecx);
@@ -1613,7 +1611,7 @@ bool Compiler::visitINVERT_I64(cell_t slot) {
 }
 
 bool Compiler::visitNEG_I64(cell_t slot) {
-  emitCheckAddress(pri);
+  emitCheckAddress(pri, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ movl(Operand(frm, slot), ecx);
   __ movl(ecx, Operand(dat, pri, NoScale, 4));
@@ -1630,8 +1628,8 @@ bool Compiler::visitNEG_I64(cell_t slot) {
 }
 
 bool Compiler::visitSMUL_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ push(ebx);
   __ movl(ebx, Operand(dat, pri, NoScale, 4)); // clobbers frm
@@ -1654,13 +1652,8 @@ bool Compiler::visitSMUL_I64(cell_t slot) {
 
 // This is not trivially possible to inline, so we need to call a helper.
 bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
-
-  // Sync |sp|.
-  __ subl(stk, dat);
-  __ movl(Operand(spAddr()), stk);
-  __ addl(stk, dat);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   static const size_t kStackNeeded = 4 * sizeof(void *);
   static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
@@ -1689,8 +1682,8 @@ bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
 }
 
 bool Compiler::visitADD_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ movq(xmm1, Operand(dat, pri, NoScale, 0));
   __ movq(xmm0, Operand(dat, alt, NoScale, 0));
@@ -1703,8 +1696,8 @@ bool Compiler::visitADD_I64(cell_t slot) {
 }
 
 bool Compiler::visitSUB_ALT_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ movq(xmm1, Operand(dat, pri, NoScale, 0));
   __ movq(xmm0, Operand(dat, alt, NoScale, 0));
@@ -1717,8 +1710,8 @@ bool Compiler::visitSUB_ALT_I64(cell_t slot) {
 }
 
 bool Compiler::visitSHL_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ lea(ecx, Operand(dat, alt, NoScale, 0));
   __ push(ecx);
@@ -1749,8 +1742,8 @@ bool Compiler::visitSHL_I64(cell_t slot) {
 }
 
 bool Compiler::visitSSHR_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ lea(ecx, Operand(dat, alt, NoScale, 0));
   __ push(ecx);
@@ -1781,8 +1774,8 @@ bool Compiler::visitSSHR_I64(cell_t slot) {
 }
 
 bool Compiler::visitSHR_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ lea(ecx, Operand(dat, alt, NoScale, 0));
   __ push(ecx);
@@ -1813,8 +1806,8 @@ bool Compiler::visitSHR_I64(cell_t slot) {
 }
 
 bool Compiler::visitOR_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ orl(ecx, Operand(dat, alt, NoScale, 0));
   __ movl(Operand(frm, slot), ecx);
@@ -1828,8 +1821,8 @@ bool Compiler::visitOR_I64(cell_t slot) {
 }
 
 bool Compiler::visitAND_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ andl(ecx, Operand(dat, alt, NoScale, 0));
   __ movl(Operand(frm, slot), ecx);
@@ -1843,8 +1836,8 @@ bool Compiler::visitAND_I64(cell_t slot) {
 }
 
 bool Compiler::visitXOR_I64(cell_t slot) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
   __ movl(ecx, Operand(dat, pri, NoScale, 0));
   __ xorl(ecx, Operand(dat, alt, NoScale, 0));
   __ movl(Operand(frm, slot), ecx);
@@ -1864,8 +1857,8 @@ bool Compiler::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
 }
 
 bool Compiler::visitCompareOp64(CompareOp op) {
-  emitCheckAddress(pri);
-  emitCheckAddress(alt);
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
 
   __ push(ebx);
 

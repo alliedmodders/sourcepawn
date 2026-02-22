@@ -171,7 +171,7 @@ class Compiler : public CompilerBase
 
   void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
   void emitGenArray(bool autozero);
-  void emitCheckAddress(Register reg);
+  void emitCheckAddress(Register reg, size_t read_size = 4);
   void emitFloatCmp(ConditionCode cc);
   void emitCallThunk(CallThunk* thunk);
   void jumpOnError(ConditionCode cc, int err = 0);
