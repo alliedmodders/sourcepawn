@@ -165,24 +165,6 @@ namespace sp {
     FOR_EACH(INITARRAY_ALT, 170, "initarray.alt", 6) \
     FOR_EACH(HEAP_SAVE, 171, "heap.save", 1) \
     FOR_EACH(HEAP_RESTORE, 172, "heap.restore", 1) \
-    FOR_EACH(FABS, 174, "fabs", 1) \
-    FOR_EACH(FLOAT, 175, "float", 1) \
-    FOR_EACH(FLOATADD, 176, "float.add", 1) \
-    FOR_EACH(FLOATSUB, 177, "float.sub", 1) \
-    FOR_EACH(FLOATMUL, 178, "float.mul", 1) \
-    FOR_EACH(FLOATDIV, 179, "float.div", 1) \
-    FOR_EACH(RND_TO_NEAREST, 180, "round", 1) \
-    FOR_EACH(RND_TO_FLOOR, 181, "floor", 1) \
-    FOR_EACH(RND_TO_CEIL, 182, "ceil", 1) \
-    FOR_EACH(RND_TO_ZERO, 183, "rndtozero", 1) \
-    FOR_EACH(FLOATCMP, 184, "float.cmp", 1) \
-    FOR_EACH(FLOAT_GT, 185, "float.gt", 1) \
-    FOR_EACH(FLOAT_GE, 186, "float.ge", 1) \
-    FOR_EACH(FLOAT_LT, 187, "float.lt", 1) \
-    FOR_EACH(FLOAT_LE, 188, "float.le", 1) \
-    FOR_EACH(FLOAT_NE, 189, "float.ne", 1) \
-    FOR_EACH(FLOAT_EQ, 190, "float.eq", 1) \
-    FOR_EACH(FLOAT_NOT, 191, "float.not", 1) \
     /* The _I64 opcodes assume registers are pointers to at least two cells \
      * of memory representing an int64. Since the stack and registers are \
      * not designed to accomodate 64-bit temporaries, some of these opcodes \
@@ -220,6 +202,24 @@ enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
     OPCODE_LIST(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
+    OP_FABS,
+    OP_FLOAT,
+    OP_FLOATADD,
+    OP_FLOATSUB,
+    OP_FLOATMUL,
+    OP_FLOATDIV,
+    OP_RND_TO_NEAREST,
+    OP_RND_TO_FLOOR,
+    OP_RND_TO_CEIL,
+    OP_RND_TO_ZERO,
+    OP_FLOATCMP,
+    OP_FLOAT_GT,
+    OP_FLOAT_GE,
+    OP_FLOAT_LT,
+    OP_FLOAT_LE,
+    OP_FLOAT_NE,
+    OP_FLOAT_EQ,
+    OP_FLOAT_NOT,
     OPCODES_LAST
 };
 
