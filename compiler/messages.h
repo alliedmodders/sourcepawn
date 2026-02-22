@@ -338,7 +338,7 @@ static const char* errmsg_ex[] = {
     /*452*/ "multiple command-line source files are no longer supported\n",
     /*453*/ "unexpected end of token stream\n",
     /*454*/ "implicit truncation converting from int64 to int\n",
-    /*455*/ "no conversion available from '%s' to '%s'\n",
+    /*455*/ "unused455\n",
     /*456*/ "expected scalar type, got \"%s\"\n",
     /*457*/ "type \"%s\" cannot be used in an operator overload\n",
     /*458*/ "failed to allocate stack slot - compiler bug\n",
@@ -346,4 +346,6 @@ static const char* errmsg_ex[] = {
     /*460*/ "cannot use view_as to cast type '%s' to type '%s'\n",
     /*461*/ "operator '%s' not defined for types '%s' and '%s'\n",
     /*462*/ "implicit conversion of '%s' to '%s' can lose data\n",
+    /*463*/ "builtin keyword is not allowed here\n",
+    /*464*/ "operator overloads are no longer supported for '%s'\n",
 };

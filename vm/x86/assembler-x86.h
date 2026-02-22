@@ -877,17 +877,33 @@ class Assembler : public AssemblerBase
     assert(FeaturesX86::Get().sse);
     emit3(0xf3, 0x0f, 0x58, dest.code, src);
   }
+  void addss(FloatRegister dest, FloatRegister src) {
+    assert(FeaturesX86::Get().sse);
+    emit3(0xf3, 0x0f, 0x58, dest.code, src.code);
+  }
   void subss(FloatRegister dest, const Operand& src) {
     assert(FeaturesX86::Get().sse);
     emit3(0xf3, 0x0f, 0x5c, dest.code, src);
+  }
+  void subss(FloatRegister dest, FloatRegister src) {
+    assert(FeaturesX86::Get().sse);
+    emit3(0xf3, 0x0f, 0x5c, dest.code, src.code);
   }
   void mulss(FloatRegister dest, const Operand& src) {
     assert(FeaturesX86::Get().sse);
     emit3(0xf3, 0x0f, 0x59, dest.code, src);
   }
+  void mulss(FloatRegister dest, FloatRegister src) {
+    assert(FeaturesX86::Get().sse);
+    emit3(0xf3, 0x0f, 0x59, dest.code, src.code);
+  }
   void divss(FloatRegister dest, const Operand& src) {
     assert(FeaturesX86::Get().sse);
     emit3(0xf3, 0x0f, 0x5e, dest.code, src);
+  }
+  void divss(FloatRegister dest, FloatRegister src) {
+    assert(FeaturesX86::Get().sse);
+    emit3(0xf3, 0x0f, 0x5e, dest.code, src.code);
   }
   void xorps(FloatRegister dest, FloatRegister src) {
     assert(FeaturesX86::Get().sse);
@@ -909,6 +925,10 @@ class Assembler : public AssemblerBase
   void movd(Register dest, const Operand& src) {
     assert(FeaturesX86::Get().sse2);
     emit3(0x66, 0x0f, 0x7e, dest.code, src);
+  }
+  void movd(FloatRegister dest, Register src) {
+    assert(FeaturesX86::Get().sse2);
+    emit3(0x66, 0x0f, 0x6e, dest.code, src.code);
   }
 
   static void PatchRel32Absolute(uint8_t* ip, void* ptr) {

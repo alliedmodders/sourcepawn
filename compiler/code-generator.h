@@ -113,7 +113,10 @@ class CodeGenerator final
     void EmitRvalue(const value& lval);
     void EmitStore(const value& lval, bool save_pri = true);
     void EmitBreak();
-    void EmitBinaryOp(Expr* expr, BuiltinType type, OPCODE op);
+    void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
+
+    // Builtins.
+    void EmitFloatBuiltin(CallExpr* expr);
 
     using DebugSymbol = std::pair<Decl*, uint32_t>;
     void AddDebugFile(const std::string& line);
@@ -256,6 +259,8 @@ class CodeGenerator final
     // Stack slot management.
     std::vector<std::optional<BitSet>> used_int64_slots_;
     BitSet free_int64_slots_;
+
+    std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
 };
 
 } // namespace cc

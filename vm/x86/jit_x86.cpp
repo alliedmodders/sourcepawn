@@ -30,6 +30,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <math.h>
 #include "jit_x86.h"
 #include "plugin-runtime.h"
 #include "plugin-context.h"
@@ -611,6 +612,17 @@ Compiler::visitSDIV(PawnReg dest)
   return true;
 }
 
+bool Compiler::visitSDIV_ALT_I32() {
+  visitSDIV(PawnReg::Alt);
+  return true;
+}
+
+bool Compiler::visitSMOD_ALT_I32() {
+  visitSDIV(PawnReg::Alt);
+  __ movl(eax, edx);
+  return true;
+}
+
 bool
 Compiler::visitLODB_I(cell_t width)
 {
@@ -856,35 +868,24 @@ Compiler::visitFLOATCMP()
   return true;
 }
 
+ConditionCode ToFloatConditionCode(CompareOp op) {
+  switch (op) {
+    case CompareOp::Sgrtr: return above;
+    case CompareOp::Sgeq: return above_equal;
+    case CompareOp::Sleq: return below_equal;
+    case CompareOp::Sless: return below;
+    case CompareOp::Eq: return equal;
+    case CompareOp::Neq: return not_equal;
+    default:
+      assert(false);
+      return zero;
+  }
+}
+
 bool
 Compiler::visitFLOAT_CMP_OP(CompareOp op)
 {
-  ConditionCode code;
-  switch (op) {
-  case CompareOp::Sgrtr:
-    code = above;
-    break;
-  case CompareOp::Sgeq:
-    code = above_equal;
-    break;
-  case CompareOp::Sleq:
-    code = below_equal;
-    break;
-  case CompareOp::Sless:
-    code = below;
-    break;
-  case CompareOp::Eq:
-    code = equal;
-    break;
-  case CompareOp::Neq:
-    code = not_equal;
-    break;
-  default:
-    assert(false);
-    reportError(SP_ERROR_INVALID_INSTRUCTION);
-    return false;
-  }
-  emitFloatCmp(code);
+  emitFloatCmp(ToFloatConditionCode(op));
   return true;
 }
 
@@ -1003,7 +1004,6 @@ Compiler::visitJcmp(CompareOp op, cell_t offset)
   }
   return true;
 }
-
 
 bool
 Compiler::visitTRACKER_PUSH_C(cell_t amount)
@@ -1651,16 +1651,13 @@ bool Compiler::visitSMUL_I64(cell_t slot) {
 }
 
 // This is not trivially possible to inline, so we need to call a helper.
-bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
+bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot) {
   emitCheckAddress(pri, sizeof(int64_t));
   emitCheckAddress(alt, sizeof(int64_t));
 
-  static const size_t kStackNeeded = 4 * sizeof(void *);
+  static const size_t kStackNeeded = 3 * sizeof(void *);
   static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
   __ subl(esp, kStackReserve);
-
-  __ lea(ecx, Operand(frm, alt_slot));
-  __ movl(Operand(esp, 3 * sizeof(void*)), ecx);
 
   __ lea(ecx, Operand(frm, pri_slot));
   __ movl(Operand(esp, 2 * sizeof(void*)), ecx);
@@ -1676,8 +1673,31 @@ bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
 
   __ movl(pri, Operand(frmAddr()));
   __ addl(pri, pri_slot);
-  __ movl(alt, Operand(frmAddr()));
-  __ addl(alt, alt_slot);
+  return true;
+}
+
+bool Compiler::visitSMOD_ALT_I64(cell_t pri_slot) {
+  emitCheckAddress(pri, sizeof(int64_t));
+  emitCheckAddress(alt, sizeof(int64_t));
+
+  static const size_t kStackNeeded = 3 * sizeof(void *);
+  static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+  __ subl(esp, kStackReserve);
+
+  __ lea(ecx, Operand(frm, pri_slot));
+  __ movl(Operand(esp, 2 * sizeof(void*)), ecx);
+
+  __ lea(alt, Operand(dat, alt, NoScale, 0));
+  __ movl(Operand(esp, 1 * sizeof(void*)), alt);
+  __ lea(pri, Operand(dat, pri, NoScale, 0));
+  __ movl(Operand(esp, 0 * sizeof(void*)), pri);
+  __ callWithABI(ExternalAddress((void*)Int64Mod));
+  __ addl(esp, kStackReserve);
+  __ testl(eax, eax);
+  jumpOnError(not_zero);
+
+  __ movl(pri, Operand(frmAddr()));
+  __ addl(pri, pri_slot);
   return true;
 }
 
@@ -1853,6 +1873,116 @@ bool Compiler::visitXOR_I64(cell_t slot) {
 bool Compiler::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
   __ movl(Operand(frm, slot), cell0);
   __ movl(Operand(frm, slot + 4), cell1);
+  return true;
+}
+
+bool Compiler::visitTEST_F32() {
+  __ movd(xmm0, pri);
+  __ xorps(xmm1, xmm1);
+  __ ucomiss(xmm0, xmm1);
+
+  // NaN sets ZF, and so does a successful comparison to 0.0, so we only need
+  // a ZF check.
+  __ set(not_zero, r8_al);
+  return true;
+}
+
+bool Compiler::visitNEG_F32() {
+  __ movl(ecx, 0x80000000);
+  __ xorl(pri, ecx);
+  return true;
+}
+
+bool Compiler::visitMUL_F32() {
+  __ movd(xmm0, pri);
+  __ movd(xmm1, alt);
+  __ mulss(xmm0, xmm1);
+  __ movd(pri, xmm0);
+  return true;
+}
+
+bool Compiler::visitDIV_ALT_F32() {
+  __ movd(xmm0, alt);
+  __ movd(xmm1, pri);
+  __ divss(xmm0, xmm1);
+  __ movd(pri, xmm0);
+  return true;
+}
+
+bool Compiler::visitADD_F32() {
+  __ movd(xmm0, pri);
+  __ movd(xmm1, alt);
+  __ addss(xmm0, xmm1);
+  __ movd(pri, xmm0);
+  return true;
+}
+
+bool Compiler::visitSUB_ALT_F32() {
+  __ movd(xmm0, alt);
+  __ movd(xmm1, pri);
+  __ subss(xmm0, xmm1);
+  __ movd(pri, xmm0);
+  return true;
+}
+
+bool Compiler::visitCompareOpF32(CompareOp op) {
+  __ movd(xmm0, pri);
+  __ movd(xmm1, alt);
+
+  auto cc = ToFloatConditionCode(op);
+  if (cc == below || cc == below_equal) {
+    // NaN results in ZF=1 PF=1 CF=1
+    //
+    // ja/jae check for ZF,CF=0 and CF=0. If we make all relational compares
+    // look like ja/jae, we'll guarantee all NaN comparisons will fail (which
+    // would not be true for jb/jbe, unless we checked with jp).
+    if (cc == below)
+      cc = above;
+    else
+      cc = above_equal;
+
+    __ ucomiss(xmm0, xmm1);
+  } else {
+    __ ucomiss(xmm1, xmm0);
+  }
+
+  // An equal or not-equal needs special handling for the parity bit.
+  if (cc == equal || cc == not_equal) {
+    // If NaN, PF=1, ZF=1, and E/Z tests ZF=1.
+    //
+    // If NaN, PF=1, ZF=1 and NE/NZ tests Z=0. But, we want any != with NaNs
+    // to return true, including NaN != NaN.
+    //
+    // To make checks simpler, we set |eax| to the expected value of a NaN
+    // beforehand. This also clears the top bits of |eax| for setcc.
+    Label done;
+    __ movl(eax, (cc == equal) ? 0 : 1);
+    __ j(parity, &done);
+    __ set(cc, r8_al);
+    __ bind(&done);
+  } else {
+    __ movl(eax, 0);
+    __ set(cc, r8_al);
+  }
+  return true;
+}
+
+bool Compiler::visitCVT_F32() {
+  __ cvtsi2ss(xmm0, pri);
+  __ movd(pri, xmm0);
+  return true;
+}
+
+bool Compiler::visitMOD_ALT_F32() {
+  static const size_t kStackNeeded = 2 * sizeof(void *);
+  static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+  __ subl(esp, kStackReserve);
+  __ movl(Operand(esp, 1 * sizeof(void*)), pri);
+  __ movl(Operand(esp, 0 * sizeof(void*)), alt);
+  __ callWithABI(ExternalAddress((void*)::fmodf));
+  __ fstp32(Operand(esp, 0));
+  __ movl(pri, Operand(esp, 0));
+  __ addl(esp, kStackReserve);
   return true;
 }
 

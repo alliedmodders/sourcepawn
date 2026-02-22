@@ -87,8 +87,14 @@ namespace sp {
     FOR_EACH(SHL_C_PRI, 68, "shl.c.pri", 2) \
     FOR_EACH(SHL_C_ALT, 69, "shl.c.alt", 2) \
     FOR_EACH(SMUL, 72, "smul", 1) \
+    /* SDIV and SMOD clobber ALT, unlike other binary operations. \
+     * This doesn't matter in practice but is noted for implementors. \
+     * SDIV (the PRI variant) is no longer generated. \
+     */ \
     FOR_EACH(SDIV, 73, "sdiv", 1) \
     FOR_EACH(SDIV_ALT, 74, "sdiv.alt", 1) \
+    FOR_EACH(SDIV_ALT_I32, 75, "sdiv.i32", 1) \
+    FOR_EACH(SMOD_ALT_I32, 76, "smod.i32", 1) \
     FOR_EACH(ADD, 78, "add", 1) \
     FOR_EACH(SUB, 79, "sub", 1) \
     FOR_EACH(SUB_ALT, 80, "sub.alt", 1) \
@@ -113,6 +119,9 @@ namespace sp {
     FOR_EACH(EQ_C_PRI, 105, "eq.c.pri", 2) \
     FOR_EACH(EQ_C_ALT, 106, "eq.c.alt", 2) \
     FOR_EACH(INC_PRI, 107, "inc.pri", 1) \
+    /* INC_PRI and DEC_PRI are generated. Every other INC/DEC opcode is \
+     * deprecated. \
+     */ \
     FOR_EACH(INC_ALT, 108, "inc.alt", 1) \
     FOR_EACH(INC, 109, "inc", 2) \
     FOR_EACH(INC_S, 110, "inc.s", 2) \
@@ -165,6 +174,22 @@ namespace sp {
     FOR_EACH(INITARRAY_ALT, 170, "initarray.alt", 6) \
     FOR_EACH(HEAP_SAVE, 171, "heap.save", 1) \
     FOR_EACH(HEAP_RESTORE, 172, "heap.restore", 1) \
+    /* Identical to 32-bit integer operations, except pri/alt are treated \
+     * as 32-bit IEEE-754 floats. */ \
+    FOR_EACH(TEST_F32, 173, "test.f32", 1) \
+    FOR_EACH(NEG_F32, 174, "neg.f32", 1) \
+    FOR_EACH(MUL_F32, 175, "mul.f32", 1) \
+    FOR_EACH(DIV_ALT_F32, 176, "div.alt.f32", 1) \
+    FOR_EACH(ADD_F32, 177, "add.f32", 1) \
+    FOR_EACH(SUB_ALT_F32, 178, "sub_alt.f32", 1) \
+    FOR_EACH(EQ_F32, 179, "eq.f32", 1) \
+    FOR_EACH(NEQ_F32, 180, "neq.f32", 1) \
+    FOR_EACH(LESS_F32, 181, "less.f32", 1) \
+    FOR_EACH(LEQ_F32, 182, "leq.f32", 1) \
+    FOR_EACH(GRTR_F32, 183, "grtr.f32", 1) \
+    FOR_EACH(GEQ_F32, 184, "geq.f32", 1) \
+    FOR_EACH(CVT_F32, 185, "cvt.f32", 1) \
+    FOR_EACH(MOD_ALT_F32, 186, "mod.alt.f32", 1) \
     /* The _I64 opcodes assume registers are pointers to at least two cells \
      * of memory representing an int64. Since the stack and registers are \
      * not designed to accomodate 64-bit temporaries, some of these opcodes \
@@ -180,7 +205,7 @@ namespace sp {
     FOR_EACH(INVERT_I64, 197, "invert.i64", 2) \
     FOR_EACH(NEG_I64, 198, "neg.i64", 2) \
     FOR_EACH(SMUL_I64, 199, "smul.i64", 2) \
-    FOR_EACH(SDIV_ALT_I64, 200, "sdiv.alt.i64", 3) \
+    FOR_EACH(SDIV_ALT_I64, 200, "sdiv.alt.i64", 2) \
     FOR_EACH(ADD_I64, 201, "add.i64", 2) \
     FOR_EACH(SUB_ALT_I64, 202, "sub_alt.i64", 2) \
     FOR_EACH(SHL_I64, 203, "shl.i64", 2) \
@@ -196,12 +221,17 @@ namespace sp {
     FOR_EACH(SLEQ_I64, 213, "sleq.i64", 1) \
     FOR_EACH(SGRTR_I64, 214, "sgrtr.i64", 1) \
     FOR_EACH(SGEQ_I64, 215, "sgeq.i64", 1) \
+    FOR_EACH(SMOD_ALT_I64, 216, "smod.alt.i64", 2) \
 
 
 enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
     OPCODE_LIST(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
+
+    // These opcodes are internal to the compiler and not part of the ABI. They
+    // are used to implement peephole optimizations on legacy float natives. When
+    // kCodeFeatureTypedOps is present, most of these are unused.
     OP_FABS,
     OP_FLOAT,
     OP_FLOATADD,

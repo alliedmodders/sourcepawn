@@ -96,6 +96,7 @@ Parser::Parse()
             case tSTOCK:
             case tOPERATOR:
             case tNATIVE:
+            case tBUILTIN:
             case tFORWARD: {
                 auto tok = *lexer_->current_token();
                 decl = parse_unknown_decl(&tok);
@@ -221,7 +222,10 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 {
     declinfo_t decl = {};
 
-    if (tok->id == tNATIVE || tok->id == tFORWARD) {
+    if (tok->id == tBUILTIN && !lexer_->inpf()->is_builtin())
+        report(lexer_->pos(), 463);
+
+    if (tok->id == tNATIVE || tok->id == tFORWARD || tok->id == tBUILTIN) {
         parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION);
         return parse_inline_function(tok->id, decl);
     }
@@ -1706,6 +1710,8 @@ Parser::parse_inline_function(int tokid, const declinfo_t& decl)
 
     if (tokid == tNATIVE || tokid == tMETHODMAP)
         fun->set_is_native();
+    else if (tokid == tBUILTIN)
+        fun->set_is_builtin();
     else if (tokid == tPUBLIC)
         fun->set_is_public();
     else if (tokid == tFORWARD)
@@ -1743,7 +1749,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     // Copy arguments.
     new (&fun->args()) PoolArray<ArgDecl*>(args);
 
-    if (fun->is_native()) {
+    if (fun->is_native() || fun->is_builtin()) {
         if (fun->decl().opertok != 0) {
             lexer_->need('=');
             lexer_->lexpush();
@@ -1757,6 +1763,7 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     switch (tokid) {
         case tNATIVE:
         case tFORWARD:
+        case tBUILTIN:
             lexer_->need(tTERM);
             return true;
         case tMETHODMAP:

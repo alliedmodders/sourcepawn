@@ -46,6 +46,8 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
   : cc_(cc),
     tree_(tree)
 {
+    sp::Atom* atom = cc_.atom("float");
+    builtins_[atom] = &CodeGenerator::EmitFloatBuiltin;
 }
 
 bool CodeGenerator::Generate() {
@@ -622,12 +624,16 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
         case '!':
             if (inner->val().type()->isInt64())
                 __ emit(OP_TEST_I64);
+            else if (inner->val().type()->isFloat())
+                __ emit(OP_TEST_F32);
             __ emit(OP_NOT);
             break;
         case '-':
             if (inner->val().type()->isInt64()) {
                 auto slot = AcquireInt64Slot(expr);
                 __ emit(OP_NEG_I64, slot);
+            } else if (inner->val().type()->isFloat()) {
+                __ emit(OP_NEG_F32);
             } else {
                 __ emit(OP_NEG);
             }
@@ -656,7 +662,6 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     EmitExpr(expr->expr());
 
     const auto& val = expr->expr()->val();
-    auto& userop = expr->userop();
 
     Type* type = val.type();
     if (type->isReference())
@@ -687,13 +692,15 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
         }
     }
 
-    if (userop.sym) {
-        EmitUserOp(userop, val);
-    } else if (type->isInt64()) {
+    if (type->isInt64()) {
         // alt is inc_slot, pri is original address.
         // After this, pri = inc_slot.
         __ emit(OP_ADDR_ALT, inc_int64_slot);
         __ emit(OP_ADD_I64, inc_int64_slot);
+    } else if (type->isFloat()) {
+        float val = (expr->token() == tINC ? 1.0f : -1.0f);
+        __ emit(OP_CONST_ALT, sp_ftoc(val));
+        __ emit(OP_ADD_F32);
     } else {
         __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
     }
@@ -821,140 +828,133 @@ CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in
         }
     }
 
+    Type* effective = left->val().type();
+    if (effective->isReference())
+        effective = effective->inner();
+
     BuiltinType type = BuiltinType::Int;
-    if (left->val().type()->isInt64())
+    if (effective->isInt64())
         type = BuiltinType::Int64;
+    else if (effective->isFloat())
+        type = BuiltinType::Float;
 
     if (oper_tok) {
         if (user_op.sym) {
             EmitUserOp(user_op, {});
             return;
         }
-        switch (oper_tok) {
-            case '*':
-                EmitBinaryOp(expr, type, OP_SMUL);
-                break;
-            case '/':
-                EmitBinaryOp(expr, type, OP_SDIV_ALT);
-                break;
-            case '%':
-                EmitBinaryOp(expr, type, OP_SDIV_ALT);
-                __ emit(OP_MOVE_PRI);
-                break;
-            case '+':
-                EmitBinaryOp(expr, type, OP_ADD);
-                break;
-            case '-':
-                EmitBinaryOp(expr, type, OP_SUB_ALT);
-                break;
-            case tSHL:
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SHL);
-                break;
-            case tSHR:
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SSHR);
-                break;
-            case tSHRU:
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SHR);
-                break;
-            case '&':
-                EmitBinaryOp(expr, type, OP_AND);
-                break;
-            case '^':
-                EmitBinaryOp(expr, type, OP_XOR);
-                break;
-            case '|':
-                EmitBinaryOp(expr, type, OP_OR);
-                break;
-            case tlLE:
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SLEQ);
-                break;
-            case tlGE:
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SGEQ);
-                break;
-            case '<':
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SLESS);
-                break;
-            case '>':
-                __ emit(OP_XCHG);
-                EmitBinaryOp(expr, type, OP_SGRTR);
-                break;
-            case tlEQ:
-                EmitBinaryOp(expr, type, OP_EQ);
-                break;
-            case tlNE:
-                EmitBinaryOp(expr, type, OP_NEQ);
-                break;
-            default:
-                assert(false);
-        }
+        EmitBinaryOp(expr, type, oper_tok);
     }
 }
 
-OPCODE GetInt64Variant(OPCODE op) {
-    switch (op) {
-        case OP_SMUL: return OP_SMUL_I64;
-        case OP_SDIV_ALT: return OP_SDIV_ALT_I64;
-        case OP_ADD: return OP_ADD_I64;
-        case OP_SUB_ALT: return OP_SUB_ALT_I64;
-        case OP_SHL: return OP_SHL_I64;
-        case OP_SSHR: return OP_SSHR_I64;
-        case OP_SHR: return OP_SHR_I64;
-        case OP_AND: return OP_AND_I64;
-        case OP_XOR: return OP_XOR_I64;
-        case OP_OR: return OP_OR_I64;
-        case OP_EQ: return OP_EQ_I64;
-        case OP_NEQ: return OP_NEQ_I64;
-        case OP_SGRTR: return OP_SGRTR_I64;
-        case OP_SGEQ: return OP_SGEQ_I64;
-        case OP_SLESS: return OP_SLESS_I64;
-        case OP_SLEQ: return OP_SLEQ_I64;
+OPCODE GetFloatBinaryOp(int oper_tok) {
+    switch (oper_tok) {
+        case '*': return OP_MUL_F32;
+        case '/': return OP_DIV_ALT_F32;
+        case '%': return OP_MOD_ALT_F32;
+        case '+': return OP_ADD_F32;
+        case '-': return OP_SUB_ALT_F32;
+        case tlEQ: return OP_EQ_F32;
+        case tlNE: return OP_NEQ_F32;
+        case '>': return OP_GRTR_F32;
+        case tlGE: return OP_GEQ_F32;
+        case '<': return OP_LESS_F32;
+        case tlLE: return OP_LEQ_F32;
         default:
             assert(false);
             return OP_NONE;
     }
 }
 
-static inline bool IsCompareOp(OPCODE op) {
-    switch (op) {
-        case OP_EQ:
-        case OP_NEQ:
-        case OP_SGRTR:
-        case OP_SGEQ:
-        case OP_SLESS:
-        case OP_SLEQ:
-        case OP_EQ_I64:
-        case OP_NEQ_I64:
-        case OP_SGRTR_I64:
-        case OP_SGEQ_I64:
-        case OP_SLESS_I64:
-        case OP_SLEQ_I64:
+OPCODE GetInt32BinaryOp(int oper_tok) {
+    switch (oper_tok) {
+        case '*': return OP_SMUL;
+        case '/': return OP_SDIV_ALT_I32;
+        case '%': return OP_SMOD_ALT_I32;
+        case '+': return OP_ADD;
+        case '-': return OP_SUB_ALT;
+        case tSHL: return OP_SHL;
+        case tSHR: return OP_SSHR;
+        case tSHRU: return OP_SHR;
+        case '&': return OP_AND;
+        case '^': return OP_XOR;
+        case '|': return OP_OR;
+        case tlEQ: return OP_EQ;
+        case tlNE: return OP_NEQ;
+        case '>': return OP_SGRTR;
+        case tlGE: return OP_SGEQ;
+        case '<': return OP_SLESS;
+        case tlLE: return OP_SLEQ;
+        default:
+            assert(false);
+            return OP_NONE;
+    }
+}
+
+OPCODE GetInt64BinaryOp(int oper_tok) {
+    switch (oper_tok) {
+        case '*': return OP_SMUL_I64;
+        case '/': return OP_SDIV_ALT_I64;
+        case '%': return OP_SMOD_ALT_I64;
+        case '+': return OP_ADD_I64;
+        case '-': return OP_SUB_ALT_I64;
+        case tSHL: return OP_SHL_I64;
+        case tSHR: return OP_SSHR_I64;
+        case tSHRU: return OP_SHR_I64;
+        case '&': return OP_AND_I64;
+        case '^': return OP_XOR_I64;
+        case '|': return OP_OR_I64;
+        case tlEQ: return OP_EQ_I64;
+        case tlNE: return OP_NEQ_I64;
+        case '>': return OP_SGRTR_I64;
+        case tlGE: return OP_SGEQ_I64;
+        case '<': return OP_SLESS_I64;
+        case tlLE: return OP_SLEQ_I64;
+        default:
+            assert(false);
+            return OP_NONE;
+    }
+}
+
+static inline bool IsCompareOp(int oper_tok) {
+    switch (oper_tok) {
+        case tlEQ:
+        case tlNE:
+        case '>':
+        case tlGE:
+        case '<':
+        case tlLE:
             return true;
         default:
             return false;
     }
 }
 
-void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, OPCODE op) {
+void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
+    switch (oper_tok) {
+        case tlLE:
+        case tlGE:
+        case '<':
+        case '>':
+        case tSHL:
+        case tSHR:
+        case tSHRU:
+            __ emit(OP_XCHG);
+            break;
+    }
+
     if (type == BuiltinType::Int64) {
-        OPCODE op64 = GetInt64Variant(op);
-        if (op64 == OP_SDIV_ALT_I64) {
-            auto pri_slot = AcquireInt64Slot(expr);
-            auto alt_slot = AcquireInt64Slot(expr);
-            __ emit(op64, pri_slot, alt_slot);
-        } else if (IsCompareOp(op64)) {
+        OPCODE op64 = GetInt64BinaryOp(oper_tok);
+        if (IsCompareOp(oper_tok)) {
             __ emit(op64);
         } else {
             auto pri_slot = AcquireInt64Slot(expr);
             __ emit(op64, pri_slot);
         }
+    } else if (type == BuiltinType::Float) {
+        __ emit(GetFloatBinaryOp(oper_tok));
     } else {
-        __ emit(op);
+        __ emit(GetInt32BinaryOp(oper_tok));
     }
 }
 
@@ -1253,6 +1253,14 @@ CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
 }
 
 void CodeGenerator::EmitCallExpr(CallExpr* call) {
+    if (call->fun()->is_builtin()) {
+        auto iter = builtins_.find(call->fun()->name());
+        assert(iter != builtins_.end());
+
+        (this->*(iter->second))(call);
+        return;
+    }
+
     // If returning an array, push a hidden parameter.
     bool pop_hidden_param = false;
     if (!call->fun()->is_native()) {
@@ -2176,7 +2184,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
         else
             assert(false);
     } else {
-        assert(false);
+        __ emit(OP_CVT_F32);
     }
 }
 
@@ -2186,6 +2194,13 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr) {
 
     if (expr->val().type()->isInt() && from->val().type()->isInt64())
         __ emit(OP_TRUNCATE_I64);
+}
+
+void CodeGenerator::EmitFloatBuiltin(CallExpr* expr) {
+    assert(expr->args().size() == 1);
+
+    EmitExpr(expr->args()[0]);
+    __ emit(OP_CVT_F32);
 }
 
 void

@@ -81,6 +81,9 @@ struct SmxConsts {
 
     // This feature indicates that INVALID_FUNCTION is null (0) instead of -1.
     static const uint32_t kCodeFeatureNullFunctions = (1 << 3);
+
+    // This feature indicates support for int64 and float ops.
+    static const uint32_t kCodeFeatureTypedOps = (1 << 4);
 };
 
 // These structures are byte-packed.

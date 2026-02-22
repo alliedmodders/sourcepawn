@@ -22,6 +22,7 @@
 #include <limits>
 #include <utility>
 
+#include <amtl/am-float.h>
 #include "interpreter.h"
 #include "debugging.h"
 #include "environment.h"
@@ -549,9 +550,8 @@ Interpreter::visitSMUL()
 bool
 Interpreter::visitSDIV(PawnReg dest)
 {
-  PawnReg dividendReg = dest; // ALT
+  PawnReg dividendReg = dest;
   PawnReg divisorReg = (dest == PawnReg::Pri) ? PawnReg::Alt : PawnReg::Pri;
-    // PRI
 
   cell_t divisor = regs_[divisorReg];
   cell_t dividend = regs_[dividendReg];
@@ -569,6 +569,44 @@ Interpreter::visitSDIV(PawnReg dest)
 
   regs_.pri() = dividend / divisor;
   regs_.alt() = dividend % divisor;
+  return true;
+}
+
+bool Interpreter::visitSDIV_ALT_I32() {
+  cell_t divisor = regs_[PawnReg::Pri];
+  cell_t dividend = regs_[PawnReg::Alt];
+
+  if (divisor == 0) {
+    cx_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
+    return false;
+  }
+
+  // -INT_MIN / -1 is an overflow.
+  if (divisor == -1 && dividend == cell_t(0x80000000)) {
+    cx_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
+    return false;
+  }
+
+  regs_.pri() = dividend / divisor;
+  return true;
+}
+
+bool Interpreter::visitSMOD_ALT_I32() {
+  cell_t divisor = regs_[PawnReg::Pri];
+  cell_t dividend = regs_[PawnReg::Alt];
+
+  if (divisor == 0) {
+    cx_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
+    return false;
+  }
+
+  // -INT_MIN / -1 is an overflow.
+  if (divisor == -1 && dividend == cell_t(0x80000000)) {
+    cx_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
+    return false;
+  }
+
+  regs_.pri() = dividend % divisor;
   return true;
 }
 
@@ -1171,7 +1209,7 @@ bool Interpreter::visitSMUL_I64(cell_t slot) {
   return true;
 }
 
-bool Interpreter::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
+bool Interpreter::visitSDIV_ALT_I64(cell_t pri_slot) {
   int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
   if (!pri)
     return false;
@@ -1179,16 +1217,33 @@ bool Interpreter::visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) {
   if (!alt)
     return false;
   int64_t* pri_dest = cx_->acquireInt64Slot(pri_slot);
-  int64_t* alt_dest = cx_->acquireInt64Slot(alt_slot);
 
-  int err = Int64Div(pri, alt, pri_dest, alt_dest);
+  int err = Int64Div(pri, alt, pri_dest);
   if (err != SP_ERROR_NONE) {
     cx_->ReportErrorNumber(err);
     return false;
   }
 
   regs_.pri() = cx_->frm() + pri_slot;
-  regs_.alt() = cx_->frm() + alt_slot;
+  return true;
+}
+
+bool Interpreter::visitSMOD_ALT_I64(cell_t pri_slot) {
+  int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+  if (!pri)
+    return false;
+  int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
+  if (!alt)
+    return false;
+  int64_t* pri_dest = cx_->acquireInt64Slot(pri_slot);
+
+  int err = Int64Mod(pri, alt, pri_dest);
+  if (err != SP_ERROR_NONE) {
+    cx_->ReportErrorNumber(err);
+    return false;
+  }
+
+  regs_.pri() = cx_->frm() + pri_slot;
   return true;
 }
 
@@ -1346,5 +1401,82 @@ bool Interpreter::visitCompareOp64(CompareOp op) {
   return true;
 }
 
+bool Interpreter::visitTEST_F32() {
+  FloatCellUnion pri(regs_.pri());
+  regs_.pri() = (pri.f32 && !ke::IsNaN(pri.f32)) ? 1 : 0;
+  return true;
+}
+
+bool Interpreter::visitNEG_F32() {
+  FloatCellUnion pri(regs_.pri());
+  regs_.pri() = FloatCellUnion(-pri.f32).cell;
+  return true;
+}
+
+bool Interpreter::visitMUL_F32() {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  regs_.pri() = FloatCellUnion(pri.f32 * alt.f32).cell;
+  return true;
+}
+
+bool Interpreter::visitDIV_ALT_F32() {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  regs_.pri() = FloatCellUnion(alt.f32 / pri.f32).cell;
+  return true;
+}
+
+bool Interpreter::visitMOD_ALT_F32() {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  regs_.pri() = FloatCellUnion(fmodf(alt.f32, pri.f32)).cell;
+  return true;
+}
+
+bool Interpreter::visitADD_F32() {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  regs_.pri() = FloatCellUnion(pri.f32 + alt.f32).cell;
+  return true;
+}
+
+bool Interpreter::visitSUB_ALT_F32() {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  regs_.pri() = FloatCellUnion(alt.f32 - pri.f32).cell;
+  return true;
+}
+
+bool Interpreter::visitCompareOpF32(CompareOp op) {
+  FloatCellUnion pri(regs_.pri());
+  FloatCellUnion alt(regs_.alt());
+  switch (op) {
+    case CompareOp::Sgrtr:
+      regs_.pri() = (pri.f32 > alt.f32);
+      break;
+    case CompareOp::Sgeq:
+      regs_.pri() = (pri.f32 >= alt.f32);
+      break;
+    case CompareOp::Sleq:
+      regs_.pri() = (pri.f32 <= alt.f32);
+      break;
+    case CompareOp::Sless:
+      regs_.pri() = (pri.f32 < alt.f32);
+      break;
+    case CompareOp::Eq:
+      regs_.pri() = (pri.f32 == alt.f32);
+      break;
+    case CompareOp::Neq:
+      regs_.pri() = (pri.f32 != alt.f32);
+      break;
+  }
+  return true;
+}
+
+bool Interpreter::visitCVT_F32() {
+  regs_.pri() = FloatCellUnion((float)regs_.pri()).cell;
+  return true;
+}
 
 } // namespace sp

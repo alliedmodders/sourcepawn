@@ -28,7 +28,8 @@
  * or <http://www.sourcemod.net/license.php>.
  */
 
-#if !defined __sourcepawn2__
+#if !defined __sourcepawn_intrinsic_float
+
 native float __float_ctor(int value);
 native float __float_add(float a, float b);
 native float __float_sub(float a, float b);
@@ -162,4 +163,4 @@ stock float operator%(oper1, float oper2)
 {
   return __float_mod(float(oper1), oper2);
 }
-#endif // __sourcepawn2__
+#endif // __sourcepawn_intrinsic_float

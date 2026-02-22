@@ -124,6 +124,7 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
     is_stock_(false),
     is_forward_(false),
     is_native_(false),
+    is_builtin_(false),
     is_analyzing_(false),
     explicit_return_type_(false),
     retvalue_used_(false),

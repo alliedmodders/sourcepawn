@@ -185,7 +185,23 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_SGEQ_I64:
   case OP_EQ_I64:
   case OP_NEQ_I64:
-    return true;
+  case OP_TEST_F32:
+  case OP_NEG_F32:
+  case OP_MUL_F32:
+  case OP_DIV_ALT_F32:
+  case OP_ADD_F32:
+  case OP_SUB_ALT_F32:
+  case OP_EQ_F32:
+  case OP_NEQ_F32:
+  case OP_LESS_F32:
+  case OP_LEQ_F32:
+  case OP_GRTR_F32:
+  case OP_GEQ_F32:
+  case OP_CVT_F32:
+  case OP_MOD_ALT_F32:
+  case OP_SDIV_ALT_I32:
+  case OP_SMOD_ALT_I32:
+      return true;
 
   case OP_TRACKER_POP_SETHEAP:
   {
@@ -277,20 +293,11 @@ MethodVerifier::verifyOp(OPCODE op)
   case OP_OR_I64:
   case OP_AND_I64:
   case OP_XOR_I64:
+  case OP_SDIV_ALT_I64:
+  case OP_SMOD_ALT_I64:
   {
     cell_t offset = readCell();
     return verifyStackOffset(offset) && verifyStackOffset(offset + 4);
-  }
-
-  case OP_SDIV_ALT_I64:
-  {
-    cell_t pri_slot = readCell();
-    cell_t alt_slot = readCell();
-    if (!verifyStackOffset(pri_slot) || !verifyStackOffset(pri_slot + 4))
-      return false;
-    if (!verifyStackOffset(alt_slot) || !verifyStackOffset(alt_slot + 4))
-      return false;
-    return true;
   }
 
   case OP_STOR_S_I64_C:

@@ -38,9 +38,11 @@ void BuiltinGenerator::AddDefine(const std::string& key, const std::string& valu
 }
 
 void BuiltinGenerator::AddBuiltinConstants() {
+    buffer_ += "#define __sourcepawn_intrinsic_float\n";
     buffer_ += "const int EOS = 0;\n";
     buffer_ += "const int cellmax = " + std::to_string(INT_MAX) + ";\n";
     buffer_ += "const int cellmin = " + std::to_string(INT_MIN) + ";\n";
+    buffer_ += "builtin float float(int n);\n";
 }
 
 void BuiltinGenerator::AddDefaultInclude() {

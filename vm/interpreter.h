@@ -113,6 +113,8 @@ class Interpreter final : public PcodeVisitor
   bool visitSUB_ALT() override;
   bool visitSMUL() override;
   bool visitSDIV(PawnReg dest) override;
+  bool visitSDIV_ALT_I32() override;
+  bool visitSMOD_ALT_I32() override;
   bool visitNOT() override;
   bool visitNEG() override;
   bool visitINVERT() override;
@@ -162,7 +164,8 @@ class Interpreter final : public PcodeVisitor
   bool visitINVERT_I64(cell_t slot) override;
   bool visitNEG_I64(cell_t slot) override;
   bool visitSMUL_I64(cell_t slot) override;
-  bool visitSDIV_ALT_I64(cell_t pri_slot, cell_t alt_slot) override;
+  bool visitSDIV_ALT_I64(cell_t pri_slot) override;
+  bool visitSMOD_ALT_I64(cell_t pri_slot) override;
   bool visitADD_I64(cell_t slot) override;
   bool visitSUB_ALT_I64(cell_t slot) override;
   bool visitSHL_I64(cell_t slot) override;
@@ -173,6 +176,15 @@ class Interpreter final : public PcodeVisitor
   bool visitXOR_I64(cell_t slot) override;
   bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) override;
   bool visitCompareOp64(CompareOp op) override;
+  bool visitTEST_F32() override;
+  bool visitNEG_F32() override;
+  bool visitMUL_F32() override;
+  bool visitDIV_ALT_F32() override;
+  bool visitADD_F32() override;
+  bool visitSUB_ALT_F32() override;
+  bool visitCVT_F32() override;
+  bool visitMOD_ALT_F32() override;
+  bool visitCompareOpF32(CompareOp op) override;
 
  private:
   Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);

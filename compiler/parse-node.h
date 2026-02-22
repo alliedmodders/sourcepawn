@@ -833,13 +833,11 @@ class IncDecExpr : public Expr
 
     int token() const { return token_; }
     Expr* expr() const { return expr_; }
-    UserOperation& userop() { return userop_; }
     bool prefix() const { return prefix_; }
 
   protected:
     int token_;
     Expr* expr_;
-    UserOperation userop_;
     bool prefix_;
 };
 
@@ -1667,6 +1665,9 @@ class FunctionDecl : public Decl
     void set_is_native() { is_native_ = true; }
     bool is_native() const { return is_native_; }
 
+    void set_is_builtin() { is_builtin_ = true; }
+    bool is_builtin() const { return is_builtin_; }
+
     void set_is_forward() { is_forward_ = true; }
     bool is_forward() const { return is_forward_; }
 
@@ -1785,6 +1786,7 @@ class FunctionDecl : public Decl
     bool is_stock_ SP_BITFIELD(1);
     bool is_forward_ SP_BITFIELD(1);
     bool is_native_ SP_BITFIELD(1);
+    bool is_builtin_ SP_BITFIELD(1);
     bool is_analyzing_ SP_BITFIELD(1);
     bool explicit_return_type_ SP_BITFIELD(1);
     bool retvalue_used_ SP_BITFIELD(1);

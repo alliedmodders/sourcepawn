@@ -309,8 +309,11 @@ class PcodeReader
     }
     case OP_SDIV_ALT_I64: {
       cell_t pri_slot = readCell();
-      cell_t alt_slot = readCell();
-      return visitor_->visitSDIV_ALT_I64(pri_slot, alt_slot);
+      return visitor_->visitSDIV_ALT_I64(pri_slot);
+    }
+    case OP_SMOD_ALT_I64: {
+      cell_t pri_slot = readCell();
+      return visitor_->visitSMOD_ALT_I64(pri_slot);
     }
     case OP_ADD_I64: {
       cell_t slot = readCell();
@@ -404,7 +407,10 @@ class PcodeReader
       return visitor_->visitSDIV(PawnReg::Pri);
     case OP_SDIV_ALT:
       return visitor_->visitSDIV(PawnReg::Alt);
-
+    case OP_SDIV_ALT_I32:
+      return visitor_->visitSDIV_ALT_I32();
+    case OP_SMOD_ALT_I32:
+      return visitor_->visitSMOD_ALT_I32();
     case OP_ADD:
       return visitor_->visitADD();
     case OP_SUB:
@@ -479,6 +485,35 @@ class PcodeReader
       return visitor_->visitCompareOp64(CompareOp::Sgrtr);
     case OP_SGEQ_I64:
       return visitor_->visitCompareOp64(CompareOp::Sgeq);
+
+    case OP_TEST_F32:
+      return visitor_->visitTEST_F32();
+    case OP_NEG_F32:
+      return visitor_->visitNEG_F32();
+    case OP_MUL_F32:
+      return visitor_->visitMUL_F32();
+    case OP_DIV_ALT_F32:
+      return visitor_->visitDIV_ALT_F32();
+    case OP_ADD_F32:
+      return visitor_->visitADD_F32();
+    case OP_SUB_ALT_F32:
+      return visitor_->visitSUB_ALT_F32();
+    case OP_CVT_F32:
+      return visitor_->visitCVT_F32();
+    case OP_MOD_ALT_F32:
+      return visitor_->visitMOD_ALT_F32();
+    case OP_EQ_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Eq);
+    case OP_NEQ_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Neq);
+    case OP_LESS_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Sless);
+    case OP_LEQ_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Sleq);
+    case OP_GRTR_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Sgrtr);
+    case OP_GEQ_F32:
+      return visitor_->visitCompareOpF32(CompareOp::Sgeq);
 
     case OP_EQ_C_PRI:
     case OP_EQ_C_ALT:

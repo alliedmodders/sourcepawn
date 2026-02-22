@@ -35,7 +35,20 @@ std::optional<BuiltinType> FindBinaryCoercionRule(Type* left, Type* right, int r
 
         return {BuiltinType::Int64};
     }
+    if (left->isFloat() || right->isFloat()) {
+        int oper_tok = NormalizeBinaryToken(raw_token);
+        if (IsBitwise(oper_tok))
+            return {BuiltinType::Void};
 
+        Type* other = left;
+        if (other->isFloat())
+            other = right;
+
+        if (!(other->isFloat() || !other->isFloat()))
+            return {BuiltinType::Void};
+
+        return {BuiltinType::Float};
+    }
     return {};
 }
 

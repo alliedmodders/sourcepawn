@@ -650,7 +650,12 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     if (type->isReference())
         type = type->inner();
 
-    find_userop(*sc_, incdec->token(), type, 0, 1, &expr_val, &incdec->userop());
+
+    UserOperation userop;
+    if (find_userop(*sc_, incdec->token(), type, 0, 1, &expr_val, &userop)) {
+        report(incdec, 464) << get_token_string(incdec->token());
+        return false;
+    }
 
     if (type->isInt64()) {
         if (incdec->prefix())
@@ -815,27 +820,26 @@ bool BinaryExprChecker::Check() {
                         &userop))
         {
             val.set_type(userop.sym->type());
-        } else if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR) {
-            char boolresult = FALSE;
-            matchtag(left_val->type(), right_val->type(), FALSE);
-            val.ident = iCONSTEXPR;
-            val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
-                                  &boolresult));
         } else {
             if (!CheckOperatorTypes())
                 return false;
+            if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
+                val.type()->coercesFromInt())
+            {
+                char boolresult = FALSE;
+                matchtag(left_val->type(), right_val->type(), FALSE);
+                val.ident = iCONSTEXPR;
+                val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
+                                      &boolresult));
+            }
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
             val.set_type(types_->type_bool());
     }
 
-    if (val.type()->isInt64()) {
-        unsigned int temp_slots = 1;
-        if (oper_tok == '/')
-            temp_slots = 2;
-        sema_.NeedsInt64Slot(expr_, temp_slots);
-    }
+    if (val.type()->isInt64())
+        sema_.NeedsInt64Slot(expr_);
 
     return true;
 }
@@ -859,10 +863,16 @@ bool BinaryExprChecker::CheckOperatorTypes() {
             return false;
         }
 
-        if (!left_type->isBuiltin(*cr))
-            left_ = expr_->set_left(sema_.BuildSimpleCast(left_, *cr));
         if (!right_type->isBuiltin(*cr))
             right_ = expr_->set_right(sema_.BuildSimpleCast(right_, *cr));
+
+        if (!left_type->isBuiltin(*cr)) {
+            if (IsAssignOp(expr_->token())) {
+                report(expr_, 462) << right_->val().type() << left_type;
+                return false;
+            }
+            left_ = expr_->set_left(sema_.BuildSimpleCast(left_, *cr));
+        }
 
         expr_->val().set_type(left_->val().type());
         return true;
@@ -967,12 +977,12 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
             if (left_type->isInt())
                 report(expr_, 454);
             else
-                report(expr_, 455) << left_type << right_val.type();
+                report(expr_, 450) << left_type << right_val.type();
             return false;
         }
         if (!right_val.type()->isInt64()) {
             if (!CanPromoteToInt64(right_val.type())) {
-                report(expr_, 455) << left_type << right_val.type();
+                report(expr_, 450) << left_type << right_val.type();
                 return false;
             }
             right_ = expr_->set_right(sema_.BuildSimpleCast(right_, BuiltinType::Int64));
@@ -1821,7 +1831,7 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             }
 
             fun = fun->canonical();
-            if (!fun->is_native() && !fun->impl()) {
+            if (!(fun->is_native() || fun->is_builtin()) && !fun->impl()) {
                 report(target, 4) << decl->name();
                 return nullptr;
             }
@@ -2926,7 +2936,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     bool tag_ok = CheckRvalue(expr);
     const auto& v = expr->val();
     if (tag_ok && (v.type()->isComposite() || v.type()->isVoid()))
-        report(455) << v.type() << types_->type_int();
+        report(450) << v.type() << types_->type_int();
 
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
@@ -3056,7 +3066,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     auto body = info->body();
     if (!body) {
-        if (info->is_native() || info->is_forward())
+        if (info->is_native() || info->is_forward() || info->is_builtin())
             return true;
         report(info->pos(), 10);
         return false;
