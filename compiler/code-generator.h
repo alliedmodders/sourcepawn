@@ -106,21 +106,16 @@ class CodeGenerator final
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
-    void EmitUserOp(const UserOperation& user_op, value* lval);
+    void EmitUserOp(const UserOperation& user_op, const value& lval);
     void EmitCall(FunctionDecl* fun, cell nargs);
-    void EmitInc(const value* lval);
-    void EmitDec(const value* lval);
+    void EmitInc(const value& lval);
+    void EmitDec(const value& lval);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void InvokeSetter(MethodmapPropertyDecl* method, bool save);
-    void EmitRvalue(value* lval);
-    void EmitStore(const value* lval, bool save_pri = true);
+    void EmitRvalue(const value& lval);
+    void EmitStore(const value& lval, bool save_pri = true);
     void EmitBreak();
     void EmitBinaryOp(Expr* expr, BuiltinType type, OPCODE op);
-
-    void EmitRvalue(const value& lval) {
-        value tmp = lval;
-        EmitRvalue(&tmp);
-    }
 
     using DebugSymbol = std::pair<Decl*, uint32_t>;
 
