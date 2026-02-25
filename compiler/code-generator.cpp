@@ -662,7 +662,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     if (type->isReference())
         type = type->inner();
 
-    if (expr->prefix()) {
+    if (expr->prefix() || expr->discard()) {
         if (type->isInt64()) {
             Int64CellUnion u(expr->token() == tINC ? 1 : -1);
             auto inc_slot = AcquireInt64Slot(expr);
@@ -689,7 +689,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
                 __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
             if (!val.canRematerialize())
                 __ emit(OP_POP_ALT);
-            EmitStore(val, true);
+            EmitStore(val, !expr->discard() /* save_pri */);
         }
     } else {
         if (type->isInt64()) {

@@ -2461,6 +2461,7 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
         return false;
     if (!expr->HasSideEffects())
         report(expr, 215);
+    expr->set_discard();
     return true;
 }
 
@@ -2870,6 +2871,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
             AssignHeapOwnership(stmt->advance());
         else
             ok = false;
+        stmt->advance()->discard();
     }
 
     ke::Maybe<cell> constval;

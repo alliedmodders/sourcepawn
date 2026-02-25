@@ -589,7 +589,8 @@ class Expr : public ParseNode
       : ParseNode(pos),
         kind_(kind),
         lvalue_(false),
-        can_alloc_heap_(false)
+        can_alloc_heap_(false),
+        discard_(false)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -627,6 +628,8 @@ class Expr : public ParseNode
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
     bool can_alloc_int64_slot() const { return can_alloc_int64_slot_; }
     void set_can_alloc_int64_slot(bool b) { can_alloc_int64_slot_ = b; }
+    bool discard() const { return discard_; }
+    void set_discard() { discard_ = true; }
 
     void MarkAndProcessUses(SemaContext& sc) {
         MarkUsed(sc);
@@ -652,6 +655,7 @@ class Expr : public ParseNode
     bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
     bool can_alloc_int64_slot_ : 1;
+    bool discard_ : 1;
 };
 
 class UnaryExpr final : public Expr
