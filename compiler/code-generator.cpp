@@ -669,26 +669,14 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
         __ emit(OP_STOR_S_I64_C, inc_int64_slot, u.cells[0], u.cells[1]);
     }
 
-    if (expr->prefix() || expr->discard()) {
-        // Save base address if needed.
-        if (!val.canRematerialize())
-            __ emit(OP_PUSH_PRI);
-        EmitRvalue(val);
-        if (userop.sym) {
-            EmitUserOp(userop, val);
-        } else if (type->isInt64()) {
-            __ emit(OP_ADDR_ALT, inc_int64_slot);
-            __ emit(OP_ADD_I64, inc_int64_slot);
-        } else {
-            __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
-        }
-        if (!val.canRematerialize())
-            __ emit(OP_POP_ALT);
-        EmitStore(val, !expr->discard() /* save_pri */);
-    } else {
-        if (!val.canRematerialize())
-            __ emit(OP_PUSH_PRI);
-        EmitRvalue(val);
+    // Save base address if needed.
+    if (!val.canRematerialize())
+        __ emit(OP_PUSH_PRI);
+
+    EmitRvalue(val);
+
+    bool want_pre_value = !(expr->prefix() || expr->discard());
+    if (want_pre_value) {
         if (type->isInt64()) {
             cell_t pre_slot = AcquireInt64Slot(expr);
             __ emit(OP_ADDR_ALT, pre_slot);
@@ -697,24 +685,36 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
         } else {
             __ emit(OP_PUSH_PRI);
         }
-        if (userop.sym) {
-            EmitUserOp(userop, val);
-        } else if (type->isInt64()) {
-            // alt is inc_slot, pri is original address.
-            // After this, pri = inc_slot.
-            __ emit(OP_ADDR_ALT, inc_int64_slot);
-            __ emit(OP_ADD_I64, inc_int64_slot);
-        } else {
-            __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
-        }
-        if (!val.canRematerialize()) {
-            // Pop the old value into ALT, then swap it with the top of
-            // stack (which contains the base address).
-            __ emit(OP_POP_ALT);
+    }
+
+    if (userop.sym) {
+        EmitUserOp(userop, val);
+    } else if (type->isInt64()) {
+        // alt is inc_slot, pri is original address.
+        // After this, pri = inc_slot.
+        __ emit(OP_ADDR_ALT, inc_int64_slot);
+        __ emit(OP_ADD_I64, inc_int64_slot);
+    } else {
+        __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
+    }
+
+    if (!val.canRematerialize()) {
+        // If want_pre_value, then ALT will have the "pre" value. Otherwise,
+        // it is the original lvalue address.
+        __ emit(OP_POP_ALT);
+    }
+
+    if (want_pre_value) {
+        // If we pushed the original lvalue address onto the stack, it's still
+        // there, and ALT has the "pre" value. In that case we need to swap
+        // them. Then ALT will have the address for the store operation, and
+        // we can later pop the return value into PRI.
+        if (!val.canRematerialize())
             __ emit(OP_SWAP_ALT);
-        }
         EmitStore(val, false /* save_pri */);
         __ emit(OP_POP_PRI);
+    } else {
+        EmitStore(val, !expr->discard() /* save_pri */);
     }
 }
 
