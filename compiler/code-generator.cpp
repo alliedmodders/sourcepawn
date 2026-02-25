@@ -662,81 +662,59 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     if (type->isReference())
         type = type->inner();
 
+    cell_t inc_int64_slot = -1;
+    if (type->isInt64()) {
+        Int64CellUnion u(expr->token() == tINC ? 1 : -1);
+        inc_int64_slot = AcquireInt64Slot(expr);
+        __ emit(OP_STOR_S_I64_C, inc_int64_slot, u.cells[0], u.cells[1]);
+    }
+
     if (expr->prefix() || expr->discard()) {
-        if (type->isInt64()) {
-            Int64CellUnion u(expr->token() == tINC ? 1 : -1);
-            auto inc_slot = AcquireInt64Slot(expr);
-            __ emit(OP_STOR_S_I64_C, inc_slot, u.cells[0], u.cells[1]);
-
-            if (!val.canRematerialize())
-                __ emit(OP_PUSH_PRI);
-            EmitRvalue(val);
-            __ emit(OP_ADDR_ALT, inc_slot);
-            __ emit(OP_ADD_I64, inc_slot);
-            if (!val.canRematerialize()) {
-                __ emit(OP_POP_PRI);
-                __ emit(OP_XCHG);
-            }
-            EmitStore(val, false);
+        // Save base address if needed.
+        if (!val.canRematerialize())
+            __ emit(OP_PUSH_PRI);
+        EmitRvalue(val);
+        if (userop.sym) {
+            EmitUserOp(userop, val);
+        } else if (type->isInt64()) {
+            __ emit(OP_ADDR_ALT, inc_int64_slot);
+            __ emit(OP_ADD_I64, inc_int64_slot);
         } else {
-            // Save base address if needed.
-            if (!val.canRematerialize())
-                __ emit(OP_PUSH_PRI);
-            EmitRvalue(val);
-            if (userop.sym)
-                EmitUserOp(userop, val);
-            else
-                __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
-            if (!val.canRematerialize())
-                __ emit(OP_POP_ALT);
-            EmitStore(val, !expr->discard() /* save_pri */);
+            __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
         }
+        if (!val.canRematerialize())
+            __ emit(OP_POP_ALT);
+        EmitStore(val, !expr->discard() /* save_pri */);
     } else {
+        if (!val.canRematerialize())
+            __ emit(OP_PUSH_PRI);
+        EmitRvalue(val);
         if (type->isInt64()) {
-            // Set the constant.
-            Int64CellUnion u(expr->token() == tINC ? 1 : -1);
-            auto inc_slot = AcquireInt64Slot(expr);
-            __ emit(OP_STOR_S_I64_C, inc_slot, u.cells[0], u.cells[1]);
-
-            auto pre_slot = AcquireInt64Slot(expr);
-
-            // Overloads not allowed.
-            assert(!userop.sym);
-
-            if (!val.canRematerialize())
-                __ emit(OP_PUSH_PRI);
-            // Get pre-inc value.
-            EmitRvalue(val);
-            // Save pre-inc value.
+            cell_t pre_slot = AcquireInt64Slot(expr);
             __ emit(OP_ADDR_ALT, pre_slot);
             __ emit(OP_MOVE_I64);
-            // Inc/dec. alt is inc_slot, pri is original address.
-            // After this, pri = inc_slot.
-            __ emit(OP_ADDR_ALT, inc_slot);
-            __ emit(OP_ADD_I64, inc_slot);
-            if (!val.canRematerialize())
-                __ emit(OP_POP_ALT);
-            EmitStore(val);
-            // Set pri = pre-inc value.
-            __ emit(OP_ADDR_PRI, pre_slot);
+            __ emit(OP_PUSH_ALT);
         } else {
-            if (!val.canRematerialize())
-                __ emit(OP_PUSH_PRI);
-            EmitRvalue(val);
             __ emit(OP_PUSH_PRI);
-            if (userop.sym)
-                EmitUserOp(userop, val);
-            else
-                __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
-            if (!val.canRematerialize()) {
-                // Pop the old value into ALT, then swap it with the top of
-                // stack (which contains the base address).
-                __ emit(OP_POP_ALT);
-                __ emit(OP_SWAP_ALT);
-            }
-            EmitStore(val);
-            __ emit(OP_POP_PRI);
         }
+        if (userop.sym) {
+            EmitUserOp(userop, val);
+        } else if (type->isInt64()) {
+            // alt is inc_slot, pri is original address.
+            // After this, pri = inc_slot.
+            __ emit(OP_ADDR_ALT, inc_int64_slot);
+            __ emit(OP_ADD_I64, inc_int64_slot);
+        } else {
+            __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
+        }
+        if (!val.canRematerialize()) {
+            // Pop the old value into ALT, then swap it with the top of
+            // stack (which contains the base address).
+            __ emit(OP_POP_ALT);
+            __ emit(OP_SWAP_ALT);
+        }
+        EmitStore(val, false /* save_pri */);
+        __ emit(OP_POP_PRI);
     }
 }
 
