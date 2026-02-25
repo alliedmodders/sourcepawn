@@ -678,26 +678,18 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
                 __ emit(OP_XCHG);
             }
             EmitStore(val, false);
-        } else if (val.ident != iACCESSOR) {
-            if (userop.sym) {
-                EmitUserOp(userop, val);
-            } else {
-                EmitIncDecInner(expr, val);
-            }
-            EmitRvalue(val);  /* and read the result into PRI */
         } else {
-            __ emit(OP_PUSH_PRI);
-            InvokeGetter(val.accessor());
-            if (userop.sym) {
+            // Save base address if needed.
+            if (!val.canRematerialize())
+                __ emit(OP_PUSH_PRI);
+            EmitRvalue(val);
+            if (userop.sym)
                 EmitUserOp(userop, val);
-            } else {
-                if (expr->token() == tINC)
-                    __ emit(OP_INC_PRI);
-                else
-                    __ emit(OP_DEC_PRI);
-            }
-            __ emit(OP_POP_ALT);
-            InvokeSetter(val.accessor(), TRUE);
+            else
+                __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
+            if (!val.canRematerialize())
+                __ emit(OP_POP_ALT);
+            EmitStore(val, true);
         }
     } else {
         if (type->isInt64()) {
@@ -727,39 +719,22 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
             EmitStore(val);
             // Set pri = pre-inc value.
             __ emit(OP_ADDR_PRI, pre_slot);
-        } else if (val.ident == iARRAYCELL || val.ident == iARRAYCHAR || val.ident == iACCESSOR) {
-            // Save base address. Stack: [addr]
-            __ emit(OP_PUSH_PRI);
-            // Get pre-inc value.
-            EmitRvalue(val);
-            // Save pre-inc value, but swap its position with the address.
-            __ emit(OP_POP_ALT); // Stack: []
-            __ emit(OP_PUSH_PRI); // Stack: [val]
-            if (userop.sym) {
-                __ emit(OP_PUSH_ALT); // Stack: [val addr]
-                // Call the overload.
-                __ emit(OP_PUSH_PRI);
-                EmitCall(userop.sym, 1);
-                // Restore the address and emit the store.
-                __ emit(OP_POP_ALT);
-                EmitStore(val);
-            } else {
-                if (val.ident != iACCESSOR)
-                    __ emit(OP_MOVE_PRI);
-                EmitIncDecInner(expr, val);
-            }
-            __ emit(OP_POP_PRI);
         } else {
-            // Much simpler case when we don't have to save the base address.
+            if (!val.canRematerialize())
+                __ emit(OP_PUSH_PRI);
             EmitRvalue(val);
             __ emit(OP_PUSH_PRI);
-            if (userop.sym) {
-                __ emit(OP_PUSH_PRI);
-                EmitCall(userop.sym, 1);
-                EmitStore(val);
-            } else {
-                EmitIncDecInner(expr, val);
+            if (userop.sym)
+                EmitUserOp(userop, val);
+            else
+                __ emit(expr->token() == tINC ? OP_INC_PRI : OP_DEC_PRI);
+            if (!val.canRematerialize()) {
+                // Pop the old value into ALT, then swap it with the top of
+                // stack (which contains the base address).
+                __ emit(OP_POP_ALT);
+                __ emit(OP_SWAP_ALT);
             }
+            EmitStore(val);
             __ emit(OP_POP_PRI);
         }
     }
@@ -2157,16 +2132,6 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
 void
 CodeGenerator::EmitUserOp(const UserOperation& user_op, const value& lval)
 {
-    // for increment and decrement operators, the symbol must first be loaded
-    // (and stored back afterwards)
-    if (user_op.oper == tINC || user_op.oper == tDEC) {
-        assert(!user_op.savepri);
-        if (lval.ident == iARRAYCELL || lval.ident == iARRAYCHAR)
-            __ emit(OP_PUSH_PRI);
-        if (lval.ident != iACCESSOR)
-            EmitRvalue(lval); /* get the symbol's value in PRI */
-    }
-
     assert(!user_op.savepri || !user_op.savealt); /* either one MAY be set, but not both */
     if (user_op.savepri) {
         // the chained comparison operators require that the ALT register is
@@ -2207,59 +2172,6 @@ CodeGenerator::EmitUserOp(const UserOperation& user_op, const value& lval)
 
     if (user_op.savepri || user_op.savealt)
         __ emit(OP_POP_ALT); /* restore the saved PRI/ALT that into ALT */
-    if (user_op.oper == tINC || user_op.oper == tDEC) {
-        if (lval.ident == iARRAYCELL || lval.ident == iARRAYCHAR)
-            __ emit(OP_POP_ALT); /* restore address (in ALT) */
-        if (lval.ident != iACCESSOR) {
-            EmitStore(lval); /* store PRI in the symbol */
-            __ emit(OP_MOVE_PRI);
-        }
-    }
-}
-
-void CodeGenerator::EmitIncDecInner(IncDecExpr* expr, const value& lval) {
-    bool inc = (expr->token() == tINC);
-
-    switch (lval.ident) {
-        case iARRAYCELL:
-            __ emit(inc ? OP_INC_I : OP_DEC_I);
-            break;
-        case iARRAYCHAR:
-            __ emit(OP_PUSH_PRI);
-            __ emit(OP_PUSH_ALT);
-            __ emit(OP_MOVE_ALT);
-            __ emit(OP_LODB_I, 1);
-            __ emit(inc ? OP_INC_PRI : OP_DEC_PRI);
-            __ emit(OP_STRB_I, 1);
-            __ emit(OP_POP_ALT);
-            __ emit(OP_POP_PRI);
-            break;
-        case iACCESSOR:
-            __ emit(inc ? OP_INC_PRI : OP_DEC_PRI);
-            InvokeSetter(lval.accessor(), false);
-            break;
-        case iVARIABLE: {
-            if (lval.type()->isReference()) {
-                auto var = lval.sym->as<VarDeclBase>();
-                __ emit(OP_PUSH_PRI);
-                __ emit(OP_LREF_S_PRI, var->addr());
-                __ emit(inc ? OP_INC_PRI : OP_DEC_PRI);
-                __ emit(OP_SREF_S_PRI, var->addr());
-                __ emit(OP_POP_PRI);
-                break;
-            }
-            [[fallthrough]];
-        }
-        default: {
-            assert(!lval.type()->isInt64());
-            auto var = lval.sym->as<VarDeclBase>();
-            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
-                __ emit(inc ? OP_INC_S : OP_DEC_S, var->addr());
-            else
-                __ emit(inc ? OP_INC : OP_DEC, var->addr());
-            break;
-        }
-    }
 }
 
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {

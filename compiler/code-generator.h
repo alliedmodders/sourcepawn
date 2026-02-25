@@ -108,7 +108,6 @@ class CodeGenerator final
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitUserOp(const UserOperation& user_op, const value& lval);
     void EmitCall(FunctionDecl* fun, cell nargs);
-    void EmitIncDecInner(IncDecExpr* expr, const value& lval);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void InvokeSetter(MethodmapPropertyDecl* method, bool save);
     void EmitRvalue(const value& lval);
@@ -117,7 +116,6 @@ class CodeGenerator final
     void EmitBinaryOp(Expr* expr, BuiltinType type, OPCODE op);
 
     using DebugSymbol = std::pair<Decl*, uint32_t>;
-
     void AddDebugFile(const std::string& line);
     void AddDebugLine(int linenr);
     void AddDebugSymbol(Decl* sym, uint32_t pc);
