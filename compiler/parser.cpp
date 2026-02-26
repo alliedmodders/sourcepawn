@@ -94,7 +94,6 @@ Parser::Parse()
             case tSTATIC:
             case tPUBLIC:
             case tSTOCK:
-            case tOPERATOR:
             case tNATIVE:
             case tBUILTIN:
             case tFORWARD: {
@@ -263,8 +262,7 @@ Parser::parse_unknown_decl(const full_token_t* tok)
     // Hacky bag o' hints as to whether this is a variable decl.
     bool probablyVariable = tok->id == tNEW || decl.type.has_postdims || !lexer_->peek('(') ||
                             decl.type.is_const;
-
-    if (!decl.opertok && probablyVariable) {
+    if (probablyVariable) {
         if (tok->id == tNEW && decl.type.is_new)
             report(143);
 
@@ -1750,10 +1748,6 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     new (&fun->args()) PoolArray<ArgDecl*>(args);
 
     if (fun->is_native() || fun->is_builtin()) {
-        if (fun->decl().opertok != 0) {
-            lexer_->need('=');
-            lexer_->lexpush();
-        }
         if (lexer_->match('=')) {
             report(442);
             lexer_->match(tSYMBOL);
@@ -2177,14 +2171,14 @@ Parser::parse_decl(declinfo_t* decl, int flags)
         return parse_old_decl(decl, flags);
 
     // Another dead giveaway is there being a label or typeless operator.
-    if (lexer_->peek(tLABEL) || lexer_->peek(tOPERATOR))
+    if (lexer_->peek(tLABEL))
         return parse_old_decl(decl, flags);
 
     // Otherwise, we have to eat a symbol to tell.
     if (lexer_->matchsymbol(&ident)) {
         auto ident_tok = *lexer_->current_token();
 
-        if (lexer_->peek(tSYMBOL) || lexer_->peek(tOPERATOR) || lexer_->peek('&') || lexer_->peek(tELLIPS)) {
+        if (lexer_->peek(tSYMBOL) || lexer_->peek('&') || lexer_->peek(tELLIPS)) {
             // A new-style declaration only allows array dims or a symbol name, so
             // this is a new-style declaration.
             return parse_new_decl(decl, &ident_tok, flags);
@@ -2298,35 +2292,29 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
     }
 
     if (flags & DECLMASK_NAMED_DECL) {
-        if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
-            decl->opertok = operatorname(&decl->name);
-            if (decl->opertok == 0)
-                decl->name = cc_.atom("__unknown__");
-        } else {
-            if (!lexer_->peek(tSYMBOL)) {
-                int tok_id = lexer_->lex();
-                switch (tok_id) {
-                    case tOBJECT:
-                    case tCHAR:
-                    case tVOID:
-                    case tINT:
-                        if (lexer_->peek(tSYMBOL)) {
-                            report(143);
-                        } else {
-                            report(157) << get_token_string(tok_id);
-                            decl->name = cc_.atom(get_token_string(tok_id));
-                        }
-                        break;
-                    default:
-                        lexer_->lexpush();
-                        break;
-                }
+        if (!lexer_->peek(tSYMBOL)) {
+            int tok_id = lexer_->lex();
+            switch (tok_id) {
+                case tOBJECT:
+                case tCHAR:
+                case tVOID:
+                case tINT:
+                    if (lexer_->peek(tSYMBOL)) {
+                        report(143);
+                    } else {
+                        report(157) << get_token_string(tok_id);
+                        decl->name = cc_.atom(get_token_string(tok_id));
+                    }
+                    break;
+                default:
+                    lexer_->lexpush();
+                    break;
             }
-            lexer_->needsymbol(&decl->name);
         }
+        lexer_->needsymbol(&decl->name);
     }
 
-    if ((flags & DECLMASK_NAMED_DECL) && !decl->opertok) {
+    if (flags & DECLMASK_NAMED_DECL) {
         if (lexer_->match('['))
             parse_post_array_dims(decl, flags);
     }
@@ -2348,13 +2336,7 @@ Parser::parse_new_decl(declinfo_t* decl, const full_token_t* first, int flags)
             return true;
         }
 
-        if ((flags & DECLFLAG_MAYBE_FUNCTION) && lexer_->match(tOPERATOR)) {
-            decl->opertok = operatorname(&decl->name);
-            if (decl->opertok == 0)
-                decl->name = cc_.atom("__unknown__");
-        } else {
-            lexer_->needsymbol(&decl->name);
-        }
+        lexer_->needsymbol(&decl->name);
     }
 
     if (flags & DECLMASK_NAMED_DECL) {

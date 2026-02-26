@@ -83,8 +83,7 @@ class CodeGenerator final
     void EmitUnary(UnaryExpr* expr);
     void EmitIncDec(IncDecExpr* expr);
     void EmitBinary(BinaryExpr* expr);
-    void EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in_user_op, Expr* left,
-                         Expr* right);
+    void EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right);
     void EmitLogicalExpr(LogicalExpr* expr);
     void EmitChainedCompareExpr(ChainedCompareExpr* expr);
     void EmitTernaryExpr(TernaryExpr* expr);
@@ -94,7 +93,6 @@ class CodeGenerator final
     void EmitCallExpr(CallExpr* expr);
     void EmitNativeCallHiddenArg(CallExpr* expr);
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
-    void EmitCallUserOpExpr(CallUserOpExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
     void EmitNumber64Expr(Number64Expr* expr);
     void EmitSimpleCastExpr(SimpleCastExpr* expr);
@@ -106,7 +104,6 @@ class CodeGenerator final
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
-    void EmitUserOp(const UserOperation& user_op, const value& lval);
     void EmitCall(FunctionDecl* fun, cell nargs);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void InvokeSetter(MethodmapPropertyDecl* method, bool save);

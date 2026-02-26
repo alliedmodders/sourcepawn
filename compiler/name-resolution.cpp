@@ -693,14 +693,11 @@ SwitchStmt::Bind(SemaContext& sc)
 
 bool FunctionDecl::EnterNames(SemaContext& sc) {
     FunctionDecl* other = nullptr;
-    if (!decl_.opertok) {
-        // Handle forwards.
-        Decl* found = FindSymbol(sc, name_);
-        if (found) {
-            if ((other = CanRedefine(found)) == nullptr)
-                return false;
-            assert(!other || !other->proto_or_impl_);
-        }
+    // Handle forwards.
+    if (Decl* found = FindSymbol(sc, name_)) {
+        if ((other = CanRedefine(found)) == nullptr)
+            return false;
+        assert(!other || !other->proto_or_impl_);
     }
 
     if (other) {
@@ -789,9 +786,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         if (is_stock_)
             error(pos(), 42);      // invalid combination of class specifiers.
     }
-
-    if (decl_.opertok)
-        name_ = NameForOperator();
 
     SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {
@@ -924,58 +918,6 @@ FunctionDecl::BindArgs(SemaContext& sc)
         canonical()->compared_prototype_args = true;
     }
     return errors.ok();
-}
-
-Atom* FunctionDecl::NameForOperator() {
-    std::vector<std::string> params;
-
-    int count = 0;
-    Type* tags[2] = {nullptr, nullptr};
-    for (const auto& var : args_) {
-        if (count < 2)
-            tags[count] = var->type();
-        if (IsReferenceType(iVARIABLE, var->type()))
-            report(pos_, 66) << var->name();
-        if (var->init_rhs())
-            report(pos_, 59) << var->name();
-        count++;
-
-        if (!var->type()->canOperatorOverload()) {
-            report(pos_, 449) << var->type();
-            continue;
-        }
-
-        params.emplace_back(var->type()->declName()->str());
-    }
-
-    /* for '!', '++' and '--', count must be 1
-     * for '-', count may be 1 or 2
-     * for '=', count must be 1, and the resulttag is also important
-     * for all other (binary) operators and the special '~' operator, count must be 2
-     */
-    switch (decl_.opertok) {
-        case '!':
-        case '=':
-        case tINC:
-        case tDEC:
-            if (count != 1)
-                error(pos_, 62);
-            break;
-        case '-':
-            if (count != 1 && count != 2)
-                error(pos_, 62);
-            break;
-        default:
-            if (count != 2)
-                error(pos_, 62);
-            break;
-    }
-    if (IsReferenceType(iVARIABLE, decl_.type.type))
-        error(pos_, 62);
-
-    std::string name =
-        "operator" + get_token_string(decl_.opertok) + "(" + ke::Join(params, ",") + ")";
-    return CompileContext::get().atom(name);
 }
 
 bool

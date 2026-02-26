@@ -677,13 +677,10 @@ class UnaryExpr final : public Expr
     int token() const { return token_; }
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
-    bool userop() const { return userop_; }
-    void set_userop() { userop_ = true; }
 
   private:
     int token_;
     Expr* expr_;
-    bool userop_ = false;
 };
 
 class BinaryExprBase : public Expr
@@ -715,8 +712,6 @@ class BinaryExpr final : public BinaryExprBase
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
-    UserOperation& userop() { return userop_; }
-    UserOperation& assignop() { return assignop_; }
     void set_initializer() { initializer_ = true; }
     cell array_copy_length() const { return array_copy_length_; }
     void set_array_copy_length(cell len) { array_copy_length_ = len; }
@@ -727,8 +722,6 @@ class BinaryExpr final : public BinaryExprBase
     bool ValidateAssignmentRHS(SemaContext& sc);
 
   private:
-    UserOperation userop_;
-    UserOperation assignop_;
     cell array_copy_length_ = 0;
     bool initializer_ = false;
 };
@@ -752,7 +745,6 @@ struct CompareOp
     token_pos_t pos;
     int token;
     Expr* expr;
-    UserOperation userop = {};
 };
 
 class ChainedCompareExpr final : public Expr
@@ -992,23 +984,6 @@ class EmitOnlyExpr : public Expr
         assert(false);
         return true;
     }
-};
-
-class CallUserOpExpr final : public EmitOnlyExpr
-{
-  public:
-    CallUserOpExpr(const UserOperation& userop, Expr* expr);
-
-    void ProcessUses(SemaContext& sc) override;
-
-    static bool is_a(Expr* node) { return node->kind() == ExprKind::CallUserOpExpr; }
-
-    const UserOperation& userop() const { return userop_; }
-    Expr* expr() const { return expr_; }
-
-  private:
-    UserOperation userop_;
-    Expr* expr_;
 };
 
 class DefaultArgExpr final : public Expr
@@ -1757,7 +1732,6 @@ class FunctionDecl : public Decl
   protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
-    Atom* NameForOperator();
 
   protected:
     token_pos_t end_pos_;

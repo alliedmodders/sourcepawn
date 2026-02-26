@@ -241,7 +241,6 @@ class Semantics final
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     FunctionDecl* BindNewTarget(Expr* target);
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
-    bool CheckOperatorOverloadSignature(FunctionDecl* info);
 
     void NeedsHeapAlloc(Expr* expr);
     void NeedsInt64Slot(Expr* expr, unsigned int count = 1);

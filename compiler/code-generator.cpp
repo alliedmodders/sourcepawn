@@ -345,13 +345,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
 
         if (init) {
             const auto& val = init->right()->val();
-            if (init->assignop().sym) {
-                assert(num_cells == 1);
-                EmitExpr(init->right());
-
-                EmitUserOp(init->assignop(), val);
-                __ emit(OP_PUSH_PRI);
-            } else if (val.ident == iCONSTEXPR) {
+            if (val.ident == iCONSTEXPR) {
                 __ emit(OP_PUSH_C, val.constval());
             } else {
                 EmitExpr(init->right());
@@ -545,9 +539,6 @@ CodeGenerator::EmitExpr(Expr* expr)
         case ExprKind::DefaultArgExpr:
             EmitDefaultArgExpr(expr->to<DefaultArgExpr>());
             break;
-        case ExprKind::CallUserOpExpr:
-            EmitCallUserOpExpr(expr->to<CallUserOpExpr>());
-            break;
         case ExprKind::NewArrayExpr:
             EmitNewArrayExpr(expr->to<NewArrayExpr>());
             break;
@@ -607,11 +598,6 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
     auto inner = expr->expr();
     EmitExpr(inner);
 
-    // Hack: abort early if the operation was already handled. We really just
-    // want to replace the UnaryExpr though.
-    if (expr->userop())
-        return;
-
     switch (expr->token()) {
         case '~':
             if (inner->val().type()->isInt64()) {
@@ -646,7 +632,7 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
 bool
 CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* target)
 {
-    if (!expr->userop() && expr->token() == '!') {
+    if (expr->token() == '!') {
         auto inner = expr->expr();
         if (!inner->val().type()->isInt64()) {
             EmitTest(expr->expr(), !jump_on_true, target);
@@ -761,7 +747,6 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
 
         if (expr->array_copy_length()) {
             assert(!oper);
-            assert(!expr->assignop().sym);
 
             __ emit(OP_PUSH_PRI);
             EmitExpr(right);
@@ -774,26 +759,19 @@ CodeGenerator::EmitBinary(BinaryExpr* expr)
     assert(!expr->array_copy_length());
     assert(!left_val.type()->isArray());
 
-    EmitBinaryInner(expr, oper, expr->userop(), left, right);
+    EmitBinaryInner(expr, oper, left, right);
 
     if (IsAssignOp(token)) {
         if (saved_lhs)
             __ emit(OP_POP_ALT);
 
-        if (expr->assignop().sym)
-            EmitUserOp(expr->assignop(), {});
         EmitStore(left_val);
     }
 }
 
-void
-CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in_user_op,
-                               Expr* left, Expr* right)
-{
+void CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right) {
     const auto& left_val = left->val();
     const auto& right_val = right->val();
-
-    UserOperation user_op = in_user_op;
 
     // left goes into ALT, right goes into PRI, though we can swap them for
     // commutative operations.
@@ -811,7 +789,6 @@ CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in
         if (right_val.ident == iCONSTEXPR) {
             if (commutative(oper_tok)) {
                 __ const_alt(right_val.constval());
-                user_op.swapparams ^= true;
             } else {
                 if (must_save_lhs)
                     __ emit(OP_PUSH_PRI);
@@ -838,13 +815,8 @@ CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, const UserOperation& in
     else if (effective->isFloat())
         type = BuiltinType::Float;
 
-    if (oper_tok) {
-        if (user_op.sym) {
-            EmitUserOp(user_op, {});
-            return;
-        }
+    if (oper_tok)
         EmitBinaryOp(expr, type, oper_tok);
-    }
 }
 
 OPCODE GetFloatBinaryOp(int oper_tok) {
@@ -1127,7 +1099,7 @@ CodeGenerator::EmitChainedCompareExpr(ChainedCompareExpr* root)
             __ relop_prefix();
 
         int oper_tok = NormalizeBinaryToken(op.token);
-        EmitBinaryInner(root, oper_tok, op.userop, left, op.expr);
+        EmitBinaryInner(root, oper_tok, left, op.expr);
 
         if (count)
             __ relop_suffix();
@@ -1427,20 +1399,6 @@ CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
             EmitDefaultArray(expr, arg);
         else
             __ const_pri(arg->default_value()->val.get());
-    }
-}
-
-void
-CodeGenerator::EmitCallUserOpExpr(CallUserOpExpr* expr)
-{
-    EmitExpr(expr->expr());
-
-    const auto& userop = expr->userop();
-    if (userop.oper) {
-        auto val = expr->expr()->val();
-        EmitUserOp(userop, val);
-    } else {
-        EmitUserOp(userop, {});
     }
 }
 
@@ -2113,51 +2071,6 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
         __ emit(OP_MOVE_PRI);
         TrackTempHeapAlloc(expr, total_size);
     }
-}
-
-void
-CodeGenerator::EmitUserOp(const UserOperation& user_op, const value& lval)
-{
-    assert(!user_op.savepri || !user_op.savealt); /* either one MAY be set, but not both */
-    if (user_op.savepri) {
-        // the chained comparison operators require that the ALT register is
-        // unmodified, so we save it here; actually, we save PRI because the normal
-        // instruction sequence (without user operator) swaps PRI and ALT
-        __ emit(OP_PUSH_PRI);
-    } else if (user_op.savealt) {
-        /* for the assignment operator, ALT may contain an address at which the
-         * result must be stored; this address must be preserved accross the
-         * call
-         */
-        assert(lval.ident == iARRAYCELL || lval.ident == iARRAYCHAR); /* checked earlier */
-        __ emit(OP_PUSH_ALT);
-    }
-
-    /* push parameters, call the function */
-    switch (user_op.paramspassed) {
-        case 1:
-            __ emit(OP_PUSH_PRI);
-            break;
-        case 2:
-            /* note that 1) a function expects that the parameters are pushed
-             * in reversed order, and 2) the left operand is in the secondary register
-             * and the right operand is in the primary register */
-            if (user_op.swapparams) {
-                __ emit(OP_PUSH_ALT);
-                __ emit(OP_PUSH_PRI);
-            } else {
-                __ emit(OP_PUSH_PRI);
-                __ emit(OP_PUSH_ALT);
-            }
-            break;
-        default:
-            assert(0);
-    }
-    assert(user_op.sym->ident() == iFUNCTN);
-    EmitCall(user_op.sym, user_op.paramspassed);
-
-    if (user_op.savepri || user_op.savealt)
-        __ emit(OP_POP_ALT); /* restore the saved PRI/ALT that into ALT */
 }
 
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {

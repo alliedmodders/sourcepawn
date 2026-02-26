@@ -389,11 +389,11 @@ bool Expr::HasSideEffects() {
     switch (kind()) {
         case ExprKind::UnaryExpr: {
             auto e = to<UnaryExpr>();
-            return e->userop() || e->expr()->HasSideEffects();
+            return e->expr()->HasSideEffects();
         }
         case ExprKind::BinaryExpr: {
             auto e = to<BinaryExpr>();
-            return e->userop().sym || IsAssignOp(e->token()) || e->left()->HasSideEffects() ||
+            return IsAssignOp(e->token()) || e->left()->HasSideEffects() ||
                    e->right()->HasSideEffects();
         }
         case ExprKind::LogicalExpr: {
@@ -405,7 +405,7 @@ bool Expr::HasSideEffects() {
             if (e->first()->HasSideEffects())
                 return true;
             for (const auto& op : e->ops()) {
-                if (op.userop.sym || op.expr->HasSideEffects())
+                if (op.expr->HasSideEffects())
                     return true;
             }
             return false;
@@ -441,7 +441,6 @@ bool Expr::HasSideEffects() {
             return to<RvalueExpr>()->expr()->HasSideEffects();
         case ExprKind::CallExpr: // Not intelligent yet.
         case ExprKind::IncDecExpr:
-        case ExprKind::CallUserOpExpr:
             return true;
         case ExprKind::NullExpr:
         case ExprKind::SizeofExpr:
@@ -479,27 +478,8 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
         return nullptr;
 
     auto& val = expr->val();
-    if (!val.type()->isInt() && !val.type()->isBool()) {
-        UserOperation userop;
-        if (find_userop(*sc_, '!', val.type(), 0, 1, &val, &userop)) {
-            // Call user op for '!', then invert it. EmitTest will fold out the
-            // extra invert.
-            //
-            // First convert to rvalue, since user operators should never
-            // taken an lvalue.
-            if (expr->lvalue())
-                expr = new RvalueExpr(expr);
-
-            expr = new CallUserOpExpr(userop, expr);
-            expr = new UnaryExpr(expr->pos(), '!', expr);
-            expr->val().ident = iEXPRESSION;
-            expr->val().set_type(types_->type_bool());
-            return expr;
-        }
-
-        if (val.type()->isInt64())
-            return BuildSimpleCast(expr, BuiltinType::Bool);
-    }
+    if (val.type()->isInt64())
+        return BuildSimpleCast(expr, BuiltinType::Bool);
 
     if (val.ident == iCONSTEXPR) {
         if (!sc_->preprocessing()) {
@@ -559,7 +539,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
 
     // :TODO: check for invalid types
 
-    UserOperation userop;
     switch (unary->token()) {
         case '~':
             if (out_val.type()->isInt64())
@@ -568,13 +547,8 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                 out_val.set_constval(~out_val.constval());
             break;
         case '!':
-            if (find_userop(*sc_, '!', out_val.type(), 0, 1, &out_val, &userop)) {
-                expr = unary->set_expr(new CallUserOpExpr(userop, expr));
-                out_val = expr->val();
-                unary->set_userop();
-            } else if (out_val.ident == iCONSTEXPR) {
+            if (out_val.ident == iCONSTEXPR)
                 out_val.set_constval(!out_val.constval());
-            }
             out_val.set_type(types_->type_bool());
             break;
         case '-':
@@ -583,10 +557,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
                 float f = sp::FloatCellUnion(out_val.constval()).f32;
                 out_val.set_constval(sp::FloatCellUnion(-f).cell);
-            } else if (find_userop(*sc_, '-', out_val.type(), 0, 1, &out_val, &userop)) {
-                expr = unary->set_expr(new CallUserOpExpr(userop, expr));
-                out_val = expr->val();
-                unary->set_userop();
             } else if (out_val.ident == iCONSTEXPR) {
                 /* the negation of a fixed point number is just an integer negation */
                 out_val.set_constval(-out_val.constval());
@@ -650,12 +620,6 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     if (type->isReference())
         type = type->inner();
 
-
-    UserOperation userop;
-    if (find_userop(*sc_, incdec->token(), type, 0, 1, &expr_val, &userop)) {
-        report(incdec, 464) << get_token_string(incdec->token());
-        return false;
-    }
 
     if (type->isInt64()) {
         if (incdec->prefix())
@@ -810,28 +774,17 @@ bool BinaryExprChecker::Check() {
     val.ident = iEXPRESSION;
     val.set_type(left_val->type());
 
-    auto& assignop = expr_->assignop();
-    if (assignop.sym)
-        val.set_type(assignop.sym->type());
-
     if (oper_tok) {
-        auto& userop = expr_->userop();
-        if (find_userop(*sema_.context(), oper_tok, left_val->type(), right_val->type(), 2, nullptr,
-                        &userop))
+        if (!CheckOperatorTypes())
+            return false;
+        if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
+            val.type()->coercesFromInt())
         {
-            val.set_type(userop.sym->type());
-        } else {
-            if (!CheckOperatorTypes())
-                return false;
-            if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
-                val.type()->coercesFromInt())
-            {
-                char boolresult = FALSE;
-                matchtag(left_val->type(), right_val->type(), FALSE);
-                val.ident = iCONSTEXPR;
-                val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
-                                      &boolresult));
-            }
+            char boolresult = FALSE;
+            matchtag(left_val->type(), right_val->type(), FALSE);
+            val.ident = iCONSTEXPR;
+            val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
+                                  &boolresult));
         }
 
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
@@ -961,10 +914,6 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
             }
             return true;
         }
-
-        // Userop tag will be propagated by the caller.
-        find_userop(*sema_.context(), 0, right_val.type(), left_val.type(), 2, &left_val,
-                    &expr_->assignop());
     }
 
     // int64 handling (gross, yes).
@@ -995,10 +944,6 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
         // This is a compound assignment, the binary operation is checked later.
         return true;
     }
-
-    // If assignment is operator overloaded, assume the assignment is valid.
-    if (expr_->assignop().sym)
-        return true;
 
     // Allow trivial conversion between char/int.
     if ((left_val.type()->isChar() && right_val.type()->isInt()) ||
@@ -1045,7 +990,7 @@ BinaryExpr::FoldToConstant()
 
     if (!left_->EvalConst(&left_val, &left_type) || !right_->EvalConst(&right_val, &right_type))
         return false;
-    if (IsAssignOp(token_) || userop_.sym)
+    if (IsAssignOp(token_))
         return false;
 
     if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
@@ -1174,21 +1119,11 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
             return false;
         }
 
-        int oper_tok = NormalizeBinaryToken(op.token);
-        if (find_userop(*sc_, oper_tok, left_val.type(), right_val.type(), 2, nullptr,
-                        &op.userop))
-        {
-            if (!op.userop.sym->type()->isBool()) {
-                report(op.pos, 51) << get_token_string(op.token);
-                return false;
-            }
-        } else {
-            // For the purposes of tag matching, we consider the order to be irrelevant.
-            if (!checkval_string(&left_val, &right_val))
-                matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
-        }
+        // For the purposes of tag matching, we consider the order to be irrelevant.
+        if (!checkval_string(&left_val, &right_val))
+            matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
 
-        if (right_val.ident != iCONSTEXPR || op.userop.sym)
+        if (right_val.ident != iCONSTEXPR)
             all_const = false;
 
         // Fold constants as we go.
@@ -2017,21 +1952,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     }
 }
 
-CallUserOpExpr::CallUserOpExpr(const UserOperation& userop, Expr* expr)
-  : EmitOnlyExpr(ExprKind::CallUserOpExpr, expr->pos()),
-    userop_(userop),
-    expr_(expr)
-{
-    val_.ident = iEXPRESSION;
-    val_.set_type(userop_.sym->type());
-}
-
-void
-CallUserOpExpr::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-}
-
 DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, ArgDecl* arg)
   : Expr(ExprKind::DefaultArgExpr, pos),
     arg_(arg)
@@ -2168,16 +2088,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
                 return false;
             ps.argv[argidx] = result;
         }
-
-        Expr* expr = ps.argv[argidx];
-        if (expr->as<DefaultArgExpr>() && !IsReferenceType(iVARIABLE, arg->type())) {
-            UserOperation userop;
-            if (find_userop(*sc_, 0, arg->default_value()->type, arg->type(), 2, nullptr,
-                            &userop))
-            {
-                ps.argv[argidx] = new CallUserOpExpr(userop, expr);
-            }
-        }
     }
 
     // Copy newly deduced argument information.
@@ -2234,13 +2144,15 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     AutoErrorPos aep(param->pos());
 
-    bool handling_this = call->implicit_this() && (pos == 0);
-
     if (param->val().ident == iACCESSOR) {
         if (!CheckRvalue(param->pos(), param->val()))
             return nullptr;
         param = new RvalueExpr(param);
     }
+
+#ifndef NDEBUG
+    bool handling_this = call->implicit_this() && (pos == 0);
+#endif
 
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
@@ -2310,16 +2222,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         if (lvalue) {
             param = new RvalueExpr(param);
             val = &param->val();
-        }
-
-        // Do not allow user operators to transform |this|.
-        UserOperation userop;
-        if (!handling_this &&
-            find_userop(*sc_, 0, arg->type(), val->type(), 2, nullptr, &userop))
-        {
-            param = new CallUserOpExpr(userop, param);
-            val = &param->val();
-            assert(!val->type()->isInt64());
         }
 
         if (val->type()->isInt() && arg->type()->isInt64()) {
@@ -3049,9 +2951,6 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
     auto& decl = info->decl();
-    if (decl.opertok && !CheckOperatorOverloadSignature(info))
-        return false;
-
     if (info->is_public() || info->is_forward()) {
         if (decl.type.dim_exprs.size() > 0)
             report(info->pos(), 141);
@@ -3124,23 +3023,6 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     return ok;
 }
 
-bool Semantics::CheckOperatorOverloadSignature(FunctionDecl* info) {
-    AutoErrorPos error_pos(info->pos());
-
-    const auto& decl = info->decl();
-    check_operatortag(decl.opertok, decl.type.type, decl.name->chars());
-
-    for (const auto& arg : info->args()) {
-        Type* type = arg->type();
-        if (type->isInt64() || type->isEnumStruct() || type->isArray()) {
-            report(arg->pos(), 457) << type;
-            return false;
-        }
-    }
-
-    return true;
-}
-
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     if (info->returns_value() && info->always_returns())
         return;
@@ -3148,7 +3030,7 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     if (info->MustReturnValue())
         ReportFunctionReturnError(info);
 
-        // Synthesize a return statement.
+    // Synthesize a return statement.
     std::vector<Stmt*> stmts = {
         info->body(),
         new ReturnStmt(info->end_pos(), nullptr),

@@ -88,7 +88,6 @@ struct DefaultArg : public PoolObject {
 struct declinfo_t {
     sp::Atom* name;
     typeinfo_t type;
-    int opertok; // Operator token, if applicable.
 };
 
 /* codes for ffabort() */
