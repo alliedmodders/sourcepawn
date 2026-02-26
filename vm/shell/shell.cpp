@@ -33,6 +33,12 @@ using namespace SourcePawn;
 
 Environment* sEnv;
 
+#ifdef NDEBUG
+static constexpr bool kIsDebug = false;
+#else
+static constexpr bool kIsDebug = true;
+#endif
+
 static const char*
 BaseFilename(const char* path)
 {
@@ -492,6 +498,10 @@ int main(int argc, char** argv)
     "-v", "--version",
     Some(false),
     "Print version information and exit.");
+  ToggleOption enable_debugging(parser,
+    "-d", "--enable-debugging",
+    Some(kIsDebug),
+    "Enable debugging.");
 
   if (!parser.parse(argc, argv)) {
     parser.usage(stderr, argc, argv);
@@ -514,7 +524,8 @@ int main(int argc, char** argv)
   if (getenv("DISABLE_JIT") || disable_jit.value())
     sEnv->SetJitEnabled(false);
 
-  sEnv->EnableDebugBreak();
+  if (enable_debugging.value())
+      sEnv->EnableDebugBreak();
 
   if (getenv("SPEW_INTERP_OPS"))
     sEnv->set_spew_interp_ops(true);
