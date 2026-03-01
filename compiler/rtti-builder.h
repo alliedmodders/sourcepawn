@@ -33,9 +33,6 @@
 namespace sp {
 namespace cc {
 
-class CodeGenerator;
-class DebugString;
-
 typedef SmxBlobSection<sp_fdbg_info_t> SmxDebugInfoSection;
 typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
 typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
@@ -46,12 +43,13 @@ class RttiBuilder
     RttiBuilder(CompileContext& cc, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
-    void add_method(FunctionDecl* fun);
     void add_native(FunctionDecl* sym);
+    smx_rtti_debug_method add_method(FunctionDecl* fun);
+    void finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(ucell addr, cell line);
-    void AddDebugSym(Decl* decl, uint32_t code_start, uint32_t code_end);
+    void AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_start, uint32_t code_end);
 
   private:
     uint32_t add_enum(Type* type);
@@ -73,8 +71,7 @@ class RttiBuilder
         return to_typeid(QualType(type));
     }
 
-    void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
-    void add_debug_line(DebugString& str);
+    //void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
     void build_debuginfo();
 
     uint8_t TypeToRttiBytecode(Type* type);

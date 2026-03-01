@@ -50,6 +50,11 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
     builtins_[atom] = &CodeGenerator::EmitFloatBuiltin;
 
     names_ = new SmxNameTable(".names");
+    smx_data_ = new SmxDataSection(".data");
+    natives_ = new SmxNativeSection(".natives");
+    pubvars_ = new SmxPubvarSection(".pubvars");
+    code_ = new SmxCodeSection(".code");
+    publics_ = new SmxPublicSection(".publics");
     rtti_ = std::make_unique<RttiBuilder>(cc, names_);
 }
 
@@ -67,51 +72,53 @@ bool CodeGenerator::Generate() {
         AddDebugSymbols(&pair.second);
     }
 
+    if (!errors_.ok())
+        return false;
+
     AddDebugSymbols(&global_syms_);
 
-    return errors_.ok();
+    FinishSmx();
+    return true;
 }
 
-void
-CodeGenerator::AddDebugLine(int linenr)
-{
-    if (fun_) {
-        auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
-        auto data = fun_->cg();
-        if (!data->dbgstrs)
-            data->dbgstrs = cc_.NewDebugStringList();
-        data->dbgstrs->emplace_back(str.c_str(), str.size());
-    } else {
-        rtti_->AddDebugLine(asm_.position(), linenr);
-    }
+void CodeGenerator::FinishSmx() {
+    // Set up the data section. Note pre-SourceMod 1.7, the |memsize| was
+    // computed as AMX::stp, which included the entire memory size needed to
+    // store the file. Here (in 1.7+), we allocate what is actually needed
+    // by the plugin.
+    smx_data_->header().datasize = data_size();
+    smx_data_->header().memsize = data_size() + DynamicMemorySize();
+    smx_data_->header().data = sizeof(sp_file_data_t);
+    smx_data_->setBlob(data_.dat(), data_.size());
+
+    // Set up the code section.
+    code_->header().codesize = asm_.size();
+    code_->header().cellsize = sizeof(cell);
+    code_->header().codeversion = SmxConsts::CODE_VERSION_FEATURE_MASK;
+    code_->header().flags = CODEFLAG_DEBUG;
+    code_->header().main = 0;
+    code_->header().code = sizeof(sp_file_code_t);
+    code_->header().features = SmxConsts::kCodeFeatureDirectArrays |
+                               SmxConsts::kCodeFeatureHeapScopes |
+                               SmxConsts::kCodeFeatureNullFunctions |
+                               SmxConsts::kCodeFeatureTypedOps;
+    code_->setBlob(asm_.bytes(), asm_.size());
+
+    smx_.add(code_);
+    smx_.add(smx_data_);
+    smx_.add(publics_);
+    smx_.add(pubvars_);
+    smx_.add(natives_);
+    smx_.add(names_);
+    rtti_->finish(smx_);
+}
+
+void CodeGenerator::AddDebugLine(int linenr) {
+    rtti_->AddDebugLine(asm_.position(), linenr);
 }
 
 void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
-    if (fun_) {
-        auto symname = decl->name()->chars();
-
-        std::optional<cell> addr;
-        if (auto fun = decl->as<FunctionDecl>()) {
-            addr.emplace(fun->cg()->label.offset());
-        } else if (auto var = decl->as<VarDeclBase>()) {
-            if (auto cv = var->as<ConstDecl>())
-                addr.emplace(cv->const_val());
-            else
-                addr.emplace(var->addr());
-        }
-
-        /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-        auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                       *addr, decl->type()->type_index(), symname, pc,
-                                       asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
-
-        auto data = fun_->cg();
-        if (!data->dbgstrs)
-            data->dbgstrs = cc_.NewDebugStringList();
-        data->dbgstrs->emplace_back(string.c_str(), string.size());
-    } else {
-        rtti_->AddDebugSym(decl, pc, asm_.position());
-    }
+    rtti_->AddDebugVar(fun_, decl, pc, asm_.position());
 }
 
 void CodeGenerator::AddDebugSymbols(tr::vector<DebugSymbol>* list) {
@@ -319,6 +326,12 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
         }
     } else {
         assert(false);
+    }
+
+    if (decl->is_public() || (decl->is_used() && !decl->as<ConstDecl>())) {
+        sp_file_pubvars_t& pubvar = pubvars_->add();
+        pubvar.address = decl->addr();
+        pubvar.name = names_->add(decl->name());
     }
 }
 
@@ -1931,6 +1944,11 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
         return;
 
     __ bind(&info->cg()->label);
+
+    // Do this before we start crawling the body, since we need the method entry
+    // to exist before we start emitting arg/local info.
+    auto debug_method = AddFunctionEntry(info);
+
     __ emit(OP_PROC);
     AddDebugLine(info->pos().line);
     EmitBreak();
@@ -1975,6 +1993,9 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     // In case there is no callgraph, we still need to track which function has
     // the biggest stack.
     max_script_memory_ = std::max(max_script_memory_, max_func_memory_);
+
+    if (debug_method)
+        rtti_->finish_method(info, *debug_method);
 }
 
 void
@@ -2011,8 +2032,8 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
 
     if (fun->is_native()) {
         if (!fun->cg()->label.bound()) {
-            __ bind_to(&fun->cg()->label, native_list_.size());
-            native_list_.emplace_back(fun);
+            cell index = AddNativeEntry(fun);
+            __ bind_to(&fun->cg()->label, index);
         }
         __ sysreq_n(&fun->cg()->label, nargs);
     } else {
@@ -2229,10 +2250,6 @@ CodeGenerator::popstacklist(bool codegen)
     current_stack_ -= PopScope(stack_scopes_);
 }
 
-void CodeGenerator::LinkPublicFunction(FunctionDecl* decl, uint32_t id) {
-    __ bind_to(&decl->cg()->funcid, id);
-}
-
 int CodeGenerator::DynamicMemorySize() const {
     int min_cells = max_script_memory_;
     if (kMaxCells - 4096 > min_cells)
@@ -2350,6 +2367,47 @@ cell_t CodeGenerator::AcquireInt64Slot(Expr* expr) {
     used_int64_slots_.back()->set(slot);
 
     return int64_slot_region_ + (slot * sizeof(cell_t) * 2);
+}
+
+std::optional<smx_rtti_debug_method> CodeGenerator::AddFunctionEntry(FunctionDecl* fun) {
+    if (fun->is_native())
+        return {};
+    if (!fun->body())
+        return {};
+    if (!fun->is_live())
+        return {};
+    if (fun->canonical() != fun)
+        return {};
+
+    uint32_t name_idx;
+    if (fun->is_public()) {
+        name_idx = names_->add(fun->name());
+    } else {
+        auto temp_name = ke::StringPrintf(".%d.%s", fun->cg()->label.offset(), fun->name()->chars());
+        name_idx = names_->add(*cc_.atoms(), temp_name);
+    }
+
+    assert(fun->cg()->label.offset() > 0);
+    assert(fun->impl());
+
+    sp_file_publics_t& pubfunc = publics_->add();
+    pubfunc.address = fun->cg()->label.offset();
+    pubfunc.name = name_idx;
+
+    auto id = (uint32_t(publics_->count() - 1) << 1) | 1;
+    if (!Label::ValueFits(id))
+        report(421);
+    __ bind_to(&fun->cg()->funcid, id);
+
+    return {rtti_->add_method(fun)};
+}
+
+uint32_t CodeGenerator::AddNativeEntry(FunctionDecl* decl) {
+    sp_file_natives_t& entry = natives_->add();
+    entry.name = names_->add(decl->name());
+
+    rtti_->add_native(decl);
+    return natives_->count() - 1;
 }
 
 } // namespace cc

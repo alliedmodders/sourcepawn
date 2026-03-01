@@ -127,7 +127,6 @@ class CompileContext final
     void operator =(CompileContext&&) = delete;
 
     DefaultArrayData* NewDefaultArrayData();
-    tr::vector<tr::string>* NewDebugStringList();
     tr::unordered_map<Atom*, Decl*>* NewSymbolMap();
 
   private:
@@ -163,7 +162,6 @@ class CompileContext final
 
     // AST attachments.
     tr::forward_list<DefaultArrayData> default_array_data_objects_;
-    tr::forward_list<tr::vector<tr::string>> debug_strings_;
     tr::forward_list<tr::unordered_map<Atom*, Decl*>> symbol_maps_;
 
     size_t malloc_bytes_ = 0;

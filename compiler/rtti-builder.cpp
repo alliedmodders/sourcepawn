@@ -115,10 +115,7 @@ void RttiBuilder::AddDebugFile(ucell codeidx, const char* file) {
     last_file_name_ = file;
 }
 
-void RttiBuilder::add_debug_line(DebugString& str) {
-    auto addr = str.parse();
-    auto line = str.parse();
-
+void RttiBuilder::AddDebugLine(ucell addr, cell line) {
     // Lines are zero-indexed for some reason.
     if (line > 0)
         line--;
@@ -131,134 +128,78 @@ void RttiBuilder::add_debug_line(DebugString& str) {
         }
     }
 
-    AddDebugLine(addr, line);
-}
-
-void RttiBuilder::AddDebugLine(ucell addr, cell line) {
     sp_fdbg_line_t& entry = dbg_lines_->add();
     entry.addr = addr;
     entry.line = line;
 }
 
-void
-RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str)
-{
-    int address = str.parse();
-    Type* type = cc_.types()->Get(str.parse());
-    str.skipspaces();
-    str.expect(':');
-    const char* name_start = str.skipspaces();
-    const char* name_end = str.skipto(' ');
-    uint32_t code_start = str.parse();
-    uint32_t code_end = str.parse();
-    int ident = str.parse();
-    int vclass = str.parse();
-    bool is_const = !!str.parse();
-
-    // We don't care about the ident type, we derive it from the tag.
-    (void)ident;
-
-    str.skipspaces();
-
-    // Encode the type.
-    uint32_t type_id = to_typeid(QualType(type, is_const));
-
-    smx_rtti_debug_var& var = table->add();
-    var.address = address;
-    switch (vclass) {
-        case sLOCAL:
-            var.vclass = address < 0 ? kVarClass_Local : kVarClass_Arg;
-            break;
-        case sGLOBAL:
-            var.vclass = kVarClass_Global;
-            break;
-        case sSTATIC:
-            var.vclass = kVarClass_Static;
-            break;
-        case sARGUMENT:
-            var.vclass = kVarClass_Arg;
-            break;
-        default:
-            var.vclass = 0;
-            assert(false);
-    }
-    var.name = names_->add(*cc_.atoms(), name_start, name_end - name_start);
-    var.code_start = code_start;
-    var.code_end = code_end;
-    var.type_id = type_id;
-}
-
-void RttiBuilder::AddDebugSym(Decl* decl, uint32_t code_start, uint32_t code_end) {
+void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_start, uint32_t code_end) {
     std::optional<cell> addr;
-    if (auto fun = decl->as<FunctionDecl>()) {
-        addr.emplace(fun->cg()->label.offset());
-    } else if (auto var = decl->as<VarDeclBase>()) {
+    if (auto var = decl->as<VarDeclBase>()) {
         if (auto cv = var->as<ConstDecl>())
             addr.emplace(cv->const_val());
         else
             addr.emplace(var->addr());
+    } else {
+        assert(false);
     }
 
     // Encode the type.
     uint32_t type_id = to_typeid(QualType(decl->type(), decl->is_const()));
 
-    smx_rtti_debug_var& var = dbg_globals_->add();
-    var.address = *addr;
+    smx_rtti_debug_var* var;
+    if (parent)
+        var = &dbg_locals_->add();
+    else
+        var = &dbg_globals_->add();
+
+    var->address = *addr;
     switch (decl->vclass()) {
         case sLOCAL:
-            var.vclass = *addr < 0 ? kVarClass_Local : kVarClass_Arg;
+            var->vclass = *addr < 0 ? kVarClass_Local : kVarClass_Arg;
             break;
         case sGLOBAL:
-            var.vclass = kVarClass_Global;
+            var->vclass = kVarClass_Global;
             break;
         case sSTATIC:
-            var.vclass = kVarClass_Static;
+            var->vclass = kVarClass_Static;
             break;
         case sARGUMENT:
-            var.vclass = kVarClass_Arg;
+            var->vclass = kVarClass_Arg;
             break;
         default:
-            var.vclass = 0;
+            var->vclass = 0;
             assert(false);
     }
-    var.name = names_->add(*cc_.atoms(), decl->name()->str());
-    var.code_start = code_start;
-    var.code_end = code_end;
-    var.type_id = type_id;
+    var->name = names_->add(*cc_.atoms(), decl->name());
+    var->code_start = code_start;
+    var->code_end = code_end;
+    var->type_id = type_id;
 }
 
-void RttiBuilder::add_method(FunctionDecl* fun) {
+smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(fun->name());
     method.pcode_start = fun->cg()->label.offset();
-    method.pcode_end = fun->cg()->pcode_end;
+    method.pcode_end = 0;
     method.signature = encode_signature(fun->canonical());
-
-    if (!fun->cg()->dbgstrs)
-        return;
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
+    return debug;
+}
 
-    for (auto& iter : *fun->cg()->dbgstrs) {
-        const char* chars = iter.c_str();
-        if (chars[0] == '\0')
-            continue;
-
-        DebugString str(chars);
-        if (str.kind() == 'S')
-            add_debug_var(dbg_locals_, str);
-        else if (str.kind() == 'L')
-            add_debug_line(str);
-    }
+void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry) {
+    assert(fun->cg()->pcode_end > fun->cg()->label.offset());
+    methods_->at(entry.method_index).pcode_end = fun->cg()->pcode_end;
 
     // Only add a method table entry if we actually had locals.
-    if (debug.first_local != dbg_locals_->count())
-        dbg_methods_->add(debug);
+    if (entry.first_local != dbg_locals_->count())
+        dbg_methods_->add(entry);
 }
 
 void RttiBuilder::add_native(FunctionDecl* fun) {

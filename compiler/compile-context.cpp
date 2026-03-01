@@ -71,11 +71,6 @@ DefaultArrayData* CompileContext::NewDefaultArrayData() {
     return &default_array_data_objects_.front();
 }
 
-tr::vector<tr::string>* CompileContext::NewDebugStringList() {
-    debug_strings_.emplace_front();
-    return &debug_strings_.front();
-}
-
 tr::unordered_map<Atom*, Decl*>* CompileContext::NewSymbolMap() {
     symbol_maps_.emplace_front();
     return &symbol_maps_.front();

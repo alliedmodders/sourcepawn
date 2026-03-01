@@ -26,12 +26,17 @@
 #include <vector>
 
 #include <utils/bitset.h>
-#include "stl/stl-unordered-map.h"
 #include "data-queue.h"
 #include "errors.h"
+#include "libsmx/data-pool.h"
+#include "libsmx/smx-builder.h"
+#include "libsmx/smx-encoding.h"
 #include "parse-node.h"
 #include "rtti-builder.h"
+#include "shared/byte-buffer.h"
+#include "shared/string-pool.h"
 #include "smx-assembly-buffer.h"
+#include "stl/stl-unordered-map.h"
 
 namespace sp {
 namespace cc {
@@ -46,21 +51,15 @@ class CodeGenerator final
 
     bool Generate();
 
-    void LinkPublicFunction(FunctionDecl* decl, uint32_t id);
-
-    RttiBuilder& rtti() { return *rtti_.get(); }
-    RefPtr<SmxNameTable> names() { return names_; }
-
-    const tr::vector<FunctionDecl*>& native_list() const { return native_list_; }
-
-    const uint8_t* code_ptr() const { return asm_.bytes(); }
+    SmxBuilder& smx() { return smx_; }
     uint32_t code_size() const { return (uint32_t)asm_.size(); }
-    const uint8_t* data_ptr() const { return data_.dat(); }
     uint32_t data_size() const { return data_.size(); }
 
     int DynamicMemorySize() const;
 
   private:
+    void FinishSmx();
+
     // Statements/decls.
     void EmitStmtList(StmtList* list);
     void EmitStmt(Stmt* stmt);
@@ -124,6 +123,8 @@ class CodeGenerator final
     void AddDebugSymbol(Decl* sym, uint32_t pc);
     void AddDebugSymbols(tr::vector<DebugSymbol>* list);
     void EnqueueDebugSymbol(Decl* decl, uint32_t pc);
+    uint32_t AddNativeEntry(FunctionDecl* decl);
+    std::optional<smx_rtti_debug_method> AddFunctionEntry(FunctionDecl* decl);
 
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
@@ -221,14 +222,30 @@ class CodeGenerator final
     friend class AutoEnterScope;
 
   private:
+    typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
+    typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
+    typedef SmxListSection<sp_file_publics_t> SmxPublicSection;
+    typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
+    typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
+
+  private:
     CompileContext& cc_;
     ParseTree* tree_;
     FunctionDecl* fun_ = nullptr;
     int max_script_memory_ = 0;
 
-    tr::vector<FunctionDecl*> native_list_;
     SmxAssemblyBuffer asm_;
     DataQueue data_;
+
+    // SMX layout.
+    SmxBuilder smx_;
+    RefPtr<SmxNameTable> names_;
+    RefPtr<SmxDataSection> smx_data_;
+    RefPtr<SmxNativeSection> natives_;
+    RefPtr<SmxPubvarSection> pubvars_;
+    RefPtr<SmxCodeSection> code_;
+    RefPtr<SmxPublicSection> publics_;
+    std::unique_ptr<RttiBuilder> rtti_;
 
     ke::Maybe<uint32_t> last_break_op_;
     tr::vector<MemoryScope> stack_scopes_;
@@ -260,53 +277,6 @@ class CodeGenerator final
     BitSet free_int64_slots_;
 
     std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
-
-    RefPtr<SmxNameTable> names_;
-    std::unique_ptr<RttiBuilder> rtti_;
-};
-
-// Helper for parsing a debug string. Debug strings look like this:
-//  L:40 10
-class DebugString
-{
-  public:
-    DebugString()
-     : kind_('\0'),
-       str_(nullptr)
-    {}
-    explicit DebugString(const char* str)
-     : kind_(str[0]),
-       str_(str)
-    {
-        assert(str_[1] == ':');
-        str_ += 2;
-    }
-    char kind() const {
-        return kind_;
-    }
-    ucell parse() {
-        return strtoul(str_, const_cast<char**>(&str_), 16);
-    }
-    const char* skipspaces() {
-        while (isspace(*str_))
-            str_++;
-        return str_;
-    }
-    void expect(char c) {
-        assert(*str_ == c);
-        str_++;
-    }
-    const char* skipto(char c) {
-        str_ = strchr(str_, c);
-        return str_;
-    }
-    char getc() {
-        return *str_++;
-    }
-
-  private:
-    char kind_;
-    const char* str_;
 };
 
 } // namespace cc
