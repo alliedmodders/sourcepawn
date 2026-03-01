@@ -48,6 +48,9 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
 {
     sp::Atom* atom = cc_.atom("float");
     builtins_[atom] = &CodeGenerator::EmitFloatBuiltin;
+
+    names_ = new SmxNameTable(".names");
+    rtti_ = std::make_unique<RttiBuilder>(cc, names_);
 }
 
 bool CodeGenerator::Generate() {
@@ -70,51 +73,44 @@ bool CodeGenerator::Generate() {
 }
 
 void
-CodeGenerator::AddDebugFile(const std::string& file)
-{
-    auto str = ke::StringPrintf("F:%x %s", asm_.position(), file.c_str());
-    debug_strings_.emplace_back(str.c_str(), str.size());
-}
-
-void
 CodeGenerator::AddDebugLine(int linenr)
 {
-    auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
     if (fun_) {
+        auto str = ke::StringPrintf("L:%x %x", asm_.position(), linenr);
         auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
         data->dbgstrs->emplace_back(str.c_str(), str.size());
     } else {
-        debug_strings_.emplace_back(str.c_str(), str.size());
+        rtti_->AddDebugLine(asm_.position(), linenr);
     }
 }
 
 void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
-    auto symname = decl->name()->chars();
-
-    std::optional<cell> addr;
-    if (auto fun = decl->as<FunctionDecl>()) {
-        addr.emplace(fun->cg()->label.offset());
-    } else if (auto var = decl->as<VarDeclBase>()) {
-        if (auto cv = var->as<ConstDecl>())
-            addr.emplace(cv->const_val());
-        else
-            addr.emplace(var->addr());
-    }
-
-    /* address tag:name codestart codeend ident vclass [tag:dim ...] */
-    auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
-                                   *addr, decl->type()->type_index(), symname, pc,
-                                   asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
-
     if (fun_) {
+        auto symname = decl->name()->chars();
+
+        std::optional<cell> addr;
+        if (auto fun = decl->as<FunctionDecl>()) {
+            addr.emplace(fun->cg()->label.offset());
+        } else if (auto var = decl->as<VarDeclBase>()) {
+            if (auto cv = var->as<ConstDecl>())
+                addr.emplace(cv->const_val());
+            else
+                addr.emplace(var->addr());
+        }
+
+        /* address tag:name codestart codeend ident vclass [tag:dim ...] */
+        auto string = ke::StringPrintf("S:%x %x:%s %x %x %x %x %x",
+                                       *addr, decl->type()->type_index(), symname, pc,
+                                       asm_.position(), decl->ident(), decl->vclass(), (int)decl->is_const());
+
         auto data = fun_->cg();
         if (!data->dbgstrs)
             data->dbgstrs = cc_.NewDebugStringList();
         data->dbgstrs->emplace_back(string.c_str(), string.size());
     } else {
-        debug_strings_.emplace_back(string.c_str(), string.size());
+        rtti_->AddDebugSym(decl, pc, asm_.position());
     }
 }
 
@@ -247,10 +243,9 @@ CodeGenerator::EmitStmt(Stmt* stmt)
         LeaveInt64SlotScope();
 }
 
-void
-CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node)
-{
-    AddDebugFile(node->file()->chars());
+void CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node) {
+    rtti_->AddDebugFile(asm_.position(), node->file()->chars());
+
     if (static_scopes_.count(node->scope())) {
         // We've already seen this scope before, which means we entered other
         // includes and then returned to this file.

@@ -43,11 +43,15 @@ typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
 class RttiBuilder
 {
   public:
-    RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names);
+    RttiBuilder(CompileContext& cc, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
     void add_method(FunctionDecl* fun);
     void add_native(FunctionDecl* sym);
+
+    void AddDebugFile(ucell codeidx, const char* file);
+    void AddDebugLine(ucell addr, cell line);
+    void AddDebugSym(Decl* decl, uint32_t code_start, uint32_t code_end);
 
   private:
     uint32_t add_enum(Type* type);
@@ -77,7 +81,6 @@ class RttiBuilder
 
   private:
     CompileContext& cc_;
-    CodeGenerator& cg_;
     TypeManager* types_ = nullptr;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
@@ -100,6 +103,9 @@ class RttiBuilder
 
     typedef ke::HashMap<Type*, uint32_t, ke::PointerPolicy<Type>> TypeIdCache;
     TypeIdCache typeid_cache_;
+
+    ucell last_file_addr_ = 0;
+    std::string last_file_name_;
 };
 
 } // namespace cc

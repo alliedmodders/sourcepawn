@@ -30,6 +30,7 @@
 #include "data-queue.h"
 #include "errors.h"
 #include "parse-node.h"
+#include "rtti-builder.h"
 #include "smx-assembly-buffer.h"
 
 namespace sp {
@@ -47,7 +48,9 @@ class CodeGenerator final
 
     void LinkPublicFunction(FunctionDecl* decl, uint32_t id);
 
-    const tr::vector<tr::string>& debug_strings() const { return debug_strings_; }
+    RttiBuilder& rtti() { return *rtti_.get(); }
+    RefPtr<SmxNameTable> names() { return names_; }
+
     const tr::vector<FunctionDecl*>& native_list() const { return native_list_; }
 
     const uint8_t* code_ptr() const { return asm_.bytes(); }
@@ -223,7 +226,6 @@ class CodeGenerator final
     FunctionDecl* fun_ = nullptr;
     int max_script_memory_ = 0;
 
-    tr::vector<tr::string> debug_strings_;
     tr::vector<FunctionDecl*> native_list_;
     SmxAssemblyBuffer asm_;
     DataQueue data_;
@@ -258,6 +260,9 @@ class CodeGenerator final
     BitSet free_int64_slots_;
 
     std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
+
+    RefPtr<SmxNameTable> names_;
+    std::unique_ptr<RttiBuilder> rtti_;
 };
 
 // Helper for parsing a debug string. Debug strings look like this:

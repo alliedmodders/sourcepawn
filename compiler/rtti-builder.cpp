@@ -24,9 +24,8 @@
 namespace sp {
 namespace cc {
 
-RttiBuilder::RttiBuilder(CompileContext& cc, CodeGenerator& cg, SmxNameTable* names)
+RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
  : cc_(cc),
-   cg_(cg),
    names_(names)
 {
     types_ = cc_.types();
@@ -78,44 +77,11 @@ RttiBuilder::finish(SmxBuilder& builder)
 void
 RttiBuilder::build_debuginfo()
 {
-    // State for tracking which file we're on. We replicate the original AMXDBG
-    // behavior here which excludes duplicate addresses.
-    ucell prev_file_addr = 0;
-    const char* prev_file_name = nullptr;
-
-    // Add debug data.
-    for (const auto& line : cg_.debug_strings()) {
-        DebugString str(line.c_str());
-        switch (str.kind()) {
-            case 'F': {
-                ucell codeidx = str.parse();
-                if (codeidx != prev_file_addr) {
-                    if (prev_file_name) {
-                        sp_fdbg_file_t& entry = dbg_files_->add();
-                        entry.addr = prev_file_addr;
-                        entry.name = names_->add(*cc_.atoms(), prev_file_name);
-                    }
-                    prev_file_addr = codeidx;
-                }
-                prev_file_name = str.skipspaces();
-                break;
-            }
-
-            case 'L':
-                add_debug_line(str);
-                break;
-
-            case 'S':
-                add_debug_var(dbg_globals_, str);
-                break;
-        }
-    }
-
     // Add the last file.
-    if (prev_file_name) {
+    if (!last_file_name_.empty()) {
         sp_fdbg_file_t& entry = dbg_files_->add();
-        entry.addr = prev_file_addr;
-        entry.name = names_->add(*cc_.atoms(), prev_file_name);
+        entry.addr = last_file_addr_;
+        entry.name = names_->add(*cc_.atoms(), last_file_name_);
     }
 
     // Make sure debug tables are sorted by address.
@@ -135,9 +101,21 @@ RttiBuilder::build_debuginfo()
     dbg_info_->header().num_arrays = 0;
 }
 
-void
-RttiBuilder::add_debug_line(DebugString& str)
-{
+void RttiBuilder::AddDebugFile(ucell codeidx, const char* file) {
+    // We replicate the original AMXDBG behavior here which excludes duplicate
+    // addresses.
+    if (codeidx != last_file_addr_) {
+        if (!last_file_name_.empty()) {
+            sp_fdbg_file_t& entry = dbg_files_->add();
+            entry.addr = last_file_addr_;
+            entry.name = names_->add(*cc_.atoms(), last_file_name_);
+        }
+        last_file_addr_ = codeidx;
+    }
+    last_file_name_ = file;
+}
+
+void RttiBuilder::add_debug_line(DebugString& str) {
     auto addr = str.parse();
     auto line = str.parse();
 
@@ -152,6 +130,11 @@ RttiBuilder::add_debug_line(DebugString& str)
             return;
         }
     }
+
+    AddDebugLine(addr, line);
+}
+
+void RttiBuilder::AddDebugLine(ucell addr, cell line) {
     sp_fdbg_line_t& entry = dbg_lines_->add();
     entry.addr = addr;
     entry.line = line;
@@ -200,6 +183,45 @@ RttiBuilder::add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString&
             assert(false);
     }
     var.name = names_->add(*cc_.atoms(), name_start, name_end - name_start);
+    var.code_start = code_start;
+    var.code_end = code_end;
+    var.type_id = type_id;
+}
+
+void RttiBuilder::AddDebugSym(Decl* decl, uint32_t code_start, uint32_t code_end) {
+    std::optional<cell> addr;
+    if (auto fun = decl->as<FunctionDecl>()) {
+        addr.emplace(fun->cg()->label.offset());
+    } else if (auto var = decl->as<VarDeclBase>()) {
+        if (auto cv = var->as<ConstDecl>())
+            addr.emplace(cv->const_val());
+        else
+            addr.emplace(var->addr());
+    }
+
+    // Encode the type.
+    uint32_t type_id = to_typeid(QualType(decl->type(), decl->is_const()));
+
+    smx_rtti_debug_var& var = dbg_globals_->add();
+    var.address = *addr;
+    switch (decl->vclass()) {
+        case sLOCAL:
+            var.vclass = *addr < 0 ? kVarClass_Local : kVarClass_Arg;
+            break;
+        case sGLOBAL:
+            var.vclass = kVarClass_Global;
+            break;
+        case sSTATIC:
+            var.vclass = kVarClass_Static;
+            break;
+        case sARGUMENT:
+            var.vclass = kVarClass_Arg;
+            break;
+        default:
+            var.vclass = 0;
+            assert(false);
+    }
+    var.name = names_->add(*cc_.atoms(), decl->name()->str());
     var.code_start = code_start;
     var.code_end = code_end;
     var.type_id = type_id;

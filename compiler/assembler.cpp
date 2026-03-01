@@ -91,9 +91,9 @@ Assembler::Assemble(SmxByteBuffer* buffer)
     RefPtr<SmxPubvarSection> pubvars = new SmxPubvarSection(".pubvars");
     RefPtr<SmxDataSection> data = new SmxDataSection(".data");
     RefPtr<SmxCodeSection> code = new SmxCodeSection(".code");
-    RefPtr<SmxNameTable> names = new SmxNameTable(".names");
 
-    RttiBuilder rtti(cc_, cg_, names);
+    RefPtr<SmxNameTable> names = cg_.names();
+    auto& rtti = cg_.rtti();
 
     std::vector<function_entry> functions;
     std::unordered_set<Decl*> symbols;
