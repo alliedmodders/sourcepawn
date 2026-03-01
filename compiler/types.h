@@ -50,7 +50,6 @@ enum IdentifierKind {
     iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
     iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
     iFUNCTN = 9,
-    iVARARGS = 11,      /* function specified ... as argument(s) */
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
     iTYPENAME = 14,     /* symbol defining a type */
 };
