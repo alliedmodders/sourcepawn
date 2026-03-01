@@ -300,7 +300,7 @@ Type* TypeManager::defineReference(Type* inner) {
 }
 
 FunctionType* TypeManager::defineFunction(Type* return_type,
-                                          const std::vector<std::pair<QualType, sp::Atom*>>& args,
+                                          const std::vector<QualType>& args,
                                           bool variadic)
 {
     FunctionCachePolicy::Lookup lookup{return_type, &args, variadic};
@@ -340,9 +340,7 @@ bool TypeManager::FunctionCachePolicy::matches(const Lookup& lookup, FunctionTyp
     if (lookup.args->size() != fun->nargs())
         return false;
     for (unsigned int i = 0; i < fun->nargs(); i++) {
-        if (lookup.args->at(i).first != fun->arg_type(i))
-            return false;
-        if (lookup.args->at(i).second != fun->arg_name(i))
+        if (lookup.args->at(i) != fun->arg_type(i))
             return false;
     }
     return true;
@@ -350,10 +348,8 @@ bool TypeManager::FunctionCachePolicy::matches(const Lookup& lookup, FunctionTyp
 
 uint32_t TypeManager::FunctionCachePolicy::hash(const Lookup& lookup) {
     uint32_t h = ke::HashPointer(lookup.return_type);
-    for (size_t i = 0; i < lookup.args->size(); i++) {
-        h = ke::HashCombine(h, lookup.args->at(i).first.hash());
-        h = ke::HashCombine(h, ke::HashPointer(lookup.args->at(i).second));
-    }
+    for (size_t i = 0; i < lookup.args->size(); i++)
+        h = ke::HashCombine(h, lookup.args->at(i).hash());
     h = ke::HashCombine(h, ke::HashInt32(lookup.variadic));
     return h;
 }

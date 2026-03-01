@@ -58,13 +58,13 @@ funcenum_t* funcenum_for_symbol(CompileContext& cc, Decl* sym) {
     FunctionDecl* fun = sym->as<FunctionDecl>();
 
     bool variadic = false;
-    std::vector<std::pair<QualType, sp::Atom*>> args;
+    std::vector<QualType> args;
     for (auto arg : fun->canonical()->args()) {
         const auto& ti = arg->type_info();
         if (ti.is_varargs)
             variadic = true;
         else
-            args.emplace_back(ti.qualified(), arg->name());
+            args.emplace_back(ti.qualified());
     }
 
     auto type = cc.types()->defineFunction(sym->type(), args, variadic);

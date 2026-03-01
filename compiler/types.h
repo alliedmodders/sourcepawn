@@ -396,7 +396,7 @@ class Type : public PoolObject
 
 class FunctionType : public Type {
   public:
-    FunctionType(Type* return_type, const std::vector<std::pair<QualType, sp::Atom*>>& args,
+    FunctionType(Type* return_type, const std::vector<QualType>& args,
                  bool variadic)
       : Type(nullptr, TypeKind::FunctionSignature),
         variadic_(variadic)
@@ -407,12 +407,11 @@ class FunctionType : public Type {
 
     Type* return_type() const { return return_type_; }
     unsigned int nargs() const { return (unsigned int)args_.size(); }
-    QualType arg_type(unsigned int i) { return args_[i].first; }
-    sp::Atom* arg_name(unsigned int i) { return args_[i].second; }
+    QualType arg_type(unsigned int i) { return args_[i]; }
     bool variadic() const { return variadic_; }
 
   private:
-    PoolArray<std::pair<QualType, sp::Atom*>> args_;
+    PoolArray<QualType> args_;
     bool variadic_;
 };
 
@@ -459,7 +458,7 @@ class TypeManager
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
     ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
     FunctionType* defineFunction(Type* return_type,
-                                 const std::vector<std::pair<QualType, sp::Atom*>>& args,
+                                 const std::vector<QualType>& args,
                                  bool variadic);
 
     Type* type_object() const { return type_object_; }
@@ -517,7 +516,7 @@ class TypeManager
 
         struct Lookup {
             Type* return_type;
-            const std::vector<std::pair<QualType, sp::Atom*>>* args;
+            const std::vector<QualType>* args;
             bool variadic;
         };
 

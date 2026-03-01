@@ -313,7 +313,7 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
         return nullptr;
 
     bool variadic = false;
-    std::vector<std::pair<QualType, sp::Atom*>> ft_args;
+    std::vector<QualType> ft_args;
     for (auto& arg : args) {
         if (!sc.BindType(pos, &arg->type))
             return nullptr;
@@ -324,7 +324,7 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
         if (arg->type.is_varargs)
             variadic = true;
         else
-            ft_args.emplace_back(arg->type.qualified(), arg->name);
+            ft_args.emplace_back(arg->type.qualified());
     }
 
     return sc.cc().types()->defineFunction(ret_type.type(), ft_args, variadic);
