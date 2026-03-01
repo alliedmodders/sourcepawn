@@ -283,7 +283,7 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
     if (decl->type()->isPstruct()) {
         EmitPstruct(decl);
     } else {
-        if (decl->ident() != iCONSTEXPR) {
+        if (!decl->as<ConstDecl>()) {
             if (decl->vclass() == sLOCAL)
                 EmitLocalVar(decl);
             else
@@ -300,14 +300,14 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
 
     __ bind_to(decl->label(), data_.dat_address());
 
-    if (decl->type()->isArray() || (decl->ident() == iVARIABLE && decl->type()->isEnumStruct())) {
+    if (decl->type()->isArray() || decl->type()->isEnumStruct()) {
         ArrayData array;
         BuildCompoundInitializer(decl, &array, data_.dat_address());
 
         data_.Add(std::move(array.iv));
         data_.Add(std::move(array.data));
         data_.AddZeroes(array.zeroes);
-    } else if (decl->ident() == iVARIABLE) {
+    } else {
         cell_t cells = 1;
         if (auto es = decl->type()->asEnumStruct())
             cells = es->array_size();
@@ -324,8 +324,6 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
         } else {
             data_.AddZeroes(cells);
         }
-    } else {
-        assert(false);
     }
 
     if (decl->is_public() || (decl->is_used() && !decl->as<ConstDecl>())) {
@@ -1136,23 +1134,17 @@ void
 CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 {
     Decl* sym = expr->decl();
-    switch (sym->ident()) {
-        case iFUNCTN: {
-            auto fun = sym->as<FunctionDecl>();
-            assert(fun == fun->canonical());
+    if (auto fun = sym->as<FunctionDecl>()) {
+        assert(fun == fun->canonical());
 
-            assert(!fun->is_native());
-            assert(fun->is_live());
-            __ emit(OP_CONST_PRI, &fun->cg()->funcid);
-            break;
-        }
-        case iVARIABLE:
-            if (sym->type()->isArray() || sym->type()->isEnumStruct())
-                __ address(sym, sPRI);
-            break;
-        default:
-            // Note: constexprs are handled in Expr::Emit().
-            assert(false);
+        assert(!fun->is_native());
+        assert(fun->is_live());
+        __ emit(OP_CONST_PRI, &fun->cg()->funcid);
+    } else if (auto var = sym->as<VarDeclBase>()) {
+        if (sym->type()->isArray() || sym->type()->isEnumStruct())
+            __ address(sym, sPRI);
+    } else {
+        assert(false);
     }
 }
 

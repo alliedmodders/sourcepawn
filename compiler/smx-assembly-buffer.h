@@ -153,7 +153,10 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void address(VarDeclBase* sym, regid reg) {
-    if (IsReferenceType(sym->ident(), sym->type()) && IsLocal(sym->vclass())) {
+    bool is_ref = sym->type()->isArray() ||
+                  sym->type()->isReference() ||
+                  sym->type()->isEnumStruct();
+    if (is_ref && IsLocal(sym->vclass())) {
       if (reg == sPRI)
         emit(OP_LOAD_S_PRI, sym->addr());
       else

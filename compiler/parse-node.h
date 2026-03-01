@@ -296,8 +296,6 @@ class Decl : public Stmt
 
     cell ConstVal();
 
-    IdentifierKind ident();
-    IdentifierKind ident_impl();
     char vclass();
     bool is_const();
     virtual Type* type() const;

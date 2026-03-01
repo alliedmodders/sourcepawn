@@ -426,12 +426,6 @@ class ArrayType : public Type {
     int size_;
 };
 
-static inline bool IsReferenceType(IdentifierKind kind, Type* type) {
-    return type->isArray() ||
-           type->isReference() ||
-           (kind == iVARIABLE && type->isEnumStruct());
-}
-
 class TypeManager
 {
   public:

@@ -260,37 +260,6 @@ char Decl::vclass() {
     return 0;
 }
 
-IdentifierKind Decl::ident() {
-    return ident_impl();
-}
-
-IdentifierKind Decl::ident_impl() {
-    switch (kind()) {
-        case StmtKind::ArgDecl:
-        case StmtKind::VarDecl:
-            return iVARIABLE;
-        case StmtKind::ConstDecl:
-        case StmtKind::EnumFieldDecl:
-            return iCONSTEXPR;
-        case StmtKind::FunctionDecl:
-        case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl:
-            return iFUNCTN;
-        case StmtKind::EnumStructDecl:
-        case StmtKind::MethodmapDecl:
-            return iTYPENAME;
-        case StmtKind::EnumDecl: {
-            auto es = as<EnumDecl>();
-            if (es->mm())
-                return iTYPENAME;
-            return iCONSTEXPR;
-        }
-        default:
-            assert(false);
-            return iINVALID;
-    }
-}
-
 LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
     for (const auto& field : fields_) {
         if (field->name() == name)

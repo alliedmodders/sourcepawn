@@ -168,7 +168,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     bool is_const = decl->type_info().is_const;
 
     // Constants are checked during binding.
-    if (decl->ident() == iCONSTEXPR)
+    if (decl->as<ConstDecl>())
         return true;
 
     if (type->isPstruct())
@@ -1339,15 +1339,41 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     }
 
     auto& val = expr->val();
-    val.ident = decl->ident();
+    switch (decl->kind()) {
+        case StmtKind::ArgDecl:
+        case StmtKind::VarDecl:
+            val.ident = iVARIABLE;
+            expr->set_lvalue(true);
+            break;
+        case StmtKind::ConstDecl:
+        case StmtKind::EnumFieldDecl:
+            val.ident = iCONSTEXPR;
+            val.set_constval(decl->ConstVal());
+            break;
+        case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
+            val.ident = iFUNCTN;
+            break;
+        case StmtKind::EnumStructDecl:
+        case StmtKind::MethodmapDecl:
+            val.ident = iTYPENAME;
+            break;
+        case StmtKind::EnumDecl: {
+            auto es = decl->as<EnumDecl>();
+            if (!es->mm()) {
+                report(expr, 174) << decl->name();
+                return false;
+            }
+            val.ident = iTYPENAME;
+            break;
+        }
+        default:
+            assert(false);
+    }
     val.sym = decl;
 
-    // Don't expose the tag of old enumroots.
     Type* type = decl->type();
-    if (decl->as<EnumDecl>() && !type->asEnumStruct() && decl->ident() == iCONSTEXPR) {
-        report(expr, 174) << decl->name();
-        return false;
-    }
     val.set_type(type);
 
     if (auto fun = decl->as<FunctionDecl>()) {
@@ -1376,25 +1402,11 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         fun->set_is_callback();
     }
 
-    switch (decl->ident()) {
-        case iVARIABLE:
-            expr->set_lvalue(true);
-            break;
-        case iFUNCTN:
-            // Not an l-value.
-            break;
-        case iTYPENAME:
-            if (!allow_types) {
-                report(expr, 174) << decl->name();
-                return false;
-            }
-            break;
-        case iCONSTEXPR:
-            val.set_constval(decl->ConstVal());
-            break;
-        default:
-            // Should not be a symbol.
-            assert(false);
+    if (val.ident == iTYPENAME) {
+        if (!allow_types) {
+            report(expr, 174) << decl->name();
+            return false;
+        }
     }
     return true;
 }
@@ -1557,10 +1569,10 @@ IndexExpr::ProcessUses(SemaContext& sc)
 
 bool Semantics::CheckThisExpr(ThisExpr* expr) {
     auto sym = expr->decl();
-    assert(sym->ident() == iVARIABLE);
+    assert(sym->as<ArgDecl>());
 
     auto& val = expr->val();
-    val.ident = sym->ident();
+    val.ident = iVARIABLE;
     val.sym = sym;
     val.set_type(sym->type());
     expr->set_lvalue(true);
@@ -2396,54 +2408,43 @@ bool Semantics::IsIncludedStock(VarDeclBase* sym) {
  */
 bool Semantics::TestSymbol(Decl* sym, bool testconst) {
     bool entry = false;
-    switch (sym->ident()) {
-        case iFUNCTN:
+    if (auto fun = sym->as<FunctionDecl>()) {
+        auto canonical = fun->canonical();
+        if (canonical->is_public() || canonical->name()->str() == uMAINFUNC)
+            entry = true; /* there is an entry point */
+        if (!(canonical->maybe_used() || canonical->is_live()) &&
+            !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
+            canonical->impl())
         {
-            auto canonical = sym->as<FunctionDecl>()->canonical();
-            if (canonical->is_public() || canonical->name()->str() == uMAINFUNC)
-                entry = true; /* there is an entry point */
-            if (!(canonical->maybe_used() || canonical->is_live()) &&
-                !(canonical->is_native() || canonical->is_stock() || canonical->is_public()) &&
-                canonical->impl())
-            {
-                /* symbol isn't used ... (and not public/native/stock) */
-                report(canonical, 203) << canonical->name();
-                return entry;
-            }
-
-            // Functions may be used as callbacks, in which case we don't check
-            // whether their arguments were used or not. We can't tell this until
-            // the scope is exiting, which is right here, so peek at the arguments
-            // for the function and check now.
-            if (canonical->body()) {
-                CheckFunctionReturnUsage(canonical);
-                if (canonical->scope() && !canonical->is_callback())
-                    TestSymbols(canonical->scope(), true);
-            }
-            break;
+            /* symbol isn't used ... (and not public/native/stock) */
+            report(canonical, 203) << canonical->name();
+            return entry;
         }
-        case iCONSTEXPR: {
-            auto var = sym->as<VarDeclBase>();
-            if (testconst && var && !var->is_read())
+
+        // Functions may be used as callbacks, in which case we don't check
+        // whether their arguments were used or not. We can't tell this until
+        // the scope is exiting, which is right here, so peek at the arguments
+        // for the function and check now.
+        if (canonical->body()) {
+            CheckFunctionReturnUsage(canonical);
+            if (canonical->scope() && !canonical->is_callback())
+                TestSymbols(canonical->scope(), true);
+        }
+    } else if (auto var = sym->as<VarDeclBase>()) {
+        if (var->as<ConstDecl>()) {
+            if (testconst && !var->is_read())
                 report(var, 203) << var->name(); /* symbol isn't used: ... */
-            break;
+            return false;
         }
-        case iTYPENAME:
-            // Ignore usage on methodmaps and enumstructs.
-            break;
-        default: {
-            auto var = sym->as<VarDeclBase>();
-            /* a variable */
 
-            // We ignore variables that are marked as public or stock that was included.
-            if (var->is_public() || IsIncludedStock(var))
-                break;
+        // We ignore variables that are marked as public or stock that was included.
+        if (var->is_public() || IsIncludedStock(var))
+            return false;
 
-            if (!var->is_used()) {
-                report(sym, 203) << sym->name(); /* symbol isn't used (and not public/stock) */
-            } else if (!var->is_read()) {
-                report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
-            }
+        if (!var->is_used()) {
+            report(sym, 203) << sym->name(); /* symbol isn't used (and not public/stock) */
+        } else if (!var->is_read()) {
+            report(sym, 204) << sym->name(); /* value assigned to symbol is never used */
         }
     }
     return entry;
@@ -3130,7 +3131,7 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
         decl->set_is_read();
 
-        if (decl->ident() == iVARIABLE) {
+        if (decl->as<VarDecl>()) {
             decl->set_is_written();
             break;
         }
