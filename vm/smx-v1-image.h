@@ -10,7 +10,12 @@
 #ifndef _include_sourcepawn_smx_parser_h_
 #define _include_sourcepawn_smx_parser_h_
 
+#include <memory>
 #include <stdio.h>
+
+#include <string_view>
+#include <unordered_map>
+
 #include <smx/smx-headers.h>
 #include <smx/smx-legacy-debuginfo.h>
 #include <smx/smx-typeinfo.h>
@@ -21,8 +26,6 @@
 #include "file-utils.h"
 #include "legacy-image.h"
 #include "rtti.h"
-
-#include <memory>
 
 namespace sp {
 
@@ -260,6 +263,8 @@ class SmxV1Image
   List<sp_file_natives_t> natives_;
   List<sp_file_pubvars_t> pubvars_;
   List<sp_file_tag_t> tags_;
+  mutable std::unordered_map<std::string_view, size_t> publics_cache_;
+  mutable std::unordered_map<std::string_view, size_t> pubvars_cache_;
 
   const Section* debug_names_section_ = nullptr;
   const char* debug_names_ = nullptr;

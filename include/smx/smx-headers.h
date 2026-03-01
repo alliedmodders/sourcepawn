@@ -50,10 +50,9 @@ struct SmxConsts {
     static const uint16_t SP1_VERSION_1_0 = 0x0101;
     static const uint16_t SP1_VERSION_1_1 = 0x0102;
     static const uint16_t SP1_VERSION_1_7 = 0x0107;
+    static const uint16_t SP1_VERSION_1_13 = 0x0113;
     static const uint16_t SP1_VERSION_MIN = SP1_VERSION_1_0;
-    static const uint16_t SP1_VERSION_MAX = SP1_VERSION_1_7;
-    static const uint16_t SP2_VERSION_MIN = 0x0200;
-    static const uint16_t SP2_VERSION_MAX = 0x0200;
+    static const uint16_t SP1_VERSION_MAX = SP1_VERSION_1_13;
 
     // Compression types.
     static const uint8_t FILE_COMPRESSION_NONE = 0;

@@ -48,6 +48,7 @@ SmxV1Image::validate()
     case SmxConsts::SP1_VERSION_1_0:
     case SmxConsts::SP1_VERSION_1_1:
     case SmxConsts::SP1_VERSION_1_7:
+    case SmxConsts::SP1_VERSION_1_13:
       break;
     default:
       return error("unsupported version");
@@ -853,27 +854,21 @@ SmxV1Image::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const
     *namep = names_ + publics_[index].name;
 }
 
-bool
-SmxV1Image::FindPublic(const char* name, size_t* indexp) const
-{
-  int high = publics_.length() - 1;
-  int low = 0;
-  while (low <= high) {
-    int mid = (low + high) / 2;
-    const char* candidate = names_ + publics_[mid].name;
-    int diff = strcmp(candidate, name);
-    if (diff == 0) {
-      if (indexp) {
-        *indexp = mid;
-        return true;
-      }
+bool SmxV1Image::FindPublic(const char* name, size_t* indexp) const {
+  if (publics_cache_.empty()) {
+    for (size_t i = 0; i < publics_.length(); i++) {
+      std::string_view key(names_ + publics_[i].name);
+      publics_cache_[key] = i;
     }
-    if (diff < 0)
-      low = mid + 1;
-    else
-      high = mid - 1;
   }
-  return false;
+
+  std::string_view key(name);
+  auto iter = publics_cache_.find(key);
+  if (iter == publics_cache_.end())
+    return false;
+
+  *indexp = iter->second;
+  return true;
 }
 
 size_t
@@ -895,24 +890,20 @@ SmxV1Image::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const
 bool
 SmxV1Image::FindPubvar(const char* name, size_t* indexp) const
 {
-  int high = pubvars_.length() - 1;
-  int low = 0;
-  while (low <= high) {
-    int mid = (low + high) / 2;
-    const char* candidate = names_ + pubvars_[mid].name;
-    int diff = strcmp(candidate, name);
-    if (diff == 0) {
-      if (indexp) {
-        *indexp = mid;
-        return true;
-      }
+  if (pubvars_cache_.empty()) {
+    for (size_t i = 0; i < pubvars_.length(); i++) {
+      std::string_view key(names_ + pubvars_[i].name);
+      pubvars_cache_[key] = i;
     }
-    if (diff < 0)
-      low = mid + 1;
-    else
-      high = mid - 1;
   }
-  return false;
+
+  std::string_view key(name);
+  auto iter = pubvars_cache_.find(key);
+  if (iter == pubvars_cache_.end())
+    return false;
+
+  *indexp = iter->second;
+  return true;
 }
 
 size_t
