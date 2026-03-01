@@ -260,5 +260,49 @@ class CodeGenerator final
     std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
 };
 
+// Helper for parsing a debug string. Debug strings look like this:
+//  L:40 10
+class DebugString
+{
+  public:
+    DebugString()
+     : kind_('\0'),
+       str_(nullptr)
+    {}
+    explicit DebugString(const char* str)
+     : kind_(str[0]),
+       str_(str)
+    {
+        assert(str_[1] == ':');
+        str_ += 2;
+    }
+    char kind() const {
+        return kind_;
+    }
+    ucell parse() {
+        return strtoul(str_, const_cast<char**>(&str_), 16);
+    }
+    const char* skipspaces() {
+        while (isspace(*str_))
+            str_++;
+        return str_;
+    }
+    void expect(char c) {
+        assert(*str_ == c);
+        str_++;
+    }
+    const char* skipto(char c) {
+        str_ = strchr(str_, c);
+        return str_;
+    }
+    char getc() {
+        return *str_++;
+    }
+
+  private:
+    char kind_;
+    const char* str_;
+};
+
 } // namespace cc
 } // namespace sp
