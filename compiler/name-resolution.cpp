@@ -327,7 +327,7 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
             ft_args.emplace_back(arg->type.qualified());
     }
 
-    return sc.cc().types()->defineFunction(ret_type.type(), ft_args, variadic);
+    return sc.cc().types()->defineFunction(QualType(ret_type.type()), ft_args, variadic);
 }
 
 bool
@@ -870,10 +870,10 @@ FunctionDecl::BindArgs(SemaContext& sc)
                     val = 0;
                     type = typeinfo.type;
                 }
-                var->default_value()->type = type;
+                var->default_value()->type = QualType(type);
                 var->default_value()->val = ke::Some(val);
 
-                matchtag(var->type(), type, MATCHTAG_COERCE);
+                matchtag(*var->type(), type, MATCHTAG_COERCE);
             }
         }
 
@@ -1227,7 +1227,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
     }
 
     auto decl = fun->args()[1];
-    if (decl->init_rhs() || decl->type_info().type != prop->type()) {
+    if (decl->init_rhs() || decl->type_info().qualified() != prop->type()) {
         report(prop, 150) << prop->type();
         return false;
     }

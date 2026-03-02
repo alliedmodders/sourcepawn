@@ -63,7 +63,7 @@ struct DefaultArrayData;
 class VarDecl;
 
 struct DefaultArg : public PoolObject {
-    Type* type = nullptr;
+    QualType type{nullptr};
     ke::Maybe<cell> val;
     DefaultArrayData* array = nullptr;
     VarDecl* sym = nullptr;

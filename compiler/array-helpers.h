@@ -39,7 +39,7 @@ bool ResolveArrayType(Semantics* sema, const token_pos_t& pos, typeinfo_t* type,
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
 
 void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
-void BuildCompoundInitializer(Type* type, Expr* init, ArrayData* array);
+void BuildCompoundInitializer(QualType type, Expr* init, ArrayData* array);
 
 cell_t CalcArraySize(Type* type);
 

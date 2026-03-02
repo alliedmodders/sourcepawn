@@ -60,6 +60,7 @@ struct value {
 
     Type* type() const { return type_; }
     void set_type(Type* type) { type_ = type; }
+    void set_type(QualType type) { type_ = *type; }
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.

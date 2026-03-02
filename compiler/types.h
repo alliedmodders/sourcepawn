@@ -389,13 +389,13 @@ class Type : public PoolObject
         PstructDecl* pstruct_ptr_;
         BuiltinType builtin_type_;
         Type* inner_type_;
-        Type* return_type_;
+        QualType return_type_;
     };
 };
 
 class FunctionType : public Type {
   public:
-    FunctionType(Type* return_type, const std::vector<QualType>& args,
+    FunctionType(QualType return_type, const std::vector<QualType>& args,
                  bool variadic)
       : Type(nullptr, TypeKind::FunctionSignature),
         variadic_(variadic)
@@ -404,7 +404,7 @@ class FunctionType : public Type {
         new (&args_) decltype(args_)(args);
     }
 
-    Type* return_type() const { return return_type_; }
+    QualType return_type() const { return return_type_; }
     unsigned int nargs() const { return (unsigned int)args_.size(); }
     QualType arg_type(unsigned int i) { return args_[i]; }
     bool variadic() const { return variadic_; }
@@ -450,7 +450,7 @@ class TypeManager
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
     ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
-    FunctionType* defineFunction(Type* return_type,
+    FunctionType* defineFunction(QualType return_type,
                                  const std::vector<QualType>& args,
                                  bool variadic);
 
@@ -508,7 +508,7 @@ class TypeManager
         typedef FunctionType* Payload;
 
         struct Lookup {
-            Type* return_type;
+            QualType return_type;
             const std::vector<QualType>* args;
             bool variadic;
         };

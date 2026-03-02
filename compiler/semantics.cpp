@@ -279,13 +279,13 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     } else if (auto expr = field->value->as<TaggedValueExpr>()) {
         actual = expr->type();
     } else if (auto expr = field->value->as<SymbolExpr>()) {
-        actual = expr->decl()->type();
+        actual = *expr->decl()->type();
     } else {
         assert(false);
         return false;
     }
 
-    TypeChecker tc(field, arg->type(), actual, TypeChecker::Assignment);
+    TypeChecker tc(field, arg->type(), QualType(actual), TypeChecker::Assignment);
     if (!tc.Coerce())
         return false;
     return true;
@@ -1310,7 +1310,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     }
     val.sym = decl;
 
-    Type* type = decl->type();
+    QualType type = decl->type();
     val.set_type(type);
 
     if (auto fun = decl->as<FunctionDecl>()) {
@@ -2097,7 +2097,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
             NeedsHeapAlloc(param);
         }
-        if (!checktag_string(arg->type(), val) && !checktag(arg->type(), val->type()))
+        if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), val->type()))
             report(param, 213) << arg->type() << val->type();
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
@@ -2131,7 +2131,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         if ((val->ident == iARRAYCELL || val->ident == iARRAYCHAR) && !type->isEnumStruct())
             type = types_->defineArray(type, 0);
 
-        TypeChecker tc(param, arg->type(), type, TypeChecker::Argument);
+        TypeChecker tc(param, arg->type(), QualType(type), TypeChecker::Argument);
         if (!tc.Coerce())
             return nullptr;
 
@@ -2154,7 +2154,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         if (val->type()->isInt64())
             NeedsInt64Slot(param);
 
-        TypeChecker tc(param, arg->type(), val->type(), TypeChecker::Argument);
+        TypeChecker tc(param, arg->type(), QualType(val->type()), TypeChecker::Argument);
         if (!tc.Coerce())
             return nullptr;
     }

@@ -299,7 +299,7 @@ Type* TypeManager::defineReference(Type* inner) {
     return type;
 }
 
-FunctionType* TypeManager::defineFunction(Type* return_type,
+FunctionType* TypeManager::defineFunction(QualType return_type,
                                           const std::vector<QualType>& args,
                                           bool variadic)
 {
@@ -347,7 +347,7 @@ bool TypeManager::FunctionCachePolicy::matches(const Lookup& lookup, FunctionTyp
 }
 
 uint32_t TypeManager::FunctionCachePolicy::hash(const Lookup& lookup) {
-    uint32_t h = ke::HashPointer(lookup.return_type);
+    uint32_t h = lookup.return_type.hash();
     for (size_t i = 0; i < lookup.args->size(); i++)
         h = ke::HashCombine(h, lookup.args->at(i).hash());
     h = ke::HashCombine(h, ke::HashInt32(lookup.variadic));

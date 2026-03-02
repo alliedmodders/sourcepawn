@@ -1350,7 +1350,7 @@ void CodeGenerator::EmitNativeCallHiddenArg(CallExpr* call) {
     auto fun = call->fun();
 
     ArrayData array;
-    BuildCompoundInitializer(fun->return_type(), nullptr, &array);
+    BuildCompoundInitializer(QualType(fun->return_type()), nullptr, &array);
 
     cell retsize = call->fun()->return_type()->CellStorageSize();
     assert(retsize);
@@ -1456,7 +1456,7 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     ArrayData array;
-    BuildCompoundInitializer(stmt->expr()->val().type(), nullptr, &array);
+    BuildCompoundInitializer(QualType(stmt->expr()->val().type()), nullptr, &array);
 
     auto info = fun_->return_array();
     if (array.iv.empty()) {

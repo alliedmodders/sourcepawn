@@ -145,7 +145,7 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
     }
 
     // Encode the type.
-    uint32_t type_id = to_typeid(QualType(decl->type(), decl->is_const()));
+    uint32_t type_id = to_typeid(decl->type());
 
     smx_rtti_debug_var* var;
     if (parent)
@@ -275,7 +275,7 @@ RttiBuilder::add_struct(Type* type)
         smx_rtti_field field;
         field.flags = 0;
         field.name = names_->add(arg->name());
-        field.type_id = to_typeid(QualType(arg->type(), arg->type_info().is_const));
+        field.type_id = to_typeid(arg->type());
         fields_->at(classdef.first_field + i) = field;
     }
     return struct_index;
@@ -313,7 +313,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     encode_type_into(bytes, fun->return_type());
 
     for (const auto& arg : fun->args())
-        encode_type_into(bytes, QualType(arg->type(), arg->type_info().is_const));
+        encode_type_into(bytes, arg->type());
 
     return type_pool_.add(bytes);
 }

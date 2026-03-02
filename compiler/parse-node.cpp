@@ -225,7 +225,7 @@ Type* MethodmapPropertyDecl::property_type() const {
     if (setter_->args().size() != 2)
         return types->type_void();
     ArgDecl* valp = setter_->args()[1];
-    return valp->type();
+    return *valp->type();
 }
 
 cell Decl::ConstVal() {
@@ -238,9 +238,9 @@ cell Decl::ConstVal() {
     return 0;
 }
 
-Type* Decl::type() const {
+QualType Decl::type() const {
     assert(false);
-    return nullptr;
+    return QualType(nullptr);
 }
 
 bool Decl::is_const() {

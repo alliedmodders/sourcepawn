@@ -109,7 +109,7 @@ static bool matchobjecttags(Type* formal, Type* actual, int flags) {
 
     auto map = actual->asMethodmap();
     for (; map; map = map->parent()) {
-        if (map->type() == formal)
+        if (*map->type() == formal)
             return true;
     }
 
@@ -242,7 +242,7 @@ bool HasTagOnInheritanceChain(Type* type, Type* other) {
     if (!map)
         return false;
     for (; map; map = map->parent()) {
-        if (map->type() == other)
+        if (*map->type() == other)
             return true;
     }
     return false;
