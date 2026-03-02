@@ -537,8 +537,18 @@ Parser::parse_typedef()
 
     lexer_->need('=');
 
-    auto type = parse_function_type();
-    return new TypedefDecl(pos, ident, type);
+    if (lexer_->peek('(') || lexer_->peek(tFUNCTION)) {
+        auto type = parse_function_type();
+        return new TypedefDecl(pos, ident, type);
+    } else {
+        typeinfo_t* ti = cc_.allocator().alloc<typeinfo_t>();
+        if (!parse_new_typeexpr(ti, nullptr, 0))
+            return nullptr;
+
+        lexer_->require_newline(TerminatorPolicy::Semicolon);
+        cc_.reports()->ResetErrorFlag();
+        return new TypedefDecl(pos, ident, ti);
+    }
 }
 
 Decl*

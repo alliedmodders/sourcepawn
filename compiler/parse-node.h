@@ -524,9 +524,13 @@ struct TypedefInfo : public PoolObject {
 class TypedefDecl : public Decl
 {
   public:
-    explicit TypedefDecl(const token_pos_t& pos, Atom* name, TypedefInfo* type)
+    TypedefDecl(const token_pos_t& pos, Atom* name, TypedefInfo* type)
       : Decl(StmtKind::TypedefDecl, pos, name),
         type_(type)
+    {}
+    TypedefDecl(const token_pos_t& pos, Atom* name, typeinfo_t* ti)
+      : Decl(StmtKind::TypedefDecl, pos, name),
+        ti_(ti)
     {}
 
     bool EnterNames(SemaContext& sc) override;
@@ -535,7 +539,8 @@ class TypedefDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::TypedefDecl; }
 
   private:
-    TypedefInfo* type_;
+    TypedefInfo* type_ = nullptr;
+    typeinfo_t* ti_ = nullptr;
     funcenum_t* fe_ = nullptr;
 };
 

@@ -75,7 +75,8 @@ enum class TypeKind : uint8_t {
     Enum,
     Reference,
     Array,
-    FunctionSignature
+    FunctionSignature,
+    Typedef
 };
 
 struct funcenum_t;
@@ -256,6 +257,7 @@ class Type : public PoolObject
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
+    bool isTypedef() const { return kind_ == TypeKind::Typedef; }
     bool isCharArray() const;
 
     // True if a value representation can be > 1 cell.
@@ -340,7 +342,7 @@ class Type : public PoolObject
     }
 
     Type* inner() const {
-        assert(isReference() || isArray());
+        assert(isReference() || isArray() || isTypedef());
         return inner_type_;
     }
 
@@ -371,6 +373,11 @@ class Type : public PoolObject
     void setReference(Type* inner) {
         assert(!inner->isReference());
         assert(kind_ == TypeKind::Reference);
+        inner_type_ = inner;
+    }
+    void setTypedef(Type* inner) {
+        assert(!inner->isTypedef());
+        assert(kind_ == TypeKind::Typedef);
         inner_type_ = inner;
     }
 
@@ -446,6 +453,7 @@ class TypeManager
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
     Type* defineReference(Type* inner);
+    Type* defineTypedef(Atom* name, Type* inner);
     ArrayType* defineArray(Type* element_type, int dim);
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);

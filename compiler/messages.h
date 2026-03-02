@@ -348,4 +348,5 @@ static const char* errmsg_ex[] = {
     /*462*/ "implicit conversion of '%s' to '%s' can lose data\n",
     /*463*/ "builtin keyword is not allowed here\n",
     /*464*/ "operator overloads are no longer supported for '%s'\n",
+    /*465*/ "type '%s' cannot be used in a typedef\n",
 };

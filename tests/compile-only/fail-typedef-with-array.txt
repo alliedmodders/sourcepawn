@@ -1,0 +1,1 @@
+(1) : error 465: type 'int[]' cannot be used in a typedef

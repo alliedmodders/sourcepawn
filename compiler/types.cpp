@@ -299,6 +299,14 @@ Type* TypeManager::defineReference(Type* inner) {
     return type;
 }
 
+Type* TypeManager::defineTypedef(Atom* name, Type* inner) {
+    assert(find(name) == nullptr);
+
+    Type* type = add(name, TypeKind::Typedef);
+    type->setTypedef(inner);
+    return type;
+}
+
 FunctionType* TypeManager::defineFunction(QualType return_type,
                                           const std::vector<QualType>& args,
                                           bool variadic)
