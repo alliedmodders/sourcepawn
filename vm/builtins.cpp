@@ -1,7 +1,7 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2006-2018 AlliedModders LLC
-// 
+//
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
 // License as published by the Free Software Foundation, either version 3 of
@@ -20,143 +20,118 @@ using namespace SourcePawn;
 
 extern sp_nativeinfo_t gBuiltinFloatNatives[];
 
-BuiltinNatives::BuiltinNatives()
-{
+BuiltinNatives::BuiltinNatives() {
 }
 
 bool
-BuiltinNatives::Initialize()
-{
-  if (!map_.init(32))
-    return false;
+BuiltinNatives::Initialize() {
+    if (!map_.init(32))
+        return false;
 
-  for (size_t i = 0; gBuiltinFloatNatives[i].name != nullptr; i++) {
-    const sp_nativeinfo_t& entry = gBuiltinFloatNatives[i];
-    NativeMap::Insert p = map_.findForAdd(entry.name);
-    assert(!p.found());
-    map_.add(p, entry.name, entry.func);
-  }
+    for (size_t i = 0; gBuiltinFloatNatives[i].name != nullptr; i++) {
+        const sp_nativeinfo_t& entry = gBuiltinFloatNatives[i];
+        NativeMap::Insert p = map_.findForAdd(entry.name);
+        assert(!p.found());
+        map_.add(p, entry.name, entry.func);
+    }
 
-  return true;
+    return true;
 }
 
 SPVM_NATIVE_FUNC
-BuiltinNatives::Lookup(const char* name)
-{
-  NativeMap::Result r = map_.find(name);
-  if (!r.found())
-    return nullptr;
-  return r->value;
+BuiltinNatives::Lookup(const char* name) {
+    NativeMap::Result r = map_.find(name);
+    if (!r.found())
+        return nullptr;
+    return r->value;
 }
 
 static cell_t
-FloatCtor(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = static_cast<float>(params[1]);
+FloatCtor(IPluginContext* pCtx, const cell_t* params) {
+    float val = static_cast<float>(params[1]);
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatAdd(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = sp_ctof(params[1]) + sp_ctof(params[2]);
+FloatAdd(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) + sp_ctof(params[2]);
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatSub(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = sp_ctof(params[1]) - sp_ctof(params[2]);
+FloatSub(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) - sp_ctof(params[2]);
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatMul(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = sp_ctof(params[1]) * sp_ctof(params[2]);
+FloatMul(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) * sp_ctof(params[2]);
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatDiv(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = sp_ctof(params[1]) / sp_ctof(params[2]);
+FloatDiv(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) / sp_ctof(params[2]);
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatMod(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = fmodf(sp_ctof(params[1]), sp_ctof(params[2]));
+FloatMod(IPluginContext* pCtx, const cell_t* params) {
+    float val = fmodf(sp_ctof(params[1]), sp_ctof(params[2]));
 
-  return sp_ftoc(val);
+    return sp_ftoc(val);
 }
 
 static cell_t
-FloatGt(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) > sp_ctof(params[2]));
+FloatGt(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) > sp_ctof(params[2]));
 }
 
 static cell_t
-FloatGe(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) >= sp_ctof(params[2]));
+FloatGe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) >= sp_ctof(params[2]));
 }
 
 static cell_t
-FloatLt(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) < sp_ctof(params[2]));
+FloatLt(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) < sp_ctof(params[2]));
 }
 
 static cell_t
-FloatLe(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) <= sp_ctof(params[2]));
+FloatLe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) <= sp_ctof(params[2]));
 }
 
 static cell_t
-FloatEq(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) == sp_ctof(params[2]));
+FloatEq(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) == sp_ctof(params[2]));
 }
 
 static cell_t
-FloatNe(IPluginContext* pCtx, const cell_t* params)
-{
-  return !!(sp_ctof(params[1]) != sp_ctof(params[2]));
+FloatNe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) != sp_ctof(params[2]));
 }
 
 static cell_t
-FloatNot(IPluginContext* pCtx, const cell_t* params)
-{
-  float val = sp_ctof(params[1]);
-  if (ke::IsNaN(val))
-    return 1;
-  return val ? 0 : 1;
+FloatNot(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]);
+    if (ke::IsNaN(val))
+        return 1;
+    return val ? 0 : 1;
 }
 
 sp_nativeinfo_t gBuiltinFloatNatives[] = {
-  {"__float_ctor",    FloatCtor},
-  {"__float_mul",     FloatMul},
-  {"__float_div",     FloatDiv},
-  {"__float_mod",     FloatMod},
-  {"__float_add",     FloatAdd},
-  {"__float_sub",     FloatSub},
-  {"__float_gt",      FloatGt},
-  {"__float_ge",      FloatGe},
-  {"__float_lt",      FloatLt},
-  {"__float_le",      FloatLe},
-  {"__float_eq",      FloatEq},
-  {"__float_ne",      FloatNe},
-  {"__float_not",     FloatNot},
-  {nullptr,           nullptr},
+    {"__float_ctor", FloatCtor}, {"__float_mul", FloatMul}, {"__float_div", FloatDiv},
+    {"__float_mod", FloatMod},   {"__float_add", FloatAdd}, {"__float_sub", FloatSub},
+    {"__float_gt", FloatGt},     {"__float_ge", FloatGe},   {"__float_lt", FloatLt},
+    {"__float_le", FloatLe},     {"__float_eq", FloatEq},   {"__float_ne", FloatNe},
+    {"__float_not", FloatNot},   {nullptr, nullptr},
 };
 
 } // namespace sp

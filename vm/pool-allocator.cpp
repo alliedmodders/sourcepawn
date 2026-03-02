@@ -16,11 +16,11 @@
  * You should have received a copy of the GNU General Public License along with
  * SourcePawn. If not, see http://www.gnu.org/licenses/.
  */
+#include "pool-allocator.h"
+#include <amtl/am-threadlocal.h>
 #include <assert.h>
 #include <stdlib.h>
 #include <new>
-#include <amtl/am-threadlocal.h>
-#include "pool-allocator.h"
 
 using namespace ke;
 using namespace sp;
@@ -28,159 +28,141 @@ using namespace sp;
 ThreadLocal<PoolAllocator*> sAllocatorTLS;
 
 PoolAllocator::PoolAllocator()
- : reserved_(nullptr),
-   last_(nullptr),
-   scope_depth_(0)
-{
+ : reserved_(nullptr)
+ , last_(nullptr)
+ , scope_depth_(0) {
 }
 
-PoolAllocator::~PoolAllocator()
-{
-  assert(!scope_depth_);
+PoolAllocator::~PoolAllocator() {
+    assert(!scope_depth_);
 
-  unwind(nullptr);
-  if (reserved_)
-    free(reserved_);
+    unwind(nullptr);
+    if (reserved_)
+        free(reserved_);
 }
 
 void
-PoolAllocator::InitDefault()
-{
-  assert(!sAllocatorTLS);
-  sAllocatorTLS.set(new PoolAllocator());
+PoolAllocator::InitDefault() {
+    assert(!sAllocatorTLS);
+    sAllocatorTLS.set(new PoolAllocator());
 }
 
 PoolAllocator&
-PoolAllocator::DefaultForThread()
-{
-  assert(sAllocatorTLS.get());
-  return *sAllocatorTLS.get();
+PoolAllocator::DefaultForThread() {
+    assert(sAllocatorTLS.get());
+    return *sAllocatorTLS.get();
 }
 
 void
-PoolAllocator::FreeDefault()
-{
-  if (!sAllocatorTLS)
-    return;
-  delete sAllocatorTLS.get();
-  sAllocatorTLS = nullptr;
+PoolAllocator::FreeDefault() {
+    if (!sAllocatorTLS)
+        return;
+    delete sAllocatorTLS.get();
+    sAllocatorTLS = nullptr;
 }
 
 char*
-PoolAllocator::enter()
-{
-  scope_depth_++;
-  if (!last_)
-    return nullptr;
-  return last_->ptr;
+PoolAllocator::enter() {
+    scope_depth_++;
+    if (!last_)
+        return nullptr;
+    return last_->ptr;
 }
 
 void
-PoolAllocator::leave(char* pos)
-{
-  assert(scope_depth_);
-  unwind(pos);
-  scope_depth_--;
+PoolAllocator::leave(char* pos) {
+    assert(scope_depth_);
+    unwind(pos);
+    scope_depth_--;
 }
 
 void
-PoolAllocator::unwind(char* pos)
-{
-  while (last_) {
-    if (pos && pos >= last_->base && pos < last_->end)
-      break;
-    Pool* prev = last_->prev;
-    {
-      if (last_->size() <= kMaxReserveSize &&
-        (!reserved_ || reserved_->size() < last_->size()))
-      {
-        if (reserved_)
-          free(reserved_);
-        reserved_ = last_;
-      } else {
-        free(last_);
-      }
+PoolAllocator::unwind(char* pos) {
+    while (last_) {
+        if (pos && pos >= last_->base && pos < last_->end)
+            break;
+        Pool* prev = last_->prev;
+        {
+            if (last_->size() <= kMaxReserveSize &&
+                (!reserved_ || reserved_->size() < last_->size())) {
+                if (reserved_)
+                    free(reserved_);
+                reserved_ = last_;
+            } else {
+                free(last_);
+            }
+        }
+        last_ = prev;
     }
-    last_ = prev;
-  }
 
-  if (!last_) {
-    assert(!pos);
-    return;
-  }
+    if (!last_) {
+        assert(!pos);
+        return;
+    }
 
-  last_->ptr = pos;
+    last_->ptr = pos;
 }
 
 void*
-PoolAllocator::slowAllocate(size_t actualBytes)
-{
-  size_t bytesNeeded = actualBytes + sizeof(Pool);
-  if (bytesNeeded < kDefaultPoolSize)
-    bytesNeeded = kDefaultPoolSize;
+PoolAllocator::slowAllocate(size_t actualBytes) {
+    size_t bytesNeeded = actualBytes + sizeof(Pool);
+    if (bytesNeeded < kDefaultPoolSize)
+        bytesNeeded = kDefaultPoolSize;
 
-  Pool* pool;
-  if (reserved_ && reserved_->size() >= bytesNeeded) {
-    pool = reserved_;
-    reserved_ = nullptr;
-  } else {
-    pool = (Pool*)malloc(bytesNeeded);
-    if (!pool) {
-      fprintf(stderr, "OUT OF POOL MEMORY\n");
-      abort();
-      return nullptr;
+    Pool* pool;
+    if (reserved_ && reserved_->size() >= bytesNeeded) {
+        pool = reserved_;
+        reserved_ = nullptr;
+    } else {
+        pool = (Pool*)malloc(bytesNeeded);
+        if (!pool) {
+            fprintf(stderr, "OUT OF POOL MEMORY\n");
+            abort();
+            return nullptr;
+        }
+        pool->base = (char*)(pool + 1);
+        pool->end = (char*)pool + bytesNeeded;
     }
-    pool->base = (char*)(pool + 1);
-    pool->end = (char*)pool + bytesNeeded;
-  }
-  pool->ptr = pool->base + actualBytes;
-  pool->prev = last_;
-  last_ = pool;
-  return pool->base;
+    pool->ptr = pool->base + actualBytes;
+    pool->prev = last_;
+    last_ = pool;
+    return pool->base;
 }
 
 PoolScope::PoolScope()
- : pool_(PoolAllocator::DefaultForThread()),
-   position_(pool_.enter())
-{
+ : pool_(PoolAllocator::DefaultForThread())
+ , position_(pool_.enter()) {
 }
 
 PoolScope::PoolScope(PoolAllocator& allocator)
- : pool_(allocator),
-   position_(pool_.enter())
-{
+ : pool_(allocator)
+ , position_(pool_.enter()) {
 }
 
-PoolScope::~PoolScope()
-{
-  pool_.leave(position_);
-}
-
-void
-PoolAllocationPolicy::reportOutOfMemory()
-{
-  fprintf(stderr, "OUT OF POOL MEMORY\n");
-  abort();
+PoolScope::~PoolScope() {
+    pool_.leave(position_);
 }
 
 void
-PoolAllocationPolicy::reportAllocationOverflow()
-{
-  fprintf(stderr, "OUT OF POOL MEMORY\n");
-  abort();
+PoolAllocationPolicy::reportOutOfMemory() {
+    fprintf(stderr, "OUT OF POOL MEMORY\n");
+    abort();
+}
+
+void
+PoolAllocationPolicy::reportAllocationOverflow() {
+    fprintf(stderr, "OUT OF POOL MEMORY\n");
+    abort();
 }
 
 void*
-PoolAllocationPolicy::am_malloc(size_t bytes)
-{
-  void* p = sAllocatorTLS.get()->rawAllocate(bytes);
-  if (!p)
-    reportOutOfMemory();
-  return p;
+PoolAllocationPolicy::am_malloc(size_t bytes) {
+    void* p = sAllocatorTLS.get()->rawAllocate(bytes);
+    if (!p)
+        reportOutOfMemory();
+    return p;
 }
 
 void
-PoolAllocationPolicy::am_free(void* ptr)
-{
+PoolAllocationPolicy::am_free(void* ptr) {
 }
-

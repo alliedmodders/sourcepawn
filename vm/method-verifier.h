@@ -1,7 +1,7 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2006-2015 AlliedModders LLC
-// 
+//
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
 // License as published by the Free Software Foundation, either version 3 of
@@ -16,8 +16,8 @@
 #include <functional>
 #include <vector>
 
-#include <sp_vm_types.h>
 #include <smx/smx-v1-opcodes.h>
+#include <sp_vm_types.h>
 #include "control-flow.h"
 
 namespace sp {
@@ -26,96 +26,96 @@ class PluginRuntime;
 
 class MethodVerifier final
 {
- public:
-  explicit MethodVerifier(PluginRuntime* rt, uint32_t startOffset);
+  public:
+    explicit MethodVerifier(PluginRuntime* rt, uint32_t startOffset);
 
-  typedef std::function<void(cell_t)> ExternalFuncRefCallback;
-  void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
+    typedef std::function<void(cell_t)> ExternalFuncRefCallback;
+    void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
 
-  ke::RefPtr<ControlFlowGraph> verify();
+    ke::RefPtr<ControlFlowGraph> verify();
 
-  int32_t max_stack() const {
-    return max_stack_;
-  }
-  int error() const {
-    return error_;
-  }
-
- private:
-  bool more() const {
-    return cip_ < stop_at_;
-  }
-
- private:
-  bool verifyOp(OPCODE op);
-  bool verifyStackOffset(cell_t offset);
-  bool verifyDatOffset(cell_t offset);
-  bool verifyJumpOffset(cell_t offset);
-  bool verifyParamCount(cell_t nparams);
-  bool verifyDimensionCount(cell_t ndims);
-  bool verifyStackAmount(cell_t amount);
-  bool verifyHeapAmount(cell_t amount);
-  bool verifyMemAmount(cell_t amount);
-  bool verifyCallOffset(cell_t offset);
-  void reportError(int err);
-  cell_t readCell();
-
-  struct VerifyData : public IBlockData {
-    VerifyData()
-     : stack_balance(0),
-       heap_scope_depth(0)
-    {}
-    VerifyData(const VerifyData& other)
-     : stack_balance(other.stack_balance),
-       heap_balance(other.heap_balance),
-       tracker_balance(other.tracker_balance),
-       heap_scope_depth(other.heap_scope_depth)
-    {}
-
-    VerifyData& operator =(const VerifyData& other) {
-      stack_balance = other.stack_balance;
-      heap_balance = other.heap_balance;
-      tracker_balance = other.tracker_balance;
-      heap_scope_depth = other.heap_scope_depth;
-      return *this;
+    int32_t max_stack() const {
+        return max_stack_;
+    }
+    int error() const {
+        return error_;
     }
 
-    uint32_t stack_balance;
-    std::vector<int32_t> heap_balance;
-    std::vector<int32_t> tracker_balance;
-    uint32_t heap_scope_depth;
+  private:
+    bool more() const {
+        return cip_ < stop_at_;
+    }
 
-    std::unique_ptr<VerifyData> entry;
-  };
+  private:
+    bool verifyOp(OPCODE op);
+    bool verifyStackOffset(cell_t offset);
+    bool verifyDatOffset(cell_t offset);
+    bool verifyJumpOffset(cell_t offset);
+    bool verifyParamCount(cell_t nparams);
+    bool verifyDimensionCount(cell_t ndims);
+    bool verifyStackAmount(cell_t amount);
+    bool verifyHeapAmount(cell_t amount);
+    bool verifyMemAmount(cell_t amount);
+    bool verifyCallOffset(cell_t offset);
+    void reportError(int err);
+    cell_t readCell();
 
-  bool handleJoins();
-  bool mergeTracker(Block* block, VerifyData* other);
-  bool verifyJoin(VerifyData* first, VerifyData* other);
-  bool verifyJoins(Block* block);
-  bool pushStack(uint32_t num_cells);
-  bool popStack(uint32_t num_cells);
-  bool pushHeap(uint32_t num_cells);
-  bool popHeap(uint32_t num_cells);
+    struct VerifyData : public IBlockData {
+        VerifyData()
+         : stack_balance(0)
+         , heap_scope_depth(0) {
+        }
+        VerifyData(const VerifyData& other)
+         : stack_balance(other.stack_balance)
+         , heap_balance(other.heap_balance)
+         , tracker_balance(other.tracker_balance)
+         , heap_scope_depth(other.heap_scope_depth) {
+        }
 
- private:
-  PluginRuntime* rt_;
-  ke::RefPtr<ControlFlowGraph> graph_;
-  Block* block_;
-  std::vector<Block*> verify_joins_;
-  uint32_t code_features_;
-  uint32_t startOffset_;
-  size_t memSize_;
-  size_t datSize_;
-  size_t heapSize_;
-  uint32_t max_stack_;
-  const cell_t* code_;
-  const cell_t* method_;
-  const cell_t* insn_;
-  const cell_t* cip_;
-  const cell_t* prev_cip_;
-  const cell_t* stop_at_;
-  ExternalFuncRefCallback collect_func_refs_;
-  int error_;
+        VerifyData& operator=(const VerifyData& other) {
+            stack_balance = other.stack_balance;
+            heap_balance = other.heap_balance;
+            tracker_balance = other.tracker_balance;
+            heap_scope_depth = other.heap_scope_depth;
+            return *this;
+        }
+
+        uint32_t stack_balance;
+        std::vector<int32_t> heap_balance;
+        std::vector<int32_t> tracker_balance;
+        uint32_t heap_scope_depth;
+
+        std::unique_ptr<VerifyData> entry;
+    };
+
+    bool handleJoins();
+    bool mergeTracker(Block* block, VerifyData* other);
+    bool verifyJoin(VerifyData* first, VerifyData* other);
+    bool verifyJoins(Block* block);
+    bool pushStack(uint32_t num_cells);
+    bool popStack(uint32_t num_cells);
+    bool pushHeap(uint32_t num_cells);
+    bool popHeap(uint32_t num_cells);
+
+  private:
+    PluginRuntime* rt_;
+    ke::RefPtr<ControlFlowGraph> graph_;
+    Block* block_;
+    std::vector<Block*> verify_joins_;
+    uint32_t code_features_;
+    uint32_t startOffset_;
+    size_t memSize_;
+    size_t datSize_;
+    size_t heapSize_;
+    uint32_t max_stack_;
+    const cell_t* code_;
+    const cell_t* method_;
+    const cell_t* insn_;
+    const cell_t* cip_;
+    const cell_t* prev_cip_;
+    const cell_t* stop_at_;
+    ExternalFuncRefCallback collect_func_refs_;
+    int error_;
 };
 
 } // namespace sp

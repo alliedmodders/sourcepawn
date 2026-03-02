@@ -15,19 +15,19 @@
 
 #include <vector>
 
-#include <stdint.h>
 #include <amtl/am-platform.h>
+#include <stdint.h>
 
 #if defined(KE_LINUX)
-#include <stdio.h>
+#    include <stdio.h>
 #endif
 
 namespace sp {
 
 struct CodeDebugMapping {
-  uint64_t addr;
-  const char* file;
-  uint32_t line;
+    uint64_t addr;
+    const char* file;
+    uint32_t line;
 };
 
 using CodeDebugMap = std::vector<CodeDebugMapping>;
@@ -35,39 +35,39 @@ using CodeDebugMap = std::vector<CodeDebugMapping>;
 #if defined(KE_LINUX) && defined(SP_HAS_JIT)
 class PerfJitFile
 {
- public:
-  explicit PerfJitFile(bool self_delete);
-  ~PerfJitFile();
+  public:
+    explicit PerfJitFile(bool self_delete);
+    ~PerfJitFile();
 
-  void Write(void* address, uint64_t length, const char* symbol);
+    void Write(void* address, uint64_t length, const char* symbol);
 
- private:
-  bool self_delete_;
-  char path_[255];
-  FILE* file_;
+  private:
+    bool self_delete_;
+    char path_[255];
+    FILE* file_;
 };
 
 class PerfJitdumpFile
 {
- public:
-  explicit PerfJitdumpFile(bool self_delete);
-  ~PerfJitdumpFile();
+  public:
+    explicit PerfJitdumpFile(bool self_delete);
+    ~PerfJitdumpFile();
 
-  void Write(void* address, uint64_t length, const char* symbol, const CodeDebugMap& mapping);
+    void Write(void* address, uint64_t length, const char* symbol, const CodeDebugMap& mapping);
 
- private:
-  uint64_t GetTimestamp();
-  uint16_t GetElfMachine();
+  private:
+    uint64_t GetTimestamp();
+    uint16_t GetElfMachine();
 
- private:
-  int pid_;
-  bool self_delete_;
-  char path_[255];
-  void *mmap_;
-  FILE* file_;
+  private:
+    int pid_;
+    bool self_delete_;
+    char path_[255];
+    void* mmap_;
+    FILE* file_;
 
-  // When being used with Intel PT profiling, we need to use the CPU clock as our time source.
-  bool use_arch_timestamp_;
+    // When being used with Intel PT profiling, we need to use the CPU clock as our time source.
+    bool use_arch_timestamp_;
 };
 #endif
 

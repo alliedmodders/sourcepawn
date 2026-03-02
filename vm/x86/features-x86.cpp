@@ -21,7 +21,7 @@
 
 #include <inttypes.h>
 #if defined(__GNUC__)
-# include <cpuid.h>
+#    include <cpuid.h>
 #endif
 
 #include <mutex>
@@ -37,13 +37,15 @@ struct cpuid_t {
 };
 
 #if defined(__GNUC__)
-static cpuid_t do_cpuid(int leaf) {
+static cpuid_t
+do_cpuid(int leaf) {
     cpuid_t regs;
     __get_cpuid(leaf, &regs.eax, &regs.ebx, &regs.ecx, &regs.edx);
     return regs;
 }
 #elif defined(_MSC_VER)
-static cpuid_t do_cpuid(int leaf) {
+static cpuid_t
+do_cpuid(int leaf) {
     cpuid_t regs;
     int out[4];
     __cpuid(out, leaf);
@@ -55,7 +57,8 @@ static cpuid_t do_cpuid(int leaf) {
 }
 #endif
 
-const FeaturesX86& FeaturesX86::Get() {
+const FeaturesX86&
+FeaturesX86::Get() {
     static FeaturesX86 features{};
     static bool initialized = false;
 

@@ -14,439 +14,403 @@ using namespace ke;
 using namespace sp::debug;
 
 RttiData::RttiData()
- : rtti_data_(nullptr),
-   rtti_data_size_(0)
-{
+ : rtti_data_(nullptr)
+ , rtti_data_size_(0) {
 }
 
 RttiData::RttiData(const uint8_t* blob, uint32_t size)
- : rtti_data_(blob),
-   rtti_data_size_(size)
-{
+ : rtti_data_(blob)
+ , rtti_data_size_(size) {
 }
 
 const Rtti*
-RttiData::typeFromTypeId(uint32_t type_id) const
-{
-  if (!rtti_data_)
+RttiData::typeFromTypeId(uint32_t type_id) const {
+    if (!rtti_data_)
+        return nullptr;
+
+    uint8_t kind = type_id & kMaxTypeIdKind;
+    uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+
+    if (kind == kTypeId_Inline) {
+        uint8_t bytes[4];
+        bytes[0] = (payload >> 0) & 0xff;
+        bytes[1] = (payload >> 8) & 0xff;
+        bytes[2] = (payload >> 16) & 0xff;
+        bytes[3] = (payload >> 24) & 0xff;
+
+        RttiParser parser(bytes, 4, 0);
+        return parser.decodeNew();
+    } else if (kind == kTypeId_Complex) {
+        RttiParser parser(rtti_data_, rtti_data_size_, payload);
+        return parser.decodeNew();
+    }
     return nullptr;
-
-  uint8_t kind = type_id & kMaxTypeIdKind;
-  uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
-
-  if (kind == kTypeId_Inline) {
-    uint8_t bytes[4];
-    bytes[0] = (payload >> 0) & 0xff;
-    bytes[1] = (payload >> 8) & 0xff;
-    bytes[2] = (payload >> 16) & 0xff;
-    bytes[3] = (payload >> 24) & 0xff;
-
-    RttiParser parser(bytes, 4, 0);
-    return parser.decodeNew();
-  } else if (kind == kTypeId_Complex) {
-    RttiParser parser(rtti_data_, rtti_data_size_, payload);
-    return parser.decodeNew();
-  }
-  return nullptr;
 }
 
 const Rtti*
-RttiData::functionTypeFromOffset(uint32_t offset) const
-{
-  if (!rtti_data_)
-    return nullptr;
+RttiData::functionTypeFromOffset(uint32_t offset) const {
+    if (!rtti_data_)
+        return nullptr;
 
-  RttiParser parser(rtti_data_, rtti_data_size_, offset);
-  return parser.decodeFunction();
+    RttiParser parser(rtti_data_, rtti_data_size_, offset);
+    return parser.decodeFunction();
 }
 
 const Rtti*
-RttiData::typesetTypeFromOffset(uint32_t offset) const
-{
-  if (!rtti_data_)
-    return nullptr;
+RttiData::typesetTypeFromOffset(uint32_t offset) const {
+    if (!rtti_data_)
+        return nullptr;
 
-  RttiParser parser(rtti_data_, rtti_data_size_, offset);
-  return parser.decodeTypeset();
+    RttiParser parser(rtti_data_, rtti_data_size_, offset);
+    return parser.decodeTypeset();
 }
 
 const uint8_t*
-RttiData::blob() const
-{
-  return rtti_data_;
+RttiData::blob() const {
+    return rtti_data_;
 }
 
 size_t
-RttiData::size() const
-{
-  return rtti_data_size_;
+RttiData::size() const {
+    return rtti_data_size_;
 }
 
 bool
-RttiData::validateType(uint32_t type_id) const
-{
-  uint8_t kind = type_id & kMaxTypeIdKind;
-  uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
-  if (kind == kTypeId_Inline) {
-    uint8_t bytes[4];
-    bytes[0] = (payload >> 0) & 0xff;
-    bytes[1] = (payload >> 8) & 0xff;
-    bytes[2] = (payload >> 16) & 0xff;
-    bytes[3] = (payload >> 24) & 0xff;
+RttiData::validateType(uint32_t type_id) const {
+    uint8_t kind = type_id & kMaxTypeIdKind;
+    uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+    if (kind == kTypeId_Inline) {
+        uint8_t bytes[4];
+        bytes[0] = (payload >> 0) & 0xff;
+        bytes[1] = (payload >> 8) & 0xff;
+        bytes[2] = (payload >> 16) & 0xff;
+        bytes[3] = (payload >> 24) & 0xff;
 
-    RttiParser parser(bytes, 4, 0);
-    return parser.validate();
-  }
-  else if (kind == kTypeId_Complex) {
-    if (payload >= rtti_data_size_)
-      return false;
+        RttiParser parser(bytes, 4, 0);
+        return parser.validate();
+    } else if (kind == kTypeId_Complex) {
+        if (payload >= rtti_data_size_)
+            return false;
 
-    RttiParser parser(rtti_data_, rtti_data_size_, payload);
-    return parser.validate();
-  }
-  else
-    return false;
+        RttiParser parser(rtti_data_, rtti_data_size_, payload);
+        return parser.validate();
+    } else
+        return false;
 }
 
 bool
-RttiData::validateFunctionOffset(uint32_t offset) const
-{
-  RttiParser parser(rtti_data_, rtti_data_size_, offset);
-  return parser.validateFunction();
+RttiData::validateFunctionOffset(uint32_t offset) const {
+    RttiParser parser(rtti_data_, rtti_data_size_, offset);
+    return parser.validateFunction();
 }
 
 bool
-RttiData::validateTypesetOffset(uint32_t offset) const
-{
-  RttiParser parser(rtti_data_, rtti_data_size_, offset);
-  return parser.validateTypeset();
+RttiData::validateTypesetOffset(uint32_t offset) const {
+    RttiParser parser(rtti_data_, rtti_data_size_, offset);
+    return parser.validateTypeset();
 }
 
 RttiParser::RttiParser(const uint8_t* bytes, uint32_t length, uint32_t offset)
- : bytes_(bytes),
-   length_(length),
-   offset_(offset),
-   is_const_(false)
-{
+ : bytes_(bytes)
+ , length_(length)
+ , offset_(offset)
+ , is_const_(false) {
 }
 
 // Decode a type, but reset the |is_const| indicator for non-
 // dependent type.
 Rtti*
-RttiParser::decodeNew()
-{
-  bool was_const = is_const_;
-  is_const_ = false;
-  
-  Rtti* result = decode();
-  if (is_const_)
-    result->setConst();
+RttiParser::decodeNew() {
+    bool was_const = is_const_;
+    is_const_ = false;
 
-  is_const_ = was_const;
-  return result;
+    Rtti* result = decode();
+    if (is_const_)
+        result->setConst();
+
+    is_const_ = was_const;
+    return result;
 }
 
 Rtti*
-RttiParser::decode()
-{
-  Rtti* result = nullptr;
-  is_const_ = match(cb::kConst) || is_const_;
+RttiParser::decode() {
+    Rtti* result = nullptr;
+    is_const_ = match(cb::kConst) || is_const_;
 
-  bool by_ref = match(cb::kByRef);
-  uint8_t type = bytes_[offset_++];
-  switch (type) {
-  case cb::kBool:
-  case cb::kInt32:
-  case cb::kFloat32:
-  case cb::kChar8:
-  case cb::kAny:
-  case cb::kTopFunction:
-    result = new Rtti(type);
-    break;
+    bool by_ref = match(cb::kByRef);
+    uint8_t type = bytes_[offset_++];
+    switch (type) {
+        case cb::kBool:
+        case cb::kInt32:
+        case cb::kFloat32:
+        case cb::kChar8:
+        case cb::kAny:
+        case cb::kTopFunction:
+            result = new Rtti(type);
+            break;
 
-  case cb::kFixedArray:
-  {
-    uint32_t size = decodeUint32();
-    Rtti* inner = decode();
-    result = new Rtti(type, size, inner);
-    break;
-  }
-  case cb::kArray:
-  {
-    Rtti* inner = decode();
-    result = new Rtti(type, inner);
-    break;
-  }
-  case cb::kEnum:
-  case cb::kTypedef:
-  case cb::kTypeset:
-  case cb::kClassdef:
-  case cb::kEnumStruct:
-  {
-    uint32_t index = decodeUint32();
-    result = new Rtti(type, index);
-    break;
-  }
-  case cb::kFunction:
-    result = decodeFunction();
-    break;
-  }
-  if (by_ref)
-    result->setByRef();
-  return result;
+        case cb::kFixedArray: {
+            uint32_t size = decodeUint32();
+            Rtti* inner = decode();
+            result = new Rtti(type, size, inner);
+            break;
+        }
+        case cb::kArray: {
+            Rtti* inner = decode();
+            result = new Rtti(type, inner);
+            break;
+        }
+        case cb::kEnum:
+        case cb::kTypedef:
+        case cb::kTypeset:
+        case cb::kClassdef:
+        case cb::kEnumStruct: {
+            uint32_t index = decodeUint32();
+            result = new Rtti(type, index);
+            break;
+        }
+        case cb::kFunction:
+            result = decodeFunction();
+            break;
+    }
+    if (by_ref)
+        result->setByRef();
+    return result;
 }
 
 Rtti*
-RttiParser::decodeFunction()
-{
-  uint8_t argc = bytes_[offset_++];
+RttiParser::decodeFunction() {
+    uint8_t argc = bytes_[offset_++];
 
-  bool variadic = false;
-  if (bytes_[offset_] == cb::kLegacyVariadic) {
-    variadic = true;
-    offset_++;
-  }
+    bool variadic = false;
+    if (bytes_[offset_] == cb::kLegacyVariadic) {
+        variadic = true;
+        offset_++;
+    }
 
-  Rtti* returnType;
-  if (bytes_[offset_] == cb::kVoid) {
-    returnType = new Rtti(cb::kVoid);
-    offset_++;
-  } else {
-    returnType = decodeNew();
-  }
+    Rtti* returnType;
+    if (bytes_[offset_] == cb::kVoid) {
+        returnType = new Rtti(cb::kVoid);
+        offset_++;
+    } else {
+        returnType = decodeNew();
+    }
 
-  Rtti* functionType = new Rtti(returnType, variadic);
-  for (uint8_t i = 0; i < argc; i++) {
-    bool is_by_ref = match(cb::kByRef);
-    Rtti* arg_type = decodeNew();
-    if (is_by_ref)
-      arg_type->setByRef();
-    functionType->addArgument(arg_type);
-  }
-  return functionType;
+    Rtti* functionType = new Rtti(returnType, variadic);
+    for (uint8_t i = 0; i < argc; i++) {
+        bool is_by_ref = match(cb::kByRef);
+        Rtti* arg_type = decodeNew();
+        if (is_by_ref)
+            arg_type->setByRef();
+        functionType->addArgument(arg_type);
+    }
+    return functionType;
 }
 
 Rtti*
-RttiParser::decodeTypeset()
-{
-  uint32_t count = decodeUint32();
-  Rtti* typeset = new Rtti(cb::kTypeset);
+RttiParser::decodeTypeset() {
+    uint32_t count = decodeUint32();
+    Rtti* typeset = new Rtti(cb::kTypeset);
 
-  for (uint32_t i = 0; i < count; i++) {
-    typeset->addSignature(decodeNew());
-  }
-  return typeset;
+    for (uint32_t i = 0; i < count; i++) {
+        typeset->addSignature(decodeNew());
+    }
+    return typeset;
 }
 
 bool
-RttiParser::validate()
-{
-  if (offset_ >= length_)
-    return false;
-  // A type can start with a |const| indicator.
-  match(cb::kConst);
-  if (offset_ >= length_)
-    return false;
-  // Argument types in .dbg.locals can be passed by reference.
-  match(cb::kByRef);
-  if (offset_ >= length_)
-    return false;
-  uint8_t type = bytes_[offset_++];
-  switch (type) {
-  case cb::kBool:
-  case cb::kInt32:
-  case cb::kFloat32:
-  case cb::kChar8:
-  case cb::kAny:
-  case cb::kTopFunction:
-    return true;
-
-  case cb::kFixedArray:
-  {
-    // Skip the size.
-    if (!tryDecodeUint32())
-      return false;
-    return validate();
-  }
-  case cb::kArray:
-    return validate();
-
-  case cb::kEnum:
-  case cb::kTypedef:
-  case cb::kTypeset:
-  case cb::kClassdef:
-  case cb::kEnumStruct:
-    // Skip the index.
-    return tryDecodeUint32();
-
-  case cb::kFunction:
-    return validateFunction();
-  }
-  return false;
-}
-
-bool
-RttiParser::validateFunction()
-{
-  // argc available?
-  if (offset_ >= length_)
-    return false;
-
-  uint8_t argc = bytes_[offset_++];
-  if (offset_ >= length_)
-    return false;
-
-  if (bytes_[offset_] == cb::kLegacyVariadic)
-    offset_++;
-  if (offset_ >= length_)
-    return false;
-
-  // Validate return type.
-  if (bytes_[offset_] == cb::kVoid)
-    offset_++;
-  else if (!validate())
-    return false;
-
-  for (uint8_t i = 0; i < argc; i++) {
+RttiParser::validate() {
     if (offset_ >= length_)
-      return false;
-    // A by_ref indicator is allowed here.
+        return false;
+    // A type can start with a |const| indicator.
     match(cb::kConst);
     if (offset_ >= length_)
-      return false;
+        return false;
+    // Argument types in .dbg.locals can be passed by reference.
     match(cb::kByRef);
-    if (!validate())
-      return false;
-  }
-  return true;
+    if (offset_ >= length_)
+        return false;
+    uint8_t type = bytes_[offset_++];
+    switch (type) {
+        case cb::kBool:
+        case cb::kInt32:
+        case cb::kFloat32:
+        case cb::kChar8:
+        case cb::kAny:
+        case cb::kTopFunction:
+            return true;
+
+        case cb::kFixedArray: {
+            // Skip the size.
+            if (!tryDecodeUint32())
+                return false;
+            return validate();
+        }
+        case cb::kArray:
+            return validate();
+
+        case cb::kEnum:
+        case cb::kTypedef:
+        case cb::kTypeset:
+        case cb::kClassdef:
+        case cb::kEnumStruct:
+            // Skip the index.
+            return tryDecodeUint32();
+
+        case cb::kFunction:
+            return validateFunction();
+    }
+    return false;
 }
 
 bool
-RttiParser::validateTypeset()
-{
-  // See if we can decode the count of signatures in this typset.
-  uint32_t old_offset = offset_;
-  if (!tryDecodeUint32())
-    return false;
+RttiParser::validateFunction() {
+    // argc available?
+    if (offset_ >= length_)
+        return false;
 
-  // Decode the count now.
-  offset_ = old_offset;
-  uint32_t count = decodeUint32();
-  for (uint32_t i = 0; i < count; i++) {
-    if (!validate())
-      return false;
-  }
-  return true;
+    uint8_t argc = bytes_[offset_++];
+    if (offset_ >= length_)
+        return false;
+
+    if (bytes_[offset_] == cb::kLegacyVariadic)
+        offset_++;
+    if (offset_ >= length_)
+        return false;
+
+    // Validate return type.
+    if (bytes_[offset_] == cb::kVoid)
+        offset_++;
+    else if (!validate())
+        return false;
+
+    for (uint8_t i = 0; i < argc; i++) {
+        if (offset_ >= length_)
+            return false;
+        // A by_ref indicator is allowed here.
+        match(cb::kConst);
+        if (offset_ >= length_)
+            return false;
+        match(cb::kByRef);
+        if (!validate())
+            return false;
+    }
+    return true;
 }
 
 bool
-RttiParser::match(uint8_t b)
-{
-  if (bytes_[offset_] != b)
-    return false;
+RttiParser::validateTypeset() {
+    // See if we can decode the count of signatures in this typset.
+    uint32_t old_offset = offset_;
+    if (!tryDecodeUint32())
+        return false;
 
-  offset_++;
-  return true;
+    // Decode the count now.
+    offset_ = old_offset;
+    uint32_t count = decodeUint32();
+    for (uint32_t i = 0; i < count; i++) {
+        if (!validate())
+            return false;
+    }
+    return true;
+}
+
+bool
+RttiParser::match(uint8_t b) {
+    if (bytes_[offset_] != b)
+        return false;
+
+    offset_++;
+    return true;
 }
 
 uint32_t
-RttiParser::decodeUint32()
-{
-  uint32_t value = 0;
-  uint32_t shift = 0;
-  while (true) {
-    uint8_t b = bytes_[offset_++];
-    value |= (b & 0x7f) << shift;
-    if ((b & 0x80) == 0)
-      break;
-    shift += 7;
-  }
-  return value;
+RttiParser::decodeUint32() {
+    uint32_t value = 0;
+    uint32_t shift = 0;
+    while (true) {
+        uint8_t b = bytes_[offset_++];
+        value |= (b & 0x7f) << shift;
+        if ((b & 0x80) == 0)
+            break;
+        shift += 7;
+    }
+    return value;
 }
 
 bool
-RttiParser::tryDecodeUint32()
-{
-  while (offset_ < length_) {
-    uint8_t b = bytes_[offset_++];
-    if ((b & 0x80) == 0)
-      return true;
-  }
-  return false;
+RttiParser::tryDecodeUint32() {
+    while (offset_ < length_) {
+        uint8_t b = bytes_[offset_++];
+        if ((b & 0x80) == 0)
+            return true;
+    }
+    return false;
 }
 
 Rtti::Rtti(uint8_t type)
- : type_(type),
-   index_(0),
-   inner_(nullptr),
-   is_const_(false),
-   is_by_ref_(false),
-   is_variadic_(false)
-{
+ : type_(type)
+ , index_(0)
+ , inner_(nullptr)
+ , is_const_(false)
+ , is_by_ref_(false)
+ , is_variadic_(false) {
 }
 
 Rtti::Rtti(uint8_t type, uint32_t size)
- : type_(type),
-   index_(size),
-   inner_(nullptr),
-   is_const_(false),
-   is_by_ref_(false),
-   is_variadic_(false)
-{
+ : type_(type)
+ , index_(size)
+ , inner_(nullptr)
+ , is_const_(false)
+ , is_by_ref_(false)
+ , is_variadic_(false) {
 }
 
 Rtti::Rtti(uint8_t type, Rtti* inner)
- : type_(type),
-   index_(0),
-   inner_(inner),
-   is_const_(false),
-   is_by_ref_(false),
-   is_variadic_(false)
-{
+ : type_(type)
+ , index_(0)
+ , inner_(inner)
+ , is_const_(false)
+ , is_by_ref_(false)
+ , is_variadic_(false) {
 }
 
 Rtti::Rtti(uint8_t type, uint32_t size, Rtti* inner)
- : type_(type),
-   index_(size),
-   inner_(inner),
-   is_const_(false),
-   is_by_ref_(false),
-   is_variadic_(false)
-{
+ : type_(type)
+ , index_(size)
+ , inner_(inner)
+ , is_const_(false)
+ , is_by_ref_(false)
+ , is_variadic_(false) {
 }
 
 Rtti::Rtti(Rtti* return_type, bool is_variadic)
- : type_(cb::kFunction),
-   index_(0),
-   inner_(return_type),
-   is_const_(false),
-   is_by_ref_(false),
-   is_variadic_(is_variadic)
-{
+ : type_(cb::kFunction)
+ , index_(0)
+ , inner_(return_type)
+ , is_const_(false)
+ , is_by_ref_(false)
+ , is_variadic_(is_variadic) {
 }
 
 void
-Rtti::setConst()
-{
-  is_const_ = true;
+Rtti::setConst() {
+    is_const_ = true;
 }
 
 void
-Rtti::setByRef()
-{
-  is_by_ref_ = true;
+Rtti::setByRef() {
+    is_by_ref_ = true;
 }
 
 void
-Rtti::addArgument(Rtti* arg)
-{
-  assert(type_ == cb::kFunction);
-  args_.push_back(std::unique_ptr<const Rtti>(arg));
+Rtti::addArgument(Rtti* arg) {
+    assert(type_ == cb::kFunction);
+    args_.push_back(std::unique_ptr<const Rtti>(arg));
 }
 
 void
-Rtti::addSignature(Rtti* arg)
-{
-  assert(type_ == cb::kTypeset);
-  args_.push_back(std::unique_ptr<const Rtti>(arg));
+Rtti::addSignature(Rtti* arg) {
+    assert(type_ == cb::kTypeset);
+    args_.push_back(std::unique_ptr<const Rtti>(arg));
 }

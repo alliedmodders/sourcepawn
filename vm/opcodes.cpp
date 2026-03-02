@@ -33,8 +33,9 @@
 using namespace sp;
 using namespace SourcePawn;
 
-const char* GetOpcodeName(OPCODE op) {
-    static std::vector<const char *> names(OPCODES_LAST, nullptr);
+const char*
+GetOpcodeName(OPCODE op) {
+    static std::vector<const char*> names(OPCODES_LAST, nullptr);
 #define FOR_EACH_OPCODE(op, val, text, cells) names[OP_##op] = text;
     OPCODE_LIST(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
@@ -43,7 +44,8 @@ const char* GetOpcodeName(OPCODE op) {
 
 namespace sp {
 
-int GetOpcodeSize(OPCODE op) {
+int
+GetOpcodeSize(OPCODE op) {
     static std::vector<int> sizes(OPCODES_LAST, 0);
 #define FOR_EACH_OPCODE(op, val, text, cells) sizes[OP_##op] = cells;
     OPCODE_LIST(FOR_EACH_OPCODE)
@@ -52,134 +54,130 @@ int GetOpcodeSize(OPCODE op) {
 }
 
 int
-GetCaseTableSize(const uint8_t* cip)
-{
-  assert((OPCODE)*reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
-  cip += sizeof(cell_t);
-  return (*reinterpret_cast<const cell_t*>(cip) * 2) + 3;
+GetCaseTableSize(const uint8_t* cip) {
+    assert((OPCODE) * reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
+    cip += sizeof(cell_t);
+    return (*reinterpret_cast<const cell_t*>(cip) * 2) + 3;
 }
 
 void
-SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip)
-{
-  fprintf(fp, "  [%05d:%04d]", int(cip - (cell_t*)runtime->code().bytes), int(cip - start));
+SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip) {
+    fprintf(fp, "  [%05d:%04d]", int(cip - (cell_t*)runtime->code().bytes), int(cip - start));
 
-  if (*cip >= OPCODES_LAST) {
-    fprintf(fp, " unknown-opcode\n");
-    return;
-  }
-
-  OPCODE op = (OPCODE)*cip;
-  fprintf(fp, " %s ", GetOpcodeName(op));
-
-  switch (op) {
-    case OP_PUSH_C:
-    case OP_PUSH_ADR:
-    case OP_SHL_C_PRI:
-    case OP_SHL_C_ALT:
-    case OP_ADD_C:
-    case OP_SMUL_C:
-    case OP_EQ_C_PRI:
-    case OP_EQ_C_ALT:
-    case OP_TRACKER_PUSH_C:
-    case OP_STACK:
-    case OP_PUSH_S:
-    case OP_HEAP:
-    case OP_GENARRAY:
-    case OP_GENARRAY_Z:
-    case OP_CONST_PRI:
-    case OP_CONST_ALT:
-    case OP_LOAD_S_PRI:
-    case OP_LOAD_S_ALT:
-    case OP_STOR_S_PRI:
-    case OP_STOR_S_ALT:
-    case OP_ADDR_PRI:
-    case OP_ADDR_ALT:
-    case OP_MOVS:
-    case OP_CVT_I64:
-    case OP_INVERT_I64:
-    case OP_NEG_I64:
-    case OP_SMUL_I64:
-    case OP_ADD_I64:
-    case OP_SUB_ALT_I64:
-    case OP_SHL_I64:
-    case OP_SSHR_I64:
-    case OP_SHR_I64:
-    case OP_EQ_I64:
-    case OP_NEQ_I64:
-    case OP_OR_I64:
-    case OP_AND_I64:
-    case OP_XOR_I64:
-      fprintf(fp, "%d", cip[1]);
-      break;
-
-    case OP_JUMP:
-    case OP_JZER:
-    case OP_JNZ:
-    case OP_JEQ:
-    case OP_JNEQ:
-    case OP_JSLESS:
-    case OP_JSGRTR:
-    case OP_JSGEQ:
-    case OP_JSLEQ:
-      fprintf(fp, "%05d:%04d",
-        cip[1] / 4,
-        int(((cell_t*)runtime->code().bytes + cip[1] / 4) - start));
-      break;
-
-    case OP_SYSREQ_C:
-    case OP_SYSREQ_N:
-    {
-      uint32_t index = cip[1];
-      if (index < runtime->image()->NumNatives())
-        fprintf(fp, "%s", runtime->GetNative(index)->name);
-      if (op == OP_SYSREQ_N)
-        fprintf(fp, " ; (%d args, index %d)", cip[2], index);
-      else
-        fprintf(fp, " ; (index %d)", index);
-      break;
+    if (*cip >= OPCODES_LAST) {
+        fprintf(fp, " unknown-opcode\n");
+        return;
     }
 
-    case OP_PUSH2_C:
-    case OP_PUSH2:
-    case OP_PUSH2_S:
-    case OP_PUSH2_ADR:
-    case OP_SDIV_ALT_I64:
-      fprintf(fp, "%d, %d", cip[1], cip[2]);
-      break;
+    OPCODE op = (OPCODE)*cip;
+    fprintf(fp, " %s ", GetOpcodeName(op));
 
-    case OP_PUSH3_C:
-    case OP_PUSH3:
-    case OP_PUSH3_S:
-    case OP_PUSH3_ADR:
-    case OP_STOR_S_I64_C:
-      fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
-      break;
+    switch (op) {
+        case OP_PUSH_C:
+        case OP_PUSH_ADR:
+        case OP_SHL_C_PRI:
+        case OP_SHL_C_ALT:
+        case OP_ADD_C:
+        case OP_SMUL_C:
+        case OP_EQ_C_PRI:
+        case OP_EQ_C_ALT:
+        case OP_TRACKER_PUSH_C:
+        case OP_STACK:
+        case OP_PUSH_S:
+        case OP_HEAP:
+        case OP_GENARRAY:
+        case OP_GENARRAY_Z:
+        case OP_CONST_PRI:
+        case OP_CONST_ALT:
+        case OP_LOAD_S_PRI:
+        case OP_LOAD_S_ALT:
+        case OP_STOR_S_PRI:
+        case OP_STOR_S_ALT:
+        case OP_ADDR_PRI:
+        case OP_ADDR_ALT:
+        case OP_MOVS:
+        case OP_CVT_I64:
+        case OP_INVERT_I64:
+        case OP_NEG_I64:
+        case OP_SMUL_I64:
+        case OP_ADD_I64:
+        case OP_SUB_ALT_I64:
+        case OP_SHL_I64:
+        case OP_SSHR_I64:
+        case OP_SHR_I64:
+        case OP_EQ_I64:
+        case OP_NEQ_I64:
+        case OP_OR_I64:
+        case OP_AND_I64:
+        case OP_XOR_I64:
+            fprintf(fp, "%d", cip[1]);
+            break;
 
-    case OP_PUSH4_C:
-    case OP_PUSH4:
-    case OP_PUSH4_S:
-    case OP_PUSH4_ADR:
-      fprintf(fp, "%d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4]);
-      break;
+        case OP_JUMP:
+        case OP_JZER:
+        case OP_JNZ:
+        case OP_JEQ:
+        case OP_JNEQ:
+        case OP_JSLESS:
+        case OP_JSGRTR:
+        case OP_JSGEQ:
+        case OP_JSLEQ:
+            fprintf(fp, "%05d:%04d", cip[1] / 4,
+                    int(((cell_t*)runtime->code().bytes + cip[1] / 4) - start));
+            break;
 
-    case OP_PUSH5_C:
-    case OP_PUSH5:
-    case OP_PUSH5_S:
-    case OP_PUSH5_ADR:
-      fprintf(fp, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
-      break;
+        case OP_SYSREQ_C:
+        case OP_SYSREQ_N: {
+            uint32_t index = cip[1];
+            if (index < runtime->image()->NumNatives())
+                fprintf(fp, "%s", runtime->GetNative(index)->name);
+            if (op == OP_SYSREQ_N)
+                fprintf(fp, " ; (%d args, index %d)", cip[2], index);
+            else
+                fprintf(fp, " ; (index %d)", index);
+            break;
+        }
 
-    case OP_INITARRAY_PRI:
-    case OP_INITARRAY_ALT:
-      fprintf(fp, "%d %d %d %d %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
-      break;
+        case OP_PUSH2_C:
+        case OP_PUSH2:
+        case OP_PUSH2_S:
+        case OP_PUSH2_ADR:
+        case OP_SDIV_ALT_I64:
+            fprintf(fp, "%d, %d", cip[1], cip[2]);
+            break;
 
-    default:
-      break;
-  }
+        case OP_PUSH3_C:
+        case OP_PUSH3:
+        case OP_PUSH3_S:
+        case OP_PUSH3_ADR:
+        case OP_STOR_S_I64_C:
+            fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
+            break;
 
-  fprintf(fp, "\n");
+        case OP_PUSH4_C:
+        case OP_PUSH4:
+        case OP_PUSH4_S:
+        case OP_PUSH4_ADR:
+            fprintf(fp, "%d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4]);
+            break;
+
+        case OP_PUSH5_C:
+        case OP_PUSH5:
+        case OP_PUSH5_S:
+        case OP_PUSH5_ADR:
+            fprintf(fp, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
+            break;
+
+        case OP_INITARRAY_PRI:
+        case OP_INITARRAY_ALT:
+            fprintf(fp, "%d %d %d %d %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
+            break;
+
+        default:
+            break;
+    }
+
+    fprintf(fp, "\n");
 }
 
 } // namespace sp

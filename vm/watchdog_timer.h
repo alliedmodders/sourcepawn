@@ -1,17 +1,17 @@
 // vim: set ts=8 sts=2 sw=2 tw=99 et:
 //
 // This file is part of SourcePawn.
-// 
+//
 // SourcePawn is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // SourcePawn is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef _include_sourcepawn_watchdog_timer_posix_h_
@@ -24,7 +24,7 @@
 #include <thread>
 
 namespace SourcePawn {
-  class IErrorReport;
+class IErrorReport;
 }
 
 namespace sp {
@@ -36,42 +36,42 @@ typedef bool (*WatchdogCallback)();
 
 class WatchdogTimer
 {
-  // Allow line debugger callback to disable timeouts.
-  friend void InvokeDebugger(PluginContext* ctx, const SourcePawn::IErrorReport* report);
+    // Allow line debugger callback to disable timeouts.
+    friend void InvokeDebugger(PluginContext* ctx, const SourcePawn::IErrorReport* report);
 
- public:
-  WatchdogTimer(Environment* env);
-  ~WatchdogTimer();
+  public:
+    WatchdogTimer(Environment* env);
+    ~WatchdogTimer();
 
-  bool Initialize(size_t timeout_ms);
-  void Shutdown();
+    bool Initialize(size_t timeout_ms);
+    void Shutdown();
 
-  // Called from main thread.
-  bool NotifyTimeoutReceived();
-  bool HandleInterrupt();
+    // Called from main thread.
+    bool NotifyTimeoutReceived();
+    bool HandleInterrupt();
 
- private:
-  // Watchdog thread.
-  void Run();
+  private:
+    // Watchdog thread.
+    void Run();
 
- private:
-  Environment* env_;
+  private:
+    Environment* env_;
 
-  bool terminate_;
-  size_t timeout_ms_;
-  std::thread::id mainthread_;
-  bool ignore_timeout_;
+    bool terminate_;
+    size_t timeout_ms_;
+    std::thread::id mainthread_;
+    bool ignore_timeout_;
 
-  std::unique_ptr<std::thread> thread_;
-  std::mutex mutex_;
-  std::condition_variable cv_;
+    std::unique_ptr<std::thread> thread_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
 
-  // Accessed only on the watchdog thread.
-  uintptr_t last_frame_id_;
-  bool second_timeout_;
+    // Accessed only on the watchdog thread.
+    uintptr_t last_frame_id_;
+    bool second_timeout_;
 
-  // Accessed only on the main thread.
-  bool timedout_;
+    // Accessed only on the main thread.
+    bool timedout_;
 };
 
 } // namespace sp

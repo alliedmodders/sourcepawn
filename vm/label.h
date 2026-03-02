@@ -32,6 +32,7 @@
 #define _include_sourcepawn_label_h__
 
 #include <assert.h>
+#include <limits.h>
 #include <stdint.h>
 
 namespace sp {
@@ -54,121 +55,117 @@ namespace sp {
 // maps).
 class Label
 {
-  // If set on status_, the label is bound.
-  static const int32_t kBound = (1 << 0);
+    // If set on status_, the label is bound.
+    static const int32_t kBound = (1 << 0);
 
- public:
-  Label()
-   : status_(0)
-  {
-  }
-  ~Label()
-  {
-    assert(!used() || bound());
-  }
+  public:
+    Label()
+     : status_(0) {
+    }
+    ~Label() {
+        assert(!used() || bound());
+    }
 
-  static inline bool More(uint32_t status) {
-    return status != 0;
-  }
-  static inline uint32_t ToOffset(uint32_t status) {
-    return status >> 1;
-  }
+    static inline bool More(uint32_t status) {
+        return status != 0;
+    }
+    static inline uint32_t ToOffset(uint32_t status) {
+        return status >> 1;
+    }
 
-  bool used() const {
-    return bound() || !!(status_ >> 1);
-  }
-  bool bound() const {
-    return !!(status_ & kBound);
-  }
-  uint32_t offset() const {
-    assert(bound());
-    return ToOffset(status_);
-  }
-  uint32_t status() const {
-    assert(!bound());
-    return status_;
-  }
-  uint32_t addPending(uint32_t pc) {
-    assert(pc <= INT_MAX / 2);
-    uint32_t prev = status_;
-    status_ = pc << 1;
-    return prev;
-  }
-  void bind(uint32_t offset) {
-    assert(!bound());
-    status_ = (offset << 1) | kBound;
-    assert(this->offset() == offset);
-  }
+    bool used() const {
+        return bound() || !!(status_ >> 1);
+    }
+    bool bound() const {
+        return !!(status_ & kBound);
+    }
+    uint32_t offset() const {
+        assert(bound());
+        return ToOffset(status_);
+    }
+    uint32_t status() const {
+        assert(!bound());
+        return status_;
+    }
+    uint32_t addPending(uint32_t pc) {
+        assert(pc <= INT_MAX / 2);
+        uint32_t prev = status_;
+        status_ = pc << 1;
+        return prev;
+    }
+    void bind(uint32_t offset) {
+        assert(!bound());
+        status_ = (offset << 1) | kBound;
+        assert(this->offset() == offset);
+    }
 
- protected:
-  // Note that 0 as an invalid offset is okay, because the offset we save for
-  // pending jumps are after the jump opcode itself, and therefore 0 is never
-  // valid, since there are no 0-byte jumps.
-  uint32_t status_;
+  protected:
+    // Note that 0 as an invalid offset is okay, because the offset we save for
+    // pending jumps are after the jump opcode itself, and therefore 0 is never
+    // valid, since there are no 0-byte jumps.
+    uint32_t status_;
 };
 
 // Label that suppresses its assert, for non-stack use.
 class SilentLabel : public Label
 {
- public:
-  SilentLabel()
-  {}
-  ~SilentLabel() {
-    status_ = 0;
-  }
+  public:
+    SilentLabel() {
+    }
+    ~SilentLabel() {
+        status_ = 0;
+    }
 };
 
 // A CodeLabel is a special form of Label intended for absolute that
 // are within the code buffer, and thus aren't known yet, and will be
 // automatically fixed up later.
-// 
+//
 // Unlike normal Labels, these do not store a list of incoming uses.
 class CodeLabelBase
 {
-  // If set on status_, the label is bound.
-  static const int32_t kBound = (1 << 0);
+    // If set on status_, the label is bound.
+    static const int32_t kBound = (1 << 0);
 
- public:
-  CodeLabelBase()
-   : status_(0)
-  {
-  }
-  ~CodeLabelBase()
-  {
-    assert(!used() || bound());
-  }
+  public:
+    CodeLabelBase()
+     : status_(0) {
+    }
+    ~CodeLabelBase() {
+        assert(!used() || bound());
+    }
 
-  static inline uint32_t ToOffset(uint32_t status) {
-    return status >> 1;
-  }
+    static inline uint32_t ToOffset(uint32_t status) {
+        return status >> 1;
+    }
 
-  bool used() const {
-    return bound() || !!(status_ >> 1);
-  }
-  bool bound() const {
-    return !!(status_ & kBound);
-  }
-  uint32_t offset() const {
-    assert(bound());
-    return ToOffset(status_);
-  }
-  uint32_t status() const {
-    assert(!bound());
-    return status_;
-  }
-  void use(uint32_t pc) {
-    assert(!used());
-    status_ = (pc << 1);
-    assert(ToOffset(status_) == pc);
-  }
-  void bind(uint32_t offset) {
-    assert(!bound());
-    status_ = (offset << 1) | kBound;
-    assert(this->offset() == offset);
-  }
+    bool used() const {
+        return bound() || !!(status_ >> 1);
+    }
+    bool bound() const {
+        return !!(status_ & kBound);
+    }
+    uint32_t offset() const {
+        assert(bound());
+        return ToOffset(status_);
+    }
+    uint32_t status() const {
+        assert(!bound());
+        return status_;
+    }
+    void use(uint32_t pc) {
+        assert(!used());
+        status_ = (pc << 1);
+        assert(ToOffset(status_) == pc);
+    }
+    void bind(uint32_t offset) {
+        assert(!bound());
+        status_ = (offset << 1) | kBound;
+        assert(this->offset() == offset);
+    }
 
- protected:
-  uint32_t status_;
+  protected:
+    uint32_t status_;
 };
 
 // Absolute address, any pointer size. These are fixed up when calling
@@ -179,10 +176,10 @@ class CodeLabel : public CodeLabelBase
 
 class SilentCodeLabel : public CodeLabel
 {
- public:
-  ~SilentCodeLabel() {
-    status_ = 0;
-  }
+  public:
+    ~SilentCodeLabel() {
+        status_ = 0;
+    }
 };
 
 class PatchLabel : public SilentCodeLabel

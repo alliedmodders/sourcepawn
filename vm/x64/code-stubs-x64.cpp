@@ -1,7 +1,7 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
+//
 // Copyright (C) 2006-2015 AlliedModders LLC
-// 
+//
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
 // License as published by the Free Software Foundation, either version 3 of
@@ -12,9 +12,9 @@
 //
 #include <sp_vm_api.h>
 #include "code-stubs.h"
+#include "constants-x64.h"
 #include "linking.h"
 #include "macro-assembler-x64.h"
-#include "constants-x64.h"
 #include "plugin-context.h"
 
 #define __ masm.

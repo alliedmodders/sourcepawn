@@ -45,12 +45,11 @@ int GetCaseTableSize(const uint8_t* cip);
 int GetOpcodeSize(OPCODE op);
 
 static inline const uint8_t*
-NextInstruction(const uint8_t* cip)
-{
-  OPCODE op = (OPCODE)*reinterpret_cast<const cell_t*>(cip);
-  if (op == OP_CASETBL)
-    return cip + GetCaseTableSize(cip) * sizeof(cell_t);
-  return cip + GetOpcodeSize(op) * sizeof(cell_t);
+NextInstruction(const uint8_t* cip) {
+    OPCODE op = (OPCODE) * reinterpret_cast<const cell_t*>(cip);
+    if (op == OP_CASETBL)
+        return cip + GetCaseTableSize(cip) * sizeof(cell_t);
+    return cip + GetOpcodeSize(op) * sizeof(cell_t);
 }
 
 } // namespace sp
