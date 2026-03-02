@@ -299,9 +299,5 @@ SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
     val_.set_type(to);
 }
 
-void SimpleCastExpr::ProcessUses(SemaContext& sc) {
-    from_->ProcessUses(sc);
-}
-
 } // namespace cc
 } // namespace sp

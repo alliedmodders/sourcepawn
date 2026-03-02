@@ -516,12 +516,6 @@ RvalueExpr::RvalueExpr(Expr* expr)
     }
 }
 
-void
-RvalueExpr::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-}
-
 bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     AutoErrorPos aep(unary->pos());
 
@@ -578,12 +572,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     return true;
 }
 
-void
-UnaryExpr::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-}
-
 bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     AutoErrorPos aep(incdec->pos());
 
@@ -633,23 +621,6 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     val.ident = iEXPRESSION;
     val.set_type(type);
     return true;
-}
-
-void
-IncDecExpr::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-}
-
-void
-BinaryExprBase::ProcessUses(SemaContext& sc)
-{
-    // Assign ops, even read/write ones, do not count as variable uses for TestSymbols.
-    if (IsAssignOp(token_))
-        left_->ProcessUses(sc);
-    else
-        left_->MarkAndProcessUses(sc);
-    right_->MarkAndProcessUses(sc);
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -1155,14 +1126,6 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     return true;
 }
 
-void
-ChainedCompareExpr::ProcessUses(SemaContext& sc)
-{
-    first_->MarkAndProcessUses(sc);
-    for (const auto& op : ops_)
-        op.expr->MarkAndProcessUses(sc);
-}
-
 bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
@@ -1218,22 +1181,6 @@ TernaryExpr::FoldToConstant()
 
     val_.set_constval(cond ? left : right);
     return true;
-}
-
-void
-TernaryExpr::ProcessUses(SemaContext& sc)
-{
-    first_->MarkAndProcessUses(sc);
-    second_->MarkAndProcessUses(sc);
-    third_->MarkAndProcessUses(sc);
-}
-
-void
-TernaryExpr::ProcessDiscardUses(SemaContext& sc)
-{
-    first_->MarkAndProcessUses(sc);
-    second_->ProcessUses(sc);
-    third_->ProcessUses(sc);
 }
 
 bool Semantics::CheckCastExpr(CastExpr* expr) {
@@ -1312,16 +1259,6 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         atype = types_->redefineArray(atype, actual_array);
     out_val.set_type(atype);
     return true;
-}
-
-void
-CastExpr::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-}
-
-void SymbolExpr::MarkUsed(SemaContext& sc) {
-    markusage(decl_, uREAD);
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
@@ -1441,21 +1378,6 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
     return true;
 }
 
-void
-CommaExpr::ProcessUses(SemaContext& sc)
-{
-    for (const auto& expr : exprs_)
-        expr->ProcessUses(sc);
-    exprs_.back()->MarkUsed(sc);
-}
-
-void
-CommaExpr::ProcessDiscardUses(SemaContext& sc)
-{
-    for (const auto& expr : exprs_)
-        expr->ProcessUses(sc);
-}
-
 bool Semantics::CheckArrayExpr(ArrayExpr* array) {
     AutoErrorPos aep(array->pos());
 
@@ -1558,13 +1480,6 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     expr->set_lvalue(true);
     return true;
-}
-
-void
-IndexExpr::ProcessUses(SemaContext& sc)
-{
-    base_->MarkAndProcessUses(sc);
-    expr_->MarkAndProcessUses(sc);
 }
 
 bool Semantics::CheckThisExpr(ThisExpr* expr) {
@@ -1708,12 +1623,6 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     val.sym = method;
     markusage(method, uREAD);
     return true;
-}
-
-void
-FieldAccessExpr::ProcessUses(SemaContext& sc)
-{
-    base_->MarkAndProcessUses(sc);
 }
 
 FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
@@ -2252,20 +2161,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     return param;
 }
 
-void
-CallExpr::ProcessUses(SemaContext& sc)
-{
-    for (const auto& arg : args_)
-        arg->MarkAndProcessUses(sc);
-}
-
-void
-CallExpr::MarkUsed(SemaContext& sc)
-{
-    if (fun_)
-        fun_->set_retvalue_used();
-}
-
 bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
     auto expr = stmt->expr();
     if (!CheckExpr(expr))
@@ -2331,13 +2226,6 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
 
     na->set_analysis_result(true);
     return true;
-}
-
-void
-NewArrayExpr::ProcessUses(SemaContext& sc)
-{
-    for (const auto& expr : exprs_)
-        expr->MarkAndProcessUses(sc);
 }
 
 bool Semantics::CheckIfStmt(IfStmt* stmt) {
@@ -3042,91 +2930,6 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     info->set_body(new_body);
 }
 
-void
-StmtList::ProcessUses(SemaContext& sc)
-{
-    for (const auto& stmt : stmts_)
-        stmt->ProcessUses(sc);
-}
-
-void
-VarDeclBase::ProcessUses(SemaContext& sc)
-{
-    if (init_)
-        init_rhs()->MarkAndProcessUses(sc);
-}
-
-void
-IfStmt::ProcessUses(SemaContext& sc)
-{
-    cond_->MarkAndProcessUses(sc);
-    on_true_->ProcessUses(sc);
-    if (on_false_)
-        on_false_->ProcessUses(sc);
-}
-
-void
-ReturnStmt::ProcessUses(SemaContext& sc)
-{
-    if (expr_)
-        expr_->MarkAndProcessUses(sc);
-}
-
-void
-ExitStmt::ProcessUses(SemaContext& sc)
-{
-    if (expr_)
-        expr_->MarkAndProcessUses(sc);
-}
-
-void
-DoWhileStmt::ProcessUses(SemaContext& sc)
-{
-    cond_->MarkAndProcessUses(sc);
-    body_->ProcessUses(sc);
-}
-
-void
-ForStmt::ProcessUses(SemaContext& sc)
-{
-    if (init_)
-        init_->ProcessUses(sc);
-    if (cond_)
-        cond_->MarkAndProcessUses(sc);
-    if (advance_)
-        advance_->ProcessUses(sc);
-    body_->ProcessUses(sc);
-}
-
-void
-SwitchStmt::ProcessUses(SemaContext& sc)
-{
-    expr_->MarkAndProcessUses(sc);
-
-    for (const auto& entry : cases_) {
-        for (const auto& expr : entry.first)
-            expr->MarkAndProcessUses(sc);
-        entry.second->ProcessUses(sc);
-    }
-
-    if (default_case_)
-        default_case_->ProcessUses(sc);
-}
-
-void
-FunctionDecl::ProcessUses(SemaContext& outer_sc)
-{
-    if (!body_)
-        return;
-
-    SemaContext sc(outer_sc, this);
-
-    for (const auto& arg : args_)
-        arg->ProcessUses(sc);
-
-    body_->ProcessUses(sc);
-}
-
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
         decl->set_is_read();
@@ -3144,13 +2947,6 @@ bool Semantics::CheckEnumStructDecl(EnumStructDecl* decl) {
     for (const auto& fun : decl->methods())
         ok &= CheckStmt(fun);
     return ok;
-}
-
-void
-EnumStructDecl::ProcessUses(SemaContext& sc)
-{
-    for (const auto& fun : methods_)
-        fun->ProcessUses(sc);
 }
 
 bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
@@ -3183,20 +2979,6 @@ void Semantics::AssignHeapOwnership(ParseNode* node) {
         node->set_tree_has_heap_allocs(true);
         pending_heap_allocation_ = false;
     }
-}
-
-void MethodmapDecl::ProcessUses(SemaContext& sc) {
-    for (const auto& prop : properties_)
-        prop->ProcessUses(sc);
-    for (const auto& method : methods_)
-        method->ProcessUses(sc);
-}
-
-void MethodmapPropertyDecl::ProcessUses(SemaContext& sc) {
-    if (getter_)
-        getter_->ProcessUses(sc);
-    if (setter_)
-        setter_->ProcessUses(sc);
 }
 
 void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
@@ -3389,11 +3171,6 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     if (type == BuiltinType::Int64 && sc_->func())
         NeedsInt64Slot(to);
     return to;
-}
-
-void DeleteStmt::ProcessUses(SemaContext& sc) {
-    expr_->MarkAndProcessUses(sc);
-    markusage(map_->dtor(), uREAD);
 }
 
 } // namespace cc

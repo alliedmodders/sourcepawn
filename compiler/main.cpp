@@ -195,7 +195,6 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
             if (!sema.Analyze(tree) || !errors.ok())
                 goto cleanup;
 
-            tree->stmts()->ProcessUses(sc);
             ok = true;
         }
     }
