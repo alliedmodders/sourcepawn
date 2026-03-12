@@ -21,13 +21,15 @@
 #include "linking.h"
 #include "method-info.h"
 #include "opcodes.h"
-#include "outofline-asm.h"
 #include "pcode-reader.h"
+#include "plugin-context.h"
 #include "plugin-runtime.h"
 #include "stack-frames.h"
 #include "watchdog_timer.h"
 #if defined(KE_ARCH_X86)
-#    include "x86/jit_x86.h"
+# include "x86/jit_x86.h"
+#elif defined(KE_ARCH_X64)
+# include "x64/jit_x64.h"
 #endif
 
 namespace sp {
@@ -102,6 +104,7 @@ CompilerBase::emit() {
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
         block_ = *iter;
         __ bind(block_->label());
+        __ bind(block_->address_label());
 
         PcodeReader<CompilerBase> reader(rt_, block_, this);
         reader.begin();
@@ -144,11 +147,23 @@ CompilerBase::emit() {
 
     debug_map.push_back({masm.pc(), "<epilogue>", 0});
 
-    for (size_t i = 0; i < ool_paths_.size(); i++) {
-        OutOfLinePath* path = ool_paths_[i];
-        __ bind(path->label());
-        if (!path->emit(static_cast<Compiler*>(this)))
-            return nullptr;
+    // Common path for invoking line debugger.
+    emitDebugBreakHandler();
+
+    for (auto& call : call_thunks_) {
+        __ bind(&call.label);
+        emitCallThunk(&call);
+    }
+
+    for (auto& error : bounds_errors_) {
+        __ bind(&error.label);
+        emitOutOfBoundsError(&error);
+    }
+
+    // jumpOnError must not be called after this.
+    for (auto& thunk : error_thunks_) {
+        __ bind(&thunk.label);
+        emitErrorThunk(&thunk);
     }
 
     // For each backward jump, emit a little thunk so we can exit from a timeout.
@@ -170,9 +185,7 @@ CompilerBase::emit() {
     emitThrowPathIfNeeded(SP_ERROR_HEAPMIN);
     emitThrowPathIfNeeded(SP_ERROR_INTEGER_OVERFLOW);
     emitThrowPathIfNeeded(SP_ERROR_INVALID_NATIVE);
-
-    // Common path for invoking line debugger.
-    emitDebugBreakHandler();
+    emitThrowPathIfNeeded(SP_ERROR_INVALID_ARRAY_SIZE);
 
     // This has to come very, very last, since it checks whether return paths
     // are used.
@@ -185,8 +198,8 @@ CompilerBase::emit() {
     if (error_)
         return nullptr;
 
-    CodeChunk code = LinkCode(env_, masm, debug_name_.c_str(), debug_map);
-    if (!code.address()) {
+    LinkedCode code = LinkCode(env_, masm, debug_name_.c_str(), debug_map);
+    if (!code.entry) {
         reportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
     }
@@ -205,8 +218,7 @@ CompilerBase::emit() {
     return new CompiledFunction(code, pcode_start_, edges.release(), cipmap.release());
 }
 
-void
-CompilerBase::emitErrorPath(ErrorPath* path) {
+void CompilerBase::emitErrorThunk(ErrorThunk* thunk) {
     // For each path that had an error check, bind it to an error routine and
     // add it to the cip map. What we'll get is something like:
     //
@@ -228,13 +240,12 @@ CompilerBase::emitErrorPath(ErrorPath* path) {
 
     // If there's no error code, it should be in eax. Otherwise we'll jump to
     // a path that sets eax to a hardcoded value.
-    __ alignStack();
-    if (path->err == 0)
+    if (thunk->err == 0)
         __ call(&report_error_);
     else
-        __ call(&throw_error_code_[path->err]);
+        __ call(&throw_error_code_[thunk->err]);
 
-    emitCipMapping(path->cip);
+    emitCipMapping(thunk->cip);
 }
 
 void
@@ -294,7 +305,7 @@ CompilerBase::find_entry_fp() {
 
     for (JitFrameIterator iter(Environment::get()); !iter.done(); iter.next()) {
         FrameLayout* frame = iter.frame();
-        if (frame->frame_type == JitFrameType::Entry)
+        if (frame->frame_type() == JitFrameType::Entry)
             break;
         fp = frame->prev_fp;
     }
@@ -317,15 +328,24 @@ CompilerBase::InvokeReportTimeout() {
     InvokeReportError(SP_ERROR_TIMEOUT);
 }
 
-bool
-ErrorPath::emit(Compiler* cc) {
-    cc->emitErrorPath(this);
-    return true;
-}
+bool CompilerBase::visitJUMP(cell_t offset) {
+    assert(block_->successors().size() == 1);
 
-bool
-OutOfBoundsErrorPath::emit(Compiler* cc) {
-    cc->emitOutOfBoundsErrorPath(this);
+    Block* successor = block_->successors()[0];
+    if (isNextBlock(successor)) {
+        // We'll visit this block next, and this terminates the block, so there's
+        // no need to emit a jump instruction.
+        assert(!isBackedge(successor));
+        return true;
+    }
+
+    Label* target = successor->label();
+    if (isBackedge(successor)) {
+        __ jmp32(target);
+        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
+    } else {
+        __ jmp(target);
+    }
     return true;
 }
 

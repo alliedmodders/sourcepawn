@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -10,26 +10,31 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
+#include <limits>
+
 #include "linking.h"
 #include "environment.h"
+#include "macro-assembler.h"
 
 using namespace sp;
 
-CodeChunk
-sp::LinkCode(Environment* env, Assembler& masm, const char* name, const CodeDebugMap& mapping) {
+LinkedCode sp::LinkCode(Environment* env, Assembler& masm, const char* name, const CodeDebugMap& mapping) {
     if (masm.outOfMemory())
-        return CodeChunk();
+        return {};
 
-    auto length = masm.length();
-    CodeChunk code = env->AllocateCode(length);
+    auto size = masm.total_size();
 
-    auto address = code.address();
-    if (!address)
-        return code;
+    // This check ensures that 32-bit displacement always works internally.
+    if (size > std::numeric_limits<int32_t>::max())
+        return {};
 
-    masm.emitToExecutableMemory(address);
+    CodeChunk chunk = env->AllocateCode(size);
+    if (!chunk)
+        return {};
 
-    env->WriteDebugMetadata(address, length, name, mapping);
+    LinkedCode code = { chunk, nullptr };
+    masm.emitToExecutableMemory(&code);
 
+    env->WriteDebugMetadata(code.entry, size, name, mapping);
     return code;
 }

@@ -13,9 +13,11 @@
 #ifndef _include_sourcepawn_vm_code_stubs_h_
 #define _include_sourcepawn_vm_code_stubs_h_
 
-#include <sp_vm_api.h>
 #include <stdint.h>
+
+#include <sp_vm_api.h>
 #include "code-allocator.h"
+#include "linking.h"
 
 namespace sp {
 
@@ -33,7 +35,7 @@ class CodeStubs
     bool Initialize();
 
     InvokeStubFn InvokeStub() const {
-        return (InvokeStubFn)invoke_stub_.address();
+        return (InvokeStubFn)invoke_stub_.entry;
     }
     void* ReturnStub() const {
         return return_stub_;
@@ -46,7 +48,7 @@ class CodeStubs
 
   private:
     Environment* env_;
-    CodeChunk invoke_stub_;
+    LinkedCode invoke_stub_;
     void* return_stub_; // Owned by invoke_stub_.
 };
 

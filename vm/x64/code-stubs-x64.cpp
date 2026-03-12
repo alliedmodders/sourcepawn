@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -13,6 +13,7 @@
 #include <sp_vm_api.h>
 #include "code-stubs.h"
 #include "constants-x64.h"
+#include "debug-metadata.h"
 #include "linking.h"
 #include "macro-assembler-x64.h"
 #include "plugin-context.h"
@@ -21,75 +22,103 @@
 
 namespace sp {
 
-#if 0
+// Windows ABI: RCX, RDX, R8, R9
+// Linux ABI: RDI, RSI, RDX, RCX, R8, R9
+//
+// Trash registers common to both ABIs:
+//     RAX, RCX, RDX, R8, R9, R10, R11
+// Callee-saved common to both ABIs:
+//     RBX, RBP, R12, R13, R14, R15
+
 bool
 CodeStubs::CompileInvokeStub()
 {
-  MacroAssembler masm;
-  __ enterFrame(JitFrameType::Entry, 0);
+    MacroAssembler masm;
 
-  __ push(rbx);
-  __ push(r12);
-  __ push(r13);
-  __ push(r14);
-  __ push(r15);
+    // Add 1 for the return address that was pushed.
+    size_t frame_items = __ enterFrame(JitFrameType::Entry, 0) + 1;
 
-  // We push 5 values, plus 2 for the frame size.
-  static const intptr_t kFpOffsetToPreAlignedSp = -(5 + kExtraWordsInSpFrame) * 8;
+    // Push all the callee-saved regs we clobber.
+    __ push(context_reg);
+    __ push(env_reg);
+    __ push(stk);
+    __ push(dat);
+    __ push(frm);
+    frame_items += 5;
 
-  // arg0 = cx
-  // arg1 = code
-  // arg2 = rval
-  
-  // Save the context and rval pointers.
-  const Register context = saved1;
-  const Register rvalptr = saved0;
-  __ movq(context, ArgReg0);
-  __ movq(rvalptr, ArgReg2);
-  
-  // Set up runtime registers.
-  __ movq(dat, Operand(context, static_cast<int32_t>(PluginContext::offsetOfMemory())));
-  __ movq(stk, Operand(context, static_cast<int32_t>(PluginContext::offsetOfSp())));
-  __ addq(stk, dat);
+    size_t frame_items_to_restore = frame_items;
 
-  // Align the stack.
-  __ andq(rsp, 0xfffffff0);
+    // arg0 = cx
+    // arg1 = code
+    // arg2 = rval
+    __ movq(env_reg, intptr_t(Environment::get()));
+    __ movq(context_reg, ArgReg0);
+    __ push(ArgReg2);
+    frame_items++;
 
-  // Call into plugin.
-  __ call(ArgReg1);
+    // Set up runtime registers.
+    __ movq(dat, Operand(ArgReg0, static_cast<int32_t>(PluginContext::offsetOfMemory())));
+    __ movl(stk, Operand(ArgReg0, static_cast<int32_t>(PluginContext::offsetOfSp())));
+    __ addq(stk, dat);
 
-  // Store the rval.
-  __ movq(Operand(rvalptr, 0), pri);
+    // We pushed 6 words.
+    size_t alignment = PreCallStackAlignment(frame_items);
+    if (alignment)
+        __ subq(rsp, alignment);
 
-  // Store latest stk. If we have an error code, we'll jump directly to here,
-  // so rax will already be set.
-  Label ret;
-  __ bind(&ret);
-  __ subq(stk, dat);
-  __ movq(Operand(context, static_cast<int32_t>(PluginContext::offsetOfSp())), stk);
+    // Call into plugin.
+    __ call(ArgReg1);
 
-  // Restore registers and leave.
-  __ leaq(rsp, Operand(rbp, kFpOffsetToPreAlignedSp));
-  __ pop(r15);
-  __ pop(r14);
-  __ pop(r13);
-  __ pop(r12);
-  __ pop(rbx);
-  __ leaveFrame();
-  __ ret();
+    // Store the rval.
+    __ movq(ArgReg2, Operand(rsp, alignment));
+    __ movl(Operand(ArgReg2, 0), pri);
 
-  // The universal emergency return will jump to here.
-  Label error;
-  __ bind(&error);
-  __ jmp(&ret);
+    // Store latest stk. If we have an error code, we'll jump directly to here,
+    // so rax will already be set.
+    Label ret;
+    __ bind(&ret);
+    __ subq(stk, dat);
+    __ movq(Operand(context_reg, static_cast<int32_t>(PluginContext::offsetOfSp())), stk);
 
-  invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
-  if (!invoke_stub_.address())
-    return false;
+    // Stack layout:
+    //
+    //      return_address
+    //      rbp
+    //      rcx
+    //      context_reg
+    //      env_reg
+    //      stk
+    //      dat
+    //      frm <-- restore RSP to here.
+    //      ArgReg2
+    //      alignment
+    //
+    // The delta between rbp to frm is frame_items_to_restore minus the entries
+    // for return_address and rbp.
+    int32_t offset_to_rsp = (frame_items_to_restore - 2) * sizeof(intptr_t);
+    __ lea(rsp, Operand(rbp, -offset_to_rsp));
 
-  return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.address()) + error.offset();
-  return true;
+    __ pop(frm);
+    __ pop(dat);
+    __ pop(stk);
+    __ pop(env_reg);
+    __ pop(context_reg);
+
+    // Restore registers and leave.
+    __ leaveFrame();
+    __ ret();
+
+    // The universal emergency return will jump to here.
+    Label error;
+    __ bind(&error);
+    __ jmp(&ret);
+
+    invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
+    if (!invoke_stub_.entry)
+        return false;
+
+    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.entry) + error.offset();
+    return true;
 }
-#endif
 
 } // namespace sp

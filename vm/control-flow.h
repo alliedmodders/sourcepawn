@@ -135,9 +135,8 @@ class Block : public ke::Refcounted<Block>, public ke::InlineListNode<Block>
     void setVisited();
 
     // The JIT uses this to manage jump targets.
-    Label* label() {
-        return &label_;
-    }
+    Label* label() { return &label_; }
+    PatchCodeLabel* address_label() { return &address_label_; }
 
     // Zap all references so the block has no cycles.
     void unlink();
@@ -186,6 +185,7 @@ class Block : public ke::Refcounted<Block>, public ke::InlineListNode<Block>
 
     // Label, for the JIT.
     Label label_;
+    PatchCodeLabel address_label_;
 
     // Counter for fast already-visited testing.
     uint32_t epoch_;

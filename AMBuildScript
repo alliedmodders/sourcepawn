@@ -393,6 +393,8 @@ class SourcePawn(object):
         vars = self.vars.copy()
         vars['binary'] = binary
 
+        self.AddVmFlags(binary)
+
         builder.Build('libsmx/AMBuilder', vars)
         builder.Build('vm/AMBuilder', vars)
 
@@ -477,6 +479,8 @@ class SourcePawn(object):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
 
+        self.AddVmFlags(binary)
+
         arch = binary.compiler.target.arch
         binary.compiler.linkflags += [
             self.zlib[arch],
@@ -558,6 +562,12 @@ class SourcePawn(object):
         finally:
             builder.cxx = None
         return rvalue
+
+    def AddVmFlags(self, module):
+        is_emscripten = module.compiler.family == 'emscripten'
+        has_jit = module.compiler.target.arch in ['x86', 'x86_64'] and not is_emscripten
+        if has_jit:
+            module.compiler.defines += ['SP_HAS_JIT']
 
 if builder.parent is None:
     root = Config()

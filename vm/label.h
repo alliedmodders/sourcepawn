@@ -1,5 +1,5 @@
 /**
- * vim: set ts=8 sts=2 sw=2 tw=99 et:
+ * vim: set ts=8 sts=4 sw=4 tw=99 et:
  * =============================================================================
  * SourcePawn JIT SDK
  * Copyright (C) 2004-2013 AlliedModders LLC.  All rights reserved.
@@ -62,6 +62,12 @@ class Label
     Label()
      : status_(0) {
     }
+    Label(Label&& other)
+     : status_(other.status_)
+    {
+      other.status_ = 0;
+    }
+    Label(const Label&) = delete;
     ~Label() {
         assert(!used() || bound());
     }
@@ -99,6 +105,13 @@ class Label
         assert(this->offset() == offset);
     }
 
+    Label& operator =(const Label&) = delete;
+    Label& operator =(Label&& other) {
+        status_ = other.status_;
+        other.status_ = 0;
+        return *this;
+    }
+
   protected:
     // Note that 0 as an invalid offset is okay, because the offset we save for
     // pending jumps are after the jump opcode itself, and therefore 0 is never
@@ -117,11 +130,12 @@ class SilentLabel : public Label
     }
 };
 
-// A CodeLabel is a special form of Label intended for absolute that
+// A CodeLabel is a special form of Label intended for addresses that
 // are within the code buffer, and thus aren't known yet, and will be
 // automatically fixed up later.
 //
 // Unlike normal Labels, these do not store a list of incoming uses.
+// They can only have one point of use.
 class CodeLabelBase
 {
     // If set on status_, the label is bound.
@@ -135,8 +149,8 @@ class CodeLabelBase
         assert(!used() || bound());
     }
 
-    static inline uint32_t ToOffset(uint32_t status) {
-        return status >> 1;
+    static inline int32_t ToOffset(uint32_t status) {
+        return int32_t(status) >> 1;
     }
 
     bool used() const {
@@ -145,7 +159,7 @@ class CodeLabelBase
     bool bound() const {
         return !!(status_ & kBound);
     }
-    uint32_t offset() const {
+    int32_t offset() const {
         assert(bound());
         return ToOffset(status_);
     }
@@ -153,7 +167,7 @@ class CodeLabelBase
         assert(!bound());
         return status_;
     }
-    void use(uint32_t pc) {
+    void use(int32_t pc) {
         assert(!used());
         status_ = (pc << 1);
         assert(ToOffset(status_) == pc);
@@ -182,7 +196,9 @@ class SilentCodeLabel : public CodeLabel
     }
 };
 
-class PatchLabel : public SilentCodeLabel
+// Same as CodeLabel, except that it is guaranteed patchable to any address
+// after emitToExecutableMemory(), not just beforehand.
+class PatchCodeLabel : public SilentCodeLabel
 {
 };
 

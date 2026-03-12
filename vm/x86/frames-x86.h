@@ -37,13 +37,16 @@ class PluginContext;
 //   [function_id]
 //
 struct FrameLayout {
-    intptr_t function_id;
-    intptr_t frame_type;
+    intptr_t function_id_;
+    intptr_t frame_type_;
     intptr_t* prev_fp;
     void* return_address;
 
     // This is -offsetof(FrameLayout, prev_ebp).
     static const intptr_t kOffsetFromFp = -2;
+
+    intptr_t function_id() { return function_id_; }
+    intptr_t frame_type() { return frame_type_; }
 
     static inline FrameLayout* FromFp(intptr_t* fp) {
         return reinterpret_cast<FrameLayout*>(fp + kOffsetFromFp);

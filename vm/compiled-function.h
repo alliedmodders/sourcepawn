@@ -19,6 +19,7 @@
 #include <amtl/am-refcounting.h>
 #include <sp_vm_types.h>
 #include "code-allocator.h"
+#include "linking.h"
 
 namespace sp {
 
@@ -47,13 +48,13 @@ static const ucell_t kInvalidCip = 0xffffffff;
 class CompiledFunction
 {
   public:
-    CompiledFunction(const CodeChunk& code, cell_t pcode_offs, FixedArray<LoopEdge>* edges,
+    CompiledFunction(const LinkedCode& code, cell_t pcode_offs, FixedArray<LoopEdge>* edges,
                      FixedArray<CipMapEntry>* cip_map);
     ~CompiledFunction();
 
   public:
     void* GetEntryAddress() const {
-        return code_.address();
+        return code_.entry;
     }
     cell_t GetCodeOffset() const {
         return code_offset_;
@@ -68,7 +69,7 @@ class CompiledFunction
     ucell_t FindCipByPc(void* pc);
 
   private:
-    CodeChunk code_;
+    LinkedCode code_;
     cell_t code_offset_;
     std::unique_ptr<FixedArray<LoopEdge>> edges_;
     std::unique_ptr<FixedArray<CipMapEntry>> cip_map_;

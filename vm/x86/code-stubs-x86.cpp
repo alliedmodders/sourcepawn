@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -85,9 +85,9 @@ CodeStubs::CompileInvokeStub() {
     __ jmp(&ret);
 
     invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
-    if (!invoke_stub_.address())
+    if (!invoke_stub_.entry)
         return false;
 
-    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.address()) + error.offset();
+    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.entry) + error.offset();
     return true;
 }

@@ -16,7 +16,7 @@
 
 using namespace sp;
 
-CompiledFunction::CompiledFunction(const CodeChunk& code, cell_t pcode_offs,
+CompiledFunction::CompiledFunction(const LinkedCode& code, cell_t pcode_offs,
                                    FixedArray<LoopEdge>* edges, FixedArray<CipMapEntry>* cipmap)
  : code_(code)
  , code_offset_(pcode_offs)
@@ -52,11 +52,11 @@ cip_map_entry_cmp(const void* a1, const void* aEntry) {
 
 ucell_t
 CompiledFunction::FindCipByPc(void* pc) {
-    if (uintptr_t(pc) < uintptr_t(code_.address()))
+    if (uintptr_t(pc) < uintptr_t(code_.entry))
         return kInvalidCip;
 
-    uint32_t pcoffs = intptr_t(pc) - intptr_t(code_.address());
-    if (pcoffs > code_.bytes())
+    uint32_t pcoffs = intptr_t(pc) - intptr_t(code_.entry);
+    if (pcoffs > code_.code_size())
         return kInvalidCip;
 
     if (!cip_map_sorted_) {

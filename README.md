@@ -220,5 +220,7 @@ SourcePawn 1.13 is currently in development.
  - The `float` type is now intrinsically supported, and `float.inc` is no
    longer required for basic float support.
  - Operator overload support has been removed due to lack of use.
+ - An x64 JIT backend has been added. It is used on x64 processors supporting
+   SSE 4.1 and higher, for plugins compiled on spcomp 1.13 or higher.
  - The x86 JIT will now only run on processors supporting SSE2 and higher.
  - The .pubvars and .publics sections of SMX files are no longer sorted.

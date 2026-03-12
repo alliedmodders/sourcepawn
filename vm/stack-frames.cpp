@@ -29,9 +29,9 @@ using namespace sp;
 using namespace SourcePawn;
 
 InvokeFrame::InvokeFrame(PluginContext* cx, ucell_t entry_cip)
- : prev_(Environment::get()->top())
- , cx_(cx)
- , entry_cip_(0) {
+ : prev_(Environment::get()->top()),
+   cx_(cx),
+   entry_cip_(0) {
     Environment::get()->enterInvoke(this);
 }
 
@@ -42,10 +42,10 @@ InvokeFrame::~InvokeFrame() {
 
 InterpInvokeFrame::InterpInvokeFrame(PluginContext* cx, MethodInfo* method,
                                      const cell_t* const& cip)
- : InvokeFrame(cx, method->pcode_offset())
- , method_(method)
- , cip_(cip)
- , native_index_(-1) {
+ : InvokeFrame(cx, method->pcode_offset()),
+   method_(method),
+   cip_(cip),
+   native_index_(-1) {
 }
 
 InterpInvokeFrame::~InterpInvokeFrame() {
@@ -65,8 +65,8 @@ InterpInvokeFrame::leaveNativeCall() {
 }
 
 JitInvokeFrame::JitInvokeFrame(PluginContext* cx, ucell_t entry_cip)
- : InvokeFrame(cx, entry_cip)
- , prev_exit_fp_(Environment::get()->exit_fp()) {
+ : InvokeFrame(cx, entry_cip),
+   prev_exit_fp_(Environment::get()->exit_fp()) {
 }
 
 JitInvokeFrame::~JitInvokeFrame() {
@@ -126,9 +126,9 @@ JitFrameIterator::JitFrameIterator(Environment* env)
 }
 
 JitFrameIterator::JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp)
- : rt_(rt)
- , cur_frame_(FrameLayout::FromFp(exit_fp)) {
-    assert(cur_frame_->frame_type == JitFrameType::Exit);
+ : rt_(rt),
+   cur_frame_(FrameLayout::FromFp(exit_fp)) {
+    assert(cur_frame_->frame_type() == JitFrameType::Exit);
     assert(cur_frame_->return_address);
     assert(cur_frame_->prev_fp);
 
@@ -138,7 +138,7 @@ JitFrameIterator::JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp)
 
 bool
 JitFrameIterator::done() const {
-    return cur_frame_->frame_type == JitFrameType::Entry;
+    return cur_frame_->frame_type() == JitFrameType::Entry;
 }
 
 void
@@ -152,11 +152,11 @@ JitFrameIterator::next() {
 
 FrameType
 JitFrameIterator::type() const {
-    switch ((JitFrameType)cur_frame_->frame_type) {
+    switch ((JitFrameType)cur_frame_->frame_type()) {
         case JitFrameType::Scripted:
             return FrameType::Scripted;
         case JitFrameType::Exit:
-            if (GetExitFrameType(cur_frame_->function_id) == ExitFrameType::Native)
+            if (GetExitFrameType(cur_frame_->function_id()) == ExitFrameType::Native)
                 return FrameType::Native;
             return FrameType::Internal;
         default:
@@ -166,8 +166,8 @@ JitFrameIterator::type() const {
 
 cell_t
 JitFrameIterator::function_cip() const {
-    assert(cur_frame_->frame_type == JitFrameType::Scripted);
-    return cur_frame_->function_id;
+    assert(cur_frame_->frame_type() == JitFrameType::Scripted);
+    return cur_frame_->function_id();
 }
 
 cell_t
@@ -192,7 +192,7 @@ JitFrameIterator::cip() const {
 uint32_t
 JitFrameIterator::native_index() const {
     assert(type() == FrameType::Native);
-    return GetExitFramePayload(cur_frame_->function_id);
+    return GetExitFramePayload(cur_frame_->function_id());
 }
 
 FrameIterator::FrameIterator()

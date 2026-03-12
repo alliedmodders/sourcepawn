@@ -45,29 +45,22 @@ module.sources += [
   'watchdog_timer.cpp',
 ]
 
-is_emscripten = module.compiler.family == 'emscripten'
-has_jit = module.compiler.target.arch in ['x86'] and not is_emscripten
-
-if has_jit:
+if 'SP_HAS_JIT' in module.compiler.defines:
   module.sources += [
     'jit.cpp',
     'linking.cpp',
   ]
-  module.compiler.defines += ['SP_HAS_JIT']
-
-if is_emscripten:
-  module.sources += [
-    'code-stubs-null.cpp',
-  ]
-elif module.compiler.target.arch == 'x86':
-  module.sources += [
-    'x86/code-stubs-x86.cpp',
-    'x86/features-x86.cpp',
-    'x86/jit_x86.cpp',
-  ]
-elif module.compiler.target.arch == 'x86_64':
-  module.sources += [
-    'x64/assembler-x64.cpp',
-    'x64/code-stubs-x64.cpp',
-    'x64/macro-assembler-x64.cpp',
-  ]
+  if module.compiler.target.arch == 'x86':
+    module.sources += [
+      'x86/code-stubs-x86.cpp',
+      'x86/features-x86.cpp',
+      'x86/jit_x86.cpp',
+    ]
+  elif module.compiler.target.arch == 'x86_64':
+    module.sources += [
+      'x64/assembler-x64.cpp',
+      'x64/code-stubs-x64.cpp',
+      'x64/features-x64.cpp',
+      'x64/macro-assembler-x64.cpp',
+      'x64/jit_x64.cpp',
+    ]

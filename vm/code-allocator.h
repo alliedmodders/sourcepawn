@@ -63,12 +63,10 @@ struct CodeChunk {
      , bytes_(bytes) {
     }
 
-    uint8_t* address() const {
-        return address_;
-    }
-    size_t bytes() const {
-        return bytes_;
-    }
+    uint8_t* address() const { return address_; }
+    size_t bytes() const { return bytes_; }
+
+    explicit operator bool() const { return !!address_; }
 
   private:
     RefPtr<CodePool> pool_;

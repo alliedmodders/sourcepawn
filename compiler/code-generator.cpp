@@ -1142,7 +1142,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
         __ emit(OP_CONST_PRI, &fun->cg()->funcid);
     } else if (auto var = sym->as<VarDeclBase>()) {
         if (sym->type()->isArray() || sym->type()->isEnumStruct())
-            __ address(sym, sPRI);
+            __ address(var, sPRI);
     } else {
         assert(false);
     }

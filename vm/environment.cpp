@@ -33,16 +33,17 @@ using namespace SourcePawn;
 static Environment* sEnvironment = nullptr;
 
 Environment::Environment()
- : debug_break_enabled_(false)
- , debug_break_handler_(nullptr)
- , debugger_(nullptr)
- , eh_top_(nullptr)
- , exception_code_(SP_ERROR_NONE)
- , debug_metadata_flags_(JIT_DEBUG_DELETE_ON_EXIT | JIT_DEBUG_PERF_BASIC)
- , profiler_(nullptr)
- , profiling_enabled_(false)
- , code_stubs_(nullptr)
- , top_(nullptr) {
+ : debug_break_enabled_(false),
+   debug_break_handler_(nullptr),
+   debugger_(nullptr),
+   eh_top_(nullptr),
+   exception_code_(SP_ERROR_NONE),
+   debug_metadata_flags_(JIT_DEBUG_DELETE_ON_EXIT | JIT_DEBUG_PERF_BASIC),
+   profiler_(nullptr),
+   profiling_enabled_(false),
+   code_stubs_(nullptr),
+   top_(nullptr)
+{
     jit_enabled_ = IsJitAvailable();
 }
 
@@ -304,7 +305,7 @@ Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t*
             }
         }
 
-        if (!method->jit()) {
+        if (CompilerBase::SupportsPlugin(cx) && !method->jit()) {
             int err = SP_ERROR_NONE;
             if (!CompilerBase::Compile(cx, method, &err)) {
                 cx->ReportErrorNumber(err);

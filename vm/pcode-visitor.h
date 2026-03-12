@@ -34,6 +34,7 @@ static_assert(sizeof(CaseTableEntry) == sizeof(cell_t) * 2,
 class PcodeVisitor
 {
   public:
+    virtual bool beforeVisitOp(OPCODE op) { return true; }
     virtual bool visitBREAK() = 0;
     virtual bool visitLOAD(PawnReg dest, cell_t srcaddr) = 0;
     virtual bool visitLOAD_S(PawnReg dest, cell_t srcoffs) = 0;
