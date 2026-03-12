@@ -37,7 +37,6 @@ class CallThunk;
 
 class Compiler : public CompilerBase
 {
-    friend class CallThunk;
     friend class OutOfBoundsErrorPath;
 
   public:
@@ -70,7 +69,6 @@ class Compiler : public CompilerBase
     bool visitHEAP(cell_t amount) override;
     bool visitRETN() override;
     bool visitCALL(cell_t offset) override;
-    bool visitJUMP(cell_t offset) override;
     bool visitJcmp(CompareOp op, cell_t offset) override;
     bool visitSHL() override;
     bool visitSHR() override;
@@ -175,14 +173,14 @@ class Compiler : public CompilerBase
     void emitPrologue() override;
     void emitThrowPath(int err) override;
     void emitErrorHandlers() override;
-    void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) override;
+    void emitOutOfBoundsError(OutOfBoundsError* path) override;
     void emitDebugBreakHandler() override;
+    void emitCallThunk(CallThunk* thunk) override;
 
     void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
     void emitGenArray(bool autozero);
     void emitCheckAddress(Register reg, size_t read_size = 4);
     void emitFloatCmp(ConditionCode cc);
-    void emitCallThunk(CallThunk* thunk);
     void jumpOnError(ConditionCode cc, int err = 0);
 
     ExternalAddress hpAddr() {

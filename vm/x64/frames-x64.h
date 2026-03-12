@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // This file is part of SourcePawn.
 //
@@ -30,17 +30,18 @@ class PluginContext;
 //   [return address]
 //   [prev_ebp]
 //       ^--- ebp is captured here.
-//   [frame_type]
-//   [function_id]
+//   [function_id<<32 | frame_type]
 //
 struct FrameLayout {
-    intptr_t function_id;
-    intptr_t frame_type;
+    intptr_t function_id_and_frame_type_;
     intptr_t* prev_fp;
     void* return_address;
 
     // This is -offsetof(FrameLayout, prev_ebp).
-    static const intptr_t kOffsetFromFp = -2;
+    static const intptr_t kOffsetFromFp = -1;
+
+    int32_t function_id() { return function_id_and_frame_type_ >> 32; }
+    int32_t frame_type() { return (int32_t)function_id_and_frame_type_; }
 
     static inline FrameLayout* FromFp(intptr_t* fp) {
         return reinterpret_cast<FrameLayout*>(fp + kOffsetFromFp);

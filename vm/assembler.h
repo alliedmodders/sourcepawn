@@ -43,6 +43,9 @@ class AssemblerBase
   public:
     static const size_t kMinBufferSize = 4096;
     static const size_t kMaxInstructionSize = 32;
+
+    // Note this is INT_MAX, because CodeLabel uses 31-bit signed integers
+    // for offsets.
     static const size_t kMaxBufferSize = INT_MAX / 2;
 
   public:
@@ -61,7 +64,11 @@ class AssemblerBase
     }
 
     // Amount needed to allocate for executable code.
-    size_t length() const {
+    size_t total_size() const {
+        return code_size() + data_size();
+    }
+
+    size_t code_size() const {
         return pos_ - buffer_;
     }
 
@@ -69,6 +76,8 @@ class AssemblerBase
     uint32_t pc() const {
         return uint32_t(pos_ - buffer_);
     }
+
+    virtual size_t data_size() const = 0;
 
   protected:
     void writeByte(uint8_t byte) {

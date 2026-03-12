@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -109,6 +109,8 @@ class PcodeReader
 
   private:
     bool visitOp(OPCODE op) {
+        if (!visitor_->beforeVisitOp(op))
+            return false;
         switch (op) {
             case OP_NOP:
                 return true;

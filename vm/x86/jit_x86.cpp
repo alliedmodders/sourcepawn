@@ -39,7 +39,6 @@
 #include "frames-x86.h"
 #include "linking.h"
 #include "method-info.h"
-#include "outofline-asm.h"
 #include "plugin-context.h"
 #include "plugin-runtime.h"
 #include "runtime-helpers.h"
@@ -703,7 +702,7 @@ Compiler::visitFLOATDIV() {
 bool
 Compiler::visitRND_TO_NEAREST() {
     // Docs say that MXCSR must be preserved across function calls, so we
-    // assume that we'll always get the defualt round-to-nearest.
+    // assume that we'll always get the default round-to-nearest.
     __ cvtss2si(pri, Operand(stk, 0));
     __ addl(stk, 4);
     return true;
@@ -785,8 +784,7 @@ Compiler::visitFLOATCMP() {
     return true;
 }
 
-ConditionCode
-ToFloatConditionCode(CompareOp op) {
+ConditionCode ToFloatConditionCode(CompareOp op) {
     switch (op) {
         case CompareOp::Sgrtr:
             return above;
@@ -848,28 +846,6 @@ Compiler::visitHEAP(cell_t amount) {
         __ lea(tmp, Operand(dat, ecx, NoScale, STACK_MARGIN));
         __ cmpl(tmp, stk);
         jumpOnError(above, SP_ERROR_HEAPLOW);
-    }
-    return true;
-}
-
-bool
-Compiler::visitJUMP(cell_t offset) {
-    assert(block_->successors().size() == 1);
-
-    Block* successor = block_->successors()[0];
-    if (isNextBlock(successor)) {
-        // We'll visit this block next, and this terminates the block, so there's
-        // no need to emit a jump instruction.
-        assert(!isBackedge(successor));
-        return true;
-    }
-
-    Label* target = successor->label();
-    if (isBackedge(successor)) {
-        __ jmp32(target);
-        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
-    } else {
-        __ jmp(target);
     }
     return true;
 }
@@ -1002,6 +978,7 @@ Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_c
         else
             __ push(alt);
         __ push(intptr_t(rt_->GetBaseContext()));
+        // :TODO: this needs an exit frame!
         __ callWithABI(ExternalAddress((void*)InvokeInitArray));
         __ addl(esp, 7 * sizeof(intptr_t));
         __ pop(alt);
@@ -1031,11 +1008,12 @@ Compiler::visitHALT(cell_t value) {
 
 bool
 Compiler::visitBOUNDS(uint32_t limit) {
-    OutOfBoundsErrorPath* bounds = new OutOfBoundsErrorPath(op_cip_, limit);
-    ool_paths_.push_back(bounds);
+    OutOfBoundsError error(op_cip_, limit);
 
     __ cmpl(eax, limit);
-    __ j(above, bounds->label());
+    __ j(above, &error.label);
+
+    bounds_errors_.emplace_back(std::move(error));
     return true;
 }
 
@@ -1124,29 +1102,14 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero) {
     return true;
 }
 
-class CallThunk : public OutOfLinePath
-{
-  public:
-    CallThunk(cell_t pcode_offset)
-     : pcode_offset(pcode_offset) {
-    }
-
-    bool emit(Compiler* cc) override {
-        cc->emitCallThunk(this);
-        return true;
-    }
-
-    cell_t pcode_offset;
-};
-
 bool
 Compiler::visitCALL(cell_t offset) {
     RefPtr<MethodInfo> method = rt_->GetMethod(offset);
     if (!method || !method->jit()) {
         // Need to emit a delayed thunk.
-        CallThunk* thunk = new CallThunk(offset);
-        __ callWithABI(thunk->label());
-        ool_paths_.push_back(thunk);
+        CallThunk thunk(offset);
+        __ callWithABI(&thunk.label);
+        call_thunks_.emplace_back(std::move(thunk));
     } else {
         // Function is already emitted, we can do a direct call.
         __ callWithABI(ExternalAddress(method->jit()->GetEntryAddress()));
@@ -1208,13 +1171,6 @@ Compiler::visitSYSREQ_C(uint32_t native_index) {
     return true;
 }
 
-static cell_t
-NativeInvokeThunk(NativeEntry* native, IPluginContext* ctx, const cell_t* params) {
-    if (native->legacy_fn)
-        return native->legacy_fn(ctx, params);
-    return native->callback->Invoke(ctx, params);
-}
-
 void
 Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
     CodeLabel return_address;
@@ -1226,12 +1182,6 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
     // Check whether the native is bound.
     bool immutable = native->status == SP_NATIVE_BOUND &&
                      !(native->flags & (SP_NTVFLAG_EPHEMERAL | SP_NTVFLAG_OPTIONAL));
-    if (!immutable) {
-        __ movl(edx, Operand(ExternalAddress(&native->status)));
-        __ cmpl(edx, SP_NATIVE_BOUND);
-        __ j(not_equal, &unbound_native_error_);
-    }
-
     bool fast_path = immutable && native->legacy_fn;
 
     // If we're going to take the slow path, the stack has an extra word, so we
@@ -1250,9 +1200,6 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
     __ subl(stk, dat);
     __ movl(Operand(spAddr()), stk);
 
-    // Push the first parameter, the context.
-    __ push(intptr_t(rt_->GetBaseContext()));
-
     if (fast_path) {
         // Fast invoke, skip right to the function call.
         //
@@ -1261,6 +1208,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
         //    8: Saved HP
         //    4: Cells
         //    0: Context
+        __ push(intptr_t(rt_->GetBaseContext()));
         __ callWithABI(ExternalAddress((void*)native->legacy_fn));
     } else {
         // Slower invoke, go through a wrapper so we don't have to make this super
@@ -1274,6 +1222,7 @@ Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
         //    4: Context
         //    0: Native
         __ push(reinterpret_cast<intptr_t>(native));
+        __ push(intptr_t(rt_->GetBaseContext()));
         __ callWithABI(ExternalAddress((void*)NativeInvokeThunk));
     }
     __ bind(&return_address);
@@ -1450,10 +1399,10 @@ Compiler::emitFloatCmp(ConditionCode cc) {
 bool
 Compiler::visitPUSH_I_I64() {
     emitCheckAddress(pri, sizeof(int64_t));
-    __ movl(alt, Operand(dat, pri, NoScale, 4));
-    __ movl(Operand(stk, -4), alt);
-    __ movl(alt, Operand(dat, pri, NoScale, 0));
-    __ movl(Operand(stk, -8), alt);
+    __ movl(tmp, Operand(dat, pri, NoScale, 4));
+    __ movl(Operand(stk, -4), tmp);
+    __ movl(tmp, Operand(dat, pri, NoScale, 0));
+    __ movl(Operand(stk, -8), tmp);
     __ subl(stk, 8);
     return true;
 }
@@ -1975,14 +1924,14 @@ Compiler::visitCompareOp64(CompareOp op) {
 void
 Compiler::jumpOnError(ConditionCode cc, int err) {
     // Note: we accept 0 for err. In this case we expect the error to be in eax.
-    ErrorPath* path = new ErrorPath(op_cip_, err);
-    ool_paths_.push_back(path);
+    ErrorThunk thunk(op_cip_, err);
 
-    __ j(cc, path->label());
+    __ j(cc, &thunk.label);
+    error_thunks_.emplace_back(std::move(thunk));
 }
 
 void
-Compiler::emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) {
+Compiler::emitOutOfBoundsError(OutOfBoundsError* path) {
     CodeLabel return_address;
     __ alignStack();
     __ pushInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
@@ -2013,15 +1962,6 @@ Compiler::emitErrorHandlers() {
         __ callWithABI(ExternalAddress((void*)InvokeReportError));
         __ leaveExitFrame();
         __ jmp(&return_to_invoke);
-    }
-
-    // The unbound native path re-uses the native exit frame so the stack trace
-    // looks as if the native was bound.
-    if (unbound_native_error_.used()) {
-        __ bind(&unbound_native_error_);
-        __ alignStack();
-        __ callWithABI(ExternalAddress((void*)ReportUnboundNative));
-        __ jmp(&return_reported_error_);
     }
 
     // The timeout uses a special stub.
@@ -2096,14 +2036,16 @@ Compiler::emitDebugBreakHandler() {
     __ ret();
 }
 
-void
-CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
+void CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
     *(intptr_t*)(pc - 4) = intptr_t(target) - intptr_t(pc);
 }
 
-bool
-CompilerBase::IsSupported() {
+bool CompilerBase::IsSupported() {
     return FeaturesX86::Get().fpu && FeaturesX86::Get().sse && FeaturesX86::Get().sse2;
+}
+
+bool CompilerBase::SupportsPlugin(PluginContext* cx) {
+    return true;
 }
 
 } // namespace sp

@@ -26,18 +26,12 @@ namespace sp {
 // encoding.
 static const Register pri = rax;
 static const Register alt = rdx;
+static const Register context_reg = r12;
+static const Register env_reg = r13;
 static const Register stk = r14;
 static const Register dat = r15;
 static const Register frm = rbx;
-
-static const Register saved0 = r12;
-static const Register saved1 = r13;
-
-static const Register scratch0 = rcx;
-static const Register scratch1 = r11;
-static const Register scratch2 = r10;
-static const Register scratch3 = r9;
-static const Register reserved_scratch = r8;
+static const Register tmp = rcx;
 
 } // namespace sp
 

@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // This file is part of SourcePawn.
 //
@@ -24,7 +24,6 @@
 #include "control-flow.h"
 #include "macro-assembler.h"
 #include "opcodes.h"
-#include "outofline-asm.h"
 #include "pcode-visitor.h"
 #include "pool-allocator.h"
 
@@ -67,6 +66,9 @@ class CompilerBase : public PcodeVisitor
     }
 
     static bool IsSupported();
+    static bool SupportsPlugin(PluginContext* cx);
+
+    bool visitJUMP(cell_t offset) override;
 
   protected:
     CompiledFunction* emit();
@@ -74,8 +76,13 @@ class CompilerBase : public PcodeVisitor
     virtual void emitPrologue() = 0;
     virtual void emitThrowPath(int err) = 0;
     virtual void emitErrorHandlers() = 0;
-    virtual void emitOutOfBoundsErrorPath(OutOfBoundsErrorPath* path) = 0;
     virtual void emitDebugBreakHandler() = 0;
+
+    struct CallThunk;
+    virtual void emitCallThunk(CallThunk* thunk) = 0;
+
+    struct OutOfBoundsError;
+    virtual void emitOutOfBoundsError(OutOfBoundsError* path) = 0;
 
     // Helpers.
     static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc);
@@ -105,7 +112,8 @@ class CompilerBase : public PcodeVisitor
     }
 
   protected:
-    void emitErrorPath(ErrorPath* path);
+    struct ErrorThunk;
+    void emitErrorThunk(ErrorThunk* path);
     void emitThrowPathIfNeeded(int err);
 
     void reportError(int err);
@@ -126,13 +134,42 @@ class CompilerBase : public PcodeVisitor
 
     MacroAssembler masm;
 
-    std::vector<OutOfLinePath*> ool_paths_;
+    struct CallThunk {
+        explicit CallThunk(cell_t pcode_offset)
+          : pcode_offset(pcode_offset)
+        {}
+        CallThunk(CallThunk&& other) = default;
+        CallThunk& operator =(CallThunk& other) = default;
+
+        PatchCodeLabel label;
+        cell_t pcode_offset;
+    };
+    std::vector<CallThunk> call_thunks_;
+
+    struct ErrorThunk {
+        explicit ErrorThunk(const cell_t* cip, int err)
+          : cip(cip), err(err)
+        {}
+        Label label;
+        const cell_t* cip;
+        int err;
+    };
+    std::vector<ErrorThunk> error_thunks_;
+
+    struct OutOfBoundsError {
+        OutOfBoundsError(const cell_t* cip, cell_t bounds)
+          : cip(cip), bounds(bounds)
+        {}
+        Label label;
+        const cell_t* cip;
+        cell_t bounds;
+    };
+    std::vector<OutOfBoundsError> bounds_errors_;
 
     Label throw_timeout_;
-    Label throw_error_code_[SP_MAX_ERROR_CODES];
     Label report_error_;
+    Label throw_error_code_[SP_MAX_ERROR_CODES];
     Label return_reported_error_;
-    Label unbound_native_error_;
 
     // Debugging.
     Label debug_break_;

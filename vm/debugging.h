@@ -22,7 +22,7 @@
 
 namespace sp {
 
-void InvokeDebugger(PluginContext* ctx, const IErrorReport* report);
+int InvokeDebugger(PluginContext* ctx, const IErrorReport* report);
 
 } // namespace sp
 

@@ -185,6 +185,9 @@ class Environment : public ISourcePawnEnvironment
     static inline size_t offsetOfExceptionCode() {
         return offsetof(Environment, exception_code_);
     }
+    static inline size_t offsetOfExit() {
+        return offsetof(Environment, exit_fp_);
+    }
 
     void* addressOfExit() {
         return &exit_fp_;

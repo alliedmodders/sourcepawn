@@ -1,5 +1,5 @@
 /**
- * vim: set ts=8 sts=2 sw=2 tw=99 et:
+ * vim: set ts=8 sts=4 sw=4 tw=99 et:
  * =============================================================================
  * SourcePawn JIT SDK
  * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
@@ -34,6 +34,7 @@
 #include <string.h>
 
 #include "features-x86.h"
+#include "linking.h"
 
 namespace sp {
 
@@ -616,7 +617,7 @@ class Assembler : public AssemblerBase
     void push(CodeLabel* src) {
         emit1(0x68);
         if (src->bound()) {
-            writeInt32(int32_t(src->offset()) - (position() + 4));
+            writeInt32(src->offset() - (position() + 4));
         } else {
             writeInt32(0xabcdef0);
             src->use(pc());
@@ -749,6 +750,17 @@ class Assembler : public AssemblerBase
         emit1(0xe8);
         emitJumpTarget(dest);
     }
+    void call(PatchCodeLabel* dest) {
+        emit1(0xe8);
+        if (dest->bound()) {
+            ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 4);
+            assert(delta >= INT_MIN && delta <= INT_MAX);
+            writeInt32(delta);
+        } else {
+            writeUint32(0);
+            dest->use(pc());
+        }
+    }
     void bind(Label* target) {
         if (outOfMemory()) {
             // If we ran out of memory, the code stream is potentially invalid and
@@ -779,7 +791,8 @@ class Assembler : public AssemblerBase
         if (outOfMemory())
             return;
         if (address->used()) {
-            uint32_t offset = CodeLabel::ToOffset(address->status());
+            int32_t offset = CodeLabel::ToOffset(address->status());
+            assert(offset >= 0);
             *reinterpret_cast<int32_t*>(buffer() + offset - 4) = position() - int32_t(offset);
         }
         address->bind(pc());
@@ -787,7 +800,7 @@ class Assembler : public AssemblerBase
     void movl(Register dest, CodeLabel* src) {
         emit1(0xb8 + dest.code);
         if (src->bound()) {
-            writeInt32(int32_t(src->offset()) - (position() + 4));
+            writeInt32(src->offset() - (position() + 4));
         } else {
             writeInt32(0xabcdef0);
             src->use(pc());
@@ -921,12 +934,14 @@ class Assembler : public AssemblerBase
         *reinterpret_cast<int32_t*>(ip - 4) = delta;
     }
 
-    void emitToExecutableMemory(void* code) {
+    void emitToExecutableMemory(LinkedCode* out) {
         assert(!outOfMemory());
 
+        out->entry = out->chunk.address();
+
         // Relocate anything we emitted as rel32 with an external pointer.
-        uint8_t* base = reinterpret_cast<uint8_t*>(code);
-        memcpy(base, buffer(), length());
+        uint8_t* base = reinterpret_cast<uint8_t*>(out->entry);
+        memcpy(base, buffer(), code_size());
         for (size_t i = 0; i < external_refs_.size(); i++) {
             size_t offset = external_refs_[i];
             PatchRel32Absolute(base + offset, *reinterpret_cast<void**>(base + offset - 4));
@@ -960,6 +975,7 @@ class Assembler : public AssemblerBase
         *deltap = delta;
         return true;
     }
+
     void emitJumpTarget(Label* dest) {
         if (dest->bound()) {
             ptrdiff_t delta = ptrdiff_t(dest->offset()) - (position() + 4);
@@ -1061,6 +1077,8 @@ class Assembler : public AssemblerBase
             emit1(0x80, r, operand);
         writeByte(imm8);
     }
+
+    size_t data_size() const override { return 0; }
 
   private:
     std::vector<uint32_t> external_refs_;

@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2016-2018 AlliedModders LLC
 //
@@ -18,16 +18,13 @@
 
 namespace sp {
 
-void
-InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
+int InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
     // Continue normal execution, if there is no listener registered.
     if (!Environment::get()->debugbreak())
-        return;
+        return SP_ERROR_NONE;
 
-    if (!ctx->IsDebugging()) {
-        ctx->ReportErrorNumber(SP_ERROR_NOTDEBUGGING);
-        return;
-    }
+    if (!ctx->IsDebugging())
+        return SP_ERROR_NOTDEBUGGING;
 
     cell_t cip = 0;
 
@@ -57,6 +54,7 @@ InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
 
     // Call debug callback.
     Environment::get()->debugbreak()(ctx, dbginfo, report);
+    return SP_ERROR_NONE;
 }
 
 } // namespace sp

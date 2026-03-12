@@ -15,7 +15,9 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #include "runtime-helpers.h"
+
 #include "environment.h"
+#include "plugin-context.h"
 
 namespace sp {
 
@@ -61,9 +63,13 @@ ReportOutOfBoundsError(cell_t index, cell_t bounds) {
     }
 }
 
-void
-ReportUnboundNative() {
-    Environment::get()->ReportError(SP_ERROR_INVALID_NATIVE);
+cell_t NativeInvokeThunk(PluginContext* ctx, NativeEntry* entry, const cell_t* params) {
+    if (entry->status != SP_NATIVE_BOUND)
+        return ctx->ThrowNativeErrorEx(SP_ERROR_INVALID_NATIVE, "Native is not bound");
+
+    if (entry->legacy_fn)
+        return entry->legacy_fn(ctx, params);
+    return entry->callback->Invoke(ctx, params);
 }
 
 } // namespace sp

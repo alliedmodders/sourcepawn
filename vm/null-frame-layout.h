@@ -35,8 +35,8 @@ using namespace SourcePawn;
 //   [function_id]
 //
 struct FrameLayout {
-    intptr_t function_id;
-    intptr_t frame_type;
+    intptr_t function_id() { return 0; }
+    intptr_t frame_type() { return 0; }
     intptr_t* prev_fp;
     void* return_address;
 
