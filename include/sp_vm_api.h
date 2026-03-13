@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0x10
-#define SOURCEPAWN_API_VERSION 0x0214
+#define SOURCEPAWN_ENGINE2_API_VERSION 0x11
+#define SOURCEPAWN_API_VERSION 0x0215
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -195,6 +195,14 @@ class ICallable
      * This can be used be reset for CallFunction() use.
      */
     virtual void Cancel() = 0;
+
+    /**
+     * @brief Pushes an int64 value onto the current call.
+     *
+     * @param number    Parameter to push.
+     * @return          Error code, if any.
+     */
+    virtual int PushInt64(int64_t value) = 0;
 };
 
 /**

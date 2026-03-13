@@ -55,6 +55,7 @@ class ScriptedInvoker : public IPluginFunction
     int PushArray(cell_t* inarray, unsigned int cells, int copyback);
     int PushString(const char* string);
     int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags);
+    int PushInt64(int64_t value);
     int Execute(cell_t* result);
     void Cancel();
     int CallFunction(const cell_t* params, unsigned int num_params, cell_t* result);
