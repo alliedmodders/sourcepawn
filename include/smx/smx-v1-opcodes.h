@@ -51,6 +51,7 @@ namespace sp {
     FOR_EACH(STOR_ALT, 16, "stor.alt", 2) \
     FOR_EACH(STOR_S_PRI, 17, "stor.s.pri", 2) \
     FOR_EACH(STOR_S_ALT, 18, "stor.s.alt", 2) \
+    FOR_EACH(STOR_S_C, 19, "stor.s.c", 3) \
     FOR_EACH(SREF_S_PRI, 21, "sref.s.pri", 2) \
     FOR_EACH(SREF_S_ALT, 22, "sref.s.alt", 2) \
     FOR_EACH(STOR_I, 23, "stor.i", 1) \
@@ -110,6 +111,7 @@ namespace sp {
     FOR_EACH(ZERO_ALT, 90, "zero.alt", 1) \
     FOR_EACH(ZERO, 91, "zero", 2) \
     FOR_EACH(ZERO_S, 92, "zero.s", 2) \
+    FOR_EACH(ZERO_S_I64, 93, "zero.s.i64", 2) \
     FOR_EACH(EQ, 95, "eq", 1) \
     FOR_EACH(NEQ, 96, "neq", 1) \
     FOR_EACH(SLESS, 101, "sless", 1) \
@@ -216,12 +218,13 @@ namespace sp {
     FOR_EACH(OR_I64, 208, "or.i64", 2) \
     FOR_EACH(AND_I64, 209, "and.i64", 2) \
     FOR_EACH(XOR_I64, 210, "neq.i64", 2) \
-    FOR_EACH(STOR_S_I64_C, 211, "stor.s.i64.c", 4) \
+    FOR_EACH(STOR_S_C_I64, 211, "stor.s.c.i64", 4) \
     FOR_EACH(SLESS_I64, 212, "sless.i64", 1) \
     FOR_EACH(SLEQ_I64, 213, "sleq.i64", 1) \
     FOR_EACH(SGRTR_I64, 214, "sgrtr.i64", 1) \
     FOR_EACH(SGEQ_I64, 215, "sgeq.i64", 1) \
     FOR_EACH(SMOD_ALT_I64, 216, "smod.alt.i64", 2) \
+    FOR_EACH(STOR_S_PRI_I64, 217, "stor.s.pri.i64", 2) \
 
 
 enum OPCODE {

@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -25,21 +25,23 @@ namespace sp {
 using namespace ke;
 
 MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
- : rt_(rt)
- , block_(nullptr)
- , startOffset_(startOffset)
- , memSize_(rt_->context()->HeapSize())
- , datSize_(rt_->image()->DescribeData().length)
- , heapSize_(memSize_ - datSize_)
- , max_stack_(0)
- , code_(nullptr)
- , cip_(nullptr)
- , prev_cip_(nullptr)
- , stop_at_(nullptr)
- , error_(SP_ERROR_NONE) {
+ : rt_(rt),
+   block_(nullptr),
+   startOffset_(startOffset),
+   memSize_(rt_->context()->HeapSize()),
+   datSize_(rt_->image()->DescribeData().length),
+   heapSize_(memSize_ - datSize_),
+   max_stack_(0),
+   code_(nullptr),
+   cip_(nullptr),
+   prev_cip_(nullptr),
+   stop_at_(nullptr),
+   error_(SP_ERROR_NONE)
+{
     assert(datSize_ < memSize_);
     assert(heapSize_ <= memSize_ - datSize_);
 
+    code_version_ = rt_->image()->DescribeCode().version;
     code_features_ = rt_->image()->DescribeCode().features;
 
     auto& code = rt_->code();
@@ -56,11 +58,16 @@ MethodVerifier::verify() {
 
     auto image = rt_->image();
     if (image->HasRtti()) {
-        auto rtti = image->GetMethodRttiByOffset(startOffset_);
-        if (!rtti || rtti->pcode_start != startOffset_) {
+        method_ = image->GetMethodRttiByOffset(startOffset_);
+        if (!method_ || method_->pcode_start != startOffset_) {
             reportError(SP_ERROR_INVALID_ADDRESS);
             return nullptr;
         }
+    }
+
+    if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+        if (!verifyLocalSlots())
+            return nullptr;
     }
 
     GraphBuilder gb(rt_, startOffset_);
@@ -71,8 +78,6 @@ MethodVerifier::verify() {
     }
 
     AutoClearBlockData<VerifyData> acbd(graph_);
-
-    method_ = code_ + (startOffset_ / sizeof(cell_t));
 
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
         block_ = *iter;
@@ -260,6 +265,11 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_ADDR_ALT:
         case OP_ADDR_PRI:
+        {
+            cell_t offset = readCell();
+            return verifyStackOffset(offset, 0);
+        }
+
         case OP_LOAD_S_PRI:
         case OP_LOAD_S_ALT:
         case OP_LREF_S_PRI:
@@ -270,9 +280,22 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_S_PRI:
         case OP_INC_S:
         case OP_DEC_S:
-        case OP_ZERO_S: {
+        case OP_ZERO_S:
+        {
             cell_t offset = readCell();
-            return verifyStackOffset(offset);
+            return verifyStackOffset(offset, sizeof(cell_t));
+        }
+
+        case OP_ZERO_S_I64:
+        {
+            cell_t offset = readCell();
+            return verifyStackOffset(offset, sizeof(int64_t));
+        }
+
+        case OP_STOR_S_C: {
+            cell_t offset = readCell();
+            readCell();
+            return verifyStackOffset(offset, sizeof(cell_t));
         }
 
         case OP_INVERT_I64:
@@ -288,16 +311,18 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_AND_I64:
         case OP_XOR_I64:
         case OP_SDIV_ALT_I64:
-        case OP_SMOD_ALT_I64: {
+        case OP_SMOD_ALT_I64:
+        case OP_STOR_S_PRI_I64:
+        {
             cell_t offset = readCell();
-            return verifyStackOffset(offset) && verifyStackOffset(offset + 4);
+            return verifyStackOffset(offset, sizeof(int64_t));
         }
 
-        case OP_STOR_S_I64_C: {
+        case OP_STOR_S_C_I64: {
             cell_t offset = readCell();
             readCell();
             readCell();
-            return verifyStackOffset(offset) && verifyStackOffset(offset + 4);
+            return verifyStackOffset(offset, sizeof(int64_t));
         }
 
         case OP_LOAD_PRI:
@@ -362,7 +387,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
             for (size_t i = 0; i < n; i++) {
                 cell_t offset = readCell();
-                if (!verifyStackOffset(offset))
+                if (!verifyStackOffset(offset, sizeof(cell_t)))
                     return false;
             }
             return pushStack(n);
@@ -379,7 +404,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
             for (size_t i = 0; i < n; i++) {
                 cell_t offset = readCell();
-                if (!verifyStackOffset(offset))
+                if (!verifyStackOffset(offset, 0))
                     return false;
             }
             return pushStack(n);
@@ -481,7 +506,12 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         // Note - STACK and HEAP are verified at runtime.
         case OP_STACK:
-        case OP_HEAP: {
+        case OP_HEAP:
+        {
+            if (op == OP_STACK && (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK)) {
+                reportError(SP_ERROR_INVALID_INSTRUCTION);
+                return false;
+            }
             cell_t value = readCell();
             if (!ke::IsAligned(value, sizeof(cell_t))) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -540,7 +570,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_S_BOTH: {
             cell_t offs1 = readCell();
             cell_t offs2 = readCell();
-            if (!verifyStackOffset(offs1) || !verifyStackOffset(offs2)) {
+            if (!verifyStackOffset(offs1, sizeof(cell_t)) || !verifyStackOffset(offs2, sizeof(cell_t))) {
                 return false;
             }
             return true;
@@ -555,7 +585,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_CONST_S: {
             cell_t offset = readCell();
             cip_++;
-            return verifyStackOffset(offset);
+            return verifyStackOffset(offset, sizeof(cell_t));
         }
 
         case OP_GENARRAY:
@@ -921,28 +951,48 @@ MethodVerifier::popHeap(uint32_t num_cells) {
     return true;
 }
 
-bool
-MethodVerifier::verifyStackOffset(cell_t offset) {
-    if (offset >= 0) {
-        // This is a rough estimate, we just make sure it definitely won't go out of
-        // the heap. We can verify this better later with RTTI tables, which store
-        // parameter counts.
-        size_t estimate = size_t((offset < 0) ? -offset : offset);
-        if (estimate >= heapSize_) {
+bool MethodVerifier::verifyStackOffset(cell_t offset, uint32_t op_size) {
+    if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+        // Modern stack is typed.
+        if (offset < 0) {
+            uint32_t arg_slot = -offset - 1;
+            if (arg_slot >= arg_count_) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
+            }
+        } else {
+            if (offset >= local_sizes_.size()) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
+            }
+            if (op_size && local_sizes_[offset] != op_size) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
+            }
+        }
+    } else {
+        // Legacy stack is anything goes, so we do our best.
+        if (offset >= 0) {
+            // This is a rough estimate, we just make sure it definitely won't go out of
+            // the heap. We can verify this better later with RTTI tables, which store
+            // parameter counts.
+            size_t estimate = size_t((offset < 0) ? -offset : offset);
+            if (estimate >= heapSize_) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
+            }
+            return true;
+        }
+
+        uint32_t addr = abs(offset);
+
+        // This is not a rough estimate. We know exactly how much stack space is
+        // available.
+        VerifyData* data = block_->data<VerifyData>();
+        if (addr > data->stack_balance * sizeof(cell_t)) {
             reportError(SP_ERROR_INSTRUCTION_PARAM);
             return false;
         }
-        return true;
-    }
-
-    uint32_t addr = abs(offset);
-
-    // This is not a rough estimate. We know exactly how much stack space is
-    // available.
-    VerifyData* data = block_->data<VerifyData>();
-    if (addr > data->stack_balance * sizeof(cell_t)) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
     }
     return true;
 }
@@ -1035,6 +1085,78 @@ void
 MethodVerifier::reportError(int err) {
     // Break here to find why verification failed.
     error_ = err;
+}
+
+bool MethodVerifier::verifyLocalSlots() {
+    if (!method_) {
+        reportError(SP_ERROR_FILE_FORMAT);
+        return false;
+    }
+
+    auto parser = rt_->image()->GetTypeParser(method_->signature);
+    if (!parser.ReadFunctionSignatureArgCount(&arg_count_)) {
+        reportError(SP_ERROR_FILE_FORMAT);
+        return false;
+    }
+
+    if (!method_->locals)
+        return true;
+
+    parser = rt_->image()->GetTypeParser(method_->locals);
+
+    uint16_t count;
+    if (!parser.ReadLocalSlotCount(&count)) {
+        reportError(SP_ERROR_FILE_FORMAT);
+        return false;
+    }
+
+    local_sizes_ = ke::FixedArray<uint8_t>(count);
+    for (uint16_t i = 0; i < count; i++) {
+        uint8_t b;
+        if (!parser.GetByte(&b))
+            return false;
+
+        if (b == cb::kConst) {
+            parser.GetNextByte(&b);
+            if (!parser.GetByte(&b))
+                return false;
+        }
+
+        switch (b) {
+            case cb::kBool:
+            case cb::kInt32:
+            case cb::kFloat32:
+            case cb::kChar8:
+            case cb::kAny:
+            case cb::kTopFunction:
+            case cb::kEnum:
+                // Always int32.
+                local_sizes_[i] = sizeof(cell_t);
+                break;
+
+            case cb::kFixedArray:
+            case cb::kArray:
+            case cb::kEnumStruct:
+            case cb::kFunctionPtr:
+            case cb::kTypeset:
+                // Address-based but int32 for now.
+                local_sizes_[i] = sizeof(cell_t);
+                break;
+
+            case cb::kInt64:
+                local_sizes_[i] = sizeof(int64_t);
+                break;
+
+            default:
+                reportError(SP_ERROR_FILE_FORMAT);
+                return false;
+        }
+
+        max_stack_ += local_sizes_[i];
+
+        parser.SkipNextType();
+    }
+    return true;
 }
 
 } // namespace sp

@@ -176,6 +176,12 @@ class PcodeReader
                 return visitor_->visitSTOR_S(offset, reg);
             }
 
+            case OP_STOR_S_C: {
+                cell_t offset = readCell();
+                cell_t value = readCell();
+                return visitor_->visitSTOR_S_C(offset, value);
+            }
+
             case OP_SREF_S_PRI:
             case OP_SREF_S_ALT: {
                 PawnReg reg = (op == OP_SREF_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
@@ -331,11 +337,15 @@ class PcodeReader
                 cell_t slot = readCell();
                 return visitor_->visitXOR_I64(slot);
             }
-            case OP_STOR_S_I64_C: {
+            case OP_STOR_S_C_I64: {
                 cell_t slot = readCell();
                 cell_t cell0 = readCell();
                 cell_t cell1 = readCell();
-                return visitor_->visitSTOR_S_I64_C(slot, cell0, cell1);
+                return visitor_->visitSTOR_S_C_I64(slot, cell0, cell1);
+            }
+            case OP_STOR_S_PRI_I64: {
+                cell_t slot = readCell();
+                return visitor_->visitSTOR_S_PRI_I64(slot);
             }
 
             case OP_RETN:
@@ -435,6 +445,10 @@ class PcodeReader
             case OP_ZERO_S: {
                 cell_t offset = readCell();
                 return visitor_->visitZERO_S(offset);
+            }
+            case OP_ZERO_S_I64: {
+                cell_t offset = readCell();
+                return visitor_->visitZERO_S_I64(offset);
             }
 
             case OP_EQ:

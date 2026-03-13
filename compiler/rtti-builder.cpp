@@ -34,7 +34,6 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
     natives_ = new SmxRttiTable<smx_rtti_native>("rtti.natives");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
-    typedefs_ = new SmxRttiTable<smx_rtti_typedef>("rtti.typedefs");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
     classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
@@ -46,6 +45,10 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     dbg_methods_ = new SmxRttiTable<smx_rtti_debug_method>(".dbg.methods");
     dbg_globals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.globals");
     dbg_locals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.locals");
+
+    // Make the type pool 1-indexed so we can use 0 as a null value.
+    std::vector<uint8_t> placeholder{0xff};
+    type_pool_.add(placeholder);
 }
 
 void
@@ -60,7 +63,6 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.add(methods_);
     builder.add(natives_);
     builder.addIfNotEmpty(enums_);
-    builder.addIfNotEmpty(typedefs_);
     builder.addIfNotEmpty(typesets_);
     builder.addIfNotEmpty(classdefs_);
     builder.addIfNotEmpty(fields_);
@@ -156,7 +158,7 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
     var->address = *addr;
     switch (decl->vclass()) {
         case sLOCAL:
-            var->vclass = *addr < 0 ? kVarClass_Local : kVarClass_Arg;
+            var->vclass = *addr >= 0 ? kVarClass_Local : kVarClass_Arg;
             break;
         case sGLOBAL:
             var->vclass = kVarClass_Global;
@@ -193,9 +195,27 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
     return debug;
 }
 
-void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry) {
+void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
+                                LocalSlotSignature&& locals)
+{
     assert(fun->cg()->pcode_end > fun->cg()->label.offset());
-    methods_->at(entry.method_index).pcode_end = fun->cg()->pcode_end;
+
+    auto& method = methods_->at(entry.method_index);
+    method.pcode_end = fun->cg()->pcode_end;
+
+    if (locals.count) {
+        union {
+            int16_t value;
+            uint8_t bytes[2];
+        } u;
+        u.value = locals.count;
+        locals.types[0] = cb::kLocalSlots;
+        locals.types[1] = u.bytes[0];
+        locals.types[2] = u.bytes[1];
+        method.locals = type_pool_.add(locals.types);
+    } else {
+        method.locals = 0;
+    }
 
     // Only add a method table entry if we actually had locals.
     if (entry.first_local != dbg_locals_->count())
@@ -300,27 +320,37 @@ uint32_t RttiBuilder::to_typeid(QualType type) {
 uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     assert(fun == fun->canonical());
 
-    std::vector<uint8_t> bytes;
+    std::vector<uint8_t> bytes{cb::kFunction};
 
     uint32_t argc = fun->args().size();
     if (argc > UCHAR_MAX)
         report(45);
 
+    Type* hidden_arg = nullptr;
+    Type* return_type = fun->return_type();
+    if (fun->needs_hidden_arg()) {
+        hidden_arg = return_type;
+        return_type = types_->type_void();
+        argc++;
+    }
+
     bytes.push_back((uint8_t)argc);
     if (fun->IsVariadic())
         bytes.push_back(cb::kLegacyVariadic);
 
-    encode_type_into(bytes, fun->return_type());
+    encode_type_into(bytes, return_type);
 
+    if (hidden_arg && fun->is_native())
+        encode_type_into(bytes, hidden_arg);
     for (const auto& arg : fun->args())
         encode_type_into(bytes, arg->type());
+    if (hidden_arg && !fun->is_native())
+        encode_type_into(bytes, hidden_arg);
 
     return type_pool_.add(bytes);
 }
 
-uint32_t
-RttiBuilder::add_enum(Type* type)
-{
+uint32_t RttiBuilder::add_enum(Type* type) {
     TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
     if (p.found())
         return p->value;
@@ -332,28 +362,6 @@ RttiBuilder::add_enum(Type* type)
     memset(&entry, 0, sizeof(entry));
     entry.name = names_->add(*cc_.atoms(), type->declName());
     enums_->add(entry);
-    return index;
-}
-
-uint32_t
-RttiBuilder::add_funcenum(Type* type, funcenum_t* fe)
-{
-    TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
-    if (p.found())
-        return p->value;
-
-    // Reserve slot beforehand in case the type is recursive.
-    uint32_t index = typedefs_->count();
-    typeid_cache_.add(p, type, index);
-    typedefs_->add();
-
-    std::vector<uint8_t> bytes;
-    encode_signature_into(bytes, fe->entries.back());
-    uint32_t signature = type_pool_.add(bytes);
-
-    smx_rtti_typedef& def = typedefs_->at(index);
-    def.name = names_->add(*cc_.atoms(), type->declName());
-    def.type_id = MakeTypeId(signature, kTypeId_Complex);
     return index;
 }
 
@@ -414,6 +422,8 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
         return cb::kFloat32;
     if (type->isInt())
         return cb::kInt32;
+    if (type->isInt64())
+        return cb::kInt64;
     if (type->isVoid())
         return cb::kVoid;
     return 0;
@@ -471,6 +481,8 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
         return;
     }
 
+    assert(type->isEnum() || type->isMethodmap());
+
     encode_enum_into(bytes, type);
 }
 
@@ -478,8 +490,11 @@ void
 RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
 {
     if (fe->entries.size() == 1) {
-        uint32_t index = add_funcenum(type, fe);
-        bytes.push_back(cb::kTypedef);
+        std::vector<uint8_t> signature;
+        encode_signature_into(signature, fe->entries.back());
+        uint32_t index = type_pool_.add(signature);
+
+        bytes.push_back(cb::kFunctionPtr);
         CompactEncodeUint32(bytes, index);
     } else {
         uint32_t index = add_typeset(type, fe);
@@ -499,6 +514,11 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionTyp
 
     for (size_t i = 0; i < ft->nargs(); i++)
         encode_type_into(bytes, ft->arg_type(i));
+}
+
+int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {
+    encode_type_into(locals->types, type);
+    return locals->count++;
 }
 
 } // namespace cc

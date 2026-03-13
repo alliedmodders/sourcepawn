@@ -94,7 +94,7 @@ void CodeGenerator::FinishSmx() {
     // Set up the code section.
     code_->header().codesize = asm_.size();
     code_->header().cellsize = sizeof(cell);
-    code_->header().codeversion = SmxConsts::CODE_VERSION_FEATURE_MASK;
+    code_->header().codeversion = SmxConsts::CODE_VERSION_TYPED_STACK;
     code_->header().flags = CODEFLAG_DEBUG;
     code_->header().main = 0;
     code_->header().code = sizeof(sp_file_code_t);
@@ -136,12 +136,13 @@ CodeGenerator::EmitStmtList(StmtList* list)
 }
 
 void CodeGenerator::EmitStmt(Stmt* stmt) {
+    std::list<std::pair<uint32_t, BuiltinType>> prev_used_temp_slots;
+
     if (fun_) {
         AddDebugLine(stmt->pos().line);
         EmitBreak();
 
-        EnterInt64SlotScope();
-        EnterInt32SlotScope();
+        std::swap(prev_used_temp_slots, used_temp_slots_);
     }
 
     if (stmt->tree_has_heap_allocs())
@@ -171,15 +172,11 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         }
         case StmtKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
-            pushstacklist();
 
             {
                 AutoEnterScope locals(this, &local_syms_);
                 EmitStmtList(s);
             }
-
-            bool returns = s->flow_type() == Flow_Return;
-            popstacklist(!returns);
             break;
         }
         case StmtKind::AssertStmt: {
@@ -246,8 +243,8 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         LeaveHeapScope();
 
     if (fun_) {
-        LeaveInt32SlotScope();
-        LeaveInt64SlotScope();
+        free_temp_slots_.splice(free_temp_slots_.end(), used_temp_slots_);
+        std::swap(used_temp_slots_, prev_used_temp_slots);
     }
 }
 
@@ -340,45 +337,45 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     bool is_struct = decl->type()->isEnumStruct();
     bool is_array = decl->type()->isArray();
 
+    int num_cells;
+    if (decl->type()->isBuiltin(BuiltinType::Int64))
+        num_cells = 2;
+    else
+        num_cells = 1;
+
+    int32_t slot = rtti_->AddLocalSlot(&locals_, decl->type());
+    decl->BindAddress(slot);
+
     if (!is_array && !is_struct) {
-        int num_cells;
-        if (decl->type()->isBuiltin(BuiltinType::Int64))
-            num_cells = 2;
-        else
-            num_cells = 1;
-
-        markstack(decl, MEMUSE_STATIC, num_cells);
-        decl->BindAddress(-current_stack_ * sizeof(cell));
-
         if (init) {
             const auto& val = init->right()->val();
             if (val.ident == iCONSTEXPR) {
-                __ emit(OP_PUSH_C, val.constval());
+                __ emit(OP_STOR_S_C, slot, val.constval());
             } else {
                 EmitExpr(init->right());
                 if (num_cells == 1)
-                    __ emit(OP_PUSH_PRI);
+                    __ emit(OP_STOR_S_PRI, slot);
                 else if (num_cells == 2)
-                    __ emit(OP_PUSH_I_I64);
+                    __ emit(OP_STOR_S_PRI_I64, slot);
                 else
                     assert(false);
             }
         } else if (num_cells == 2) {
-            __ emit(OP_PUSH2_C, 0, 0);
+            __ emit(OP_ZERO_S_I64, slot);
         } else if (num_cells == 1) {
             // Note: we no longer honor "decl" for scalars.
-            __ emit(OP_PUSH_C, 0);
+            __ emit(OP_ZERO_S, slot);
         }
     } else {
         // Note that genarray() pushes the address onto the stack, so we don't
         // need to call modstk() here.
         TrackHeapAlloc(decl, MEMUSE_DYNAMIC, 0);
-        markstack(decl, MEMUSE_STATIC, 1);
-        decl->BindAddress(-current_stack_ * sizeof(cell));
 
         auto init_rhs = decl->init_rhs();
         if (init_rhs && init_rhs->as<NewArrayExpr>()) {
             EmitExpr(init_rhs->as<NewArrayExpr>());
+            __ emit(OP_POP_PRI);
+            __ emit(OP_STOR_S_PRI, slot);
         } else if (!init_rhs || decl->type()->isArray() || is_struct) {
             ArrayData array;
             BuildCompoundInitializer(decl, &array, 0);
@@ -410,9 +407,10 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
                 array.zeroes = 0;
 
             __ emit(OP_HEAP, total_size * sizeof(cell));
-            __ emit(OP_PUSH_ALT);
             __ emit(OP_INITARRAY_ALT, iv_addr, iv_size, non_filled, array.zeroes, 0);
+            __ emit(OP_STOR_S_ALT, slot);
         } else if (StringExpr* ctor = init_rhs->as<StringExpr>()) {
+            assert(false);
             auto queue_size = data_.size();
             auto str_addr = data_.dat_address();
             data_.Add(ctor->text()->chars(), ctor->text()->length());
@@ -427,6 +425,8 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
                 __ emit(OP_GENARRAY, 1);
             __ const_pri(str_addr);
             __ copyarray(decl, cells * sizeof(cell));
+        } else {
+            assert(false);
         }
     }
 }
@@ -608,7 +608,7 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
     switch (expr->token()) {
         case '~':
             if (inner->val().type()->isInt64()) {
-                auto slot = AcquireInt64Slot(expr);
+                auto slot = AcquireTempSlot(BuiltinType::Int64);
                 __ emit(OP_INVERT_I64, slot);
             } else {
                 __ emit(OP_INVERT);
@@ -623,7 +623,7 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
             break;
         case '-':
             if (inner->val().type()->isInt64()) {
-                auto slot = AcquireInt64Slot(expr);
+                auto slot = AcquireTempSlot(BuiltinType::Int64);
                 __ emit(OP_NEG_I64, slot);
             } else if (inner->val().type()->isFloat()) {
                 __ emit(OP_NEG_F32);
@@ -663,8 +663,8 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     cell_t inc_int64_slot = -1;
     if (type->isInt64()) {
         Int64CellUnion u(expr->token() == tINC ? 1 : -1);
-        inc_int64_slot = AcquireInt64Slot(expr);
-        __ emit(OP_STOR_S_I64_C, inc_int64_slot, u.cells[0], u.cells[1]);
+        inc_int64_slot = AcquireTempSlot(BuiltinType::Int64);
+        __ emit(OP_STOR_S_C_I64, inc_int64_slot, u.cells[0], u.cells[1]);
     }
 
     // Save base address if needed.
@@ -676,7 +676,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     bool want_pre_value = !(expr->prefix() || expr->discard());
     if (want_pre_value) {
         if (type->isInt64()) {
-            cell_t pre_slot = AcquireInt64Slot(expr);
+            cell_t pre_slot = AcquireTempSlot(BuiltinType::Int64);
             __ emit(OP_ADDR_ALT, pre_slot);
             __ emit(OP_MOVE_I64);
             __ emit(OP_PUSH_ALT);
@@ -927,7 +927,7 @@ void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
         if (IsCompareOp(oper_tok)) {
             __ emit(op64);
         } else {
-            auto pri_slot = AcquireInt64Slot(expr);
+            auto pri_slot = AcquireTempSlot(BuiltinType::Int64);
             __ emit(op64, pri_slot);
         }
     } else if (type == BuiltinType::Float) {
@@ -1234,23 +1234,32 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
         return;
     }
 
-    // If returning an array, push a hidden parameter.
-    bool pop_hidden_param = false;
-    if (!call->fun()->is_native()) {
-        if (call->fun()->return_array()) {
+    // Calculate the hidden parameter if needed. If we need to heap allocate,
+    // we store the address in a local slot, so we can easily read it back out
+    // after the function returns. For simple stack allocations we just use a
+    // local variable.
+    std::optional<cell_t> hidden_arg;
+    std::optional<cell_t> hidden_slot;
+    cell_t nargs = (cell_t)call->args().size();
+    if (call->fun()->needs_hidden_arg()) {
+        auto return_type = call->fun()->return_type();
+        if (call->fun()->is_native() && return_type->isArray()) {
+            EmitNativeCallHiddenArg(call);
+
+            hidden_arg = {AcquireTempSlot(BuiltinType::Int)};
+            __ emit(OP_STOR_S_ALT, *hidden_arg);
+        } else if (return_type->isArray() || return_type->isEnumStruct()) {
             cell retsize = call->fun()->return_type()->CellStorageSize();
             assert(retsize);
 
+            hidden_arg = {AcquireTempSlot(BuiltinType::Int)};
             __ emit(OP_HEAP, retsize * sizeof(cell));
-            __ emit(OP_PUSH_ALT);
+            __ emit(OP_STOR_S_ALT, *hidden_arg);
             TrackTempHeapAlloc(call, 1);
-
-            pop_hidden_param = true;
-        } else if (call->fun()->return_type()->isInt64()) {
-            auto slot = AcquireInt64Slot(call);
-            __ emit(OP_PUSH_ADR, slot);
-            pop_hidden_param = true;
+        } else {
+            hidden_slot = {AcquireTempSlot(BuiltinType::Int64)};
         }
+        nargs++;
     }
 
     const auto& argv = call->args();
@@ -1299,12 +1308,12 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
             }
             if (needs_temp) {
                 if (val.type()->isInt64()) {
-                    auto slot = AcquireInt64Slot(expr);
+                    auto slot = AcquireTempSlot(BuiltinType::Int64);
                     __ emit(OP_ADDR_ALT, slot);
                     __ emit(OP_MOVE_I64);
                     __ emit(OP_MOVE_PRI);
                 } else {
-                    auto slot = AcquireInt32Slot(expr);
+                    auto slot = AcquireTempSlot(BuiltinType::Int);
                     __ emit(OP_STOR_S_PRI, slot);
                     __ emit(OP_ADDR_PRI, slot);
                 }
@@ -1320,7 +1329,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
                 // we can't tell if this is already a copy :(
                 // Maybe we could use iEXPRESSION as an indicator?
                 if (val.type()->isInt64()) {
-                    int32_t slot = AcquireInt64Slot(expr);
+                    int32_t slot = AcquireTempSlot(BuiltinType::Int64);
                     __ emit(OP_ADDR_ALT, slot);
                     __ emit(OP_MOVE_I64);
                     __ emit(OP_MOVE_PRI);
@@ -1331,23 +1340,15 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
         __ emit(OP_PUSH_PRI);
     }
 
-    cell_t hidden_args = 0;
-    std::optional<int32_t> hidden_slot;
-    if (call->fun()->is_native()) {
-        if (call->fun()->return_array()) {
-            EmitNativeCallHiddenArg(call);
-            hidden_args++;
-        } else if (call->fun()->return_type()->isInt64()) {
-            hidden_slot = {AcquireInt64Slot(call)};
-            __ emit(OP_PUSH_ADR, *hidden_slot);
-            hidden_args++;
-        }
-    }
+    if (hidden_arg)
+        __ emit(OP_PUSH_S, *hidden_arg);
+    else if (hidden_slot)
+        __ emit(OP_PUSH_ADR, *hidden_slot);
 
-    EmitCall(call->fun(), (cell)argv.size() + hidden_args);
+    EmitCall(call->fun(), nargs);
 
-    if (pop_hidden_param)
-        __ emit(OP_POP_PRI);
+    if (hidden_arg)
+        __ emit(OP_LOAD_S_PRI, *hidden_arg);
     else if (hidden_slot)
         __ emit(OP_ADDR_PRI, *hidden_slot);
 }
@@ -1388,8 +1389,6 @@ void CodeGenerator::EmitNativeCallHiddenArg(CallExpr* call) {
 
         __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, info->zeroes, 0);
     }
-
-    __ emit(OP_PUSH_ALT);
 }
 
 void
@@ -1469,7 +1468,7 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     auto info = fun_->return_array();
     if (array.iv.empty()) {
         // A much simpler copy can be emitted.
-        __ load_hidden_arg(fun_, true);
+        __ load_hidden_arg(fun_);
 
         cell size = fun_->return_type()->CellStorageSize();
         __ emit(OP_MOVS, size * sizeof(cell));
@@ -1502,7 +1501,7 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     // add.c <iv-size * 4>      ; address to data
     // memcopy <data-size>
     __ emit(OP_PUSH_PRI);
-    __ load_hidden_arg(fun_, false);
+    __ load_hidden_arg(fun_);
     __ emit(OP_INITARRAY_ALT, dat_addr, iv_size, 0, 0, 0);
     __ emit(OP_MOVE_PRI);
     __ emit(OP_ADD_C, iv_size * sizeof(cell));
@@ -1523,7 +1522,7 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
             EmitReturnArrayStmt(stmt);
         } else if (v.type()->isInt64()) {
             // Must copy to the hidden arg.
-            __ load_hidden_arg(fun_, true);
+            __ load_hidden_arg(fun_);
             __ emit(OP_MOVE_I64);
         }
     } else {
@@ -1532,7 +1531,6 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         __ const_pri(0);
     }
 
-    genstackfree(-1); /* free everything on the stack */
     __ emit(OP_RETN);
 }
 
@@ -1689,8 +1687,24 @@ CodeGenerator::EmitStore(const value& lval, bool save_pri)
 void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
     assert(prop->getter());
 
+    // :TODO: figure out how to factor this code with EmitCallExpr.
+    std::optional<cell_t> hidden_slot;
+    if (prop->getter()->return_type()->isInt64())
+        hidden_slot = {AcquireTempSlot(BuiltinType::Int64)};
+
+    // |this|
     __ emit(OP_PUSH_PRI);
-    EmitCall(prop->getter(), 1);
+
+    cell_t nargs = 1;
+    if (hidden_slot) {
+        __ emit(OP_PUSH_ADR, *hidden_slot);
+        nargs++;
+    }
+
+    EmitCall(prop->getter(), nargs);
+
+    if (hidden_slot)
+        __ emit(OP_ADDR_PRI, *hidden_slot);
 }
 
 void CodeGenerator::InvokeSetter(MethodmapPropertyDecl* prop, bool save_pri) {
@@ -1712,7 +1726,6 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
     assert(token == tDO || token == tWHILE);
 
     LoopContext loop_cx;
-    loop_cx.stack_scope_id = stack_scope_id();
     loop_cx.heap_scope_id = heap_scope_id();
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
@@ -1776,8 +1789,6 @@ CodeGenerator::EmitLoopControl(int token)
     assert(loop_);
     assert(token == tBREAK || token == tCONTINUE);
 
-    genstackfree(loop_->stack_scope_id);
-
     for (auto iter = heap_scopes_.rbegin(); iter != heap_scopes_.rend(); iter++) {
         if (iter->scope_id == loop_->heap_scope_id)
             break;
@@ -1797,17 +1808,14 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
     ke::Maybe<AutoEnterScope> debug_scope;
 
     auto scope = stmt->scope();
-    if (scope) {
-        pushstacklist();
+    if (scope)
         debug_scope.init(this, &local_syms_);
-    }
 
     auto init = stmt->init();
     if (init)
         EmitStmt(init);
 
     LoopContext loop_cx;
-    loop_cx.stack_scope_id = stack_scope_id();
     loop_cx.heap_scope_id = heap_scope_id();
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
@@ -1871,10 +1879,8 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
     }
     __ bind(&loop_cx.break_to);
 
-    if (scope) {
+    if (scope)
         debug_scope = {};
-        popstacklist(true);
-    }
 }
 
 void
@@ -1953,36 +1959,24 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     AddDebugLine(info->pos().line);
     EmitBreak();
     current_stack_ = 0;
+    locals_ = {};
+    free_temp_slots_ = {};
+    used_temp_slots_ = {};
 
     {
         AutoEnterScope arg_scope(this, &local_syms_);
 
-        cell_t int64_stack_needed = info->num_int64_slots() * 2;
-        cell_t int32_stack_needed = info->num_int32_slots();
+        cell_t arg_index = 0;
+        if (info->needs_hidden_arg())
+            arg_index++;
 
-        if (int64_stack_needed || int32_stack_needed) {
-            pushstacklist();
-            markstack(info, MEMUSE_STATIC, int64_stack_needed + int32_stack_needed);
-            __ emit(OP_STACK, -(int64_stack_needed + int32_stack_needed) * sizeof(cell_t));
-            int64_slot_region_ = -current_stack_ * sizeof(cell_t);
-            int32_slot_region_ = int64_slot_region_ + (int64_stack_needed) * sizeof(cell_t);
+        for (const auto& fun_arg : info->args()) {
+            fun_arg->BindAddress(-(arg_index + 1));
+            EnqueueDebugSymbol(fun_arg, asm_.position());
+            arg_index++;
         }
 
-        free_int64_slots_ = BitSet();
-        for (int32_t i = 0; i < info->num_int64_slots(); i++)
-            free_int64_slots_.set(i);
-
-        free_int32_slots_ = BitSet();
-        for (int32_t i = 0; i < info->num_int32_slots(); i++)
-            free_int32_slots_.set(i);
-
-        for (const auto& fun_arg : info->args())
-            EnqueueDebugSymbol(fun_arg, asm_.position());
-
         EmitStmt(info->body());
-
-        if (int64_stack_needed || int32_stack_needed)
-            popstacklist(false);
     }
 
     assert(!has_stack_or_heap_scopes());
@@ -1990,7 +1984,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     // If return keyword is missing, we added it in the semantic pass.
     __ emit(OP_ENDPROC);
 
-    stack_scopes_.clear();
     heap_scopes_.clear();
 
     info->cg()->pcode_end = asm_.pc();
@@ -2001,7 +1994,9 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     max_script_memory_ = std::max(max_script_memory_, max_func_memory_);
 
     if (debug_method)
-        rtti_->finish_method(info, *debug_method);
+        rtti_->finish_method(info, *debug_method, std::move(locals_));
+    else
+        assert(locals_.count == 0);
 }
 
 void
@@ -2098,8 +2093,8 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
     Int64CellUnion u(*expr->ToInt64());
 
-    auto slot = AcquireInt64Slot(expr);
-    __ emit(OP_STOR_S_I64_C, slot, u.cells[0], u.cells[1]);
+    auto slot = AcquireTempSlot(BuiltinType::Int64);
+    __ emit(OP_STOR_S_C_I64, slot, u.cells[0], u.cells[1]);
     __ emit(OP_ADDR_PRI, slot);
 }
 
@@ -2111,7 +2106,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
 
     if (expr->to()->isInt64()) {
         assert(from_type->isInt());
-        auto slot = AcquireInt64Slot(expr);
+        auto slot = AcquireTempSlot(BuiltinType::Int64);
         __ emit(OP_CVT_I64, slot);
     } else if (expr->to()->isBool()) {
         if (from_type->isInt64())
@@ -2211,51 +2206,6 @@ int CodeGenerator::heap_scope_id() {
     return heap_scopes_.back().scope_id;
 }
 
-void
-CodeGenerator::pushstacklist()
-{
-    EnterMemoryScope(stack_scopes_);
-}
-
-int
-CodeGenerator::markstack(ParseNode* node, MemuseType type, int size)
-{
-    current_stack_ += size;
-    AllocInScope(node, stack_scopes_.back(), type, size);
-    return size;
-}
-
-void
-CodeGenerator::modstk_for_scope(const MemoryScope& scope)
-{
-    cell_t total = 0;
-    for (const auto& use : scope.usage) {
-        assert(use.type == MEMUSE_STATIC);
-        total += use.size;
-    }
-    if (total)
-        __ emit(OP_STACK, total * sizeof(cell));
-}
-
-void
-CodeGenerator::genstackfree(int stop_id)
-{
-    for (size_t i = stack_scopes_.size() - 1; i < stack_scopes_.size(); i--) {
-        const MemoryScope& scope = stack_scopes_[i];
-        if (scope.scope_id <= stop_id)
-            break;
-        modstk_for_scope(scope);
-    }
-}
-
-void
-CodeGenerator::popstacklist(bool codegen)
-{
-    if (codegen)
-        modstk_for_scope(stack_scopes_.back());
-    current_stack_ -= PopScope(stack_scopes_);
-}
-
 int CodeGenerator::DynamicMemorySize() const {
     int min_cells = max_script_memory_;
     if (kMaxCells - 4096 > min_cells)
@@ -2349,56 +2299,19 @@ bool CodeGenerator::ComputeStackUsage() {
     return ComputeStackUsage(callgraph_.begin());
 }
 
-void CodeGenerator::EnterInt64SlotScope() {
-    used_int64_slots_.emplace_back();
-}
+cell_t CodeGenerator::AcquireTempSlot(BuiltinType builtin_type) {
+    auto iter = free_temp_slots_.begin();
+    while (iter != free_temp_slots_.end()) {
+        if ((*iter).second == builtin_type) {
+            used_temp_slots_.splice(used_temp_slots_.end(), free_temp_slots_, iter);
+            return (*iter).first;
+        }
+    }
 
-void CodeGenerator::LeaveInt64SlotScope() {
-    if (auto used = ke::PopBack(&used_int64_slots_); used)
-        free_int64_slots_.or_with(*used);
-}
-
-void CodeGenerator::EnterInt32SlotScope() {
-    used_int32_slots_.emplace_back();
-}
-
-void CodeGenerator::LeaveInt32SlotScope() {
-    if (auto used = ke::PopBack(&used_int32_slots_); used)
-        free_int32_slots_.or_with(*used);
-}
-
-cell_t CodeGenerator::AcquireInt64Slot(Expr* expr) {
-    assert(expr->can_alloc_int64_slot());
-
-    int32_t slot = 0;
-    auto available = free_int64_slots_.take_any();
-    if (available)
-        slot = *available;
-    else
-        report(expr, 458);
-
-    if (!used_int64_slots_.back())
-        used_int64_slots_.back() = {BitSet()};
-    used_int64_slots_.back()->set(slot);
-
-    return int64_slot_region_ + (slot * sizeof(cell_t) * 2);
-}
-
-cell_t CodeGenerator::AcquireInt32Slot(Expr* expr) {
-    assert(expr->can_alloc_int32_slot());
-
-    int32_t slot = 0;
-    auto available = free_int32_slots_.take_any();
-    if (available)
-        slot = *available;
-    else
-        report(expr, 458);
-
-    if (!used_int32_slots_.back())
-        used_int32_slots_.back() = {BitSet()};
-    used_int32_slots_.back()->set(slot);
-
-    return int32_slot_region_ + (slot * sizeof(cell_t));
+    auto type = cc_.types()->GetBuiltin(builtin_type);
+    uint32_t slot = rtti_->AddLocalSlot(&locals_, QualType(type));
+    used_temp_slots_.emplace_back(slot, builtin_type);
+    return slot;
 }
 
 std::optional<smx_rtti_debug_method> CodeGenerator::AddFunctionEntry(FunctionDecl* fun) {

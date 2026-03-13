@@ -20,6 +20,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <list>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -175,23 +176,11 @@ class CodeGenerator final
     void LeaveHeapScope();
     void TrackTempHeapAlloc(Expr* source, int size);
     void TrackHeapAlloc(ParseNode* node, MemuseType type, int size);
-
-    // Stack functions
-    void pushstacklist();
-    void popstacklist(bool codegen);
-    int markstack(ParseNode* node, MemuseType type, int size);
     void modheap_for_scope(const MemoryScope& scope);
-    void modstk_for_scope(const MemoryScope& scope);
 
-    // Generates code to free mem usage, but does not pop the list.  
-    //  This is used for code like dobreak()/docont()/doreturn().
-    // stop_id is the list at which to stop generating.
-    void genstackfree(int stop_id);
-
-    int stack_scope_id() { return stack_scopes_.back().scope_id; }
     int heap_scope_id();
     bool has_stack_or_heap_scopes() {
-        return !stack_scopes_.empty() || !heap_scopes_.empty();
+        return !heap_scopes_.empty();
     }
 
     void EnterMemoryScope(tr::vector<MemoryScope>& frame);
@@ -203,13 +192,9 @@ class CodeGenerator final
     bool ComputeStackUsage();
     bool ComputeStackUsage(CallGraph::iterator caller_iter);
 
-    void EnterInt64SlotScope();
-    void LeaveInt64SlotScope();
-    cell_t AcquireInt64Slot(Expr* expr);
-
-    void EnterInt32SlotScope();
-    void LeaveInt32SlotScope();
-    cell_t AcquireInt32Slot(Expr* expr);
+    void EnterTempSlotScope();
+    void LeaveTempSlotScope();
+    cell_t AcquireTempSlot(BuiltinType type);
 
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;
@@ -252,12 +237,13 @@ class CodeGenerator final
     std::unique_ptr<RttiBuilder> rtti_;
 
     ke::Maybe<uint32_t> last_break_op_;
-    tr::vector<MemoryScope> stack_scopes_;
     tr::vector<MemoryScope> heap_scopes_;
     SymbolStack local_syms_;
     tr::vector<DebugSymbol> global_syms_;
     tr::vector<std::pair<SymbolScope*, tr::vector<DebugSymbol>>> static_syms_;
     tr::unordered_set<SymbolScope*> static_scopes_;
+    std::list<std::pair<uint32_t, BuiltinType>> free_temp_slots_;
+    std::list<std::pair<uint32_t, BuiltinType>> used_temp_slots_;
 
     // Loop handling.
     struct LoopContext {
@@ -272,16 +258,9 @@ class CodeGenerator final
     int current_memory_ = 0;
     int max_func_memory_ = 0;
     CallGraph callgraph_;
-    cell_t int64_slot_region_ = 0;
-    cell_t int32_slot_region_ = 0;
+    LocalSlotSignature locals_;
 
     AutoCountErrors errors_;
-
-    // Stack slot management.
-    std::vector<std::optional<BitSet>> used_int64_slots_;
-    BitSet free_int64_slots_;
-    std::vector<std::optional<BitSet>> used_int32_slots_;
-    BitSet free_int32_slots_;
 
     std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
 };

@@ -161,6 +161,7 @@ namespace smxdasm
             Prep(V1Opcode.STOR_PRI, V1Param.Address);
             Prep(V1Opcode.STOR_S_ALT, V1Param.Stack);
             Prep(V1Opcode.STOR_S_PRI, V1Param.Stack);
+            Prep(V1Opcode.STOR_S_C, V1Param.Stack, V1Param.Constant);
             Prep(V1Opcode.STRADJUST_PRI);
             Prep(V1Opcode.STRB_I, V1Param.Constant);
             Prep(V1Opcode.SUB);
@@ -178,6 +179,7 @@ namespace smxdasm
             Prep(V1Opcode.ZERO_ALT);
             Prep(V1Opcode.ZERO_PRI);
             Prep(V1Opcode.ZERO_S, V1Param.Stack);
+            Prep(V1Opcode.ZERO_S_I64, V1Param.Stack);
             Prep(V1Opcode.REBASE, V1Param.Address, V1Param.Constant, V1Param.Constant);
             Prep(V1Opcode.INITARRAY_PRI, V1Param.Address, V1Param.Constant, V1Param.Constant,
                  V1Param.Constant, V1Param.Constant);
@@ -204,7 +206,8 @@ namespace smxdasm
             Prep(V1Opcode.OR_I64, V1Param.Stack);
             Prep(V1Opcode.AND_I64, V1Param.Stack);
             Prep(V1Opcode.XOR_I64, V1Param.Stack);
-            Prep(V1Opcode.STOR_S_I64_C, V1Param.Stack, V1Param.Constant, V1Param.Constant);
+            Prep(V1Opcode.STOR_S_C_I64, V1Param.Stack, V1Param.Constant, V1Param.Constant);
+            Prep(V1Opcode.STOR_S_PRI_I64, V1Param.Stack);
             Prep(V1Opcode.SLESS_I64);
             Prep(V1Opcode.SLEQ_I64);
             Prep(V1Opcode.SGRTR_I64);

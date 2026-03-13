@@ -71,6 +71,9 @@ void Compiler::emitPrologue() {
         __ cmpq(rcx, rax);
         jumpOnError(below, SP_ERROR_STACKLOW);
     }
+
+    if (cell_t stack_needed = method_info_->StackSizeForLocalSlots())
+        __ addq(stk, stack_needed);
 }
 
 void Compiler::emitThrowPath(int err) {
@@ -146,7 +149,9 @@ void Compiler::emitOutOfBoundsError(OutOfBoundsError* path) {
 }
 
 bool Compiler::beforeVisitOp(OPCODE op) {
+#ifndef NDEBUG
     __ movq(rcx, op);
+#endif
     return true;
 }
 
@@ -211,13 +216,13 @@ bool Compiler::visitLOAD(PawnReg dest, cell_t srcaddr) {
 
 bool Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(frm, srcoffs));
+    __ movl(reg, Operand(frm, StackOffset(srcoffs)));
     return true;
 }
 
 bool Compiler::visitLREF_S(PawnReg dest, cell_t srcoffs) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(frm, srcoffs));
+    __ movl(reg, Operand(frm, StackOffset(srcoffs)));
     __ movl(reg, Operand(dat, reg, NoScale));
     return true;
 }
@@ -247,7 +252,7 @@ bool Compiler::visitCONST(PawnReg dest, cell_t imm) {
 bool Compiler::visitADDR(PawnReg dest, cell_t offset) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ movl(reg, frmAddr());
-    __ addl(reg, offset);
+    __ addl(reg, StackOffset(offset));
     return true;
 }
 
@@ -259,13 +264,13 @@ bool Compiler::visitSTOR(cell_t offset, PawnReg src) {
 
 bool Compiler::visitSTOR_S(cell_t offset, PawnReg src) {
     Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(Operand(frm, offset), reg);
+    __ movl(Operand(frm, StackOffset(offset)), reg);
     return true;
 }
 
 bool Compiler::visitSREF_S(cell_t offset, PawnReg src) {
     Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(tmp, Operand(frm, offset));
+    __ movl(tmp, Operand(frm, StackOffset(offset)));
     __ movl(Operand(dat, tmp, NoScale), reg);
     return true;
 }
@@ -331,8 +336,12 @@ bool Compiler::visitPUSH(const cell_t* offsets, size_t nvals) {
 }
 
 bool Compiler::visitPUSH_S(const cell_t* offsets, size_t nvals) {
-    assert(false);
-    return false;
+    for (size_t i = 1; i <= nvals; i++) {
+        __ movl(tmp, Operand(frm, StackOffset(offsets[i - 1])));
+        __ movl(Operand(stk, -(4 * int(i))), tmp);
+    }
+    __ subq(stk, 4 * nvals);
+    return true;
 }
 
 bool Compiler::visitPOP(PawnReg dest) {
@@ -633,8 +642,8 @@ bool Compiler::visitZERO(cell_t offset) {
 }
 
 bool Compiler::visitZERO_S(cell_t offset) {
-    assert(false);
-    return false;
+    __ movl(Operand(frm, StackOffset(offset)), 0);
+    return true;
 }
 
 bool Compiler::visitCompareOp(CompareOp op) {
@@ -751,7 +760,7 @@ bool Compiler::visitPUSH_ADR(const cell_t* offsets, size_t nvals) {
     // absolute address.
     __ subq(frm, dat);
     for (size_t i = 1; i <= nvals; i++) {
-        __ lea(tmp, Operand(frm, offsets[i - 1]));
+        __ lea(tmp, Operand(frm, StackOffset(offsets[i - 1])));
         __ movl(Operand(stk, -(4 * int(i))), tmp);
     }
     __ subq(stk, 4 * nvals);
@@ -1209,7 +1218,7 @@ bool Compiler::visitMOVE_I64() {
 
 bool Compiler::visitCVT_I64(cell_t slot) {
     __ movsxd(tmp, pri);
-    __ lea(pri, Operand(frm, slot));
+    __ lea(pri, Operand(frm, StackOffset(slot)));
     __ movq(Operand(pri, 0), tmp);
     __ subq(pri, dat);
     return true;
@@ -1237,7 +1246,7 @@ bool Compiler::visitINVERT_I64(cell_t slot) {
 
     __ movq(rcx, Operand(dat, pri, NoScale, 0));
     __ notq(rcx);
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ movq(Operand(rax, 0), rcx);
 
     __ subq(rax, dat);
@@ -1249,7 +1258,7 @@ bool Compiler::visitNEG_I64(cell_t slot) {
 
     __ movq(rcx, Operand(dat, pri, NoScale, 0));
     __ negq(rcx);
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ movq(Operand(rax, 0), rcx);
 
     __ subq(rax, dat);
@@ -1262,7 +1271,7 @@ bool Compiler::visitSMUL_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ imulq(rdi, rsi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1300,7 +1309,7 @@ bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot) {
     __ idivq(tmp);
 
     __ movq(rcx, rax);
-    __ lea(rax, Operand(frm, pri_slot));
+    __ lea(rax, Operand(frm, StackOffset(pri_slot)));
     __ movq(Operand(rax, 0), rcx);
     __ subq(rax, dat);
     return true;
@@ -1335,7 +1344,7 @@ bool Compiler::visitSMOD_ALT_I64(cell_t pri_slot) {
     __ sarq(rdx, 63);
     __ idivq(tmp);
 
-    __ lea(rax, Operand(frm, pri_slot));
+    __ lea(rax, Operand(frm, StackOffset(pri_slot)));
     __ movq(Operand(rax, 0), rdx);
     __ subq(rax, dat);
     return true;
@@ -1347,7 +1356,7 @@ bool Compiler::visitADD_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ addq(rdi, rsi);
 
     __ movq(Operand(rax, 0), rdi);
@@ -1361,7 +1370,7 @@ bool Compiler::visitSUB_ALT_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ subq(rsi, rdi);
     __ movq(Operand(rax, 0), rsi);
 
@@ -1375,7 +1384,7 @@ bool Compiler::visitSHL_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ shlq_cl(rdi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1389,7 +1398,7 @@ bool Compiler::visitSSHR_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ sarq_cl(rdi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1403,7 +1412,7 @@ bool Compiler::visitSHR_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ shrq_cl(rdi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1417,7 +1426,7 @@ bool Compiler::visitOR_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ orq(rdi, rsi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1431,7 +1440,7 @@ bool Compiler::visitAND_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ andq(rdi, rsi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1445,7 +1454,7 @@ bool Compiler::visitXOR_I64(cell_t slot) {
 
     __ movq(rdi, Operand(dat, pri, NoScale, 0));
     __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, slot));
+    __ lea(rax, Operand(frm, StackOffset(slot)));
     __ xorq(rdi, rsi);
     __ movq(Operand(rax, 0), rdi);
 
@@ -1453,10 +1462,10 @@ bool Compiler::visitXOR_I64(cell_t slot) {
     return true;
 }
 
-bool Compiler::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
+bool Compiler::visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) {
     Int64CellUnion u(cell0, cell1);
     __ movq(rcx, u.i64);
-    __ movq(Operand(frm, slot), rcx);
+    __ movq(Operand(frm, StackOffset(slot)), rcx);
     return true;
 }
 
@@ -1598,6 +1607,25 @@ bool Compiler::visitMOD_ALT_F32() {
     if (size_t alignment = __ callWithABI(0, ExternalAddress((void*)::fmodf)))
         __ addq(rsp, alignment);
     __ movd(pri, xmm0);
+    return true;
+}
+
+bool Compiler::visitSTOR_S_PRI_I64(cell_t slot) {
+    emitCheckAddress(pri, sizeof(int64_t));
+
+    __ movq(tmp, Operand(dat, pri, NoScale, 0));
+    __ movq(Operand(frm, StackOffset(slot)), tmp);
+    return true;
+}
+
+bool Compiler::visitZERO_S_I64(cell_t offset) {
+    __ xorq(tmp, tmp);
+    __ movq(Operand(frm, StackOffset(offset)), tmp);
+    return true;
+}
+
+bool Compiler::visitSTOR_S_C(cell_t slot, cell_t value) {
+    __ movl(Operand(frm, StackOffset(slot)), value);
     return true;
 }
 

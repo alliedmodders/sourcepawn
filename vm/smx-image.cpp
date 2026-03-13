@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2004-2015 AlliedModers LLC
 //
@@ -290,8 +290,16 @@ SmxImage::validateCode() {
         features = code->features;
 
     uint32_t supported_features =
-        SmxConsts::kCodeFeatureDirectArrays | SmxConsts::kCodeFeatureHeapScopes |
-        SmxConsts::kCodeFeatureNullFunctions | SmxConsts::kCodeFeatureTypedOps;
+        SmxConsts::kCodeFeatureDirectArrays |
+        SmxConsts::kCodeFeatureHeapScopes |
+        SmxConsts::kCodeFeatureNullFunctions |
+        SmxConsts::kCodeFeatureTypedOps;
+
+    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+        if ((features & supported_features) != supported_features)
+            return error("invalid feature set");
+    }
+
     if (features & ~supported_features)
         return error("unsupported feature set; code is too new");
 
@@ -439,10 +447,6 @@ SmxImage::validateRtti() {
     if (rtti_classdefs_ && !validateRttiClassdefs())
         return false;
 
-    rtti_typedefs_ = findRttiSection("rtti.typedefs");
-    if (rtti_typedefs_ && !validateRttiTypedefs())
-        return false;
-
     rtti_typesets_ = findRttiSection("rtti.typesets");
     if (rtti_typesets_ && !validateRttiTypesets())
         return false;
@@ -561,6 +565,15 @@ SmxImage::validateRttiMethods() {
             return error("invalid method code start");
         if (method->pcode_end > code_.header()->size)
             return error("invalid method code end");
+        if (rtti_methods_->row_size >= 20) {
+            if (code_->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK)
+                return error("invalid method row size");
+            if (!rtti_data_->validateLocalSlots(method->locals))
+                return error("invalid local signature");
+        } else {
+            if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK)
+                return error("invalid method row size");
+        }
     }
     return true;
 }
@@ -573,18 +586,6 @@ SmxImage::validateRttiNatives() {
             return error("invalid native name");
         if (!rtti_data_->validateFunctionOffset(native->signature))
             return error("invalid native type offset");
-    }
-    return true;
-}
-
-bool
-SmxImage::validateRttiTypedefs() {
-    for (uint32_t i = 0; i < rtti_typedefs_->row_count; i++) {
-        const smx_rtti_typedef* typedefType = getRttiRow<smx_rtti_typedef>(rtti_typedefs_, i);
-        if (!validateName(typedefType->name))
-            return error("invalid typedef name");
-        if (!rtti_data_->validateType(typedefType->type_id))
-            return error("invalid typedef type");
     }
     return true;
 }
@@ -715,8 +716,10 @@ SmxImage::validateDebugVariables(const smx_rtti_table_header* rtti_table) {
             return error("invalid debug variable type");
         std::shared_ptr<const sp::debug::Rtti> rtti_type =
             std::shared_ptr<const sp::debug::Rtti>(rtti_data_->typeFromTypeId(debug_var->type_id));
+        if (!rtti_type)
+            return error("invalid debug variable type");
         if (!rtti_type->isConst() && !validateSymbolAddress(debug_var->address, debug_var->vclass))
-            return false;
+            return error("invalid debug variable address");
     }
     return true;
 }
@@ -730,12 +733,22 @@ SmxImage::validateSymbolAddress(int32_t address, uint8_t vclass) {
                 return error("invalid global variable address");
             break;
         case kVarClass_Local:
-            if (address > 0)
-                return error("invalid local variable address");
+            if (code()->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+                if (address < 0)
+                    return error("invalid local variable address");
+            } else {
+                if (address >= 0)
+                    return error("invalid local variable address");
+            }
             break;
         case kVarClass_Arg:
-            if (address <= 0)
-                return error("invalid argument address");
+            if (code()->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+                if (address > 0)
+                    return error("invalid argument address");
+            } else {
+                if (address <= 0)
+                    return error("invalid argument address");
+            }
     }
     return true;
 }
@@ -1229,4 +1242,8 @@ SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t*
     assert(index < debug_info_->num_lines);
     *addr = debug_lines_[index].addr;
     return true;
+}
+
+FastRtti SmxImage::GetTypeParser(uint32_t offset) {
+    return FastRtti(rtti_data_->blob(), rtti_data_->size(), offset);
 }

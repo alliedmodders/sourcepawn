@@ -62,6 +62,8 @@ class DumpTool final {
 
         if (!smx_->rtti_methods())
             DumpLegacyCode();
+
+        DumpRttiEnums();
     }
 
     void DumpHeaders() {
@@ -185,7 +187,6 @@ class DumpTool final {
 
         for (uint32_t i = 0; i < methods->row_count; i++) {
             auto method = smx_->getRttiRow<smx_rtti_method>(methods, i);
-            fprintf(stdout, "\n");
             fprintf(stdout, ".method %s ; index %u", smx_->names() + method->name, i);
             if (show_name_offsets.value())
                 fprintf(stdout, ", name_offset = %u", method->name);
@@ -193,9 +194,152 @@ class DumpTool final {
             fprintf(stdout, "{\n");
             fprintf(stdout, "    .pcode_start = 0x%x\n", method->pcode_start);
             fprintf(stdout, "    .pcode_end = 0x%x\n", method->pcode_end);
+            DumpLocals(method);
             DumpCodeRange<false>(method->pcode_start, method->pcode_end);
             fprintf(stdout, "}\n");
         }
+    }
+
+    void DumpLocals(const smx_rtti_method* method) {
+        if (smx_->code()->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK || !method->locals)
+            return;
+
+        uint16_t locals;
+        auto rtti = smx_->GetTypeParser(method->locals);
+        if (!rtti.ReadLocalSlotCount(&locals)) {
+            fprintf(stdout, "    .locals ERROR\n");
+            return;
+        }
+
+        for (uint32_t i = 0; i < locals; i++) {
+            fprintf(stdout, "    .locals %d ", i);
+            auto type = DumpType(rtti);
+            if (!type.empty())
+                fprintf(stdout, "%s", type.c_str());
+            else
+                fprintf(stdout, "ERROR");
+            fprintf(stdout, "\n");
+        }
+    }
+
+    std::string DumpType(FastRtti& rtti) {
+        bool is_const = false;
+        uint8_t b;
+        if (!rtti.GetNextByte(&b))
+            return {};
+        if (b == cb::kConst) {
+            is_const = true;
+            if (!rtti.GetNextByte(&b))
+                return {};
+        }
+
+        bool by_ref = false;
+        if (b == cb::kByRef) {
+            by_ref = true;
+            if (!rtti.GetNextByte(&b))
+                return {};
+        }
+
+        std::string type_inner;
+        std::string type_outer;
+        while (type_inner.empty()) {
+            switch (b) {
+                case cb::kBool:
+                    type_inner = "bool";
+                    break;
+                case cb::kInt32:
+                    type_inner = "int";
+                    break;
+                case cb::kInt64:
+                    type_inner = "int64";
+                    break;
+                case cb::kFloat32:
+                    type_inner = "float";
+                    break;
+                case cb::kChar8:
+                    type_inner = "char";
+                    break;
+                case cb::kAny:
+                    type_inner = "any";
+                    break;
+                case cb::kVoid:
+                    type_inner = "void";
+                    break;
+                case cb::kFixedArray:
+                {
+                    uint32_t size;
+                    if (!rtti.ReadCompactUint32(&size))
+                        return {};
+                    type_outer += ke::StringPrintf("[%u]", size);
+                    continue;
+                }
+                case cb::kArray:
+                    type_outer += "[]";
+                    continue;
+                case cb::kEnum:
+                {
+                    uint32_t value;
+                    if (!rtti.ReadCompactUint32(&value))
+                        return {};
+
+                    if (!smx_->rtti_enums()) {
+                        type_inner = ke::StringPrintf("enum_%u", value);
+                    } else {
+                        auto entry = smx_->getRttiRow<smx_rtti_enum>(smx_->rtti_enums(), value);
+                        type_inner = ke::StringPrintf("enum %s", smx_->names() + entry->name);
+                    }
+                    break;
+                }
+                case cb::kTypeset:
+                {
+                    uint32_t value;
+                    if (!rtti.ReadCompactUint32(&value))
+                        return {};
+                    type_inner = "typeset todo";
+                    break;
+                }
+                case cb::kEnumStruct:
+                {
+                    uint32_t value;
+                    if (!rtti.ReadCompactUint32(&value))
+                        return {};
+                    type_inner = "enum struct todo";
+                    break;
+                }
+                case cb::kFunctionPtr:
+                {
+                    uint32_t value;
+                    if (!rtti.ReadCompactUint32(&value))
+                        return {};
+                    type_inner = "fn todo";
+                    break;
+                }
+                default:
+                    assert(false);
+            }
+        }
+
+        std::string out;
+        if (is_const)
+            out = "const ";
+        out += type_inner;
+        if (by_ref)
+            out += "&";
+        return out + type_outer;
+    }
+
+    void DumpRttiEnums() {
+        auto rtti_enums = smx_->rtti_enums();
+        if (!rtti_enums || rtti_enums->row_count == 0)
+            return;
+
+        fprintf(stdout, ".rtti_enums\n");
+        fprintf(stdout, "{\n");
+        for (uint32_t i = 0; i < rtti_enums->row_count; i++) {
+            auto entry = smx_->getRttiRow<smx_rtti_enum>(rtti_enums, i);
+            fprintf(stdout, "    %u: %s\n", i, smx_->names() + entry->name);
+        }
+        fprintf(stdout, "}\n");
     }
 
     void DumpLegacyCode() {
@@ -303,6 +447,16 @@ class DumpTool final {
                 fprintf(stdout, " %d", cip[1]);
                 break;
 
+            case OP_CALL:
+            {
+                const char* name = smx_->LookupFunction(cip[1]);
+                if (name)
+                    fprintf(stdout, " %s", name);
+                else
+                    fprintf(stdout, " unknown_function_%x", cip[1]);
+                break;
+            }
+
             case OP_JUMP:
             case OP_JZER:
             case OP_JNZ:
@@ -323,12 +477,12 @@ class DumpTool final {
             case OP_SYSREQ_N:
             {
                 uint32_t index = cip[1];
+                if (op == OP_SYSREQ_N)
+                    fprintf(stdout, " %u", cip[2]);
                 if (index < smx_->natives().length())
                     fprintf(stdout, " %s", smx_->names() + smx_->natives()[index].name);
                 else
                     fprintf(stdout, " unknown_native_%u", index);
-                if (op == OP_SYSREQ_N)
-                    fprintf(stdout, " (%u)", cip[2]);
                 break;
             }
 
@@ -344,7 +498,7 @@ class DumpTool final {
             case OP_PUSH3:
             case OP_PUSH3_S:
             case OP_PUSH3_ADR:
-            case OP_STOR_S_I64_C:
+            case OP_STOR_S_C_I64:
                 fprintf(stdout, " %d, %d, %d", cip[1], cip[2], cip[3]);
                 break;
 

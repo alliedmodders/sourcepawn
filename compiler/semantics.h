@@ -118,10 +118,6 @@ class SemaContext
     bool preprocessing() const { return preprocessing_; }
 
     std::unordered_set<SymbolScope*>& static_scopes() { return static_scopes_; }
-    uint32_t& temp_int64_slots() { return temp_int64_slots_; }
-    uint32_t& max_int64_slots() { return max_int64_slots_; }
-    uint32_t& temp_int32_slots() { return temp_int32_slots_; }
-    uint32_t& max_int32_slots() { return max_int32_slots_; }
 
   private:
     CompileContext& cc_;
@@ -140,10 +136,6 @@ class SemaContext
     bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
-    uint32_t temp_int64_slots_ = 0;
-    uint32_t max_int64_slots_ = 0;
-    uint32_t temp_int32_slots_ = 0;
-    uint32_t max_int32_slots_ = 0;
 };
 
 class Semantics final
@@ -247,9 +239,6 @@ class Semantics final
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
 
     void NeedsHeapAlloc(Expr* expr);
-    void NeedsInt64Slot(Expr* expr, unsigned int count = 1);
-    void NeedsInt32Slot(Expr* expr);
-    void NeedsTempSlot(Expr* expr);
     void AssignHeapOwnership(ParseNode* node);
 
     Expr* AnalyzeForTest(Expr* expr);

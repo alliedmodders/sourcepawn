@@ -604,10 +604,6 @@ class Expr : public ParseNode
     void set_lvalue(bool lvalue) { lvalue_ = lvalue; }
     bool can_alloc_heap() const { return can_alloc_heap_; }
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
-    bool can_alloc_int64_slot() const { return can_alloc_int64_slot_; }
-    void set_can_alloc_int64_slot(bool b) { can_alloc_int64_slot_ = b; }
-    bool can_alloc_int32_slot() const { return can_alloc_int32_slot_; }
-    void set_can_alloc_int32_slot(bool b) { can_alloc_int32_slot_ = b; }
     bool discard() const { return discard_; }
     void set_discard() { discard_ = true; }
 
@@ -629,8 +625,6 @@ class Expr : public ParseNode
     ExprKind kind_ : 8;
     bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
-    bool can_alloc_int64_slot_ : 1;
-    bool can_alloc_int32_slot_ : 1;
     bool discard_ : 1;
 };
 
@@ -1611,6 +1605,8 @@ class FunctionDecl : public Decl
     void set_is_live() { is_live_ = true; }
     bool maybe_used() const { return maybe_used_; }
     void set_maybe_used() { maybe_used_ = true; }
+    bool needs_hidden_arg() const { return needs_hidden_arg_; }
+    void set_needs_hidden_arg() { needs_hidden_arg_ = true; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
@@ -1623,7 +1619,6 @@ class FunctionDecl : public Decl
     bool IsVariadic();
 
     struct ReturnArrayInfo : public PoolObject {
-        cell_t hidden_address = 0;
         cell_t iv_size = 0;
         cell_t dat_addr = 0;
         cell_t zeroes = 0;
@@ -1691,6 +1686,7 @@ class FunctionDecl : public Decl
     bool always_returns_ SP_BITFIELD(1); // whether all paths have an explicit return statement
     bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
+    bool needs_hidden_arg_ SP_BITFIELD(1);
     bool checked_one_signature SP_BITFIELD(1);
     bool compared_prototype_args SP_BITFIELD(1);
 };

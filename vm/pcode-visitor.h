@@ -86,6 +86,7 @@ class PcodeVisitor
     virtual bool visitZERO(PawnReg dest) = 0;
     virtual bool visitZERO(cell_t address) = 0;
     virtual bool visitZERO_S(cell_t offset) = 0;
+    virtual bool visitZERO_S_I64(cell_t offset) = 0;
     virtual bool visitCompareOp(CompareOp op) = 0;
     virtual bool visitEQ_C(PawnReg src, cell_t value) = 0;
     virtual bool visitINC(PawnReg dest) = 0;
@@ -147,7 +148,9 @@ class PcodeVisitor
     virtual bool visitOR_I64(cell_t slot) = 0;
     virtual bool visitAND_I64(cell_t slot) = 0;
     virtual bool visitXOR_I64(cell_t slot) = 0;
-    virtual bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) = 0;
+    virtual bool visitSTOR_S_C(cell_t slot, cell_t value) = 0;
+    virtual bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) = 0;
+    virtual bool visitSTOR_S_PRI_I64(cell_t slot) = 0;
     virtual bool visitCompareOp64(CompareOp op) = 0;
     virtual bool visitTEST_F32() = 0;
     virtual bool visitNEG_F32() = 0;

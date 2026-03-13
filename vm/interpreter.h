@@ -76,6 +76,7 @@ class Interpreter final : public PcodeVisitor
     bool visitZERO(PawnReg dest) override;
     bool visitZERO(cell_t offset) override;
     bool visitZERO_S(cell_t offset) override;
+    bool visitZERO_S_I64(cell_t offset) override;
     bool visitRETN() override;
     bool visitSTACK(cell_t amount) override;
     bool visitPUSH_S(const cell_t* offsets, size_t nvals) override;
@@ -174,7 +175,9 @@ class Interpreter final : public PcodeVisitor
     bool visitOR_I64(cell_t slot) override;
     bool visitAND_I64(cell_t slot) override;
     bool visitXOR_I64(cell_t slot) override;
-    bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) override;
+    bool visitSTOR_S_C(cell_t slot, cell_t value) override;
+    bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) override;
+    bool visitSTOR_S_PRI_I64(cell_t slot) override;
     bool visitCompareOp64(CompareOp op) override;
     bool visitTEST_F32() override;
     bool visitNEG_F32() override;
@@ -191,9 +194,8 @@ class Interpreter final : public PcodeVisitor
 
     bool run();
 
-    cell_t return_value() const {
-        return return_value_;
-    }
+    cell_t return_value() const { return return_value_; }
+    cell_t StackOffset(cell_t offset);
 
   private:
     bool invokeNative(uint32_t native_index);

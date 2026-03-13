@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2004-2021 AlliedModers LLC
 //
@@ -37,12 +37,39 @@ class RttiData
     bool validateType(uint32_t type_id) const;
     bool validateFunctionOffset(uint32_t offset) const;
     bool validateTypesetOffset(uint32_t offset) const;
+    bool validateLocalSlots(uint32_t offset) const;
 
   private:
     const uint8_t* rtti_data_;
     uint32_t rtti_data_size_;
 };
 
+// Prefer this over RttiParser/Rtti, since it does not call malloc().
+class FastRtti final {
+  public:
+    FastRtti(const uint8_t* data, size_t size, uint32_t offset)
+      : data_(data),
+        size_(size),
+        offset_(offset)
+    {}
+
+    bool ReadFunctionSignatureArgCount(uint32_t* out);
+    bool ReadLocalSlotCount(uint16_t* out);
+    bool GetByte(uint8_t* out) const;
+    bool GetNextByte(uint8_t* out);
+    bool SkipNextType();
+
+    void NextByte() { offset_++; }
+
+    bool ReadCompactUint32(uint32_t* out);
+
+  private:
+    const uint8_t* data_;
+    size_t size_;
+    uint32_t offset_;
+};
+
+// Do not use in performance critical code.
 class RttiParser
 {
   public:

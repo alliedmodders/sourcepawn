@@ -93,6 +93,9 @@ struct smx_rtti_method {
     // <return-type> must be kVoid or a <type>.
     // <param> must be: kByRef? <type>
     uint32_t signature;
+
+    // Local variable signatures, or 0 if no locals.
+    uint32_t locals;
 };
 
 // The rtti.natives table has the following row structure. The rows must be
@@ -103,16 +106,6 @@ struct smx_rtti_native {
 
     // Method signature; see smx_rtti_method::signature.
     uint32_t signature;
-};
-
-// The rtti.typedefs table has the following row structure:
-struct smx_rtti_typedef {
-    // Index into the name table.
-    uint32_t name;
-
-    // Type identifier. The type must be a concrete type, not an entry in the
-    // typedef table.
-    uint32_t type_id;
 };
 
 // The rtti.typesets table has the following row structure:
@@ -220,6 +213,7 @@ namespace cb {
 // This section encodes raw types.
 static const uint8_t kBool = 0x01;
 static const uint8_t kInt32 = 0x06;
+static const uint8_t kInt64 = 0x07;
 static const uint8_t kFloat32 = 0x0c;
 static const uint8_t kChar8 = 0x0e;
 static const uint8_t kAny = 0x10;
@@ -240,12 +234,19 @@ static const uint8_t kArray = 0x31;
 // smx_rtti_method::signature.
 static const uint8_t kFunction = 0x32;
 
+// kFunctionPtr is followed by a <type> that must reference a kFunction type.
+static const uint8_t kFunctionPtr = 0x33;
+
 // Each of these is followed by an index into an appropriate table.
 static const uint8_t kEnum = 0x42;       // rtti.enums
-static const uint8_t kTypedef = 0x43;    // rtti.typedefs
+static const uint8_t kObsoleteTypedef = 0x43;
 static const uint8_t kTypeset = 0x44;    // rtti.typesets
 static const uint8_t kClassdef = 0x45;   // rtti.classdefs
 static const uint8_t kEnumStruct = 0x46; // rtti.enumstructs
+
+// Followed by a fixed-length int16 encoding the number of locals, then that
+// many encoded types.
+static const uint8_t kLocalSlots = 0x60;
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.

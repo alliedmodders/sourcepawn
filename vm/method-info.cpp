@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -19,15 +19,15 @@
 namespace sp {
 
 MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t codeOffset)
- : rt_(rt)
- , pcode_offset_(codeOffset)
- , checked_(false)
- , validation_error_(SP_ERROR_NONE)
- , max_stack_(0) {
-}
+ : rt_(rt),
+   pcode_offset_(codeOffset),
+   checked_(false),
+   validation_error_(SP_ERROR_NONE),
+   max_stack_(0)
+{}
 
-MethodInfo::~MethodInfo() {
-}
+MethodInfo::~MethodInfo()
+{}
 
 void
 MethodInfo::setCompiledFunction(CompiledFunction* fun) {
@@ -41,15 +41,44 @@ MethodInfo::setCompiledFunction(CompiledFunction* fun) {
 
 void
 MethodInfo::InternalValidate() {
+    checked_ = true;
+
     MethodVerifier verifier(rt_, pcode_offset_);
     graph_ = verifier.verify();
-    if (graph_) {
-        max_stack_ = verifier.max_stack();
-    } else {
+    if (!graph_) {
         validation_error_ = verifier.error();
+        return;
     }
+    max_stack_ = verifier.max_stack();
+    local_sizes_ = std::move(verifier.local_sizes());
+    BuildLocalOffsetTable();
+}
 
-    checked_ = true;
+void MethodInfo::BuildLocalOffsetTable() {
+    local_offsets_ =
+        ke::FixedArray<cell_t>(local_sizes_.size());
+
+    cell_t offset = 0;
+    for (size_t i = 0; i < local_sizes_.size(); i++) {
+        offset -= local_sizes_[i];
+        local_offsets_[i] = offset;
+    }
+}
+
+cell_t MethodInfo::StackOffset(cell_t slot) {
+    if (rt_->code().version < SmxConsts::CODE_VERSION_TYPED_STACK)
+        return slot;
+
+    if (slot < 0)
+        return (-slot - 1 + 3) * sizeof(cell_t);
+
+    return local_offsets_.at(slot);
+}
+
+cell_t MethodInfo::StackSizeForLocalSlots() {
+    if (local_offsets_.empty())
+        return 0;
+    return local_offsets_.back();
 }
 
 } // namespace sp

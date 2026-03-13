@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2004-2021 AlliedModers LLC
 //
@@ -13,15 +13,125 @@
 using namespace ke;
 using namespace sp::debug;
 
-RttiData::RttiData()
- : rtti_data_(nullptr)
- , rtti_data_size_(0) {
+bool FastRtti::ReadFunctionSignatureArgCount(uint32_t* out) {
+    uint8_t b;
+    if (!GetNextByte(&b) || b != cb::kFunction)
+        return false;
+    if (!GetNextByte(&b))
+        return false;
+    *out = b;
+    return true;
 }
 
-RttiData::RttiData(const uint8_t* blob, uint32_t size)
- : rtti_data_(blob)
- , rtti_data_size_(size) {
+bool FastRtti::ReadLocalSlotCount(uint16_t* out) {
+    uint8_t b;
+    if (!GetNextByte(&b) || b != cb::kLocalSlots)
+        return false;
+
+    union u {
+        uint16_t value;
+        uint8_t bytes[2];
+    } u;
+    if (!GetNextByte(&u.bytes[0]))
+        return false;
+    if (!GetNextByte(&u.bytes[1]))
+        return false;
+    *out = u.value;
+    return true;
 }
+
+bool FastRtti::GetByte(uint8_t* out) const {
+    if (offset_ >= size_)
+        return false;
+    *out = *(data_ + offset_);
+    return true;
+}
+
+bool FastRtti::GetNextByte(uint8_t* out) {
+    if (!GetByte(out))
+        return false;
+    offset_++;
+    return true;
+}
+
+bool FastRtti::SkipNextType() {
+    while (true) {
+        uint8_t byte;
+        if (!GetNextByte(&byte))
+            return false;
+
+        if (byte == cb::kByRef || byte == cb::kConst) {
+            if (!GetNextByte(&byte))
+                return false;
+        }
+
+        switch (byte) {
+            case cb::kBool:
+            case cb::kInt32:
+            case cb::kInt64:
+            case cb::kFloat32:
+            case cb::kChar8:
+            case cb::kAny:
+            case cb::kVoid:
+            case cb::kTopFunction:
+                return true;
+
+            case cb::kFixedArray:
+            {
+                uint32_t size;
+                if (!ReadCompactUint32(&size))
+                    return false;
+                continue;
+            }
+
+            case cb::kArray:
+                continue;
+
+            case cb::kEnum:
+            case cb::kTypeset:
+            case cb::kEnumStruct:
+            case cb::kFunctionPtr:
+            {
+                uint32_t value;
+                if (!ReadCompactUint32(&value))
+                    return false;
+                return true;
+            }
+
+            default:
+                assert(false);
+                return false;
+        }
+    }
+}
+
+bool FastRtti::ReadCompactUint32(uint32_t* out) {
+    uint32_t value = 0;
+    uint32_t shift = 0;
+    for (;;) {
+        uint8_t b;
+        if (!GetNextByte(&b))
+            return false;
+        value |= (b & 0x7f) << shift;
+        if ((b & 0x80) == 0) {
+            *out = value;
+            return true;
+        }
+        shift += 7;
+        if (shift >= 32)
+            return false;
+    }
+}
+
+RttiData::RttiData()
+ : rtti_data_(nullptr),
+   rtti_data_size_(0)
+{}
+
+RttiData::RttiData(const uint8_t* blob, uint32_t size)
+ : rtti_data_(blob),
+   rtti_data_size_(size)
+{}
 
 const Rtti*
 RttiData::typeFromTypeId(uint32_t type_id) const {
@@ -75,8 +185,7 @@ RttiData::size() const {
     return rtti_data_size_;
 }
 
-bool
-RttiData::validateType(uint32_t type_id) const {
+bool RttiData::validateType(uint32_t type_id) const {
     uint8_t kind = type_id & kMaxTypeIdKind;
     uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
     if (kind == kTypeId_Inline) {
@@ -98,24 +207,43 @@ RttiData::validateType(uint32_t type_id) const {
         return false;
 }
 
-bool
-RttiData::validateFunctionOffset(uint32_t offset) const {
+bool RttiData::validateFunctionOffset(uint32_t offset) const {
     RttiParser parser(rtti_data_, rtti_data_size_, offset);
     return parser.validateFunction();
 }
 
-bool
-RttiData::validateTypesetOffset(uint32_t offset) const {
+bool RttiData::validateTypesetOffset(uint32_t offset) const {
     RttiParser parser(rtti_data_, rtti_data_size_, offset);
     return parser.validateTypeset();
 }
 
-RttiParser::RttiParser(const uint8_t* bytes, uint32_t length, uint32_t offset)
- : bytes_(bytes)
- , length_(length)
- , offset_(offset)
- , is_const_(false) {
+bool RttiData::validateLocalSlots(uint32_t offset) const {
+    if (offset == 0)
+        return true;
+
+    if (offset >= rtti_data_size_ || rtti_data_size_ - offset < 3)
+        return false;
+    if (rtti_data_[offset] != cb::kLocalSlots)
+        return false;
+    offset++;
+
+    uint16_t count = *reinterpret_cast<const uint16_t*>(rtti_data_ + offset);
+    offset += sizeof(uint16_t);
+
+    RttiParser parser(rtti_data_, rtti_data_size_, offset);
+    for (uint32_t i = 0; i < count; i++) {
+        if (!parser.validate())
+            return false;
+    }
+    return true;
 }
+
+RttiParser::RttiParser(const uint8_t* bytes, uint32_t length, uint32_t offset)
+ : bytes_(bytes),
+   length_(length),
+   offset_(offset),
+   is_const_(false)
+{}
 
 // Decode a type, but reset the |is_const| indicator for non-
 // dependent type.
@@ -142,6 +270,7 @@ RttiParser::decode() {
     switch (type) {
         case cb::kBool:
         case cb::kInt32:
+        case cb::kInt64:
         case cb::kFloat32:
         case cb::kChar8:
         case cb::kAny:
@@ -161,10 +290,11 @@ RttiParser::decode() {
             break;
         }
         case cb::kEnum:
-        case cb::kTypedef:
+        case cb::kObsoleteTypedef:
         case cb::kTypeset:
         case cb::kClassdef:
-        case cb::kEnumStruct: {
+        case cb::kEnumStruct:
+        case cb::kFunctionPtr: {
             uint32_t index = decodeUint32();
             result = new Rtti(type, index);
             break;
@@ -234,6 +364,7 @@ RttiParser::validate() {
     switch (type) {
         case cb::kBool:
         case cb::kInt32:
+        case cb::kInt64:
         case cb::kFloat32:
         case cb::kChar8:
         case cb::kAny:
@@ -250,10 +381,11 @@ RttiParser::validate() {
             return validate();
 
         case cb::kEnum:
-        case cb::kTypedef:
+        case cb::kObsoleteTypedef:
         case cb::kTypeset:
         case cb::kClassdef:
         case cb::kEnumStruct:
+        case cb::kFunctionPtr:
             // Skip the index.
             return tryDecodeUint32();
 
@@ -266,6 +398,12 @@ RttiParser::validate() {
 bool
 RttiParser::validateFunction() {
     // argc available?
+    if (offset_ >= length_)
+        return false;
+
+    // For now, just skip this if it's missing on older plugins.
+    if (bytes_[offset_] == cb::kFunction)
+        offset_++;
     if (offset_ >= length_)
         return false;
 

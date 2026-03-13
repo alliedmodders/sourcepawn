@@ -111,41 +111,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_POP_ALT);
   }
 
-  void load_hidden_arg(FunctionDecl* fun, bool save_pri) {
-    if (!fun->IsVariadic()) {
-      if (fun->return_array()) {
-        emit(OP_LOAD_S_ALT, fun->return_array()->hidden_address);
-      } else {
-        cell_t hidden_address = ((cell_t)fun->args().size() + 3) * sizeof(cell_t);
-        emit(OP_LOAD_S_ALT, hidden_address);
-      }
-      return;
-    }
-
-    // Load the number of arguments into PRI. Frame layout:
-    //   base + 0*sizeof(cell) == previous "base"
-    //   base + 1*sizeof(cell) == function return address
-    //   base + 2*sizeof(cell) == number of arguments
-    //   base + 3*sizeof(cell) == first argument of the function
-
-    // Compute an address to the first argument, then add the argument count
-    // to find the address after the final argument:
-    //    push.pri
-    //    addr.alt   0xc   ; Compute &first_arg
-    //    load.s.pri 0x8   ; Load arg count
-    //    idxaddr          ; Compute (&first_arg) + argcount
-    //    load.i           ; Load *(&first_arg + argcount)
-    //    move.alt
-    //    pop.pri
-    if (save_pri)
-      emit(OP_PUSH_PRI);
-    emit(OP_ADDR_ALT, 0xc);
-    emit(OP_LOAD_S_PRI, 2 * sizeof(cell));
-    emit(OP_IDXADDR);
-    emit(OP_LOAD_I);
-    emit(OP_MOVE_ALT);
-    if (save_pri)
-      emit(OP_POP_PRI);
+  void load_hidden_arg(FunctionDecl* decl) {
+    assert(decl->needs_hidden_arg());
+    emit(OP_LOAD_S_ALT, -1);
   }
 
   void address(Decl* sym, regid reg) {

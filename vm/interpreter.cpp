@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // This file is part of SourcePawn.
 //
@@ -45,14 +45,14 @@ Interpreter::Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval) {
 }
 
 Interpreter::Interpreter(PluginContext* cx, RefPtr<MethodInfo> method)
- : env_(Environment::get())
- , rt_(cx->runtime())
- , cx_(cx)
- , reader_(rt_, method->pcode_offset(), this)
- , method_(method)
- , has_returned_(false)
- , return_value_(0) {
-}
+ : env_(Environment::get()),
+   rt_(cx->runtime()),
+   cx_(cx),
+   reader_(rt_, method->pcode_offset(), this),
+   method_(std::move(method)),
+   has_returned_(false),
+   return_value_(0)
+{}
 
 bool
 Interpreter::run() {
@@ -64,6 +64,10 @@ Interpreter::run() {
     reader_.begin();
 
     if (!cx_->pushAmxFrame())
+        return false;
+
+    cell_t stack_needed = method_->StackSizeForLocalSlots();
+    if (stack_needed && !cx_->addStack(stack_needed))
         return false;
 
     while (!has_returned_ && reader_.more()) {
@@ -79,8 +83,11 @@ Interpreter::run() {
     return true;
 }
 
-bool
-Interpreter::invokeNative(uint32_t native_index) {
+cell_t Interpreter::StackOffset(cell_t offset) {
+    return method_->StackOffset(offset);
+}
+
+bool Interpreter::invokeNative(uint32_t native_index) {
     NativeEntry* native = rt_->NativeAt(native_index);
 
     ivk_->enterNativeCall(native_index);
@@ -124,7 +131,7 @@ Interpreter::visitPUSH_C(const cell_t* vals, size_t nvals) {
 bool
 Interpreter::visitPUSH_ADR(const cell_t* offsets, size_t nvals) {
     for (size_t i = 0; i < nvals; i++) {
-        cell_t address = cx_->frm() + offsets[i];
+        cell_t address = cx_->frm() + StackOffset(offsets[i]);
         if (!cx_->pushStack(address))
             return false;
     }
@@ -236,7 +243,7 @@ Interpreter::visitZERO(cell_t address) {
 
 bool
 Interpreter::visitZERO_S(cell_t offset) {
-    return cx_->setFrameValue(offset, 0);
+    return cx_->setFrameValue(StackOffset(offset), 0);
 }
 
 bool
@@ -248,7 +255,7 @@ bool
 Interpreter::visitPUSH_S(const cell_t* offsets, size_t nvals) {
     for (size_t i = 0; i < nvals; i++) {
         cell_t value;
-        if (!cx_->getFrameValue(offsets[i], &value))
+        if (!cx_->getFrameValue(StackOffset(offsets[i]), &value))
             return false;
         if (!cx_->pushStack(value))
             return false;
@@ -269,17 +276,17 @@ Interpreter::visitCONST(cell_t address, cell_t value) {
 
 bool
 Interpreter::visitCONST_S(cell_t offset, cell_t value) {
-    return cx_->setFrameValue(offset, value);
+    return cx_->setFrameValue(StackOffset(offset), value);
 }
 
 bool
 Interpreter::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
-    return cx_->getFrameValue(srcoffs, &regs_[dest]);
+    return cx_->getFrameValue(StackOffset(srcoffs), &regs_[dest]);
 }
 
 bool
 Interpreter::visitSTOR_S(cell_t offset, PawnReg src) {
-    return cx_->setFrameValue(offset, regs_[src]);
+    return cx_->setFrameValue(StackOffset(offset), regs_[src]);
 }
 
 bool
@@ -397,9 +404,9 @@ Interpreter::visitINC(cell_t address) {
 bool
 Interpreter::visitINC_S(cell_t offset) {
     cell_t value;
-    if (!cx_->getFrameValue(offset, &value))
+    if (!cx_->getFrameValue(StackOffset(offset), &value))
         return false;
-    return cx_->setFrameValue(offset, value + 1);
+    return cx_->setFrameValue(StackOffset(offset), value + 1);
 }
 
 bool
@@ -429,9 +436,9 @@ Interpreter::visitDEC(cell_t address) {
 bool
 Interpreter::visitDEC_S(cell_t offset) {
     cell_t value;
-    if (!cx_->getFrameValue(offset, &value))
+    if (!cx_->getFrameValue(StackOffset(offset), &value))
         return false;
-    return cx_->setFrameValue(offset, value - 1);
+    return cx_->setFrameValue(StackOffset(offset), value - 1);
 }
 
 bool
@@ -454,9 +461,9 @@ Interpreter::visitLOAD_BOTH(cell_t addressForPri, cell_t addressForAlt) {
 
 bool
 Interpreter::visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    if (!cx_->getFrameValue(offsetForPri, &regs_.pri()))
+    if (!cx_->getFrameValue(StackOffset(offsetForPri), &regs_.pri()))
         return false;
-    if (!cx_->getFrameValue(offsetForAlt, &regs_.alt()))
+    if (!cx_->getFrameValue(StackOffset(offsetForAlt), &regs_.alt()))
         return false;
     return true;
 }
@@ -623,7 +630,7 @@ Interpreter::visitCompareOp(CompareOp op) {
 
 bool
 Interpreter::visitADDR(PawnReg dest, cell_t offset) {
-    regs_[dest] = cx_->frm() + offset;
+    regs_[dest] = cx_->frm() + StackOffset(offset);
     return true;
 }
 
@@ -698,7 +705,7 @@ Interpreter::visitLIDX() {
 bool
 Interpreter::visitLREF_S(PawnReg dest, cell_t srcoffs) {
     cell_t address;
-    if (!cx_->getFrameValue(srcoffs, &address))
+    if (!cx_->getFrameValue(StackOffset(srcoffs), &address))
         return false;
     return cx_->getCellValue(address, &regs_[dest]);
 }
@@ -706,7 +713,7 @@ Interpreter::visitLREF_S(PawnReg dest, cell_t srcoffs) {
 bool
 Interpreter::visitSREF_S(cell_t destoffs, PawnReg src) {
     cell_t address;
-    if (!cx_->getFrameValue(destoffs, &address))
+    if (!cx_->getFrameValue(StackOffset(destoffs), &address))
         return false;
     return cx_->setCellValue(address, regs_[src]);
 }
@@ -1053,11 +1060,11 @@ Interpreter::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t dat
 
 bool
 Interpreter::visitCVT_I64(cell_t slot) {
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = regs_.pri();
 
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1087,11 +1094,11 @@ Interpreter::visitINVERT_I64(cell_t slot) {
     if (!src)
         return false;
 
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = ~*src;
 
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1101,10 +1108,10 @@ Interpreter::visitNEG_I64(cell_t slot) {
     if (!src)
         return false;
 
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = -*src;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1116,10 +1123,10 @@ Interpreter::visitSMUL_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri * *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1131,7 +1138,7 @@ Interpreter::visitSDIV_ALT_I64(cell_t pri_slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* pri_dest = cx_->acquireInt64Slot(pri_slot);
+    int64_t* pri_dest = cx_->acquireInt64Slot(StackOffset(pri_slot));
 
     int err = Int64Div(pri, alt, pri_dest);
     if (err != SP_ERROR_NONE) {
@@ -1139,7 +1146,7 @@ Interpreter::visitSDIV_ALT_I64(cell_t pri_slot) {
         return false;
     }
 
-    regs_.pri() = cx_->frm() + pri_slot;
+    regs_.pri() = cx_->frm() + StackOffset(pri_slot);
     return true;
 }
 
@@ -1151,7 +1158,7 @@ Interpreter::visitSMOD_ALT_I64(cell_t pri_slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* pri_dest = cx_->acquireInt64Slot(pri_slot);
+    int64_t* pri_dest = cx_->acquireInt64Slot(StackOffset(pri_slot));
 
     int err = Int64Mod(pri, alt, pri_dest);
     if (err != SP_ERROR_NONE) {
@@ -1159,7 +1166,7 @@ Interpreter::visitSMOD_ALT_I64(cell_t pri_slot) {
         return false;
     }
 
-    regs_.pri() = cx_->frm() + pri_slot;
+    regs_.pri() = cx_->frm() + StackOffset(pri_slot);
     return true;
 }
 
@@ -1171,10 +1178,10 @@ Interpreter::visitADD_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri + *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1186,10 +1193,10 @@ Interpreter::visitSUB_ALT_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *alt - *pri;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1201,10 +1208,10 @@ Interpreter::visitSHL_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri << *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1216,10 +1223,10 @@ Interpreter::visitSSHR_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri >> *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1231,10 +1238,10 @@ Interpreter::visitSHR_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = (uint64_t)*pri >> (uint64_t)*alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1246,10 +1253,10 @@ Interpreter::visitOR_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri | *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1261,10 +1268,10 @@ Interpreter::visitAND_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri & *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
@@ -1276,16 +1283,16 @@ Interpreter::visitXOR_I64(cell_t slot) {
     int64_t* alt = cx_->acquireInt64Addr(regs_.alt());
     if (!alt)
         return false;
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     *dest = *pri ^ *alt;
-    regs_.pri() = cx_->frm() + slot;
+    regs_.pri() = cx_->frm() + StackOffset(slot);
     return true;
 }
 
 bool
-Interpreter::visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) {
-    int64_t* dest = cx_->acquireInt64Slot(slot);
+Interpreter::visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) {
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
 
     Int64CellUnion u(cell0, cell1);
     *dest = u.i64;
@@ -1412,6 +1419,27 @@ bool
 Interpreter::visitCVT_F32() {
     regs_.pri() = FloatCellUnion((float)regs_.pri()).cell;
     return true;
+}
+
+bool Interpreter::visitSTOR_S_PRI_I64(cell_t slot) {
+    int64_t* pri = cx_->acquireInt64Addr(regs_.pri());
+    if (!pri)
+        return false;
+    int64_t* dest = cx_->acquireInt64Slot(StackOffset(slot));
+    *dest = *pri;
+    return true;
+}
+
+bool Interpreter::visitZERO_S_I64(cell_t slot) {
+    if (!cx_->setFrameValue(StackOffset(slot), 0))
+        return false;
+    if (!cx_->setFrameValue(StackOffset(slot) + 4, 0))
+        return false;
+    return true;
+}
+
+bool Interpreter::visitSTOR_S_C(cell_t slot, cell_t value) {
+    return cx_->setFrameValue(StackOffset(slot), value);
 }
 
 } // namespace sp

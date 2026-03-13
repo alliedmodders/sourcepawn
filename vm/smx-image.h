@@ -85,6 +85,8 @@ class SmxImage final : public FileReader
     bool HasRtti() const;
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
 
+    FastRtti GetTypeParser(uint32_t offset);
+
   private:
     SmxImage();
 
@@ -195,6 +197,7 @@ class SmxImage final : public FileReader
         return rtti_data_.get();
     }
     const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
+    const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
 
   protected:
     bool error(const char* msg) {

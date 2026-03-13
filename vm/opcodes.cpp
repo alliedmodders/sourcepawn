@@ -98,6 +98,9 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_OR_I64:
         case OP_AND_I64:
         case OP_XOR_I64:
+        case OP_ZERO_S_I64:
+        case OP_STOR_S_PRI_I64:
+        case OP_STOR_S_C:
             fprintf(fp, "%d", cip[1]);
             break;
 
@@ -138,7 +141,7 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_PUSH3:
         case OP_PUSH3_S:
         case OP_PUSH3_ADR:
-        case OP_STOR_S_I64_C:
+        case OP_STOR_S_C_I64:
             fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
             break;
 
