@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -115,6 +115,15 @@ ScriptedInvoker::PushArray(cell_t* inarray, unsigned int cells, int copyback) {
     m_curparam++;
 
     return SP_ERROR_NONE;
+}
+
+int ScriptedInvoker::PushInt64(int64_t value) {
+    if (m_curparam >= SP_MAX_EXEC_PARAMS) {
+        return SetError(SP_ERROR_PARAMS_MAX);
+    }
+
+    Int64CellUnion u(value);
+    return PushArray(u.cells, 2, 0);
 }
 
 int
