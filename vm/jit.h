@@ -116,6 +116,7 @@ class CompilerBase : public PcodeVisitor
     void emitThrowPathIfNeeded(int err);
 
     void reportError(int err);
+    cell_t StackOffset(cell_t offset);
 
   protected:
     Environment* env_;

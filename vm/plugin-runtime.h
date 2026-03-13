@@ -176,7 +176,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
 
     FunctionMap function_map_;
     std::vector<RefPtr<MethodInfo>> methods_;
-    ;
 
     // Pause state.
     bool paused_;

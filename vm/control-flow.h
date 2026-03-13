@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include <amtl/am-fixedarray.h>
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
 #include "label.h"
@@ -199,6 +200,8 @@ typedef ke::InlineList<Block>::reverse_iterator PostorderIterator;
 
 class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
 {
+    friend class MethodVerifier;
+
   public:
     explicit ControlFlowGraph(PluginRuntime* rt, const uint8_t* start_offset);
     ~ControlFlowGraph();

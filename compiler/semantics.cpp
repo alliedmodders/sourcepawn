@@ -99,9 +99,6 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             AssignHeapOwnership(stmt);
     });
 
-    ke::SaveRestore<uint32_t> int64_slot_scope(sc_->temp_int64_slots());
-    ke::SaveRestore<uint32_t> int32_slot_scope(sc_->temp_int32_slots());
-
     switch (stmt->kind()) {
         case StmtKind::ChangeScopeNode:
             return CheckChangeScopeNode(stmt->to<ChangeScopeNode>());
@@ -536,8 +533,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
 
     switch (unary->token()) {
         case '~':
-            if (out_val.type()->isInt64())
-                NeedsInt64Slot(unary);
             if (out_val.ident == iCONSTEXPR)
                 out_val.set_constval(~out_val.constval());
             break;
@@ -547,8 +542,6 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             out_val.set_type(types_->type_bool());
             break;
         case '-':
-            if (out_val.type()->isInt64())
-                NeedsInt64Slot(unary);
             if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
                 float f = sp::FloatCellUnion(out_val.constval()).f32;
                 out_val.set_constval(sp::FloatCellUnion(-f).cell);
@@ -608,14 +601,6 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
     Type* type = expr_val.type();
     if (type->isReference())
         type = type->inner();
-
-
-    if (type->isInt64()) {
-        if (incdec->prefix())
-            NeedsInt64Slot(incdec, 1);
-        else
-            NeedsInt64Slot(incdec, 2);
-    }
 
     // :TODO: more type checks
     auto& val = incdec->val();
@@ -762,9 +747,6 @@ bool BinaryExprChecker::Check() {
         if (IsChainedOp(token) || token == tlEQ || token == tlNE)
             val.set_type(types_->type_bool());
     }
-
-    if (val.type()->isInt64())
-        sema_.NeedsInt64Slot(expr_);
 
     return true;
 }
@@ -1519,7 +1501,6 @@ bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
     auto& val = expr->val();
     val.ident = iEXPRESSION;
     val.set_type(types_->type_int64());
-    NeedsInt64Slot(expr);
     return true;
 }
 
@@ -1914,6 +1895,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             report(call, 411);
             return false;
         }
+        NeedsHeapAlloc(call);
     }
 
     markusage(fun, uREAD);
@@ -1921,10 +1903,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     auto& val = call->val();
     val.ident = iEXPRESSION;
     val.set_type(fun->return_type());
-    if (fun->return_array())
-        NeedsHeapAlloc(call);
-    else if (fun->return_type()->isInt64())
-        NeedsInt64Slot(call);
 
     // We don't have canonical decls yet, so get the one attached to the symbol.
     if (fun->deprecate())
@@ -2090,12 +2068,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     report(param, 22); // need lvalue
                     return nullptr;
                 }
-                NeedsTempSlot(param);
-            } else if (!lvalue) {
-                NeedsTempSlot(param);
             }
-        } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
-            NeedsTempSlot(param);
         }
         if (val->type()->isInt64()) {
             // Hack: allow this since we don't have typed varargs right now.
@@ -2152,10 +2125,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             param = BuildSimpleCast(param, BuiltinType::Int64);
             val = &param->val();
         }
-
-        // Needed for copy.
-        if (val->type()->isInt64())
-            NeedsInt64Slot(param);
 
         TypeChecker tc(param, arg->type(), QualType(val->type()), TypeChecker::Argument);
         if (!tc.Coerce())
@@ -2484,19 +2453,7 @@ bool Semantics::CheckCompoundReturnStmt(ReturnStmt* stmt) {
     }
 
     if (!curfunc->return_array()) {
-        // the address of the array is stored in a hidden parameter; the address
-        // of this parameter is 1 + the number of parameters (times the size of
-        // a cell) + the size of the stack frame and the return address
-        //   base + 0*sizeof(cell)         == previous "base"
-        //   base + 1*sizeof(cell)         == function return address
-        //   base + 2*sizeof(cell)         == number of arguments
-        //   base + 3*sizeof(cell)         == first argument of the function
-        //   ...
-        //   base + ((n-1)+3)*sizeof(cell) == last argument of the function
-        //   base + (n+3)*sizeof(cell)     == hidden parameter with array address
         auto info = new FunctionDecl::ReturnArrayInfo;
-        info->hidden_address = ((cell_t)curfunc->args().size() + 3) * sizeof(cell);
-
         curfunc->set_return_array(info);
         curfunc->update_return_type(val.type());
     }
@@ -2514,9 +2471,7 @@ bool Semantics::CheckNativeCompoundReturn(FunctionDecl* info) {
         }
     }
 
-    // For native calls, the implicit arg is first, not last.
     auto rai = new FunctionDecl::ReturnArrayInfo;
-    rai->hidden_address = sizeof(cell_t) * 3;
     info->set_return_array(rai);
     return true;
 }
@@ -2848,6 +2803,13 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             report(info->pos(), 141);
     }
 
+    if (info->return_type()->isArray() ||
+        info->return_type()->isEnumStruct() ||
+        info->return_type()->isInt64())
+    {
+        info->set_needs_hidden_arg();
+    }
+
     if (info->is_native()) {
         auto rt = info->return_type();
         if ((rt->isArray() || rt->isEnumStruct()) && !CheckNativeCompoundReturn(info))
@@ -2877,8 +2839,6 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
-    info->set_num_int64_slots(sc.max_int64_slots());
-    info->set_num_int32_slots(sc.max_int32_slots());
     info->set_returns_value(sc_->returns_value());
     info->set_always_returns(sc_->always_returns());
 
@@ -2969,28 +2929,6 @@ bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
 void Semantics::NeedsHeapAlloc(Expr* expr) {
     expr->set_can_alloc_heap(true);
     pending_heap_allocation_ = true;
-}
-
-void Semantics::NeedsInt64Slot(Expr* expr, unsigned int count) {
-    expr->set_can_alloc_int64_slot(true);
-    sc_->temp_int64_slots() += count;
-    if (sc_->temp_int64_slots() > sc_->max_int64_slots())
-        sc_->max_int64_slots() = sc_->temp_int64_slots();
-}
-
-void Semantics::NeedsInt32Slot(Expr* expr) {
-    expr->set_can_alloc_int32_slot(true);
-    sc_->temp_int32_slots() += 1;
-    if (sc_->temp_int32_slots() > sc_->max_int32_slots())
-        sc_->max_int32_slots() = sc_->temp_int32_slots();
-}
-
-void Semantics::NeedsTempSlot(Expr* expr) {
-    Type* type = expr->val().type();
-    if (type->isInt64())
-        NeedsInt64Slot(expr);
-    else
-        NeedsInt32Slot(expr);
 }
 
 void Semantics::AssignHeapOwnership(ParseNode* node) {
@@ -3186,9 +3124,6 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
 
     to->val().ident = iEXPRESSION;
     to->val().set_type(types_->GetBuiltin(type));
-
-    if (type == BuiltinType::Int64 && sc_->func())
-        NeedsInt64Slot(to);
     return to;
 }
 

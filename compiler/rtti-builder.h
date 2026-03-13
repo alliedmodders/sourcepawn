@@ -37,6 +37,12 @@ typedef SmxBlobSection<sp_fdbg_info_t> SmxDebugInfoSection;
 typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
 typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
 
+struct LocalSlotSignature {
+  // Reserve five bytes at the start for the longest possible byte + count.
+  std::vector<uint8_t> types = {0, 0, 0};
+  uint32_t count = 0;
+};
+
 class RttiBuilder
 {
   public:
@@ -45,7 +51,10 @@ class RttiBuilder
     void finish(SmxBuilder& builder);
     void add_native(FunctionDecl* sym);
     smx_rtti_debug_method add_method(FunctionDecl* fun);
-    void finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry);
+    void finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
+                       LocalSlotSignature&& locals);
+
+    int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(ucell addr, cell line);
@@ -53,7 +62,6 @@ class RttiBuilder
 
   private:
     uint32_t add_enum(Type* type);
-    uint32_t add_funcenum(Type* type, funcenum_t* fe);
     uint32_t add_typeset(Type* type, funcenum_t* fe);
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
@@ -85,7 +93,6 @@ class RttiBuilder
     RefPtr<SmxRttiTable<smx_rtti_method>> methods_;
     RefPtr<SmxRttiTable<smx_rtti_native>> natives_;
     RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
-    RefPtr<SmxRttiTable<smx_rtti_typedef>> typedefs_;
     RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
     RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;

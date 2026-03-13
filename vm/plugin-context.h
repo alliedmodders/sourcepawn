@@ -165,8 +165,8 @@ class PluginContext final : public BasePluginContext
         return reinterpret_cast<int64_t*>(addr);
     }
 
-    int64_t* acquireInt64Slot(cell_t slot) {
-        cell_t* addr = throwIfBadAddress(frm_ + slot);
+    int64_t* acquireInt64Slot(cell_t offset) {
+        cell_t* addr = throwIfBadAddress(frm_ + offset);
         assert(addr);
         return reinterpret_cast<int64_t*>(addr);
     }

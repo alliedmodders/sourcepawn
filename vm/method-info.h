@@ -14,6 +14,7 @@
 #define _INCLUDE_SOURCEPAWN_VM_METHOD_INFO_H_
 
 #include <amtl/am-refcounting.h>
+#include <smx/smx-headers.h>
 #include <sp_vm_types.h>
 #include "control-flow.h"
 
@@ -40,24 +41,30 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
         graph_ = nullptr;
         return validation_error_ == SP_ERROR_NONE;
     }
+    uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
-    int validationError() const {
-        return validation_error_;
-    }
-    uint32_t pcode_offset() const {
-        return pcode_offset_;
-    }
-    int32_t max_stack() const {
-        return max_stack_;
-    }
+    int validationError() const { return validation_error_; }
+    uint32_t pcode_offset() const { return pcode_offset_; }
+    int32_t max_stack() const { return max_stack_; }
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const {
         return jit_.get();
     }
 
+    // Note: these are only valid during interpreting or compilation.
+    cell_t StackOffset(cell_t slot);
+    // Returns the amount to change SP. It is always <= 0 since the stack
+    // growns down.
+    cell_t StackSizeForLocalSlots();
+
+    void ClearCompilerCache() {
+        local_offsets_ = {};
+    }
+
   private:
     void InternalValidate();
+    void BuildLocalOffsetTable();
 
   private:
     PluginRuntime* rt_;
@@ -68,6 +75,8 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
     bool checked_;
     int validation_error_;
     int32_t max_stack_;
+    ke::FixedArray<uint8_t> local_sizes_;
+    ke::FixedArray<cell_t> local_offsets_;
 };
 
 } // namespace sp

@@ -840,32 +840,12 @@ FunctionDecl::BindArgs(SemaContext& sc)
 {
     AutoCountErrors errors;
 
-    size_t arg_index = 0;
     for (auto& var : args_) {
         const auto& typeinfo = var->type_info();
 
         AutoErrorPos pos(var->pos());
 
-        if (typeinfo.is_varargs) {
-            /* redimension the argument list, add the entry iVARARGS */
-            var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
-            break;
-        }
-
         Type* type = typeinfo.type;
-
-        /* Stack layout:
-         *   base + 0*sizeof(cell)  == previous "base"
-         *   base + 1*sizeof(cell)  == function return address
-         *   base + 2*sizeof(cell)  == number of arguments
-         *   base + 3*sizeof(cell)  == first argument of the function
-         * So the offset of each argument is "(argcnt+3) * sizeof(cell)".
-         *
-         * Since arglist has an empty terminator at the end, we actually add 2.
-         */
-        var->BindAddress(static_cast<cell>((arg_index + 3) * sizeof(cell)));
-        arg_index++;
-
         if (type->isArray() || typeinfo.type->isEnumStruct()) {
             if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
                 fill_arg_defvalue(sc.cc(), var);

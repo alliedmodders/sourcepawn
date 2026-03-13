@@ -146,7 +146,7 @@ class Compiler : public CompilerBase
     bool visitOR_I64(cell_t slot) override;
     bool visitAND_I64(cell_t slot) override;
     bool visitXOR_I64(cell_t slot) override;
-    bool visitSTOR_S_I64_C(cell_t slot, cell_t cell0, cell_t cell1) override;
+    bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) override;
     bool visitCompareOp64(CompareOp op) override;
     bool visitTEST_F32() override;
     bool visitNEG_F32() override;
@@ -157,6 +157,9 @@ class Compiler : public CompilerBase
     bool visitCompareOpF32(CompareOp op) override;
     bool visitCVT_F32() override;
     bool visitMOD_ALT_F32() override;
+    bool visitSTOR_S_PRI_I64(cell_t slot) override;
+    bool visitZERO_S_I64(cell_t offset) override;
+    bool visitSTOR_S_C(cell_t slot, cell_t value) override;
 
   private:
     bool setup(cell_t pcode_offs);

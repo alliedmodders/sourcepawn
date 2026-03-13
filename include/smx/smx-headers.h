@@ -64,10 +64,12 @@ struct SmxConsts {
     // Version 11: Not used; no changes.
     // Version 12: PROC/RETN semantic changes.
     // Version 13: Feature flags in code headers.
+    // Version 14: The stack and locals are now typed.
     static const uint8_t CODE_VERSION_MINIMUM = 9;
     static const uint8_t CODE_VERSION_SM_LEGACY = 10;
     static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
-    static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_FEATURE_MASK;
+    static const uint8_t CODE_VERSION_TYPED_STACK = 14;
+    static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_TYPED_STACK;
     static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 
     static const uint32_t kCodeFeatureDeprecated0 = (1 << 0);

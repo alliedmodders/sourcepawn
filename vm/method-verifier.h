@@ -16,6 +16,7 @@
 #include <functional>
 #include <vector>
 
+#include <amtl/am-fixedarray.h>
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 #include "control-flow.h"
@@ -34,12 +35,9 @@ class MethodVerifier final
 
     ke::RefPtr<ControlFlowGraph> verify();
 
-    int32_t max_stack() const {
-        return max_stack_;
-    }
-    int error() const {
-        return error_;
-    }
+    int32_t max_stack() const { return max_stack_; }
+    int error() const { return error_; }
+    ke::FixedArray<uint8_t>&& local_sizes() { return std::move(local_sizes_); }
 
   private:
     bool more() const {
@@ -48,7 +46,7 @@ class MethodVerifier final
 
   private:
     bool verifyOp(OPCODE op);
-    bool verifyStackOffset(cell_t offset);
+    bool verifyStackOffset(cell_t offset, uint32_t op_size);
     bool verifyDatOffset(cell_t offset);
     bool verifyJumpOffset(cell_t offset);
     bool verifyParamCount(cell_t nparams);
@@ -62,15 +60,15 @@ class MethodVerifier final
 
     struct VerifyData : public IBlockData {
         VerifyData()
-         : stack_balance(0)
-         , heap_scope_depth(0) {
-        }
+         : stack_balance(0),
+           heap_scope_depth(0)
+        {}
         VerifyData(const VerifyData& other)
-         : stack_balance(other.stack_balance)
-         , heap_balance(other.heap_balance)
-         , tracker_balance(other.tracker_balance)
-         , heap_scope_depth(other.heap_scope_depth) {
-        }
+         : stack_balance(other.stack_balance),
+           heap_balance(other.heap_balance),
+           tracker_balance(other.tracker_balance),
+           heap_scope_depth(other.heap_scope_depth)
+        {}
 
         VerifyData& operator=(const VerifyData& other) {
             stack_balance = other.stack_balance;
@@ -97,11 +95,17 @@ class MethodVerifier final
     bool pushHeap(uint32_t num_cells);
     bool popHeap(uint32_t num_cells);
 
+    bool verifyLocalSlots();
+
   private:
     PluginRuntime* rt_;
     ke::RefPtr<ControlFlowGraph> graph_;
     Block* block_;
+    const smx_rtti_method* method_ = nullptr;
     std::vector<Block*> verify_joins_;
+    ke::FixedArray<uint8_t> local_sizes_;
+    uint32_t arg_count_ = 0;
+    int code_version_;
     uint32_t code_features_;
     uint32_t startOffset_;
     size_t memSize_;
@@ -109,7 +113,6 @@ class MethodVerifier final
     size_t heapSize_;
     uint32_t max_stack_;
     const cell_t* code_;
-    const cell_t* method_;
     const cell_t* insn_;
     const cell_t* cip_;
     const cell_t* prev_cip_;

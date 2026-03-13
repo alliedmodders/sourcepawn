@@ -45,6 +45,8 @@ namespace smxdasm
         public const byte kStruct = 0x45;
         public const byte kEnumStruct = 0x46;
 
+        public const byte kLocalSlots = 0x60;
+
         public const byte kVoid = 0x70;
         public const byte kVariadic = 0x71;
         public const byte kByRef = 0x72;
@@ -104,7 +106,26 @@ namespace smxdasm
         public string FunctionTypeFromOffset(int offset)
         {
             TypeBuilder b = new TypeBuilder(smx_file_, bytes_, offset);
+            b.match(cb.kFunction);
             return b.DecodeFunction();
+        }
+
+        public string[] LocalTypesFromOffset(int offset)
+        {
+            if (offset == 0)
+                return new string[]{};
+
+            if (bytes_[offset] != cb.kLocalSlots)
+                return new string[]{"invalid local signature"};
+            offset++;
+
+            int count = (short)(bytes_[offset]) | ((short)(bytes_[offset + 1]) << 8);
+            offset += 2;
+
+            string[] locals = new string[count];
+            for (int i = 0; i < count; i++)
+                locals[i] = BuildTypename(ref offset);
+            return locals;
         }
 
         public string[] TypesetTypesFromOffset(int offset)
@@ -247,7 +268,7 @@ namespace smxdasm
                 return signature;
             }
 
-            private bool match(byte b)
+            public bool match(byte b)
             {
                 if (bytes_[offset_] != b)
                     return false;
@@ -287,6 +308,7 @@ namespace smxdasm
         public int pcode_start;
         public int pcode_end;
         public int signature;
+        public int locals;
     }
 
     public class SmxRttiMethodTable : SmxRttiListTable
@@ -304,6 +326,8 @@ namespace smxdasm
                 Methods[i].pcode_start = reader.ReadInt32();
                 Methods[i].pcode_end = reader.ReadInt32();
                 Methods[i].signature = reader.ReadInt32();
+                if (row_size_ >= 20)
+                    Methods[i].locals = reader.ReadInt32();
             }
         }
 

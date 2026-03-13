@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // This file is part of SourcePawn.
 //
@@ -39,18 +39,20 @@ using namespace SourcePawn;
 #define __ masm.
 
 CompilerBase::CompilerBase(PluginRuntime* rt, MethodInfo* method)
- : env_(Environment::get())
- , rt_(rt)
- , context_(rt->GetBaseContext())
- , image_(rt_->image())
- , method_info_(method)
- , error_(SP_ERROR_NONE)
- , pcode_start_(0)
- , code_start_(nullptr)
- , op_cip_(nullptr) {
+ : env_(Environment::get()),
+   rt_(rt),
+   context_(rt->GetBaseContext()),
+   image_(rt_->image()),
+   method_info_(method),
+   error_(SP_ERROR_NONE),
+   pcode_start_(0),
+   code_start_(nullptr),
+   op_cip_(nullptr)
+{
 }
 
 CompilerBase::~CompilerBase() {
+    method_info_->ClearCompilerCache();
 }
 
 CompiledFunction*
@@ -347,6 +349,10 @@ bool CompilerBase::visitJUMP(cell_t offset) {
         __ jmp(target);
     }
     return true;
+}
+
+cell_t CompilerBase::StackOffset(cell_t slot) {
+    return method_info_->StackOffset(slot);
 }
 
 } // namespace sp

@@ -1134,8 +1134,15 @@ namespace smxviewer
                     addDetailLine("pcode_start = 0x{0:x} ; {1}", method.pcode_start, method.pcode_start);
                     addDetailLine("pcode_end = 0x{0:x} ; {1}", method.pcode_end, method.pcode_end);
                     addDetailLine("signature = 0x{0:x} ; {1}", method.signature, method.signature);
+                    addDetailLine("locals = 0x{0:x} ; {1}", method.locals, method.locals);
                     addDetailLine("---");
                     addDetailLine("{0}", signature);
+                    string[] locals = file_.RttiData.LocalTypesFromOffset(method.locals);
+                    if (locals.Length > 0) {
+                        addDetailLine("locals:");
+                        for (int i = 0; i < locals.Length; i++)
+                            addDetailLine("{0}: {1}", i, locals[i]);
+                    }
                     endDetailUpdate();
                 }, null);
             }
