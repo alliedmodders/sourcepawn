@@ -32,11 +32,12 @@
 using namespace sp;
 using namespace SourcePawn;
 
-PluginRuntime::PluginRuntime(LegacyImage* image)
- : image_(image)
- , paused_(false)
- , computed_code_hash_(false)
- , computed_data_hash_(false) {
+PluginRuntime::PluginRuntime(SmxImage* image)
+ : image_(image),
+   paused_(false),
+   computed_code_hash_(false),
+   computed_data_hash_(false)
+{
     code_ = image_->DescribeCode();
     data_ = image_->DescribeData();
     memset(code_hash_, 0, sizeof(code_hash_));

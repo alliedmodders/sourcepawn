@@ -661,7 +661,7 @@ PluginContext::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
         return SP_ERROR_HEAPLOW;
 
     cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
-    LegacyImage* image = runtime()->image();
+    auto image = runtime()->image();
 
     if (autozero) {
         memset(reinterpret_cast<uint8_t*>(base) + iv_size, 0, bytes - iv_size);

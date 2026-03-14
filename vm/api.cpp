@@ -38,7 +38,6 @@
 #endif
 #include <amtl/am-string.h>
 #include "code-stubs.h"
-#include "smx-v1-image.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -224,7 +223,7 @@ SourcePawnEngine2::LoadPlugin(ICompilation* co, const char* file, int* err) {
 }
 
 static IPluginRuntime*
-LoadImage(std::unique_ptr<SmxV1Image> image, const char* file, char* error, size_t maxlength) {
+LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
     if (!image->validate()) {
         const char* errorMessage = image->errorMessage();
         if (!errorMessage)
@@ -268,7 +267,7 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
         return nullptr;
     }
 
-    std::unique_ptr<SmxV1Image> image(new SmxV1Image(fp));
+    std::unique_ptr<SmxImage> image(new SmxImage(fp));
     fclose(fp);
 
     return LoadImage(std::move(image), file, error, maxlength);
@@ -277,12 +276,12 @@ SourcePawnEngine2::LoadBinaryFromFile(const char* file, char* error, size_t maxl
 IPluginRuntime*
 SourcePawnEngine2::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
                                         void (*dtor)(uint8_t*), char* error, size_t maxlength) {
-    std::unique_ptr<SmxV1Image> image;
+    std::unique_ptr<SmxImage> image;
 
     if (dtor)
-        image = std::make_unique<SmxV1Image>(addr, size, dtor);
+        image = std::make_unique<SmxImage>(addr, size, dtor);
     else
-        image = std::make_unique<SmxV1Image>(addr, size);
+        image = std::make_unique<SmxImage>(addr, size);
 
     return LoadImage(std::move(image), file, error, maxlength);
 }
@@ -362,19 +361,8 @@ SourcePawnEngine2::Shutdown() {
 }
 
 IPluginRuntime*
-SourcePawnEngine2::CreateEmptyRuntime(const char* name, uint32_t memory) {
-    std::unique_ptr<EmptyImage> image(new EmptyImage(memory));
-
-    PluginRuntime* rt = new PluginRuntime(image.release());
-    if (!rt->Initialize()) {
-        delete rt;
-        return NULL;
-    }
-
-    if (!name)
-        name = "<anonymous>";
-    rt->SetNames(name, name);
-    return rt;
+SourcePawnEngine2::CreateEmptyRuntime(const char*, uint32_t) {
+  return nullptr;
 }
 
 bool
