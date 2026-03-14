@@ -24,19 +24,29 @@
 #include <smx/smx-v1.h>
 #include <sp_vm_types.h>
 #include "file-utils.h"
-#include "legacy-image.h"
 #include "rtti.h"
 
 namespace sp {
 
 using namespace debug;
 
-class SmxV1Image : public FileReader, public LegacyImage
+class SmxImage final : public FileReader
 {
   public:
-    SmxV1Image(FILE* fp);
-    SmxV1Image(uint8_t* addr, size_t length);
-    SmxV1Image(uint8_t* addr, size_t length, void (*dtor)(uint8_t*));
+    SmxImage(FILE* fp);
+    SmxImage(uint8_t* addr, size_t length);
+    SmxImage(uint8_t* addr, size_t length, void (*dtor)(uint8_t*));
+
+    struct Code {
+        const uint8_t* bytes;
+        size_t length;
+        int version;
+        uint32_t features;
+    };
+    struct Data {
+        const uint8_t* bytes;
+        size_t length;
+    };
 
     // This must be called to initialize the reader.
     bool validate();
@@ -50,34 +60,34 @@ class SmxV1Image : public FileReader, public LegacyImage
     }
 
   public:
-    Code DescribeCode() const override;
-    Data DescribeData() const override;
-    size_t NumNatives() const override;
-    const char* GetNative(size_t index) const override;
-    bool FindNative(const char* name, size_t* indexp) const override;
-    size_t NumPublics() const override;
-    void GetPublic(size_t index, uint32_t* offsetp, const char** namep) const override;
-    bool FindPublic(const char* name, size_t* indexp) const override;
-    size_t NumPubvars() const override;
-    void GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const override;
-    bool FindPubvar(const char* name, size_t* indexp) const override;
-    size_t HeapSize() const override;
-    size_t ImageSize() const override;
-    const char* LookupFile(uint32_t code_offset) const override;
-    const char* LookupFunction(uint32_t code_offset) const override;
-    bool LookupLine(uint32_t code_offset, uint32_t* line) const override;
+    Code DescribeCode() const;
+    Data DescribeData() const;
+    size_t NumNatives() const;
+    const char* GetNative(size_t index) const;
+    bool FindNative(const char* name, size_t* indexp) const;
+    size_t NumPublics() const;
+    void GetPublic(size_t index, uint32_t* offsetp, const char** namep) const;
+    bool FindPublic(const char* name, size_t* indexp) const;
+    size_t NumPubvars() const;
+    void GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const;
+    bool FindPubvar(const char* name, size_t* indexp) const;
+    size_t HeapSize() const;
+    size_t ImageSize() const;
+    const char* LookupFile(uint32_t code_offset) const;
+    const char* LookupFunction(uint32_t code_offset) const;
+    bool LookupLine(uint32_t code_offset, uint32_t* line) const;
     bool LookupFunctionAddress(const char* function, const char* file,
-                               ucell_t* addr) const override;
-    bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const override;
-    size_t NumFiles() const override;
-    const char* GetFileName(size_t index) const override;
-    size_t NumFunctions() const override;
-    const char* GetFunctionName(size_t index, const char** filename) const override;
-    bool HasRtti() const override;
-    const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const override;
+                               ucell_t* addr) const;
+    bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const;
+    size_t NumFiles() const;
+    const char* GetFileName(size_t index) const;
+    size_t NumFunctions() const;
+    const char* GetFunctionName(size_t index, const char** filename) const;
+    bool HasRtti() const;
+    const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
 
   private:
-    SmxV1Image();
+    SmxImage();
 
     struct Section {
         const char* name;

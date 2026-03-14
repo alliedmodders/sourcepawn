@@ -33,7 +33,7 @@ using namespace SourcePawn;
 
 class PluginRuntime;
 class PluginContext;
-class LegacyImage;
+class SmxImage;
 
 struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).
@@ -122,7 +122,7 @@ class CompilerBase : public PcodeVisitor
     Environment* env_;
     PluginRuntime* rt_;
     PluginContext* context_;
-    LegacyImage* image_;
+    SmxImage* image_;
     PoolScope scope_;
     ke::RefPtr<MethodInfo> method_info_;
     ke::RefPtr<ControlFlowGraph> graph_;

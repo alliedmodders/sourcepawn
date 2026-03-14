@@ -40,7 +40,7 @@ module.sources += [
   'rtti.cpp',
   'runtime-helpers.cpp',
   'scripted-invoker.cpp',
-  'smx-v1-image.cpp',
+  'smx-image.cpp',
   'stack-frames.cpp',
   'watchdog_timer.cpp',
 ]

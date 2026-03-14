@@ -12,27 +12,27 @@
 #include <amtl/am-string.h>
 #include <zlib/zlib.h>
 #include "environment.h"
-#include "smx-v1-image.h"
+#include "smx-image.h"
 
 using namespace ke;
 using namespace sp;
 
-SmxV1Image::SmxV1Image(FILE* fp)
+SmxImage::SmxImage(FILE* fp)
  : FileReader(fp) {
 }
 
-SmxV1Image::SmxV1Image(uint8_t* addr, size_t length)
+SmxImage::SmxImage(uint8_t* addr, size_t length)
  : FileReader(addr, length) {
 }
 
-SmxV1Image::SmxV1Image(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
+SmxImage::SmxImage(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
  : FileReader(addr, length, dtor) {
 }
 
 // Validating SMX v1 scripts is fairly expensive. We reserve real validation
 // for v2.
 bool
-SmxV1Image::validate() {
+SmxImage::validate() {
     if (length_ < sizeof(sp_file_hdr_t))
         return error("bad header");
 
@@ -171,8 +171,8 @@ SmxV1Image::validate() {
     return true;
 }
 
-const SmxV1Image::Section*
-SmxV1Image::findSection(const char* name) const {
+const SmxImage::Section*
+SmxImage::findSection(const char* name) const {
     for (size_t i = 0; i < sections_.size(); i++) {
         if (strcmp(sections_[i].name, name) == 0)
             return &sections_[i];
@@ -181,7 +181,7 @@ SmxV1Image::findSection(const char* name) const {
 }
 
 bool
-SmxV1Image::validateSection(const Section* section) const {
+SmxImage::validateSection(const Section* section) const {
     if (section->dataoffs >= length_)
         return false;
     if (section->size > length_ - section->dataoffs)
@@ -190,7 +190,7 @@ SmxV1Image::validateSection(const Section* section) const {
 }
 
 bool
-SmxV1Image::validateRttiHeader(const Section* section) const {
+SmxImage::validateRttiHeader(const Section* section) const {
     if (!validateSection(section))
         return false;
 
@@ -212,7 +212,7 @@ SmxV1Image::validateRttiHeader(const Section* section) const {
 }
 
 bool
-SmxV1Image::validateData() {
+SmxImage::validateData() {
     // .data is required.
     const Section* section = findSection(".data");
     if (!section)
@@ -233,7 +233,7 @@ SmxV1Image::validateData() {
 }
 
 bool
-SmxV1Image::validateCode() {
+SmxImage::validateCode() {
     // .code is required.
     const Section* section = findSection(".code");
     if (!section)
@@ -272,7 +272,7 @@ SmxV1Image::validateCode() {
 }
 
 bool
-SmxV1Image::validatePublics() {
+SmxImage::validatePublics() {
     const Section* section = findSection(".publics");
     if (!section)
         return true;
@@ -295,7 +295,7 @@ SmxV1Image::validatePublics() {
 }
 
 bool
-SmxV1Image::validatePubvars() {
+SmxImage::validatePubvars() {
     const Section* section = findSection(".pubvars");
     if (!section)
         return true;
@@ -318,7 +318,7 @@ SmxV1Image::validatePubvars() {
 }
 
 bool
-SmxV1Image::validateNatives() {
+SmxImage::validateNatives() {
     const Section* section = findSection(".natives");
     if (!section)
         return true;
@@ -341,12 +341,12 @@ SmxV1Image::validateNatives() {
 }
 
 bool
-SmxV1Image::validateName(size_t offset) const {
+SmxImage::validateName(size_t offset) const {
     return offset < names_section_->size;
 }
 
 bool
-SmxV1Image::validateRtti() {
+SmxImage::validateRtti() {
     const Section* rtti_data = findSection("rtti.data");
     if (!rtti_data)
         return true;
@@ -422,7 +422,7 @@ SmxV1Image::validateRtti() {
 }
 
 bool
-SmxV1Image::validateRttiEnums() {
+SmxImage::validateRttiEnums() {
     for (uint32_t i = 0; i < rtti_enums_->row_count; i++) {
         const smx_rtti_enum* enumType = getRttiRow<smx_rtti_enum>(rtti_enums_, i);
         if (!validateName(enumType->name))
@@ -432,7 +432,7 @@ SmxV1Image::validateRttiEnums() {
 }
 
 bool
-SmxV1Image::validateRttiEnumStructs() {
+SmxImage::validateRttiEnumStructs() {
     if (!rtti_enumstruct_fields_)
         return error("rtti.enumstruct_fields section missing");
 
@@ -461,7 +461,7 @@ SmxV1Image::validateRttiEnumStructs() {
 }
 
 bool
-SmxV1Image::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index) {
+SmxImage::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index) {
     if (index >= rtti_enumstruct_fields_->row_count)
         return error("invalid enum struct field index");
 
@@ -476,7 +476,7 @@ SmxV1Image::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, u
 }
 
 bool
-SmxV1Image::validateRttiClassdefs() {
+SmxImage::validateRttiClassdefs() {
     if (!rtti_fields_)
         return error("rtti.fields section missing");
 
@@ -505,7 +505,7 @@ SmxV1Image::validateRttiClassdefs() {
 }
 
 bool
-SmxV1Image::validateRttiField(uint32_t index) {
+SmxImage::validateRttiField(uint32_t index) {
     if (index >= rtti_fields_->row_count)
         return error("invalid classdef field index");
 
@@ -519,7 +519,7 @@ SmxV1Image::validateRttiField(uint32_t index) {
 }
 
 bool
-SmxV1Image::validateRttiMethods() {
+SmxImage::validateRttiMethods() {
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
         const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
         if (!validateName(method->name))
@@ -537,7 +537,7 @@ SmxV1Image::validateRttiMethods() {
 }
 
 bool
-SmxV1Image::validateRttiNatives() {
+SmxImage::validateRttiNatives() {
     for (uint32_t i = 0; i < rtti_natives_->row_count; i++) {
         const smx_rtti_native* native = getRttiRow<smx_rtti_native>(rtti_natives_, i);
         if (!validateName(native->name))
@@ -549,7 +549,7 @@ SmxV1Image::validateRttiNatives() {
 }
 
 bool
-SmxV1Image::validateRttiTypedefs() {
+SmxImage::validateRttiTypedefs() {
     for (uint32_t i = 0; i < rtti_typedefs_->row_count; i++) {
         const smx_rtti_typedef* typedefType = getRttiRow<smx_rtti_typedef>(rtti_typedefs_, i);
         if (!validateName(typedefType->name))
@@ -561,7 +561,7 @@ SmxV1Image::validateRttiTypedefs() {
 }
 
 bool
-SmxV1Image::validateRttiTypesets() {
+SmxImage::validateRttiTypesets() {
     for (uint32_t i = 0; i < rtti_typesets_->row_count; i++) {
         const smx_rtti_typeset* typesetType = getRttiRow<smx_rtti_typeset>(rtti_typesets_, i);
         if (!validateName(typesetType->name))
@@ -573,7 +573,7 @@ SmxV1Image::validateRttiTypesets() {
 }
 
 bool
-SmxV1Image::validateDebugInfo() {
+SmxImage::validateDebugInfo() {
     const Section* dbginfo = findSection(".dbg.info");
     if (!dbginfo)
         return true;
@@ -669,7 +669,7 @@ SmxV1Image::validateDebugInfo() {
 }
 
 bool
-SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table) {
+SmxImage::validateDebugVariables(const smx_rtti_table_header* rtti_table) {
     for (uint32_t i = 0; i < rtti_table->row_count; i++) {
         const smx_rtti_debug_var* debug_var = getRttiRow<smx_rtti_debug_var>(rtti_table, i);
         if (debug_var->vclass > kVarClass_Max)
@@ -693,7 +693,7 @@ SmxV1Image::validateDebugVariables(const smx_rtti_table_header* rtti_table) {
 }
 
 bool
-SmxV1Image::validateSymbolAddress(int32_t address, uint8_t vclass) {
+SmxImage::validateSymbolAddress(int32_t address, uint8_t vclass) {
     switch (vclass) {
         case kVarClass_Global:
         case kVarClass_Static:
@@ -712,7 +712,7 @@ SmxV1Image::validateSymbolAddress(int32_t address, uint8_t vclass) {
 }
 
 bool
-SmxV1Image::validateDebugMethods() {
+SmxImage::validateDebugMethods() {
     for (uint32_t i = 0; i < rtti_dbg_methods_->row_count; i++) {
         const smx_rtti_debug_method* debug_method =
             getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, i);
@@ -725,7 +725,7 @@ SmxV1Image::validateDebugMethods() {
 }
 
 bool
-SmxV1Image::validateTags() {
+SmxImage::validateTags() {
     const Section* section = findSection(".tags");
     if (!section)
         return true;
@@ -748,7 +748,7 @@ SmxV1Image::validateTags() {
 }
 
 auto
-SmxV1Image::DescribeCode() const -> Code {
+SmxImage::DescribeCode() const -> Code {
     Code code;
     code.bytes = code_.blob();
     code.length = code_.length();
@@ -758,7 +758,7 @@ SmxV1Image::DescribeCode() const -> Code {
 }
 
 auto
-SmxV1Image::DescribeData() const -> Data {
+SmxImage::DescribeData() const -> Data {
     Data data;
     data.bytes = data_.blob();
     data.length = data_.length();
@@ -766,18 +766,18 @@ SmxV1Image::DescribeData() const -> Data {
 }
 
 size_t
-SmxV1Image::NumNatives() const {
+SmxImage::NumNatives() const {
     return natives_.length();
 }
 
 const char*
-SmxV1Image::GetNative(size_t index) const {
+SmxImage::GetNative(size_t index) const {
     assert(index < natives_.length());
     return names_ + natives_[index].name;
 }
 
 bool
-SmxV1Image::FindNative(const char* name, size_t* indexp) const {
+SmxImage::FindNative(const char* name, size_t* indexp) const {
     for (size_t i = 0; i < natives_.length(); i++) {
         const char* candidate = names_ + natives_[i].name;
         if (strcmp(candidate, name) == 0) {
@@ -790,12 +790,12 @@ SmxV1Image::FindNative(const char* name, size_t* indexp) const {
 }
 
 size_t
-SmxV1Image::NumPublics() const {
+SmxImage::NumPublics() const {
     return publics_.length();
 }
 
 void
-SmxV1Image::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const {
+SmxImage::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const {
     assert(index < publics_.length());
     if (offsetp)
         *offsetp = publics_[index].address;
@@ -804,7 +804,7 @@ SmxV1Image::GetPublic(size_t index, uint32_t* offsetp, const char** namep) const
 }
 
 bool
-SmxV1Image::FindPublic(const char* name, size_t* indexp) const {
+SmxImage::FindPublic(const char* name, size_t* indexp) const {
     if (publics_cache_.empty()) {
         for (size_t i = 0; i < publics_.length(); i++) {
             std::string_view key(names_ + publics_[i].name);
@@ -822,12 +822,12 @@ SmxV1Image::FindPublic(const char* name, size_t* indexp) const {
 }
 
 size_t
-SmxV1Image::NumPubvars() const {
+SmxImage::NumPubvars() const {
     return pubvars_.length();
 }
 
 void
-SmxV1Image::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const {
+SmxImage::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const {
     assert(index < pubvars_.length());
     if (offsetp)
         *offsetp = pubvars_[index].address;
@@ -836,7 +836,7 @@ SmxV1Image::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const
 }
 
 bool
-SmxV1Image::FindPubvar(const char* name, size_t* indexp) const {
+SmxImage::FindPubvar(const char* name, size_t* indexp) const {
     if (pubvars_cache_.empty()) {
         for (size_t i = 0; i < pubvars_.length(); i++) {
             std::string_view key(names_ + pubvars_[i].name);
@@ -854,17 +854,17 @@ SmxV1Image::FindPubvar(const char* name, size_t* indexp) const {
 }
 
 size_t
-SmxV1Image::HeapSize() const {
+SmxImage::HeapSize() const {
     return data_->memsize;
 }
 
 size_t
-SmxV1Image::ImageSize() const {
+SmxImage::ImageSize() const {
     return length_;
 }
 
 const char*
-SmxV1Image::LookupFile(uint32_t addr) const {
+SmxImage::LookupFile(uint32_t addr) const {
     int high = debug_files_.length();
     int low = -1;
 
@@ -886,7 +886,7 @@ SmxV1Image::LookupFile(uint32_t addr) const {
 
 template <typename SymbolType, typename DimType>
 const char*
-SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr) const {
+SmxImage::lookupFunction(const SymbolType* syms, uint32_t addr) const {
     const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
     const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
     for (uint32_t i = 0; i < debug_info_->num_syms; i++) {
@@ -908,7 +908,7 @@ SmxV1Image::lookupFunction(const SymbolType* syms, uint32_t addr) const {
 }
 
 const char*
-SmxV1Image::LookupFunction(uint32_t code_offset) const {
+SmxImage::LookupFunction(uint32_t code_offset) const {
     if (auto method = GetMethodRttiByOffset(code_offset))
         return names_ + method->name;
 
@@ -933,12 +933,12 @@ SmxV1Image::LookupFunction(uint32_t code_offset) const {
 }
 
 bool
-SmxV1Image::HasRtti() const {
+SmxImage::HasRtti() const {
     return rtti_data_ != nullptr;
 }
 
 const smx_rtti_method*
-SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset) const {
+SmxImage::GetMethodRttiByOffset(uint32_t pcode_offset) const {
     if (!rtti_methods_)
         return nullptr;
 
@@ -951,7 +951,7 @@ SmxV1Image::GetMethodRttiByOffset(uint32_t pcode_offset) const {
 }
 
 bool
-SmxV1Image::LookupLine(uint32_t addr, uint32_t* line) const {
+SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
     int high = debug_lines_.length();
     int low = -1;
 
@@ -972,12 +972,12 @@ SmxV1Image::LookupLine(uint32_t addr, uint32_t* line) const {
 }
 
 size_t
-SmxV1Image::NumFiles() const {
+SmxImage::NumFiles() const {
     return debug_files_.length();
 }
 
 const char*
-SmxV1Image::GetFileName(size_t index) const {
+SmxImage::GetFileName(size_t index) const {
     if (index >= debug_files_.length())
         return nullptr;
 
@@ -989,7 +989,7 @@ SmxV1Image::GetFileName(size_t index) const {
 
 template <typename SymbolType, typename DimType>
 uint32_t
-SmxV1Image::getFunctionCount(const SymbolType* syms) const {
+SmxImage::getFunctionCount(const SymbolType* syms) const {
     const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
     const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
     uint32_t func_count = 0;
@@ -1009,7 +1009,7 @@ SmxV1Image::getFunctionCount(const SymbolType* syms) const {
 }
 
 size_t
-SmxV1Image::NumFunctions() const {
+SmxImage::NumFunctions() const {
     if (rtti_methods_) {
         return rtti_methods_->row_count;
     }
@@ -1029,7 +1029,7 @@ SmxV1Image::NumFunctions() const {
 
 template <typename SymbolType, typename DimType>
 const char*
-SmxV1Image::getFunctionName(const SymbolType* syms, const char** filename, uint32_t index) const {
+SmxImage::getFunctionName(const SymbolType* syms, const char** filename, uint32_t index) const {
     const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
     const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
     uint32_t func_count = 0;
@@ -1057,7 +1057,7 @@ SmxV1Image::getFunctionName(const SymbolType* syms, const char** filename, uint3
 }
 
 const char*
-SmxV1Image::GetFunctionName(size_t index, const char** filename) const {
+SmxImage::GetFunctionName(size_t index, const char** filename) const {
     if (rtti_methods_) {
         if (index >= rtti_methods_->row_count)
             return nullptr;
@@ -1078,7 +1078,7 @@ SmxV1Image::GetFunctionName(size_t index, const char** filename) const {
 
 template <typename SymbolType, typename DimType>
 bool
-SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr,
+SmxImage::getFunctionAddress(const SymbolType* syms, const char* function, ucell_t* funcaddr,
                                uint32_t& index) const {
     const uint8_t* cursor = reinterpret_cast<const uint8_t*>(syms);
     const uint8_t* cursor_end = cursor + debug_symbols_section_->size;
@@ -1101,7 +1101,7 @@ SmxV1Image::getFunctionAddress(const SymbolType* syms, const char* function, uce
 }
 
 bool
-SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr) const {
+SmxImage::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr) const {
     *funcaddr = 0;
     if (rtti_methods_) {
         for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
@@ -1153,7 +1153,7 @@ SmxV1Image::LookupFunctionAddress(const char* function, const char* file, ucell_
 }
 
 bool
-SmxV1Image::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr) const {
+SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr) const {
     // Find a suitable "breakpoint address" close to the indicated line (and in
     // the specified file). The address is moved up to the next "breakable" line
     // if no "breakpoint" is available on the specified line. You can use function

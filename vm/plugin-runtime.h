@@ -19,7 +19,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
-#include "legacy-image.h"
+#include "smx-image.h"
 #include "scripted-invoker.h"
 
 namespace sp {
@@ -43,7 +43,7 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
                       public ke::InlineListNode<PluginRuntime>
 {
   public:
-    PluginRuntime(LegacyImage* image);
+    PluginRuntime(SmxImage* image);
     ~PluginRuntime();
 
     bool Initialize();
@@ -122,8 +122,8 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     }
 
   public:
-    typedef LegacyImage::Code Code;
-    typedef LegacyImage::Data Data;
+    typedef SmxImage::Code Code;
+    typedef SmxImage::Data Data;
 
     const Code& code() const {
         return code_;
@@ -131,7 +131,7 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     const Data& data() const {
         return data_;
     }
-    LegacyImage* image() const {
+    SmxImage* image() const {
         return image_.get();
     }
     PluginContext* context() const {
@@ -151,7 +151,7 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     };
 
   private:
-    std::unique_ptr<sp::LegacyImage> image_;
+    std::unique_ptr<sp::SmxImage> image_;
     std::unique_ptr<uint8_t[]> aligned_code_;
     std::unique_ptr<floattbl_t[]> float_table_;
     std::string name_;

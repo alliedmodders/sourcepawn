@@ -1665,11 +1665,9 @@ class ISourcePawnEngine2
     virtual void Shutdown() = 0;
 
     /**
-     * @brief Creates an empty plugin with a blob of memory.
+     * @brief No longer implemented. Returns NULL.
      *
-     * @param name    Name, for debugging (NULL for anonymous).
-     * @param bytes    Number of bytes of memory (hea+stk).
-     * @return      New runtime, or NULL if not enough memory.
+     * @return      NULL.
      */
     virtual IPluginRuntime* CreateEmptyRuntime(const char* name, uint32_t memory) = 0;
 
