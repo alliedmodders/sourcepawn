@@ -51,9 +51,8 @@ class SmxImage final : public FileReader
     // This must be called to initialize the reader.
     bool validate();
 
-    const sp_file_hdr_t* hdr() const {
-        return hdr_;
-    }
+    const sp_file_hdr_t* hdr() const { return hdr_; }
+    const char* names() const { return names_; }
 
     const char* errorMessage() const {
         return error_.c_str();

@@ -293,6 +293,12 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
 
     if (decl->is_public() || decl->is_used())
         EnqueueDebugSymbol(decl, asm_.position());
+
+    if (decl->is_public()) {
+        sp_file_pubvars_t& pubvar = pubvars_->add();
+        pubvar.address = decl->addr();
+        pubvar.name = names_->add(decl->name());
+    }
 }
 
 void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
@@ -324,12 +330,6 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
         } else {
             data_.AddZeroes(cells);
         }
-    }
-
-    if (decl->is_public() || (decl->is_used() && !decl->as<ConstDecl>())) {
-        sp_file_pubvars_t& pubvar = pubvars_->add();
-        pubvar.address = decl->addr();
-        pubvar.name = names_->add(decl->name());
     }
 }
 
