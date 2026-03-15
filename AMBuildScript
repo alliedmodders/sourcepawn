@@ -383,6 +383,7 @@ class SourcePawn(object):
         self.BuildSpcomp(builder)
         self.BuildSpshell(builder)
         self.BuildVerifier(builder)
+        self.BuildSmxDump(builder)
 
     def BuildStaticCoreLib(self, builder):
         cxx = builder.cxx
@@ -475,6 +476,9 @@ class SourcePawn(object):
 
         builder.Add(binary)
 
+    def BuildSmxDump(self, builder):
+        builder.Build('tools/smxdump/AMBuild', self.vars)
+
     def AddStaticLibraries(self, binary):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
@@ -550,6 +554,13 @@ class SourcePawn(object):
         for cxx in self.root.targets:
             self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
         self.included_zlib = True
+
+    def SpProgram(self, builder, name):
+        binary = self.root.Program(builder, name)
+        self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
+        self.AddStaticLibraries(binary)
+        return binary
 
     def BuildForArch(self, scripts, cxx, extra_vars={}):
         new_vars = copy.copy(self.vars)
