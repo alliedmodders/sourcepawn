@@ -1,5 +1,5 @@
 /**
- * vim: set ts=8 sw=2 tw=99 sts=2 et:
+ * vim: set ts=8 sw=4 tw=99 sts=4 et:
  * =============================================================================
  * SourceMod
  * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
@@ -41,6 +41,7 @@ namespace sp {
 void SpewOpcode(FILE* fp, sp::PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
 
 // These count opcodes in # of cells, not bytes.
+const char* GetOpcodeName(OPCODE op);
 int GetCaseTableSize(const uint8_t* cip);
 int GetOpcodeSize(OPCODE op);
 
