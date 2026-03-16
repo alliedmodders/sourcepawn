@@ -207,6 +207,10 @@ class CodeGenerator final
     void LeaveInt64SlotScope();
     cell_t AcquireInt64Slot(Expr* expr);
 
+    void EnterInt32SlotScope();
+    void LeaveInt32SlotScope();
+    cell_t AcquireInt32Slot(Expr* expr);
+
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;
 
@@ -269,12 +273,15 @@ class CodeGenerator final
     int max_func_memory_ = 0;
     CallGraph callgraph_;
     cell_t int64_slot_region_ = 0;
+    cell_t int32_slot_region_ = 0;
 
     AutoCountErrors errors_;
 
     // Stack slot management.
     std::vector<std::optional<BitSet>> used_int64_slots_;
     BitSet free_int64_slots_;
+    std::vector<std::optional<BitSet>> used_int32_slots_;
+    BitSet free_int32_slots_;
 
     std::unordered_map<sp::Atom*, void(CodeGenerator::*)(CallExpr*)> builtins_;
 };

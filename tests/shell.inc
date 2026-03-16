@@ -13,6 +13,7 @@ native void writenum(int n);
 native void printfloat(float n);
 native void writefloat(float n);
 native void printnums(any:...); // note: int only, no int64
+native void printnums64(...); // note: int64 only
 native void print(const char[] str);
 native void dump_stack_trace();
 native void report_error();

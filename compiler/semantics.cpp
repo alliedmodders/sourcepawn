@@ -100,6 +100,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
     });
 
     ke::SaveRestore<uint32_t> int64_slot_scope(sc_->temp_int64_slots());
+    ke::SaveRestore<uint32_t> int32_slot_scope(sc_->temp_int32_slots());
 
     switch (stmt->kind()) {
         case StmtKind::ChangeScopeNode:
@@ -2079,7 +2080,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     bool lvalue = param->lvalue();
     if (arg->type_info().is_varargs) {
         assert(!handling_this);
-        assert(!param->val().type()->isInt64());
 
         // Always pass by reference.
         if (val->ident == iVARIABLE) {
@@ -2090,15 +2090,18 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     report(param, 22); // need lvalue
                     return nullptr;
                 }
-                NeedsHeapAlloc(param);
+                NeedsTempSlot(param);
             } else if (!lvalue) {
-                NeedsHeapAlloc(param);
+                NeedsTempSlot(param);
             }
         } else if (val->ident == iCONSTEXPR || val->ident == iEXPRESSION) {
-            NeedsHeapAlloc(param);
+            NeedsTempSlot(param);
         }
-        if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), val->type()))
+        if (val->type()->isInt64()) {
+            // Hack: allow this since we don't have typed varargs right now.
+        } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), val->type())) {
             report(param, 213) << arg->type() << val->type();
+        }
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
 
@@ -2875,6 +2878,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
     info->set_num_int64_slots(sc.max_int64_slots());
+    info->set_num_int32_slots(sc.max_int32_slots());
     info->set_returns_value(sc_->returns_value());
     info->set_always_returns(sc_->always_returns());
 
@@ -2972,6 +2976,21 @@ void Semantics::NeedsInt64Slot(Expr* expr, unsigned int count) {
     sc_->temp_int64_slots() += count;
     if (sc_->temp_int64_slots() > sc_->max_int64_slots())
         sc_->max_int64_slots() = sc_->temp_int64_slots();
+}
+
+void Semantics::NeedsInt32Slot(Expr* expr) {
+    expr->set_can_alloc_int32_slot(true);
+    sc_->temp_int32_slots() += 1;
+    if (sc_->temp_int32_slots() > sc_->max_int32_slots())
+        sc_->max_int32_slots() = sc_->temp_int32_slots();
+}
+
+void Semantics::NeedsTempSlot(Expr* expr) {
+    Type* type = expr->val().type();
+    if (type->isInt64())
+        NeedsInt64Slot(expr);
+    else
+        NeedsInt32Slot(expr);
 }
 
 void Semantics::AssignHeapOwnership(ParseNode* node) {
