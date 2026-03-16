@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2004-2015 AlliedModers LLC
 //
@@ -101,20 +101,20 @@ class SmxImage final : public FileReader
     {
       public:
         Blob()
-         : header_(nullptr)
-         , section_(nullptr)
-         , blob_(nullptr)
-         , length_(0)
-         , features_(0) {
-        }
+         : header_(nullptr),
+           section_(nullptr),
+           blob_(nullptr),
+           length_(0),
+           features_(0)
+        {}
         Blob(const Section* header, const T* section, const uint8_t* blob, size_t length,
              uint32_t features)
-         : header_(header)
-         , section_(section)
-         , blob_(blob)
-         , length_(length)
-         , features_(features) {
-        }
+         : header_(header),
+           section_(section),
+           blob_(blob),
+           length_(length),
+           features_(features)
+        {}
 
         size_t size() const {
             return section_->size;
@@ -151,13 +151,13 @@ class SmxImage final : public FileReader
     {
       public:
         List()
-         : section_(nullptr)
-         , length_(0) {
-        }
+         : section_(nullptr),
+           length_(0)
+        {}
         List(const T* section, size_t length)
-         : section_(section)
-         , length_(length) {
-        }
+         : section_(section),
+           length_(length)
+        {}
 
         size_t length() const {
             return length_;
@@ -194,6 +194,7 @@ class SmxImage final : public FileReader
     const RttiData* rttidata() const {
         return rtti_data_.get();
     }
+    const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
 
   protected:
     bool error(const char* msg) {
@@ -224,7 +225,7 @@ class SmxImage final : public FileReader
     bool validateSymbolAddress(int32_t address, uint8_t vclass);
     bool validateTags();
 
-  private:
+  public:
     template <typename SymbolType, typename DimType>
     const char* lookupFunction(const SymbolType* syms, uint32_t addr) const;
     template <typename SymbolType, typename DimType>
@@ -247,6 +248,7 @@ class SmxImage final : public FileReader
         return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
     }
 
+  public:
     template <typename T>
     const T* getRttiRow(const smx_rtti_table_header* header, size_t index) const {
         assert(index < header->row_count);

@@ -1,5 +1,5 @@
 /**
- * vim: set ts=8 sw=2 tw=99 sts=2 et:
+ * vim: set ts=8 sw=4 tw=99 sts=4 et:
  * =============================================================================
  * SourceMod
  * Copyright _(C) 2004-2008 AlliedModders LLC.  All rights reserved.
@@ -33,8 +33,9 @@
 using namespace sp;
 using namespace SourcePawn;
 
-const char*
-GetOpcodeName(OPCODE op) {
+namespace sp {
+
+const char* GetOpcodeName(OPCODE op) {
     static std::vector<const char*> names(OPCODES_LAST, nullptr);
 #define FOR_EACH_OPCODE(op, val, text, cells) names[OP_##op] = text;
     OPCODE_LIST(FOR_EACH_OPCODE)
@@ -42,10 +43,7 @@ GetOpcodeName(OPCODE op) {
     return names[op];
 }
 
-namespace sp {
-
-int
-GetOpcodeSize(OPCODE op) {
+int GetOpcodeSize(OPCODE op) {
     static std::vector<int> sizes(OPCODES_LAST, 0);
 #define FOR_EACH_OPCODE(op, val, text, cells) sizes[OP_##op] = cells;
     OPCODE_LIST(FOR_EACH_OPCODE)
@@ -53,15 +51,13 @@ GetOpcodeSize(OPCODE op) {
     return sizes[op];
 }
 
-int
-GetCaseTableSize(const uint8_t* cip) {
+int GetCaseTableSize(const uint8_t* cip) {
     assert((OPCODE) * reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
     cip += sizeof(cell_t);
     return (*reinterpret_cast<const cell_t*>(cip) * 2) + 3;
 }
 
-void
-SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip) {
+void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip) {
     fprintf(fp, "  [%05d:%04d]", int(cip - (cell_t*)runtime->code().bytes), int(cip - start));
 
     if (*cip >= OPCODES_LAST) {
