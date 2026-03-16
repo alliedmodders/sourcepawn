@@ -606,6 +606,8 @@ class Expr : public ParseNode
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
     bool can_alloc_int64_slot() const { return can_alloc_int64_slot_; }
     void set_can_alloc_int64_slot(bool b) { can_alloc_int64_slot_ = b; }
+    bool can_alloc_int32_slot() const { return can_alloc_int32_slot_; }
+    void set_can_alloc_int32_slot(bool b) { can_alloc_int32_slot_ = b; }
     bool discard() const { return discard_; }
     void set_discard() { discard_ = true; }
 
@@ -628,6 +630,7 @@ class Expr : public ParseNode
     bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
     bool can_alloc_int64_slot_ : 1;
+    bool can_alloc_int32_slot_ : 1;
     bool discard_ : 1;
 };
 
@@ -1630,6 +1633,8 @@ class FunctionDecl : public Decl
 
     int32_t num_int64_slots() const { return num_int64_slots_; }
     void set_num_int64_slots(int32_t num_int64_slots) { num_int64_slots_ = num_int64_slots; }
+    int32_t num_int32_slots() const { return num_int32_slots_; }
+    void set_num_int32_slots(int32_t num_int32_slots) { num_int32_slots_ = num_int32_slots; }
 
     const PoolForwardList<FunctionDecl*>* refers_to() const {
         return refers_to_;
@@ -1668,6 +1673,7 @@ class FunctionDecl : public Decl
     CGInfo* cg_ = nullptr;
 
     int32_t num_int64_slots_ = 0;
+    int32_t num_int32_slots_ = 0;
 
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);

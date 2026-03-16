@@ -154,6 +154,21 @@ static cell_t PrintNums(IPluginContext* cx, const cell_t* params)
   return 1;
 }
 
+static cell_t PrintNums64(IPluginContext* cx, const cell_t* params)
+{
+  for (size_t i = 1; i <= size_t(params[0]); i++) {
+    int err;
+    cell_t* addr;
+    if ((err = cx->LocalToPhysAddr(params[i], &addr)) != SP_ERROR_NONE)
+      return cx->ThrowNativeErrorEx(err, "Could not read argument");
+    fprintf(stdout, "%" PRIi64, *reinterpret_cast<int64_t*>(addr));
+    if (i != size_t(params[0]))
+      fprintf(stdout, ", ");
+  }
+  fprintf(stdout, "\n");
+  return 1;
+}
+
 static cell_t Printf(IPluginContext* cx, const cell_t* params) {
   char* p;
   cx->LocalToString(params[1], &p);
@@ -429,6 +444,7 @@ static int Execute(const char* file)
   BindNative(rt, "printnum64", PrintNum64);
   BindNative(rt, "writenum", WriteNum);
   BindNative(rt, "printnums", PrintNums);
+  BindNative(rt, "printnums64", PrintNums64);
   BindNative(rt, "printfloat", PrintFloat);
   BindNative(rt, "writefloat", WriteFloat);
   BindNative(rt, "donothing", DoNothing);
