@@ -43,7 +43,17 @@ void SpewOpcode(FILE* fp, sp::PluginRuntime* runtime, const cell_t* start, const
 // These count opcodes in # of cells, not bytes.
 const char* GetOpcodeName(OPCODE op);
 int GetCaseTableSize(const uint8_t* cip);
-int GetOpcodeSize(OPCODE op);
+
+static inline int GetOpcodeSize(OPCODE op) {
+    switch (op) {
+#define FOR_EACH_OPCODE(op, val, text, cells) case OP_##op: return cells;
+        OPCODE_LIST(FOR_EACH_OPCODE)
+#undef FOR_EACH_OPCODE
+        default:
+            assert(false);
+            return 0;
+    }
+}
 
 static inline const uint8_t*
 NextInstruction(const uint8_t* cip) {
