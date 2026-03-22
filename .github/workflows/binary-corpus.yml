@@ -1,0 +1,56 @@
+name: Source Binary Corpus Tests
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        slice: [1,2,3,4,5]
+        build_target: [x64]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+
+      - uses: actions/checkout@v3
+        with:
+          repository: dvander/sourcepawn-binary-corpus
+          submodules: recursive
+          path: sourcepawn-binary-corpus
+
+      # Setup Python for AMBuild
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Install AMBuild
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install git+https://github.com/alliedmodders/ambuild
+          pip install progressbar2
+
+      - name: Select clang compiler
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+          clang --version
+          clang++ --version
+
+      - name: Build
+        run: |
+          mkdir objdir
+          cd objdir
+          python ../configure.py --enable-optimize --enable-debug --enable-asan --targets=${{ matrix.build_target }}
+          ambuild
+          echo "VERIFIER=objdir/verifier/linux-x86_64/verifier" >> $GITHUB_ENV
+
+      - name: Test
+        run: |
+          python tools/corpus/verify.py ${VERIFIER} ${GITHUB_WORKSPACE}/sourcepawn-binary-corpus -j \
+                 --fail-fast --num-slice 5 --slice ${{ matrix.slice }}
