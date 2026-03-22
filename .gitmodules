@@ -1,3 +1,6 @@
 [submodule "third_party/amtl"]
 	path = third_party/amtl
 	url = https://github.com/alliedmodders/amtl
+[submodule "third_party/lz4"]
+	path = third_party/lz4
+	url = https://github.com/lz4/lz4

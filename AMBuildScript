@@ -335,6 +335,7 @@ class SourcePawn(object):
         self.spshell = {}
         self.spcomp = []
         self.zlib = None
+        self.lz4 = None
         self.libamtl = None
         self.static_libsp = {}
         self.dynamic_libsp = {}
@@ -344,6 +345,7 @@ class SourcePawn(object):
 
     def BuildCore(self):
         self.EnsureZlib()
+        self.EnsureLz4()
         self.EnsureAmtl()
 
         for cxx in self.root.targets:
@@ -481,6 +483,9 @@ class SourcePawn(object):
         builder.Build('tools/smxdump/AMBuild', self.vars)
 
     def AddStaticLibraries(self, binary):
+        self.EnsureZlib()
+        self.EnsureLz4()
+
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
 
@@ -489,6 +494,7 @@ class SourcePawn(object):
         arch = binary.compiler.target.arch
         binary.compiler.linkflags += [
             self.zlib[arch],
+            self.lz4[arch],
             self.libamtl[arch],
             self.static_libsp[arch],
         ]
@@ -555,6 +561,14 @@ class SourcePawn(object):
         for cxx in self.root.targets:
             self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
         self.included_zlib = True
+
+    def EnsureLz4(self):
+        if self.lz4 is not None:
+            return
+        self.lz4 = {}
+        for cxx in self.root.targets:
+            self.lz4[cxx.target.arch] = self.BuildForArch("third_party/AMBuild.lz4", cxx)
+        self.included_lz4 = True
 
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)

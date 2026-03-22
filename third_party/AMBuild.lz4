@@ -1,0 +1,12 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+library = Root.StaticLibrary(builder, 'lz4')
+library.compiler.includes += [
+  os.path.join(builder.currentSourcePath, '..', 'third_party'),
+]
+library.sources += [
+    'lz4/lib/lz4.c',
+]
+
+rvalue = builder.Add(library).binary
