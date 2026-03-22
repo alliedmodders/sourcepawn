@@ -43,14 +43,6 @@ const char* GetOpcodeName(OPCODE op) {
     return names[op];
 }
 
-int GetOpcodeSize(OPCODE op) {
-    static std::vector<int> sizes(OPCODES_LAST, 0);
-#define FOR_EACH_OPCODE(op, val, text, cells) sizes[OP_##op] = cells;
-    OPCODE_LIST(FOR_EACH_OPCODE)
-#undef FOR_EACH_OPCODE
-    return sizes[op];
-}
-
 int GetCaseTableSize(const uint8_t* cip) {
     assert((OPCODE) * reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
     cip += sizeof(cell_t);
