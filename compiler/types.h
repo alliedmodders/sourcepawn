@@ -29,7 +29,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_types.h>
 #include "pool-objects.h"
-#include "shared/string-atom.h"
+#include "utils/string-atom.h"
 #include "stl/stl-vector.h"
 
 typedef int32_t cell;

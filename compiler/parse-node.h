@@ -29,9 +29,9 @@
 #include "ast-types.h"
 #include "expressions.h"
 #include "lexer.h"
-#include "pool-allocator.h"
 #include "sc.h"
-#include "shared/string-pool.h"
+#include "utils/pool-allocator.h"
+#include "utils/string-pool.h"
 #include "symbols.h"
 
 namespace sp {

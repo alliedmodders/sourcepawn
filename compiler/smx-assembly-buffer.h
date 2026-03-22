@@ -17,7 +17,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
-#include "shared/byte-buffer.h"
+#include "utils/byte-buffer.h"
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 

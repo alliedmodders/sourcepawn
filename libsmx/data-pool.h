@@ -27,7 +27,7 @@
 
 #include <amtl/am-hashmap.h>
 #include <amtl/am-vector.h>
-#include "shared/byte-buffer.h"
+#include "utils/byte-buffer.h"
 
 namespace sp {
 

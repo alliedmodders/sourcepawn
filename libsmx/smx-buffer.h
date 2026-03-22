@@ -19,7 +19,7 @@
 #define _include_sp_smx_memory_buffer_h_
 
 #include <string.h>
-#include <shared/byte-buffer.h>
+#include <utils/byte-buffer.h>
 
 namespace sp {
 

@@ -26,13 +26,9 @@
 #include <new>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <amtl/am-bits.h>
-#include <amtl/am-fixedarray.h>
-#include <amtl/am-hashtable.h>
-#include <amtl/am-vector.h>
-
-#include "shared/string-pool.h"
 
 namespace sp {
 

@@ -22,7 +22,7 @@
 #include <limits>
 #include <memory>
 
-#include "shared/string-pool.h"
+#include "utils/string-pool.h"
 #include "stl/stl-unordered-map.h"
 #include "stl/stl-vector.h"
 #include "source-file.h"
