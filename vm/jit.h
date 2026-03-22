@@ -25,7 +25,6 @@
 #include "macro-assembler.h"
 #include "opcodes.h"
 #include "pcode-visitor.h"
-#include "pool-allocator.h"
 
 namespace sp {
 
@@ -123,7 +122,6 @@ class CompilerBase : public PcodeVisitor
     PluginRuntime* rt_;
     PluginContext* context_;
     SmxImage* image_;
-    PoolScope scope_;
     ke::RefPtr<MethodInfo> method_info_;
     ke::RefPtr<ControlFlowGraph> graph_;
     ke::RefPtr<Block> block_;
