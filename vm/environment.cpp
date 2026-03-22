@@ -17,7 +17,6 @@
 #include "debug-metadata.h"
 #include "method-info.h"
 #include "plugin-context.h"
-#include "pool-allocator.h"
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
 #    include "jit.h"
@@ -73,7 +72,6 @@ Environment::get() {
 
 bool
 Environment::Initialize() {
-    PoolAllocator::InitDefault();
     api_v1_ = std::make_unique<SourcePawnEngine>();
     api_v2_ = std::make_unique<SourcePawnEngine2>();
     watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
@@ -92,7 +90,6 @@ Environment::Shutdown() {
     builtins_ = nullptr;
     code_stubs_ = nullptr;
     code_alloc_ = nullptr;
-    PoolAllocator::FreeDefault();
 
     assert(sEnvironment == this);
     sEnvironment = nullptr;

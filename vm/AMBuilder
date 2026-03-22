@@ -36,7 +36,6 @@ module.sources += [
   'opcodes.cpp',
   'plugin-context.cpp',
   'plugin-runtime.cpp',
-  'pool-allocator.cpp',
   'rtti.cpp',
   'runtime-helpers.cpp',
   'scripted-invoker.cpp',
