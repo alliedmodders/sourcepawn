@@ -27,8 +27,8 @@
 #include "libsmx/smx-builder.h"
 #include "libsmx/smx-encoding.h"
 #include "sc.h"
-#include "shared/byte-buffer.h"
-#include "shared/string-pool.h"
+#include "utils/byte-buffer.h"
+#include "utils/string-pool.h"
 
 namespace sp {
 namespace cc {

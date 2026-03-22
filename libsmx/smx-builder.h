@@ -28,7 +28,7 @@
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <smx/smx-typeinfo.h>
-#include "shared/string-atom.h"
+#include "utils/string-atom.h"
 #include "smx-buffer.h"
 
 namespace sp {

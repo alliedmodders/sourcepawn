@@ -33,8 +33,8 @@
 #include "libsmx/smx-encoding.h"
 #include "parse-node.h"
 #include "rtti-builder.h"
-#include "shared/byte-buffer.h"
-#include "shared/string-pool.h"
+#include "utils/byte-buffer.h"
+#include "utils/string-pool.h"
 #include "smx-assembly-buffer.h"
 #include "stl/stl-unordered-map.h"
 

@@ -22,7 +22,7 @@
 #include <memory>
 
 #include "lexer.h"
-#include "pool-allocator.h"
+#include "utils/pool-allocator.h"
 
 namespace sp {
 namespace cc {

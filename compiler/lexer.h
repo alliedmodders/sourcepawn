@@ -26,7 +26,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <amtl/am-inlinelist.h>
-#include <shared/string-pool.h>
+#include <utils/string-pool.h>
 
 #include "compile-options.h"
 #include "sc.h"

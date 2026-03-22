@@ -15,7 +15,7 @@
 // 
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
-#include "shared/string-pool.h"
+#include "utils/string-pool.h"
 #include "exp/compiler/reporting.h"
 #include "exp/compiler/source-manager.h"
 #include "exp/compiler/compile-context.h"

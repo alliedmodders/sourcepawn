@@ -397,6 +397,7 @@ class SourcePawn(object):
         self.AddVmFlags(binary)
 
         builder.Build('libsmx/AMBuilder', vars)
+        builder.Build('utils/AMBuilder', vars)
         builder.Build('vm/AMBuilder', vars)
 
         cppnode = builder.Add(binary)

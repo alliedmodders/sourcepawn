@@ -18,7 +18,6 @@ module.sources += [
   'name-resolution.cpp',
   'parse-node.cpp',
   'parser.cpp',
-  'pool-allocator.cpp',
   'pool-objects.cpp',
   'rtti-builder.cpp',
   'sci18n.cpp',
