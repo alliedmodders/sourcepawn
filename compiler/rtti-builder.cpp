@@ -39,6 +39,7 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
     enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
     es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
+    globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
     dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -68,6 +69,7 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.addIfNotEmpty(fields_);
     builder.addIfNotEmpty(enumstructs_);
     builder.addIfNotEmpty(es_fields_);
+    builder.addIfNotEmpty(globals_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -519,6 +521,16 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionTyp
 int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {
     encode_type_into(locals->types, type);
     return locals->count++;
+}
+
+uint32_t RttiBuilder::AddGlobalSlot(VarDeclBase* decl, cell_t address) {
+    uint32_t slot = (uint32_t)globals_->count();
+    auto& entry = globals_->add();
+    entry.name = names_->add(*cc_.atoms(), decl->name());
+    entry.type_id = to_typeid(decl->type());
+    entry.address = address;
+    entry.visibility = decl->is_public() ? 1 : 0;
+    return slot;
 }
 
 } // namespace cc

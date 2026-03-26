@@ -86,6 +86,7 @@ class SmxImage final : public FileReader
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
 
     FastRtti GetTypeParser(uint32_t offset);
+    FastRtti ReadTypeId(uint32_t type_id);
 
   private:
     SmxImage();
@@ -198,6 +199,7 @@ class SmxImage final : public FileReader
     }
     const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
+    const smx_rtti_table_header* rtti_globals() const { return rtti_globals_; }
 
   protected:
     bool error(const char* msg) {
@@ -222,6 +224,7 @@ class SmxImage final : public FileReader
     bool validateRttiNatives();
     bool validateRttiTypedefs();
     bool validateRttiTypesets();
+    bool validateRttiGlobals();
     bool validateDebugInfo();
     bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
     bool validateDebugMethods();
@@ -242,7 +245,7 @@ class SmxImage final : public FileReader
 
     const smx_rtti_table_header* findRttiSection(const char* name) const {
         const Section* section = findSection(name);
-        if (!section)
+        if (!section || !validateRttiHeader(section))
             return nullptr;
         return reinterpret_cast<const smx_rtti_table_header*>(buffer() + section->dataoffs);
     }
@@ -277,6 +280,8 @@ class SmxImage final : public FileReader
     mutable std::unordered_map<std::string_view, size_t> publics_cache_;
     mutable std::unordered_map<std::string_view, size_t> pubvars_cache_;
 
+    std::vector<uint32_t> rtti_pubvars_;
+
     const Section* debug_names_section_ = nullptr;
     const char* debug_names_ = nullptr;
     const sp_fdbg_info_t* debug_info_ = nullptr;
@@ -296,6 +301,7 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_natives_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
+    const smx_rtti_table_header* rtti_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_locals_ = nullptr;

@@ -212,7 +212,6 @@ class CodeGenerator final
 
   private:
     typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
-    typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
     typedef SmxListSection<sp_file_publics_t> SmxPublicSection;
     typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
     typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
@@ -231,7 +230,6 @@ class CodeGenerator final
     RefPtr<SmxNameTable> names_;
     RefPtr<SmxDataSection> smx_data_;
     RefPtr<SmxNativeSection> natives_;
-    RefPtr<SmxPubvarSection> pubvars_;
     RefPtr<SmxCodeSection> code_;
     RefPtr<SmxPublicSection> publics_;
     std::unique_ptr<RttiBuilder> rtti_;

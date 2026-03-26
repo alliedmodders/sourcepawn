@@ -184,7 +184,7 @@ bool CompilerBase::IsSupported() {
 
 bool CompilerBase::SupportsPlugin(PluginContext* cx) {
     const auto& code = cx->runtime()->code();
-    if (code.version < SmxConsts::CODE_VERSION_FEATURE_MASK)
+    if (code.version < SmxConsts::CODE_VERSION_TYPED_GLOBALS)
         return false;
 
     uint32_t required_features =
@@ -209,9 +209,8 @@ bool Compiler::visitBREAK() {
 }
 
 bool Compiler::visitLOAD(PawnReg dest, cell_t srcaddr) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(dat, srcaddr));
-    return true;
+    assert(false);
+    return false;
 }
 
 bool Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
@@ -1626,6 +1625,29 @@ bool Compiler::visitZERO_S_I64(cell_t offset) {
 
 bool Compiler::visitSTOR_S_C(cell_t slot, cell_t value) {
     __ movl(Operand(frm, StackOffset(slot)), value);
+    return true;
+}
+
+bool Compiler::visitLOAD_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(pri, Operand(dat, global->address));
+    return true;
+}
+
+bool Compiler::visitSTOR_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(Operand(dat, global->address), pri);
+    return true;
+}
+
+bool Compiler::visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) {
+    emitCheckAddress(pri, sizeof(int64_t));
+
+    __ movq(rcx, Operand(dat, pri, NoScale, 0));
+    __ movq(Operand(dat, global->address), rcx);
+    return true;
+}
+
+bool Compiler::visitADDR_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(pri, global->address);
     return true;
 }
 

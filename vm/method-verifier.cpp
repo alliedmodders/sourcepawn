@@ -26,10 +26,11 @@ using namespace ke;
 
 MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
  : rt_(rt),
+   smx_(rt->image()),
    block_(nullptr),
    startOffset_(startOffset),
    memSize_(rt_->context()->HeapSize()),
-   datSize_(rt_->image()->DescribeData().length),
+   datSize_(smx_->DescribeData().length),
    heapSize_(memSize_ - datSize_),
    max_stack_(0),
    code_(nullptr),
@@ -41,8 +42,8 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
     assert(datSize_ < memSize_);
     assert(heapSize_ <= memSize_ - datSize_);
 
-    code_version_ = rt_->image()->DescribeCode().version;
-    code_features_ = rt_->image()->DescribeCode().features;
+    code_version_ = smx_->DescribeCode().version;
+    code_features_ = smx_->DescribeCode().features;
 
     auto& code = rt_->code();
     code_ = reinterpret_cast<const cell_t*>(code.bytes);
@@ -56,7 +57,7 @@ MethodVerifier::verify() {
         return nullptr;
     }
 
-    auto image = rt_->image();
+    auto image = smx_;
     if (image->HasRtti()) {
         method_ = image->GetMethodRttiByOffset(startOffset_);
         if (!method_ || method_->pcode_start != startOffset_) {
@@ -332,6 +333,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_INC:
         case OP_DEC:
         case OP_ZERO: {
+            if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             cell_t offset = readCell();
             return verifyDatOffset(offset);
         }
@@ -364,6 +367,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_PUSH3:
         case OP_PUSH4:
         case OP_PUSH5: {
+            if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             size_t n = 1;
             if (op >= OP_PUSH2)
                 n = ((op - OP_PUSH2) / 4) + 2;
@@ -537,7 +542,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_SYSREQ_C: {
             cell_t index = readCell();
-            if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
+            if (index < 0 || size_t(index) >= smx_->NumNatives()) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return false;
             }
@@ -546,7 +551,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_SYSREQ_N: {
             cell_t index = readCell();
-            if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
+            if (index < 0 || size_t(index) >= smx_->NumNatives()) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return false;
             }
@@ -559,6 +564,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_LOAD_BOTH: {
+            if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             cell_t offs1 = readCell();
             cell_t offs2 = readCell();
             if (!verifyDatOffset(offs1) || !verifyDatOffset(offs2)) {
@@ -577,6 +584,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_CONST: {
+            if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             cell_t offset = readCell();
             cip_++;
             return verifyDatOffset(offset);
@@ -668,6 +677,20 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_RETN:
             block_->heap_scope_depth() = block_->data<VerifyData>()->heap_scope_depth;
             return true;
+
+        case OP_LOAD_GLB_PRI:
+        case OP_STOR_GLB_PRI:
+        case OP_STOR_GLB_PRI_I64:
+        case OP_ADDR_GLB_PRI:
+        {
+            if (code_version_ < SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            uint32_t glb_index = readCell();
+            auto globals = smx_->rtti_globals();
+            if (glb_index >= globals->row_count)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            return true;
+        }
 
         default:
             // Should have been caught earlier.
@@ -1081,10 +1104,10 @@ MethodVerifier::collectExternalFuncRefs(const ExternalFuncRefCallback& callback)
     collect_func_refs_ = callback;
 }
 
-void
-MethodVerifier::reportError(int err) {
+bool MethodVerifier::reportError(int err) {
     // Break here to find why verification failed.
     error_ = err;
+    return false;
 }
 
 bool MethodVerifier::verifyLocalSlots() {
@@ -1093,7 +1116,7 @@ bool MethodVerifier::verifyLocalSlots() {
         return false;
     }
 
-    auto parser = rt_->image()->GetTypeParser(method_->signature);
+    auto parser = smx_->GetTypeParser(method_->signature);
     if (!parser.ReadFunctionSignatureArgCount(&arg_count_)) {
         reportError(SP_ERROR_FILE_FORMAT);
         return false;
@@ -1102,7 +1125,7 @@ bool MethodVerifier::verifyLocalSlots() {
     if (!method_->locals)
         return true;
 
-    parser = rt_->image()->GetTypeParser(method_->locals);
+    parser = smx_->GetTypeParser(method_->locals);
 
     uint16_t count;
     if (!parser.ReadLocalSlotCount(&count)) {

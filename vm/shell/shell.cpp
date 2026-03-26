@@ -352,6 +352,30 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+//  native int find_pubvar(const char[] name);
+static cell_t FindPubVar(IPluginContext* cx, const cell_t* params) {
+  char* name;
+  cx->LocalToString(params[1], &name);
+
+  uint32_t index;
+  if (cx->FindPubvarByName(name, &index) == SP_ERROR_NONE)
+      return index;
+  return -1;
+}
+
+//  native int get_pubvar_count();
+static cell_t GetPubvarCount(IPluginContext* cx, const cell_t* params) {
+  return cx->GetPubVarsNum();
+}
+
+//  native void get_pubvar_name(int index, char[] buffer, int maxlength);
+static cell_t GetPubvarName(IPluginContext* cx, const cell_t* params) {
+    sp_pubvar_t* pb;
+    if (cx->GetPubvarByIndex(params[1], &pb) != SP_ERROR_NONE)
+        return cx->ThrowNativeError("Invalid pubvar index");
+    return cx->StringToLocal(params[2], params[3], pb->name);
+}
+
 #pragma pack(push, 1)
 struct TestStruct {
   cell_t x;
@@ -462,6 +486,9 @@ static int Execute(const char* file)
   BindNative(rt, "print_test_struct", PrintTestStruct);
   BindNative(rt, "add_test_structs", AddTestStructs);
   BindNative(rt, "add_int64", AddInt64);
+  BindNative(rt, "find_pubvar", FindPubVar);
+  BindNative(rt, "get_pubvar_count", GetPubvarCount);
+  BindNative(rt, "get_pubvar_name", GetPubvarName);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
