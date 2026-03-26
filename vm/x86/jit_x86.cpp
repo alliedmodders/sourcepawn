@@ -1944,6 +1944,31 @@ bool Compiler::visitSTOR_S_C(cell_t slot, cell_t value) {
     return true;
 }
 
+bool Compiler::visitLOAD_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(pri, Operand(dat, global->address));
+    return true;
+}
+
+bool Compiler::visitSTOR_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(Operand(dat, global->address), pri);
+    return true;
+}
+
+bool Compiler::visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) {
+    emitCheckAddress(pri, sizeof(int64_t));
+
+    __ movl(tmp, Operand(dat, pri, NoScale, 0));
+    __ movl(Operand(dat, global->address), tmp);
+    __ movl(tmp, Operand(dat, pri, NoScale, 4));
+    __ movl(Operand(dat, global->address + 4), tmp);
+    return true;
+}
+
+bool Compiler::visitADDR_GLB_PRI(const smx_rtti_global* global) {
+    __ movl(pri, global->address);
+    return true;
+}
+
 void
 Compiler::jumpOnError(ConditionCode cc, int err) {
     // Note: we accept 0 for err. In this case we expect the error to be in eax.

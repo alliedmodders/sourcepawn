@@ -15,8 +15,7 @@
 #include "environment.h"
 #include "smx-image.h"
 
-using namespace ke;
-using namespace sp;
+namespace sp {
 
 SmxImage::SmxImage(FILE* fp)
  : FileReader(fp) {
@@ -295,7 +294,7 @@ SmxImage::validateCode() {
         SmxConsts::kCodeFeatureNullFunctions |
         SmxConsts::kCodeFeatureTypedOps;
 
-    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_GLOBALS) {
         if ((features & supported_features) != supported_features)
             return error("invalid feature set");
     }
@@ -336,6 +335,10 @@ SmxImage::validatePubvars() {
     const Section* section = findSection(".pubvars");
     if (!section)
         return true;
+
+    if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_GLOBALS)
+        return error("unexpected .pubvars section");
+
     if (!validateSection(section))
         return error("invalid .pubvars section");
     if ((section->size % sizeof(sp_file_pubvars_t)) != 0)
@@ -449,6 +452,10 @@ SmxImage::validateRtti() {
 
     rtti_typesets_ = findRttiSection("rtti.typesets");
     if (rtti_typesets_ && !validateRttiTypesets())
+        return false;
+
+    rtti_globals_ = findRttiSection("rtti.globals");
+    if (rtti_globals_ && !validateRttiGlobals())
         return false;
 
     return true;
@@ -598,6 +605,31 @@ SmxImage::validateRttiTypesets() {
             return error("invalid typeset name");
         if (!rtti_data_->validateTypesetOffset(typesetType->signature))
             return error("invalid typeset signatures");
+    }
+    return true;
+}
+
+bool SmxImage::validateRttiGlobals() {
+    if (!rtti_globals_)
+        return true;
+
+    for (uint32_t i = 0; i < rtti_globals_->row_count; i++) {
+        const auto* global = getRttiRow<smx_rtti_global>(rtti_globals_, i);
+        if (!validateName(global->name))
+            return error("invalid global name");
+        if (!rtti_data_->validateType(global->type_id))
+            return error("invalid global type");
+        if (global->visibility != 0 && global->visibility != 1)
+            return error("invalid global visibility");
+        if (global->address >= HeapSize())
+            return error("invalid global address");
+
+        if (global->visibility == 1) {
+            std::string_view key(names_ + global->name);
+            pubvars_cache_[key] = (uint32_t)rtti_pubvars_.size();
+
+            rtti_pubvars_.emplace_back(i);
+        }
     }
     return true;
 }
@@ -865,21 +897,32 @@ SmxImage::FindPublic(const char* name, size_t* indexp) const {
 
 size_t
 SmxImage::NumPubvars() const {
+    if (!rtti_pubvars_.empty())
+        return rtti_pubvars_.size();
     return pubvars_.length();
 }
 
 void
 SmxImage::GetPubvar(size_t index, uint32_t* offsetp, const char** namep) const {
-    assert(index < pubvars_.length());
-    if (offsetp)
-        *offsetp = pubvars_[index].address;
-    if (namep)
-        *namep = names_ + pubvars_[index].name;
+    if (rtti_pubvars_.size()) {
+        auto pubvar = getRttiRow<smx_rtti_global>(rtti_globals_, rtti_pubvars_[index]);
+        if (offsetp)
+            *offsetp = pubvar->address;
+        if (namep)
+            *namep = names_ + pubvar->name;
+    } else {
+        assert(index < pubvars_.length());
+        if (offsetp)
+            *offsetp = pubvars_[index].address;
+        if (namep)
+            *namep = names_ + pubvars_[index].name;
+    }
 }
 
 bool
 SmxImage::FindPubvar(const char* name, size_t* indexp) const {
     if (pubvars_cache_.empty()) {
+        // Note: cache is pre-populated when using RTTI.
         for (size_t i = 0; i < pubvars_.length(); i++) {
             std::string_view key(names_ + pubvars_[i].name);
             pubvars_cache_[key] = i;
@@ -1247,3 +1290,13 @@ SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t*
 FastRtti SmxImage::GetTypeParser(uint32_t offset) {
     return FastRtti(rtti_data_->blob(), rtti_data_->size(), offset);
 }
+
+FastRtti SmxImage::ReadTypeId(uint32_t type_id) {
+    uint8_t kind = type_id & kMaxTypeIdKind;
+    uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+    if (kind == kTypeId_Inline)
+        return FastRtti(payload);
+    return GetTypeParser(payload);
+}
+
+} // namespace sp

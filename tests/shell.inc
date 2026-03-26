@@ -56,3 +56,7 @@ native void assert_eq(any a1, any a2);
 
 native void print_test_struct(TestStruct x);
 native TestStruct add_test_structs(TestStruct a, TestStruct b);
+
+native int find_pubvar(const char[] name);
+native int get_pubvar_count();
+native void get_pubvar_name(int index, char[] buffer, int maxlength);

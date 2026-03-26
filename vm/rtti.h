@@ -10,6 +10,7 @@
 #ifndef _include_sourcepawn_rtti_h_
 #define _include_sourcepawn_rtti_h_
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -52,6 +53,16 @@ class FastRtti final {
         size_(size),
         offset_(offset)
     {}
+    explicit FastRtti(uint32_t type_id_payload)
+      : data_(inline_bytes_.data()),
+        size_(inline_bytes_.size()),
+        offset_(0)
+    {
+        inline_bytes_[0] = (type_id_payload >> 0) & 0xff;
+        inline_bytes_[1] = (type_id_payload >> 8) & 0xff;
+        inline_bytes_[2] = (type_id_payload >> 16) & 0xff;
+        inline_bytes_[3] = (type_id_payload >> 24) & 0xff;
+    }
 
     bool ReadFunctionSignatureArgCount(uint32_t* out);
     bool ReadLocalSlotCount(uint16_t* out);
@@ -64,6 +75,7 @@ class FastRtti final {
     bool ReadCompactUint32(uint32_t* out);
 
   private:
+    std::array<uint8_t, 4> inline_bytes_{};
     const uint8_t* data_;
     size_t size_;
     uint32_t offset_;

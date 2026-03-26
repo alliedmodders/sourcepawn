@@ -98,6 +98,21 @@ struct smx_rtti_method {
     uint32_t locals;
 };
 
+// The rtti.globals table has the following row structure:
+struct smx_rtti_global {
+    // Index into the name table.
+    uint32_t name;
+
+    // Type id or signature.
+    uint32_t type_id;
+
+    // DAT-relative address.
+    uint32_t address;
+
+    // Visibility. Must be either 1 (public) or 0 (private).
+    uint8_t visibility;
+};
+
 // The rtti.natives table has the following row structure. The rows must be
 // identical to the native table mapping.
 struct smx_rtti_native {

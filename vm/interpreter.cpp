@@ -1442,4 +1442,28 @@ bool Interpreter::visitSTOR_S_C(cell_t slot, cell_t value) {
     return cx_->setFrameValue(StackOffset(slot), value);
 }
 
+bool Interpreter::visitLOAD_GLB_PRI(const smx_rtti_global* global) {
+    return cx_->getCellValue(global->address, &regs_.pri());
+}
+
+bool Interpreter::visitSTOR_GLB_PRI(const smx_rtti_global* global) {
+    return cx_->setCellValue(global->address, regs_.pri());
+}
+
+bool Interpreter::visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) {
+    cell_t* src = cx_->acquireAddrRange(regs_.pri(), sizeof(cell_t) * 2);
+    if (!src)
+        return false;
+    cell_t* dest = cx_->acquireAddrRange(global->address, sizeof(cell_t) * 2);
+    if (!dest)
+        return false;
+    *reinterpret_cast<int64_t*>(dest) = *reinterpret_cast<int64_t*>(src);
+    return true;
+}
+
+bool Interpreter::visitADDR_GLB_PRI(const smx_rtti_global* global) {
+    regs_.pri() = global->address;
+    return true;
+}
+
 } // namespace sp

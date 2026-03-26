@@ -38,7 +38,7 @@ typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
 typedef SmxListSection<sp_fdbg_file_t> SmxDebugFileSection;
 
 struct LocalSlotSignature {
-  // Reserve five bytes at the start for the longest possible byte + count.
+  // Reserve three bytes at the start for the longest possible byte + count.
   std::vector<uint8_t> types = {0, 0, 0};
   uint32_t count = 0;
 };
@@ -55,6 +55,7 @@ class RttiBuilder
                        LocalSlotSignature&& locals);
 
     int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
+    uint32_t AddGlobalSlot(VarDeclBase* decl, cell_t address);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(ucell addr, cell line);
@@ -98,6 +99,7 @@ class RttiBuilder
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
     RefPtr<SmxRttiTable<smx_rtti_enumstruct>> enumstructs_;
     RefPtr<SmxRttiTable<smx_rtti_es_field>> es_fields_;
+    RefPtr<SmxRttiTable<smx_rtti_global>> globals_;
     RefPtr<SmxDebugInfoSection> dbg_info_;
     RefPtr<SmxDebugLineSection> dbg_lines_;
     RefPtr<SmxDebugFileSection> dbg_files_;
