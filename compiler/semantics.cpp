@@ -775,11 +775,11 @@ bool BinaryExprChecker::CheckOperatorTypes() {
 
     // For the purposes of tag matching, we consider the order to be irrelevant.
     Type* left_type = left_val->type();
-    if (left_type->isReference())
+    if (left_type->isReference() || left_type->isTypedef())
         left_type = left_type->inner();
 
     Type* right_type = right_val->type();
-    if (right_type->isReference())
+    if (right_type->isReference() || right_type->isTypedef())
         right_type = right_type->inner();
 
     if (auto cr = FindBinaryCoercionRule(left_type, right_type, expr_->token()); cr) {
@@ -890,20 +890,24 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
 
     // int64 handling (gross, yes).
     auto left_type = left_val.type();
-    if (left_type->isReference())
+    if (left_type->isReference() || left_type->isTypedef())
         left_type = left_type->inner();
 
-    if (left_type->isInt64() || right_val.type()->isInt64()) {
+    auto right_type = right_val.type();
+    if (right_type->isTypedef())
+        right_type = right_type->inner();
+
+    if (left_type->isInt64() || right_type->isInt64()) {
         if (!left_type->isInt64()) {
             if (left_type->isInt())
                 report(expr_, 454);
             else
-                report(expr_, 450) << left_type << right_val.type();
+                report(expr_, 450) << left_type << right_type;
             return false;
         }
-        if (!right_val.type()->isInt64()) {
-            if (!CanPromoteToInt64(right_val.type())) {
-                report(expr_, 450) << left_type << right_val.type();
+        if (!right_type->isInt64()) {
+            if (!CanPromoteToInt64(right_type)) {
+                report(expr_, 450) << left_type << right_type;
                 return false;
             }
             right_ = expr_->set_right(sema_.BuildSimpleCast(right_, BuiltinType::Int64));
@@ -918,22 +922,22 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     }
 
     // Allow trivial conversion between char/int.
-    if ((left_val.type()->isChar() && right_val.type()->isInt()) ||
-        (left_val.type()->isInt() && right_val.type()->isInt()))
+    if ((left_val.type()->isChar() && right_type->isInt()) ||
+        (left_val.type()->isInt() && right_type->isInt()))
     {
         return true;
     }
 
-    if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
-        if (left_val.type() != right_val.type()) {
-            report(expr_, 134) << left_val.type() << right_val.type();
+    if (left_val.type()->asEnumStruct() || right_type->asEnumStruct()) {
+        if (left_val.type() != right_type) {
+            report(expr_, 134) << left_val.type() << right_type;
             return false;
         }
 
         auto es = left_val.type()->asEnumStruct();
         expr_->set_array_copy_length(es->array_size());
     } else if (!left_val.type()->isArray()) {
-        matchtag(left_val.type(), right_val.type(), TRUE);
+        matchtag(left_val.type(), right_type, TRUE);
     }
     return true;
 }

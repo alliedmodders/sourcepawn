@@ -252,6 +252,13 @@ bool matchtag(Type* formal, Type* actual, int flags) {
     Type* given_formal = formal;
     Type* given_actual = actual;
 
+    if (formal->isTypedef()) {
+        formal = formal->inner();
+    }
+    if (actual->isTypedef()) {
+        actual = actual->inner();
+    }
+
     if (flags & MATCHTAG_COERCE) {
         if (formal->isReference())
             formal = formal->inner();

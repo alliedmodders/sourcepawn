@@ -133,7 +133,7 @@ StmtList::Bind(SemaContext& sc)
     bool ok = true;
     for (const auto& stmt : stmts_) {
         sc.cc().reports()->ResetErrorFlag();
-
+        
         ok &= stmt->Bind(sc);
     }
     return ok;
@@ -300,6 +300,18 @@ TypedefDecl::EnterNames(SemaContext& sc)
 
     if (type_)
         fe_ = funcenums_add(sc.cc(), name_, false);
+    else {
+        if (!sc.BindType(pos(), ti_))
+            return false;
+        if (ti_->dim_exprs.size() && !ResolveArrayType(sc.sema(), pos(), ti_, sGLOBAL))
+            return false;
+        if (ti_->type->isArray()) {
+            report(this, 465) << ti_->type;
+            return false;
+        }
+        sc.cc().types()->defineTypedef(name_, ti_->type);
+    }
+        
     return true;
 }
 
@@ -310,16 +322,6 @@ bool TypedefDecl::Bind(SemaContext& sc) {
             return false;
 
         new (&fe_->entries) PoolArray<FunctionType*>({ft});
-    } else {
-        if (!sc.BindType(pos(), ti_))
-            return false;
-        if (ti_->dim_exprs.size() && !ResolveArrayType(sc.sema(), pos(), ti_, sGLOBAL))
-            return false;
-        if (ti_->type->isArray()) {
-            report(this, 465) << ti_->type;
-            return false;
-        }
-        sc.cc().types()->defineTypedef(name_, ti_->type);
     }
     return true;
 }

@@ -30,9 +30,13 @@ std::optional<BuiltinType> FindBinaryCoercionRule(Type* left, Type* right, int r
         if (other->isInt64())
             other = right;
 
-        if (!(other->isInt() || other->isInt64()))
-            return {BuiltinType::Void};
+        if (other->isTypedef()) {
+            other = other->inner();
+        }
 
+        if (!(other->isInt() || other->isInt64())) {
+            return {BuiltinType::Void};
+        }
         return {BuiltinType::Int64};
     }
     if (left->isFloat() || right->isFloat()) {
