@@ -480,7 +480,17 @@ class SourcePawn(object):
         builder.Add(binary)
 
     def BuildSmxDump(self, builder):
-        builder.Build('tools/smxdump/AMBuild', self.vars)
+        binary = self.root.Program(builder, 'smxdump')
+
+        self.SetupBinForArch(binary, builder)
+
+        vars = self.vars.copy()
+        vars['binary'] = binary
+        builder.Build('tools/smxdump/AMBuilder', vars)
+
+        self.AddStaticLibraries(binary)
+
+        builder.Add(binary)
 
     def AddStaticLibraries(self, binary):
         self.EnsureZlib()
