@@ -26,7 +26,7 @@ jobs:
           path: sourcepawn-corpus
 
       # Setup Python for AMBuild
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v6
         with:
           python-version: 3.8
       - name: Install AMBuild
