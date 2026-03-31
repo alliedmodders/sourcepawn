@@ -478,7 +478,22 @@ class SourcePawn(object):
         builder.Add(binary)
 
     def BuildSmxDump(self, builder):
-        builder.Build('tools/smxdump/AMBuild', self.vars)
+        binary = self.root.Program(builder, 'smxdump')
+        # External root might add 'version.rc' to sources. Remove it, it doesn't exist
+        try:
+            binary.sources.remove("version.rc")
+        except:
+            pass
+
+        self.SetupBinForArch(binary, builder)
+
+        vars = self.vars.copy()
+        vars['binary'] = binary
+        builder.Build('tools/smxdump/AMBuilder', vars)
+
+        self.AddStaticLibraries(binary)
+
+        builder.Add(binary)
 
     def AddStaticLibraries(self, binary):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
