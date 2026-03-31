@@ -15,11 +15,11 @@ jobs:
         build_target: [x64]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
         with:
           repository: dvander/sourcepawn-binary-corpus
           submodules: recursive
