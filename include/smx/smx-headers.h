@@ -40,6 +40,7 @@ struct SmxConsts {
     // File format verison number.
     // 0x0101 - SourcePawn 1.0; initial version used by SourceMod 1.0.
     // 0x0102 - SourcePawn 1.1; used by SourceMod 1.1+.
+    // 0x0200 - Used by spcomp2.
     //
     // The major version bits (8-15) indicate a product number. Consumers should
     // reject any version for a different product.
@@ -68,8 +69,7 @@ struct SmxConsts {
     static const uint8_t CODE_VERSION_SM_LEGACY = 10;
     static const uint8_t CODE_VERSION_FEATURE_MASK = 13;
     static const uint8_t CODE_VERSION_TYPED_STACK = 14;
-    static const uint8_t CODE_VERSION_TYPED_GLOBALS = 15;
-    static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_TYPED_GLOBALS;
+    static const uint8_t CODE_VERSION_CURRENT = CODE_VERSION_TYPED_STACK;
     static const uint8_t CODE_VERSION_ALWAYS_REJECT = 0x7f;
 
     static const uint32_t kCodeFeatureDeprecated0 = (1 << 0);

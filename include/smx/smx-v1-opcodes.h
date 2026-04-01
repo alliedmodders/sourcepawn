@@ -78,13 +78,6 @@ namespace sp {
     FOR_EACH(JNZ, 54, "jnz", 2) \
     FOR_EACH(JEQ, 55, "jeq", 2) \
     FOR_EACH(JNEQ, 56, "jneq", 2) \
-    /* These instructions index into the smx_rtti_global table. */ \
-    /* Load a 32-bit value from a global variable. */ \
-    FOR_EACH(LOAD_GLB_PRI, 57, "load.glb.pri", 2) \
-    FOR_EACH(STOR_GLB_PRI, 58, "stor.glb.pri", 2) \
-    FOR_EACH(STOR_GLB_PRI_I64, 59, "stor.glb.pri.i64", 2) \
-    FOR_EACH(ADDR_GLB_PRI, 60, "addr.glb.pri", 2) \
-    /* Calculate the address to a global vareiable. */ \
     FOR_EACH(JSLESS, 61, "jsless", 2) \
     FOR_EACH(JSLEQ, 62, "jsleq", 2) \
     FOR_EACH(JSGRTR, 63, "jsgrtr", 2) \

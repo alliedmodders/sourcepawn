@@ -116,27 +116,37 @@ class SmxAssemblyBuffer : public ByteBuffer
     emit(OP_LOAD_S_ALT, -1);
   }
 
-  void address_pri(Decl* sym) {
-    address_pri(sym->as<VarDeclBase>());
+  void address(Decl* sym, regid reg) {
+    address(sym->as<VarDeclBase>(), reg);
   }
 
-  void address_pri(VarDeclBase* sym) {
+  void address(VarDeclBase* sym, regid reg) {
     bool is_ref = sym->type()->isArray() ||
                   sym->type()->isReference() ||
                   sym->type()->isEnumStruct();
     if (is_ref && IsLocal(sym->vclass())) {
-      emit(OP_LOAD_S_PRI, sym->addr());
+      if (reg == sPRI)
+        emit(OP_LOAD_S_PRI, sym->addr());
+      else
+        emit(OP_LOAD_S_ALT, sym->addr());
     } else {
       if (sym->type()->isArray())
         assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
 
-      if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-        if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
-          emit(OP_LOAD_S_PRI, sym->addr());
-        else
-          emit(OP_ADDR_PRI, sym->addr());
+      if (reg == sPRI) {
+        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
+          if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
+            emit(OP_LOAD_S_PRI, sym->addr());
+          else
+            emit(OP_ADDR_PRI, sym->addr());
+        } else {
+          emit(OP_CONST_PRI, sym->addr());
+        }
       } else {
-        emit(OP_ADDR_GLB_PRI, sym->addr());
+        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
+          emit(OP_ADDR_ALT, sym->addr());
+        else
+          emit(OP_CONST_ALT, sym->addr());
       }
     }
   }

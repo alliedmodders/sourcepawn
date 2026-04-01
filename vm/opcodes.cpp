@@ -25,6 +25,8 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions), found in LICENSE.txt _(as of this writing), version JULY-31-2007)),
  * or <http://www.sourcemod.net/license.php>.
+ *
+ * Version: $Id$
  */
 #include "opcodes.h"
 
@@ -99,10 +101,6 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_ZERO_S_I64:
         case OP_STOR_S_PRI_I64:
         case OP_STOR_S_C:
-        case OP_LOAD_GLB_PRI:
-        case OP_STOR_GLB_PRI:
-        case OP_STOR_GLB_PRI_I64:
-        case OP_ADDR_GLB_PRI:
             fprintf(fp, "%d", cip[1]);
             break;
 

@@ -188,10 +188,6 @@ class Interpreter final : public PcodeVisitor
     bool visitCVT_F32() override;
     bool visitMOD_ALT_F32() override;
     bool visitCompareOpF32(CompareOp op) override;
-    bool visitLOAD_GLB_PRI(const smx_rtti_global* global) override;
-    bool visitSTOR_GLB_PRI(const smx_rtti_global* global) override;
-    bool visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) override;
-    bool visitADDR_GLB_PRI(const smx_rtti_global* global) override;
 
   private:
     Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);

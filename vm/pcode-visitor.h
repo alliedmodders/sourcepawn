@@ -161,10 +161,6 @@ class PcodeVisitor
     virtual bool visitCVT_F32() = 0;
     virtual bool visitMOD_ALT_F32() = 0;
     virtual bool visitCompareOpF32(CompareOp op) = 0;
-    virtual bool visitLOAD_GLB_PRI(const smx_rtti_global* global) = 0;
-    virtual bool visitSTOR_GLB_PRI(const smx_rtti_global* global) = 0;
-    virtual bool visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) = 0;
-    virtual bool visitADDR_GLB_PRI(const smx_rtti_global* global) = 0;
 };
 
 } // namespace sp

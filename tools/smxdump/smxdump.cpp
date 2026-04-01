@@ -55,7 +55,6 @@ class DumpTool final {
         DumpHeaders();
         DumpPublics();
         DumpPubvars();
-        DumpGlobals();
         DumpNatives();
         DumpData();
         DumpCode();
@@ -127,30 +126,6 @@ class DumpTool final {
             fprintf(stdout, "    %u: %s @ 0x%x", i, name, pubvars[i].address);
             if (show_name_offsets.value())
                 fprintf(stdout, " ; name_offset = %u", pubvars[i].name);
-            fprintf(stdout, "\n");
-        }
-        fprintf(stdout, "}\n");
-    }
-
-    void DumpGlobals() {
-        auto globals = smx_->rtti_globals();
-        if (!globals)
-            return;
-
-        fprintf(stdout, ".rtti.globals\n");
-        fprintf(stdout, "{\n");
-        for (uint32_t i = 0; i < globals->row_count; i++) {
-            auto entry = smx_->getRttiRow<smx_rtti_global>(globals, i);
-            const char* visibility = "private";
-            if (entry->visibility == 1)
-                visibility = "public";
-            fprintf(stdout, "    %u: %s %s", i, visibility, smx_->names() + entry->name);
-
-            auto rtti = smx_->ReadTypeId(entry->type_id);
-            fprintf(stdout, " %s", DumpType(rtti).c_str());
-            fprintf(stdout, " @ 0x%x", entry->address);
-            if (show_name_offsets.value())
-                fprintf(stdout, " ; name_offset = %u", entry->name);
             fprintf(stdout, "\n");
         }
         fprintf(stdout, "}\n");
@@ -296,14 +271,10 @@ class DumpTool final {
                     if (!rtti.ReadCompactUint32(&size))
                         return {};
                     type_outer += ke::StringPrintf("[%u]", size);
-                    if (!rtti.GetNextByte(&b))
-                        return {};
                     continue;
                 }
                 case cb::kArray:
                     type_outer += "[]";
-                    if (!rtti.GetNextByte(&b))
-                        return {};
                     continue;
                 case cb::kEnum:
                 {
@@ -341,14 +312,6 @@ class DumpTool final {
                     if (!rtti.ReadCompactUint32(&value))
                         return {};
                     type_inner = "fn todo";
-                    break;
-                }
-                case cb::kClassdef:
-                {
-                    uint32_t value;
-                    if (!rtti.ReadCompactUint32(&value))
-                        return {};
-                    type_inner = "pstruct todo";
                     break;
                 }
                 default:
@@ -491,22 +454,6 @@ class DumpTool final {
                     fprintf(stdout, " %s", name);
                 else
                     fprintf(stdout, " unknown_function_%x", cip[1]);
-                break;
-            }
-
-            case OP_LOAD_GLB_PRI:
-            case OP_STOR_GLB_PRI:
-            case OP_STOR_GLB_PRI_I64:
-            case OP_ADDR_GLB_PRI:
-            {
-                uint32_t glb_index = cip[1];
-                auto globals = smx_->rtti_globals();
-                if (glb_index < globals->row_count) {
-                    auto global = smx_->getRttiRow<smx_rtti_global>(globals, glb_index);
-                    fprintf(stdout, " %s", smx_->names() + global->name);
-                } else {
-                    fprintf(stdout, " unknown_global_%u", glb_index);
-                }
                 break;
             }
 

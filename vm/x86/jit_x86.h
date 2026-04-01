@@ -168,10 +168,6 @@ class Compiler : public CompilerBase
     bool visitSTOR_S_PRI_I64(cell_t slot) override;
     bool visitZERO_S_I64(cell_t offset) override;
     bool visitSTOR_S_C(cell_t slot, cell_t value) override;
-    bool visitLOAD_GLB_PRI(const smx_rtti_global* global) override;
-    bool visitSTOR_GLB_PRI(const smx_rtti_global* global) override;
-    bool visitSTOR_GLB_PRI_I64(const smx_rtti_global* global) override;
-    bool visitADDR_GLB_PRI(const smx_rtti_global* global) override;
 
   private:
     bool setup(cell_t pcode_offs);

@@ -55,7 +55,7 @@ class MethodVerifier final
     bool verifyHeapAmount(cell_t amount);
     bool verifyMemAmount(cell_t amount);
     bool verifyCallOffset(cell_t offset);
-    bool reportError(int err);
+    void reportError(int err);
     cell_t readCell();
 
     struct VerifyData : public IBlockData {
@@ -99,7 +99,6 @@ class MethodVerifier final
 
   private:
     PluginRuntime* rt_;
-    SmxImage* smx_;
     ke::RefPtr<ControlFlowGraph> graph_;
     Block* block_;
     const smx_rtti_method* method_ = nullptr;

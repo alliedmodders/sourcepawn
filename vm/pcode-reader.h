@@ -32,13 +32,11 @@ class PcodeReader
 {
   public:
     PcodeReader(PluginRuntime* rt, uint32_t startOffset, T* visitor)
-     : rt_(rt),
-       smx_(rt_->image()),
-       visitor_(visitor),
-       code_(nullptr),
-       cip_(nullptr),
-       stop_at_(nullptr)
-    {
+     : rt_(rt)
+     , visitor_(visitor)
+     , code_(nullptr)
+     , cip_(nullptr)
+     , stop_at_(nullptr) {
         assert(ke::IsAligned(startOffset, sizeof(cell_t)));
 
         auto& code = rt->code();
@@ -48,13 +46,11 @@ class PcodeReader
         stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
     }
     PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
-     : rt_(rt),
-       smx_(rt_->image()),
-       visitor_(visitor),
-       code_(nullptr),
-       cip_(nullptr),
-       stop_at_(nullptr)
-    {
+     : rt_(rt)
+     , visitor_(visitor)
+     , code_(nullptr)
+     , cip_(nullptr)
+     , stop_at_(nullptr) {
         auto& code = rt->code();
         code_ = reinterpret_cast<const cell_t*>(code.bytes);
         cip_ = reinterpret_cast<const cell_t*>(block->start());
@@ -752,27 +748,6 @@ class PcodeReader
             case OP_HEAP_RESTORE:
                 return visitor_->visitHEAP_RESTORE();
 
-            case OP_LOAD_GLB_PRI: {
-                uint32_t index = readCell();
-                const smx_rtti_global* global = smx_->getRttiRow<smx_rtti_global>(smx_->rtti_globals(), index);
-                return visitor_->visitLOAD_GLB_PRI(global);
-            }
-            case OP_STOR_GLB_PRI: {
-                uint32_t index = readCell();
-                const smx_rtti_global* global = smx_->getRttiRow<smx_rtti_global>(smx_->rtti_globals(), index);
-                return visitor_->visitSTOR_GLB_PRI(global);
-            }
-            case OP_STOR_GLB_PRI_I64: {
-                uint32_t index = readCell();
-                const smx_rtti_global* global = smx_->getRttiRow<smx_rtti_global>(smx_->rtti_globals(), index);
-                return visitor_->visitSTOR_GLB_PRI_I64(global);
-            }
-            case OP_ADDR_GLB_PRI: {
-                uint32_t index = readCell();
-                const smx_rtti_global* global = smx_->getRttiRow<smx_rtti_global>(smx_->rtti_globals(), index);
-                return visitor_->visitADDR_GLB_PRI(global);
-            }
-
             default:
                 assert(false);
                 return false;
@@ -792,7 +767,6 @@ class PcodeReader
 
   private:
     PluginRuntime* rt_;
-    SmxImage* smx_;
     T* visitor_;
     const cell_t* code_;
     const cell_t* insn_begin_;

@@ -52,6 +52,7 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
     names_ = new SmxNameTable(".names");
     smx_data_ = new SmxDataSection(".data");
     natives_ = new SmxNativeSection(".natives");
+    pubvars_ = new SmxPubvarSection(".pubvars");
     code_ = new SmxCodeSection(".code");
     publics_ = new SmxPublicSection(".publics");
     rtti_ = std::make_unique<RttiBuilder>(cc, names_);
@@ -93,7 +94,7 @@ void CodeGenerator::FinishSmx() {
     // Set up the code section.
     code_->header().codesize = asm_.size();
     code_->header().cellsize = sizeof(cell);
-    code_->header().codeversion = SmxConsts::CODE_VERSION_TYPED_GLOBALS;
+    code_->header().codeversion = SmxConsts::CODE_VERSION_TYPED_STACK;
     code_->header().flags = CODEFLAG_DEBUG;
     code_->header().main = 0;
     code_->header().code = sizeof(sp_file_code_t);
@@ -106,6 +107,7 @@ void CodeGenerator::FinishSmx() {
     smx_.add(code_);
     smx_.add(smx_data_);
     smx_.add(publics_);
+    smx_.add(pubvars_);
     smx_.add(natives_);
     smx_.add(names_);
     rtti_->finish(smx_);
@@ -276,13 +278,6 @@ void CodeGenerator::EmitChangeScopeNode(ChangeScopeNode* node) {
 }
 
 void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
-    if ((decl->vclass() == sGLOBAL || decl->vclass() == sSTATIC) &&
-        !decl->as<ConstDecl>())
-    {
-        uint32_t slot = rtti_->AddGlobalSlot(decl, data_.dat_address());
-        __ bind_to(decl->label(), slot);
-    }
-
     if (decl->type()->isPstruct()) {
         EmitPstruct(decl);
     } else {
@@ -296,10 +291,18 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
 
     if (decl->is_public() || decl->is_used())
         EnqueueDebugSymbol(decl, asm_.position());
+
+    if (decl->is_public()) {
+        sp_file_pubvars_t& pubvar = pubvars_->add();
+        pubvar.address = decl->addr();
+        pubvar.name = names_->add(decl->name());
+    }
 }
 
 void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
+
+    __ bind_to(decl->label(), data_.dat_address());
 
     if (decl->type()->isArray() || decl->type()->isEnumStruct()) {
         ArrayData array;
@@ -457,6 +460,8 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         }
     }
 
+    decl->BindAddress(data_.dat_address());
+
     for (const auto& value : values)
         data_.Add(value);
 }
@@ -511,7 +516,7 @@ CodeGenerator::EmitExpr(Expr* expr)
         case ExprKind::ThisExpr: {
             auto e = expr->to<ThisExpr>();
             if (e->decl()->type()->isEnumStruct())
-                __ address_pri(e->decl());
+                __ address(e->decl(), sPRI);
             break;
         }
         case ExprKind::StringExpr: {
@@ -1138,7 +1143,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
         __ emit(OP_CONST_PRI, &fun->cg()->funcid);
     } else if (auto var = sym->as<VarDeclBase>()) {
         if (sym->type()->isArray() || sym->type()->isEnumStruct())
-            __ address_pri(var);
+            __ address(var, sPRI);
     } else {
         assert(false);
     }
@@ -1284,7 +1289,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
             bool needs_temp = false;
             if (val.type()->isArray()) {
                 if (lvalue)
-                    __ address_pri(val.sym);
+                    __ address(val.sym, sPRI);
             } else if (val.ident == iVARIABLE) {
                 assert(val.sym);
                 assert(lvalue);
@@ -1294,7 +1299,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
                     EmitRvalue(val);
                     needs_temp = true;
                 } else if (lvalue) {
-                    __ address_pri(val.sym);
+                    __ address(val.sym, sPRI);
                 } else {
                     needs_temp = true;
                 }
@@ -1317,7 +1322,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
             if (arg->type_info().type->isReference()) {
                 if (val.ident == iVARIABLE) {
                     assert(val.sym);
-                    __ address_pri(val.sym);
+                    __ address(val.sym, sPRI);
                 }
             } else {
                 // Emit a copy since int64 is passed by value. Unfortunately
@@ -1616,11 +1621,11 @@ void CodeGenerator::EmitRvalue(const value& lval) {
         default: {
             auto var = lval.sym->as<VarDeclBase>();
             if (var->type()->isInt64())
-                __ address_pri(var);
+                __ address(var, sPRI);
             else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
                 __ emit(OP_LOAD_S_PRI, var->addr());
             else if (!var->type()->isComposite())
-                __ emit(OP_LOAD_GLB_PRI, var->addr());
+                __ emit(OP_LOAD_PRI, var->addr());
             break;
         }
     }
@@ -1668,9 +1673,10 @@ CodeGenerator::EmitStore(const value& lval, bool save_pri)
                 }
             } else {
                 if (var->type()->isInt64()) {
-                    __ emit(OP_STOR_GLB_PRI_I64, var->addr());
+                    __ emit(OP_CONST_ALT, var->addr());
+                    __ emit(OP_MOVE_I64);
                 } else {
-                    __ emit(OP_STOR_GLB_PRI, var->addr());
+                    __ emit(OP_STOR_PRI, var->addr());
                 }
             }
             break;
@@ -2052,7 +2058,7 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
     if (def->sym) {
         // Need to use the address label rather than raw address, since the
         // variable may not be emitted yet.
-        __ emit(OP_ADDR_GLB_PRI, def->sym->label());
+        __ emit(OP_CONST_PRI, def->sym->label());
         return;
     }
 
