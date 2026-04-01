@@ -57,7 +57,6 @@ struct SmxConsts {
     // Compression types.
     static const uint8_t FILE_COMPRESSION_NONE = 0;
     static const uint8_t FILE_COMPRESSION_GZ = 1;
-    static const uint8_t FILE_COMPRESSION_LZ4 = 2;
 
     // Version 9: Initial version.
     // Version 10: DEBUG code flag removed; no bytecode changes.

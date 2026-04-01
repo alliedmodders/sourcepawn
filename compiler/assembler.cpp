@@ -35,7 +35,7 @@
 #include <smx/smx-v1-opcodes.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
-#include <lz4/lib/lz4.h>
+#include <zlib/zlib.h>
 #include "assembler.h"
 #include "compile-context.h"
 #include "compile-options.h"
@@ -118,14 +118,15 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
 
     if (compression_level) {
         size_t region_size = header->imagesize - header->dataoffs;
-        size_t zbuf_max = LZ4_compressBound((int)region_size);
-        std::unique_ptr<char[]> zbuf = std::make_unique<char[]>(zbuf_max);
+        size_t zbuf_max = compressBound(region_size);
+        std::unique_ptr<Bytef[]> zbuf = std::make_unique<Bytef[]>(zbuf_max);
 
-        int new_disksize = LZ4_compress_default((const char*)(buffer.bytes() + header->dataoffs),
-                                                 zbuf.get(), (int)region_size, (int)zbuf_max);
-        if (new_disksize > 0) {
+        uLong new_disksize = zbuf_max;
+        int err = compress2(zbuf.get(), &new_disksize, (Bytef*)(buffer.bytes() + header->dataoffs),
+                            region_size, compression_level);
+        if (err == Z_OK) {
             header->disksize = new_disksize + header->dataoffs;
-            header->compression = SmxConsts::FILE_COMPRESSION_LZ4;
+            header->compression = SmxConsts::FILE_COMPRESSION_GZ;
 
             ByteBuffer new_buffer;
             new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
@@ -134,7 +135,7 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
             return splat_to_binary(cc, binfname, new_buffer.bytes(), new_buffer.size());
         }
 
-        printf("Unable to compress\n");
+        printf("Unable to compress, error %d\n", err);
         printf("Falling back to no compression.\n");
     }
 

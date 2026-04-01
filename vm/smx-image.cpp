@@ -11,7 +11,6 @@
 
 #include <amtl/am-string.h>
 #include <zlib/zlib.h>
-#include <lz4/lib/lz4.h>
 #include "environment.h"
 #include "smx-image.h"
 
@@ -51,28 +50,26 @@ SmxImage::validate() {
             return error("unsupported version");
     }
 
-    if (hdr_->compression != SmxConsts::FILE_COMPRESSION_NONE) {
-        // We don't support junk in binaries, check that disksize matches the actual file size.
-        // (this is to avoid a known crash in inflate() if told that data is bigger than it is)
-        if (hdr_->disksize > length_)
-            return error("illegal disk size");
-
-        // The start of the compression cannot be larger than the file.
-        if (hdr_->dataoffs > length_)
-            return error("illegal compressed region");
-
-        // The compressed region must start after the header.
-        if (hdr_->dataoffs < sizeof(sp_file_hdr_t))
-            return error("illegal compressed region");
-
-        // The full size of the image must be at least as large as the start
-        // of the compressed region.
-        if (hdr_->imagesize < hdr_->dataoffs)
-            return error("illegal image size");
-    }
-
     switch (hdr_->compression) {
         case SmxConsts::FILE_COMPRESSION_GZ: {
+            // We don't support junk in binaries, check that disksize matches the actual file size.
+            // (this is to avoid a known crash in inflate() if told that data is bigger than it is)
+            if (hdr_->disksize > length_)
+                return error("illegal disk size");
+
+            // The start of the compression cannot be larger than the file.
+            if (hdr_->dataoffs > length_)
+                return error("illegal compressed region");
+
+            // The compressed region must start after the header.
+            if (hdr_->dataoffs < sizeof(sp_file_hdr_t))
+                return error("illegal compressed region");
+
+            // The full size of the image must be at least as large as the start
+            // of the compressed region.
+            if (hdr_->imagesize < hdr_->dataoffs)
+                return error("illegal image size");
+
             // Allocate the uncompressed image buffer.
             uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
             std::unique_ptr<uint8_t, decltype(&DefaultFree)> uncompressed(
@@ -86,32 +83,6 @@ SmxImage::validate() {
             uLongf destlen = hdr_->imagesize - hdr_->dataoffs;
             int rv = uncompress((Bytef*)dest, &destlen, src, compressedSize);
             if (rv != Z_OK)
-                return error("could not decode compressed region");
-
-            // Copy the initial uncompressed region back in.
-            memcpy(uncompressed.get(), buffer(), hdr_->dataoffs);
-
-            // Replace the original buffer.
-            length_ = hdr_->imagesize;
-            buffer_ = std::move(uncompressed);
-            hdr_ = (sp_file_hdr_t*)buffer();
-            break;
-        }
-
-        case SmxConsts::FILE_COMPRESSION_LZ4: {
-            // Allocate the uncompressed image buffer.
-            uint32_t compressedSize = hdr_->disksize - hdr_->dataoffs;
-            std::unique_ptr<uint8_t, decltype(&DefaultFree)> uncompressed(
-                static_cast<uint8_t*>(malloc(hdr_->imagesize)), DefaultFree);
-            if (!uncompressed)
-                return error("out of memory");
-
-            // Decompress.
-            const uint8_t* src = buffer() + hdr_->dataoffs;
-            uint8_t* dest = uncompressed.get() + hdr_->dataoffs;
-            int destlen = hdr_->imagesize - hdr_->dataoffs;
-            int rv = LZ4_decompress_safe((const char*)src, (char*)dest, compressedSize, destlen);
-            if (rv < 0 || (uint32_t)rv != (uint32_t)destlen)
                 return error("could not decode compressed region");
 
             // Copy the initial uncompressed region back in.
