@@ -34,8 +34,6 @@ obj-*/
 *~
 *.rej
 *.orig
-*.smx
-!tests/binary/*.smx
 *.swp
 *.pyc
 
