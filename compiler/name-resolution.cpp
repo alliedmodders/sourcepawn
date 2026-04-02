@@ -80,9 +80,6 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
             return false;
     }
 
-    if (ti->type->isTypedef())
-        ti->type = ti->type->inner();
-
     if (ti->type->asEnumStruct()) {
         if (ti->reference) {
             report(pos, 136);
@@ -104,6 +101,9 @@ bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Ty
         report(pos, 139) << atom;
         return false;
     }
+
+    if (type->isTypedef())
+        type = type->inner();
 
     *out_type = type;
     return true;
@@ -298,18 +298,8 @@ TypedefDecl::EnterNames(SemaContext& sc)
         return false;
     }
 
-    if (type_)
-        fe_ = funcenums_add(sc.cc(), name_, false);
-    return true;
-}
-
-bool TypedefDecl::Bind(SemaContext& sc) {
     if (type_) {
-        auto ft = type_->Bind(sc);
-        if (!ft)
-            return false;
-
-        new (&fe_->entries) PoolArray<FunctionType*>({ft});
+        fe_ = funcenums_add(sc.cc(), name_, false);
     } else {
         if (!sc.BindType(pos(), ti_))
             return false;
@@ -320,6 +310,17 @@ bool TypedefDecl::Bind(SemaContext& sc) {
             return false;
         }
         sc.cc().types()->defineTypedef(name_, ti_->type);
+    }
+    return true;
+}
+
+bool TypedefDecl::Bind(SemaContext& sc) {
+    if (type_) {
+        auto ft = type_->Bind(sc);
+        if (!ft)
+            return false;
+
+        new (&fe_->entries) PoolArray<FunctionType*>({ft});
     }
     return true;
 }
