@@ -78,25 +78,32 @@ native Handle CloneHandle(Handle hndl, Handle plugin=INVALID_HANDLE);
 methodmap Handle __nullable__ {
     public native ~Handle();
 
+    /**
+     * Closes a Handle.  If the handle has multiple copies open,
+     * it is not destroyed unless all copies are closed.
+     *
+     * @note Closing a Handle has a different meaning for each Handle type.  Make
+     *       sure you read the documentation on whatever provided the Handle.
+     *
+     * @error           Invalid handles will cause a run time error.
+     */
     public native void Close();
-};
 
-/**
- * Do not use this function.  Returns if a Handle and its contents
- * are readable, whereas INVALID_HANDLE only checks for the absence
- * of a Handle.
- *
- * This function is intended only for tests where the validity of a
- * Handle can absolutely not be known.
- *
- * Do not use this to check the return values of functions, or to
- * check if timers should be closed (except in very rare cases).
- * This function is for very specific usage and using it for general
- * purpose routines can and will hide very subtle bugs.
- *
- * @param hndl      Handle to test for validity.
- * @return          True if handle is valid, false otherwise.
- * @deprecated      Do not use this function.
- */
-#pragma deprecated Do not use this function.
-native bool IsValidHandle(Handle hndl);
+    /**
+     * Clones a Handle.  When passing handles in between plugins, caching handles
+     * can result in accidental invalidation when one plugin releases the Handle, or is its owner
+     * is unloaded from memory.  To prevent this, the Handle may be "cloned" with a new owner.
+     *
+     * @note Usually, you will be cloning Handles for other plugins.  This means that if you clone
+     *       the Handle without specifying the new owner, it will assume the identity of your original
+     *       calling plugin, which is not very useful.  You should either specify that the receiving
+     *       plugin should clone the handle on its own, or you should explicitly clone the Handle
+     *       using the receiving plugin's identity Handle.
+     *
+     * @param plugin    Optional Handle to another plugin to mark as the new owner.
+     *                  If no owner is passed, the owner becomes the calling plugin.
+     * @return          Handle on success, INVALID_HANDLE if not cloneable.
+     * @error           Invalid handles will cause a run time error.
+     */
+    public native Handle Clone(Handle plugin=INVALID_HANDLE);
+};

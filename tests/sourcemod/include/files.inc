@@ -112,6 +112,11 @@ methodmap File < Handle
 		CloseHandle(this);
 	}
 
+	// Get the file size in bytes.
+	//
+	// @return                File size in bytes, -1 on error.
+	public native int Size();
+
 	// Reads a line of text from a file.
 	//
 	// @param buffer          String buffer to hold the line.
@@ -300,6 +305,7 @@ native bool ReadDirEntry(Handle dir, char[] buffer, int maxlength, FileType &typ
  *   "r": Open an existing file for reading.
  *   "w": Create a file for writing, or truncate (delete the contents of) an
  *        existing file and then open it for writing.
+ *   "wx": Create file for writing, fails if file already exists.
  *   "a": Create a file for writing, or open an existing file such that writes
  *        will be appended to the end.
  *   "r+": Open an existing file for both reading and writing.
@@ -309,7 +315,7 @@ native bool ReadDirEntry(Handle dir, char[] buffer, int maxlength, FileType &typ
  *         such that writes will be appended to the end.
  *
  * The open mode may also contain an additional character after "r", "w", or "a",
- * but before any "+" sign. This character may be "b" (indicating binary mode) or
+ * but before the "+" sign. This character may be "b" (indicating binary mode) or
  * "t" (indicating text mode). By default, "text" mode is implied. On Linux and
  * Mac, this has no distinction from binary mode. On Windows, it causes the '\n'
  * character (0xA) to be written as "\r\n" (0xD, 0xA).
@@ -595,6 +601,15 @@ native bool CreateDirectory(const char[] path, int mode=FPERM_O_READ|FPERM_O_EXE
  * @return              True on success, false otherwise.
  */
 native bool SetFilePermissions(const char[] path, int mode);
+
+/**
+ * Retrieves a file or directories permissions.
+ *
+ * @param path          Path to the file.
+ * @param mode          Variable to store the permissions in.
+ * @return              True on success, false otherwise.
+ */
+native bool GetFilePermissions(const char[] path, int &mode);
 
 /**
  * Returns a file timestamp as a unix timestamp.
