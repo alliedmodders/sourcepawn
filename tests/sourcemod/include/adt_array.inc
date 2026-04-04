@@ -74,7 +74,7 @@ methodmap ArrayList < Handle {
 
 	// Clones an array, returning a new handle with the same size and data.
 	// This should NOT be confused with CloneHandle. This is a completely new
-	// handle with the same data but no relation to the original. It should
+	// handle with the same data but no relation to the original. It should be
 	// closed when no longer needed.
 	//
 	// @return              New handle to the cloned array object
@@ -129,9 +129,11 @@ methodmap ArrayList < Handle {
 	// @param index         Index in the array.
 	// @param buffer        Buffer to copy to.
 	// @param maxlength     Maximum size of the buffer.
+	// @param block         Optionally specify which block to read from
+	//                      (useful if the blocksize > 0).
 	// @return              Number of characters copied.
 	// @error               Invalid index.
-	public native int GetString(int index, char[] buffer, int maxlength);
+	public native int GetString(int index, char[] buffer, int maxlength, int block=0);
 
 	// Retrieves an array of cells from an array.
 	//
@@ -139,9 +141,11 @@ methodmap ArrayList < Handle {
 	// @param buffer        Buffer to store the array in.
 	// @param size          If not set, assumes the buffer size is equal to the
 	//                      blocksize.  Otherwise, the size passed is used.
+	// @param block         Optionally specify which block to read from
+	//                      (useful if the blocksize > 0).
 	// @return              Number of cells copied.
 	// @error               Invalid index.
-	public native int GetArray(int index, any[] buffer, int size=-1);
+	public native int GetArray(int index, any[] buffer, int size=-1, int block=0);
 
 	// Sets a cell value in an array.
 	//
@@ -157,9 +161,13 @@ methodmap ArrayList < Handle {
 	//
 	// @param index         Index in the array.
 	// @param value         String value to set.
+	// @param size          If not set, assumes the buffer size is equal to the
+	//                      blocksize.  Otherwise, the size passed is used.
+	// @param block         Optionally specify which block to write to
+	//                      (useful if the blocksize > 0).
 	// @return              Number of characters copied.
 	// @error               Invalid index.
-	public native int SetString(int index, const char[] value);
+	public native int SetString(int index, const char[] value, int size=-1, int block=0);
 
 	// Sets an array of cells in an array.
 	//
@@ -167,9 +175,11 @@ methodmap ArrayList < Handle {
 	// @param values        Array to copy.
 	// @param size          If not set, assumes the buffer size is equal to the
 	//                      blocksize.  Otherwise, the size passed is used.
+	// @param block         Optionally specify which block to write to
+	//                      (useful if the blocksize > 0).
 	// @return              Number of cells copied.
 	// @error               Invalid index.
-	public native int SetArray(int index, const any[] values, int size=-1);
+	public native int SetArray(int index, const any[] values, int size=-1, int block=0);
 
 	// Shifts an array up.  All array contents after and including the given
 	// index are shifted up by one, and the given index is then "free."
@@ -197,18 +207,28 @@ methodmap ArrayList < Handle {
 	// Returns the index for the first occurrence of the provided string. If
 	// the string cannot be located, -1 will be returned.
 	//
-	// @param item          String to search for
+	// @param item          String to search for.
+	// @param block         Optionally which block to search in.
+	// @param start         Index to start searching from (exclusive), or -1 for direction default.
+	//                      Valid numbers are in the interval [-1..Length].
+	// @param reverse       Whether the search direction should be reversed.
+	// @param caseSensitive If true (default), comparison is case sensitive.
+	//                      If false, comparison is case insensitive.
 	// @return              Array index, or -1 on failure
-	public native int FindString(const char[] item);
+	// @error               Invalid block, or invalid start index.
+	public native int FindString(const char[] item, int block=0, int start=-1, bool reverse=false, bool caseSensitive=true);
 
 	// Returns the index for the first occurrence of the provided value. If the
 	// value cannot be located, -1 will be returned.
 	//
-	// @param item          Value to search for
-	// @param block         Optionally which block to search in
-	// @return              Array index, or -1 on failure
-	// @error               Invalid block index
-	public native int FindValue(any item, int block=0);
+	// @param item          Value to search for.
+	// @param block         Optionally which block to search in.
+	// @param start         Index to start searching from (exclusive), or -1 for direction default.
+	//                      Valid numbers are in the interval [-1..Length].
+	// @param reverse       Whether the search direction should be reversed.
+	// @return              Array index, or -1 on failure.
+	// @error               Invalid block, or invalid start index.
+	public native int FindValue(any item, int block=0, int start=-1, bool reverse=false);
 
 	// Sort an ADT Array. Specify the type as Integer, Float, or String.
 	//
@@ -349,10 +369,12 @@ native any GetArrayCell(Handle array, int index, int block=0, bool asChar=false)
  * @param index         Index in the array.
  * @param buffer        Buffer to copy to.
  * @param maxlength     Maximum size of the buffer.
+ * @param block         Optionally specify which block to read from
+ *                      (useful if the blocksize > 0).
  * @return              Number of characters copied.
  * @error               Invalid Handle or invalid index.
  */
-native int GetArrayString(Handle array, int index, char[] buffer, int maxlength);
+native int GetArrayString(Handle array, int index, char[] buffer, int maxlength, int block=0);
 
 /**
  * Retrieves an array of cells from an array.
@@ -362,10 +384,12 @@ native int GetArrayString(Handle array, int index, char[] buffer, int maxlength)
  * @param buffer        Buffer to store the array in.
  * @param size          If not set, assumes the buffer size is equal to the
  *                      blocksize.  Otherwise, the size passed is used.
+ * @param block         Optionally specify which block to read from
+ *                      (useful if the blocksize > 0).
  * @return              Number of cells copied.
  * @error               Invalid Handle or invalid index.
  */
-native int GetArrayArray(Handle array, int index, any[] buffer, int size=-1);
+native int GetArrayArray(Handle array, int index, any[] buffer, int size=-1, int block=0);
 
 /**
  * Sets a cell value in an array.
@@ -386,10 +410,14 @@ native void SetArrayCell(Handle array, int index, any value, int block=0, bool a
  * @param array         Array Handle.
  * @param index         Index in the array.
  * @param value         String value to set.
+ * @param size          If not set, assumes the buffer size is equal to the
+ *                      blocksize.  Otherwise, the size passed is used.
+ * @param block         Optionally specify which block to write to
+ *                      (useful if the blocksize > 0).
  * @return              Number of characters copied.
  * @error               Invalid Handle or invalid index.
  */
-native int SetArrayString(Handle array, int index, const char[] value);
+native int SetArrayString(Handle array, int index, const char[] value, int size=-1, int block=0);
 
 /**
  * Sets an array of cells in an array.
@@ -399,10 +427,12 @@ native int SetArrayString(Handle array, int index, const char[] value);
  * @param values        Array to copy.
  * @param size          If not set, assumes the buffer size is equal to the
  *                      blocksize.  Otherwise, the size passed is used.
+ * @param block         Optionally specify which block to write to
+ *                      (useful if the blocksize > 0).
  * @return              Number of cells copied.
  * @error               Invalid Handle or invalid index.
  */
-native int SetArrayArray(Handle array, int index, const any[] values, int size=-1);
+native int SetArrayArray(Handle array, int index, const any[] values, int size=-1, int block=0);
 
 /**
  * Shifts an array up.  All array contents after and including the given
@@ -442,10 +472,11 @@ native void SwapArrayItems(Handle array, int index1, int index2);
  *
  * @param array         Array Handle.
  * @param item          String to search for
+ * @param block         Optionally which block to search in
  * @return              Array index, or -1 on failure
  * @error               Invalid Handle
  */
-native int FindStringInArray(Handle array, const char[] item);
+native int FindStringInArray(Handle array, const char[] item, int block=0);
 
 /**
  * Returns the index for the first occurrence of the provided value. If the value

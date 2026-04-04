@@ -310,7 +310,7 @@ methodmap DHookParam < Handle
 
 	// Gets an object's variable value.
 	//
-	// @param num           Parameter number to get, starting at 1.
+	// @param num           Parameter number to get, 0 for param "this", other parameters start from 1
 	// @param offset        Byte offset within the object to the var to get.
 	// @param type          Type of var it is.
 	//
@@ -320,7 +320,7 @@ methodmap DHookParam < Handle
 
 	// Gets an object's vector variable value.
 	//
-	// @param num           Parameter number to get, starting at 1.
+	// @param num           Parameter number to get, 0 for param "this", other parameters start from 1.
 	// @param offset        Byte offset within the object to the var to get.
 	// @param type          Type of var it is.
 	// @param vec           Buffer to store the result vector.
@@ -330,7 +330,7 @@ methodmap DHookParam < Handle
 
 	// Gets an object's string variable value.
 	//
-	// @param num           Parameter number to get, starting at 1.
+	// @param num           Parameter number to get, 0 for param "this", other parameters start from 1.
 	// @param offset        Byte offset within the object to the var to get.
 	// @param type          Type of var it is.
 	// @param buffer        Buffer to store the result string.
@@ -344,7 +344,7 @@ methodmap DHookParam < Handle
 	// The changes are only applied when MRES_ChangedHandled or MRES_ChangedOverride
 	// is returned in the callback.
 	//
-	// @param num           Parameter number to set, starting at 1.
+	// @param num           Parameter number to set, 0 for param "this", other parameters start from 1.
 	// @param offset        Byte offset within the object to the var to set.
 	// @param type          Type of var it is.
 	// @param value         The value to set the var to.
@@ -357,7 +357,7 @@ methodmap DHookParam < Handle
 	// The changes are only applied when MRES_ChangedHandled or MRES_ChangedOverride
 	// is returned in the callback.
 	//
-	// @param num           Parameter number to set, starting at 1.
+	// @param num           Parameter number to set, 0 for param "this", other parameters start from 1.
 	// @param offset        Byte offset within the object to the var to set.
 	// @param type          Type of var it is.
 	// @param vec           The value to set the vector var to.
@@ -764,7 +764,7 @@ native int DHookGamerules(Handle setup, bool post, DHookRemovalCB removalcb=INVA
  *
  * @param setup             Setup handle to use to add the hook.
  * @param post              true to make the hook a post hook. (If you need to change the return value or need the return 
- *                          alue use a post hook! If you need to change params and return use a pre and post hook!)
+ *                          value use a post hook! If you need to change params and return use a pre and post hook!)
  * @param addr              This pointer address.
  * @param removalcb         Callback for when the hook is removed (Entity hooks are auto-removed on entity destroyed and
  *                          will call this callback)
@@ -928,7 +928,7 @@ native void DHookSetReturnString(Handle hReturn, char[] value);
  * Gets an objects variable value
  *
  * @param hParams           Handle to params structure
- * @param num               Param number to get.
+ * @param num               Param number to get, 0 for param "this".
  * @param offset            Offset within the object to the var to get.
  * @param type              Type of var it is
  *
@@ -941,7 +941,7 @@ native any DHookGetParamObjectPtrVar(Handle hParams, int num, int offset, Object
  * Sets an objects variable value
  *
  * @param hParams           Handle to params structure
- * @param num               Param number to set.
+ * @param num               Param number to set, 0 for param "this".
  * @param offset            Offset within the object to the var to set.
  * @param type              Type of var it is
  * @param value             The value to set the var to.
@@ -954,7 +954,7 @@ native void DHookSetParamObjectPtrVar(Handle hParams, int num, int offset, Objec
  * Gets an objects vector variable value
  *
  * @param hParams           Handle to params structure
- * @param num               Param number to get.
+ * @param num               Param number to get, 0 for param "this".
  * @param offset            Offset within the object to the var to get.
  * @param type              Type of var it is
  * @param buffer            Buffer to store the result vector
@@ -967,7 +967,7 @@ native void DHookGetParamObjectPtrVarVector(Handle hParams, int num, int offset,
  * Sets an objects vector variable value
  *
  * @param hParams           Handle to params structure
- * @param num               Param number to set.
+ * @param num               Param number to set, 0 for param "this".
  * @param offset            Offset within the object to the var to set.
  * @param type              Type of var it is
  * @param value             The value to set the vector var to.
@@ -980,7 +980,7 @@ native void DHookSetParamObjectPtrVarVector(Handle hParams, int num, int offset,
  * Gets an objects string variable value
  *
  * @param hParams           Handle to params structure
- * @param num               Param number to get.
+ * @param num               Param number to get, 0 for param "this".
  * @param offset            Offset within the object to the var to get.
  * @param type              Type of var it is
  * @param buffer            Buffer to store the result vector

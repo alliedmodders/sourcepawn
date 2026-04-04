@@ -166,7 +166,10 @@ enum {
 	TF_CUSTOM_SLAP_KILL,
 	TF_CUSTOM_CROC,
 	TF_CUSTOM_TAUNTATK_GASBLAST,
-	TF_CUSTOM_AXTINGUISHER_BOOSTED
+	TF_CUSTOM_AXTINGUISHER_BOOSTED,
+	TF_CUSTOM_KRAMPUS_MELEE,
+	TF_CUSTOM_KRAMPUS_RANGED,
+	TF_CUSTOM_TAUNTATK_TRICKSHOT
 };
 
 // Weapon codes as used in some events, such as player_death
@@ -399,6 +402,7 @@ stock TFClassType TF2_GetPlayerClass(int client)
  */
 stock void TF2_SetPlayerClass(int client, TFClassType classType, bool weapons=true, bool persistent=true)
 {
+	#pragma unused weapons
 	SetEntProp(client, Prop_Send, "m_iClass", view_as<int>(classType));
 
 	if (persistent)

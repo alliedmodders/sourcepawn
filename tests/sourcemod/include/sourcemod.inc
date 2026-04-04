@@ -78,6 +78,14 @@ struct Plugin
 #include <commandline>
 #include <entitylump>
 
+typedef Address = int64;
+public const int64 __Int64_Address__ = 0;
+
+/**< Equivallent to nullptr */
+public const Address Address_Null = 0;
+/**< Size of a pointer in bytes (same as `sizeof(void*)`) */
+public const Address Address_PointerSize = 0;
+
 enum APLRes
 {
 	APLRes_Success = 0,     /**< Plugin should load */
@@ -413,6 +421,24 @@ native int GetTime(int bigStamp[2]={0,0});
 native void FormatTime(char[] buffer, int maxlength, const char[] format, int stamp=-1);
 
 /**
+ * Parses a string representing a date and/or time into a unix timestamp.
+ * The timezone is always interpreted as UTC/GMT.
+ *
+ * See this URL for valid parameters:
+ * https://en.cppreference.com/w/cpp/io/manip/get_time
+ *
+ * Note that available parameters depends on support from your operating system.
+ * In particular, ones highlighted in yellow on that page are not currently
+ * available on Windows and should be avoided for portable plugins.
+ *
+ * @param dateTime     Date and/or time string.
+ * @param format       Formatting rules (passing NULL_STRING will use the rules defined in sm_datetime_format).
+ * @return             32bit timestamp (number of seconds since unix epoch).
+ * @error              Invalid date/time string or time format.
+ */
+native int ParseTime(const char[] dateTime, const char[] format);
+
+/**
  * Loads a game config file.
  *
  * @param file          File to load.  The path must be relative to the 'gamedata' folder under the config folder
@@ -707,11 +733,6 @@ enum NumberType
     NumberType_Int32
 };
 
-enum Address
-{
-    Address_Null = 0               // a typical invalid result when an address lookup fails
-};
-
 /**
  * Load up to 4 bytes from a memory address.
  *
@@ -735,6 +756,26 @@ native any LoadFromAddress(Address addr, NumberType size);
  * @error                          Address is null or pointing to reserved memory.
  */
 native void StoreToAddress(Address addr, any data, NumberType size, bool updateMemAccess = true);
+
+/**
+ * Load sizeof(void*) from a memory address.
+ *
+ * @param addr          Address to a memory location.
+ * @return              The address that is stored at that address.
+ * @error               Address is null or pointing to reserved memory.
+ */
+native Address LoadAddressFromAddress(Address addr);
+
+/**
+ * Store sizeof(void*) bytes to a memory address.
+ *
+ * @param addr                     Address to a memory location.
+ * @param data                     Address to store at that location.
+ * @param updateMemAccess          If true, SourceMod will set read / write / exec permissions
+ *                                 on the memory page being written to.
+ * @error                          Address is null or pointing to reserved memory.
+ */
+native void StoreAddressToAddress(Address addr, Address data, bool updateMemAccess = true);
 
 methodmap FrameIterator < Handle {
 	// Creates a stack frame iterator to build your own stack traces.

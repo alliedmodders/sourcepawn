@@ -2306,6 +2306,7 @@ cell_t CodeGenerator::AcquireTempSlot(BuiltinType builtin_type) {
             used_temp_slots_.splice(used_temp_slots_.end(), free_temp_slots_, iter);
             return (*iter).first;
         }
+        iter++;
     }
 
     auto type = cc_.types()->GetBuiltin(builtin_type);
