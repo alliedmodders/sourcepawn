@@ -1049,7 +1049,7 @@ bool CodeGenerator::EmitBinaryExprTest(BinaryExpr* root, bool jump_on_true, Labe
         return false;
 
     Expr* left = root->left();
-    if (left->val().type()->isInt64())
+    if (left->val().type()->isInt64() || left->val().type()->isFloat())
         return false;
 
     Expr* right = root->right();
