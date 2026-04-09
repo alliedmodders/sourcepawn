@@ -312,10 +312,6 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
         data_.Add(std::move(array.data));
         data_.AddZeroes(array.zeroes);
     } else {
-        cell_t cells = 1;
-        if (auto es = decl->type()->asEnumStruct())
-            cells = es->array_size();
-
         if (init) {
             if (auto n64 = init->right()->as<Number64Expr>()) {
                 Int64CellUnion u(*n64->ToInt64());
@@ -326,6 +322,12 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
                 data_.Add(init->right()->val().constval());
             }
         } else {
+            cell_t cells = 1;
+            if (auto es = decl->type()->asEnumStruct())
+                cells = es->array_size();
+            else if (decl->type()->isInt64())
+                cells = 2;
+
             data_.AddZeroes(cells);
         }
     }
