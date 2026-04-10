@@ -2107,7 +2107,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     Type* from_type = expr->from()->val().type();
 
     if (expr->to()->isInt64()) {
-        assert(from_type->isInt());
+        assert(from_type->isInt() || from_type->isAny());
         auto slot = AcquireTempSlot(BuiltinType::Int64);
         __ emit(OP_CVT_I64, slot);
     } else if (expr->to()->isBool()) {
