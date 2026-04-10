@@ -1166,6 +1166,14 @@ TernaryExpr::FoldToConstant()
     return true;
 }
 
+static inline bool IsValidIntWidthChange(Type* from, Type* to) {
+    if (from->isInt64() && to->isInt())
+        return true;
+    if (from->isInt() && to->isInt64())
+        return true;
+    return false;
+}
+
 bool Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
@@ -1217,18 +1225,14 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         }
         atype = types_->defineReference(atype);
     }
-    if (atype->isInt64()) {
-        report(expr, 460) << out_val.type() << atype;
-        return false;
-    }
     if (actual_array && ltype->isInt64()) {
         report(expr, 460) << actual_array << atype;
         return false;
     }
 
-    if (out_val.type()->isInt64()) {
-        if (!atype->isInt()) {
-            report(expr, 460) << ltype << atype;
+    if (out_val.type()->isInt64() || atype->isInt64()) {
+        if (!IsValidIntWidthChange(out_val.type(), atype)) {
+            report(expr, 460) << out_val.type() << atype;
             return false;
         }
         if (inner->lvalue()) {

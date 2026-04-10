@@ -2122,8 +2122,12 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr) {
     auto from = expr->expr();
     EmitExpr(from);
 
-    if (expr->val().type()->isInt() && from->val().type()->isInt64())
+    if (expr->val().type()->isInt() && from->val().type()->isInt64()) {
         __ emit(OP_TRUNCATE_I64);
+    } else if (expr->val().type()->isInt64() && from->val().type()->isInt()) {
+        auto slot = AcquireTempSlot(BuiltinType::Int64);
+        __ emit(OP_CVT_I64, slot);
+    }
 }
 
 void CodeGenerator::EmitFloatBuiltin(CallExpr* expr) {
