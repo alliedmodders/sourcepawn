@@ -1,7 +1,6 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders LLC 2021
-//  Copyright (c) ITB CompuPhase, 1997-2006
+//  Copyright (c) AlliedModders 2026
 //
 //  This software is provided "as-is", without any express or implied warranty.
 //  In no event will the authors be held liable for any damages arising from
@@ -19,32 +18,50 @@
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
-
-#include <string>
-#include <utility>
+#include <stdio.h>
 #include <vector>
-
-#define CTRL_CHAR '\\'  /* default control character */
+#include "ast-types.h"
 
 namespace sp {
 namespace cc {
 
-struct CompileOptions {
-    bool need_semicolon = false;
-    std::vector<std::string> source_files;
-    std::vector<std::string> include_paths;
-    int tabsize = 8;
-    bool require_newdecls = false;
-    bool warnings_are_errors = false;
-    bool use_stderr = false;
-    int pragma_dynamic = 0;
-    int ctrlchar_org = CTRL_CHAR;
-    int compression = 9;
-    bool show_includes = false;
-    bool print_ast = false;
-    bool syntax_only = false;    int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
-    std::vector<std::pair<std::string, std::string>> predefines;
-};
+class ParseTree;
+class Stmt;
+class Expr;
+struct typeinfo_t;
 
+#define _(Name) class Name;
+AST_STMT_TYPE_LIST(_)
+#undef _
+
+#define _(Name) class Name;
+AST_EXPR_TYPE_LIST(_)
+#undef _
+
+class StructInitFieldExpr;
+
+class AstPrinter
+{
+  public:
+    explicit AstPrinter(FILE* out);
+
+    void Print(ParseTree* tree);
+    void Print(Stmt* stmt, bool is_last = true);
+    void Print(Expr* expr, bool is_last = true);
+
+  private:
+    void PrintIndent(bool is_last);
+    void PrintType(const typeinfo_t& type);
+    void PrintExprInline(Expr* expr);
+
+#define _(Name) void Print##Name(Name* node, bool is_last);
+    AST_STMT_TYPE_LIST(_)
+    AST_EXPR_TYPE_LIST(_)
+#undef _
+
+  private:
+    FILE* out_;
+    std::vector<bool> stack_;
+};
 } // namespace cc
 } // namespace sp

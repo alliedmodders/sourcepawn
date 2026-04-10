@@ -538,6 +538,9 @@ class TypedefDecl : public Decl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::TypedefDecl; }
 
+    TypedefInfo* typedef_info() const { return type_; }
+    typeinfo_t* ti() const { return ti_; }
+
   private:
     TypedefInfo* type_ = nullptr;
     typeinfo_t* ti_ = nullptr;
@@ -831,6 +834,7 @@ class CastExpr final : public Expr
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
     const auto& type_info() const { return type_; }
     Type* type() const { return type_.type(); }
+    int token() const { return token_; }
 
   private:
     int token_;
@@ -872,6 +876,7 @@ class SymbolExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SymbolExpr; }
 
     Decl* decl() const { return decl_; }
+    Atom* name() const { return name_; }
 
   private:
     bool DoBind(SemaContext& sc, bool is_lval);
@@ -1219,7 +1224,8 @@ class ArrayExpr final : public Expr
     PoolArray<Expr*> exprs_;
 };
 
-struct StructInitFieldExpr : public Expr {
+class StructInitFieldExpr final : public Expr {
+  public:
     StructInitFieldExpr(Atom* name, Expr* value, const token_pos_t& pos)
       : Expr(ExprKind::StructInitFieldExpr, pos),
         name(name), value(value)
@@ -1831,6 +1837,7 @@ class MethodmapDecl : public LayoutDecl
     QualType type() const override { return QualType(type_); }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
+    Atom* extends() const { return extends_; }
 
   private:
     bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);

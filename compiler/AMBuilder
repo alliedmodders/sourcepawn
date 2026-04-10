@@ -6,6 +6,7 @@ module = binary.Module(builder, 'compiler')
 module.sources += [
   'assembler.cpp',
   'array-helpers.cpp',
+  'ast-printer.cpp',
   'builtin-generator.cpp',
   'coercion-rules.cpp',
   'compile-context.cpp',

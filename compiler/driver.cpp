@@ -73,6 +73,8 @@ args::ToggleOption opt_stderr(nullptr, "--use-stderr", Some(false),
                               "Use stderr instead of stdout for error messages.");
 args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
                                  "Disable opcode verification (for debugging).");
+args::ToggleOption opt_print_ast(nullptr, "--print-ast", Some(false),
+                                 "Print the Abstract Syntax Tree");
 
 /* set_extension
  * Set the default extension, or force an extension. To erase the
@@ -123,6 +125,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
     cc.options()->use_stderr = opt_stderr.value();
     cc.options()->compression = opt_compression.value();
     cc.options()->show_includes = opt_showincludes.value();
+    cc.options()->print_ast = opt_print_ast.value();
 
     if (opt_no_verify.value())
         cc.set_verify_output(false);
