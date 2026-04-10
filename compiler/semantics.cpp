@@ -478,6 +478,10 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     auto& val = expr->val();
     if (val.type()->isInt64())
         return BuildSimpleCast(expr, BuiltinType::Bool);
+    if (val.type()->isVoid()) {
+        report(expr, 466);
+        return nullptr;
+    }
 
     if (val.ident == iCONSTEXPR) {
         if (!sc_->preprocessing()) {
@@ -622,7 +626,7 @@ static inline bool SupportsOperators(Type* type) {
 }
 
 static inline bool CanPromoteToInt64(Type* type) {
-    return type->isInt();
+    return type->isInt() || type->isAny();
 }
 
 class BinaryExprChecker final
@@ -880,12 +884,12 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
             if (left_type->isInt())
                 report(expr_, 454);
             else
-                report(expr_, 450) << left_type << right_val.type();
+                report(expr_, 450) << right_val.type() << left_type;
             return false;
         }
         if (!right_val.type()->isInt64()) {
             if (!CanPromoteToInt64(right_val.type())) {
-                report(expr_, 450) << left_type << right_val.type();
+                report(expr_, 450) << right_val.type() << left_type;
                 return false;
             }
             right_ = expr_->set_right(sema_.BuildSimpleCast(right_, BuiltinType::Int64));
@@ -1169,7 +1173,7 @@ TernaryExpr::FoldToConstant()
 static inline bool IsValidIntWidthChange(Type* from, Type* to) {
     if (from->isInt64() && to->isInt())
         return true;
-    if (from->isInt() && to->isInt64())
+    if ((from->isInt() || from->isAny()) && to->isInt64())
         return true;
     return false;
 }
