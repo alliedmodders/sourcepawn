@@ -131,14 +131,14 @@ void AstPrinter::PrintExprStmt(ExprStmt* node, bool is_last) {
 }
 
 void AstPrinter::PrintUnaryExpr(UnaryExpr* node, bool is_last) {
-    fprintf(out_, "UnaryExpr (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "UnaryExpr (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->expr(), true);
     stack_.pop_back();
 }
 
 void AstPrinter::PrintBinaryExpr(BinaryExpr* node, bool is_last) {
-    fprintf(out_, "BinaryExpr (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "BinaryExpr (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->left(), false);
     Print(node->right(), true);
@@ -282,7 +282,7 @@ void AstPrinter::PrintExitStmt(ExitStmt* node, bool is_last) {
 }
 
 void AstPrinter::PrintDoWhileStmt(DoWhileStmt* node, bool is_last) {
-    fprintf(out_, "DoWhileStmt (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "DoWhileStmt (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->cond(), false);
     Print(node->body(), true);
@@ -453,7 +453,7 @@ void AstPrinter::PrintMethodmapMethodDecl(MethodmapMethodDecl* node, bool is_las
 }
 
 void AstPrinter::PrintLogicalExpr(LogicalExpr* node, bool is_last) {
-    fprintf(out_, "LogicalExpr (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "LogicalExpr (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->left(), false);
     Print(node->right(), true);
@@ -485,14 +485,14 @@ void AstPrinter::PrintTernaryExpr(TernaryExpr* node, bool is_last) {
 }
 
 void AstPrinter::PrintIncDecExpr(IncDecExpr* node, bool is_last) {
-    fprintf(out_, "IncDecExpr (token %s, prefix: %d)\n", get_token_string(node->token()).c_str(), node->prefix());
+    fprintf(out_, "IncDecExpr (token '%s', prefix: %d)\n", get_token_string(node->token()).c_str(), node->prefix());
     stack_.push_back(is_last);
     Print(node->expr(), true);
     stack_.pop_back();
 }
 
 void AstPrinter::PrintCastExpr(CastExpr* node, bool is_last) {
-    fprintf(out_, "CastExpr (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "CastExpr (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->expr(), true);
     stack_.pop_back();
@@ -510,7 +510,7 @@ void AstPrinter::PrintSymbolExpr(SymbolExpr* node, bool is_last) {
 }
 
 void AstPrinter::PrintCallExpr(CallExpr* node, bool is_last) {
-    fprintf(out_, "CallExpr (token %s)\n", get_token_string(node->token()).c_str());
+    fprintf(out_, "CallExpr (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     if (!node->args().empty()) {
         Print(node->target(), false);
