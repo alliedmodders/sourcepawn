@@ -119,7 +119,6 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
     retvalue_used_(false),
     is_callback_(false),
     returns_value_(false),
-    always_returns_(false),
     is_live_(false),
     maybe_used_(false)
 {

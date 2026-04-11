@@ -2215,17 +2215,10 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
     // Note: unlike loop conditions, we don't factor in constexprs here, it's
     // too much work and way less common than constant loop conditions.
 
-    ke::Maybe<bool> always_returns;
-    {
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
-        if (!CheckStmt(stmt->on_true(), STMT_OWNS_HEAP))
-            return false;
-    }
-    {
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
-        if (stmt->on_false() && !CheckStmt(stmt->on_false(), STMT_OWNS_HEAP))
-            return false;
-    }
+    if (!CheckStmt(stmt->on_true(), STMT_OWNS_HEAP))
+        return false;
+    if (stmt->on_false() && !CheckStmt(stmt->on_false(), STMT_OWNS_HEAP))
+        return false;
 
     if (stmt->on_false()) {
         FlowType a = stmt->on_true()->flow_type();
@@ -2233,9 +2226,6 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
         if (a == b)
             stmt->set_flow_type(a);
     }
-
-    if (*always_returns)
-        sc_->set_always_returns(true);
     return true;
 }
 
@@ -2325,16 +2315,16 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
     for (const auto& stmt : block->stmts()) {
         cc_.reports()->ResetErrorFlag();
 
-        if (ok && !sc_->warned_unreachable() &&
-            (sc_->always_returns() || block->flow_type() != Flow_None))
-        {
+        if (ok && !sc_->warned_unreachable() && block->flow_type() == Flow_Return) {
             report(stmt, 225);
             sc_->set_warned_unreachable();
         }
         ok &= CheckStmt(stmt);
 
-        if (FlowType flow = stmt->flow_type(); flow != Flow_None)
-            block->set_flow_type(flow);
+        if (FlowType flow = stmt->flow_type(); flow != Flow_None) {
+            if (block->flow_type() == Flow_None)
+                block->set_flow_type(flow);
+        }
     }
 
     if (block->scope())
@@ -2343,23 +2333,6 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
     // Blocks always taken heap ownership.
     AssignHeapOwnership(block);
     return ok;
-}
-
-AutoCollectSemaFlow::AutoCollectSemaFlow(SemaContext& sc, ke::Maybe<bool>* out)
-  : sc_(sc),
-    out_(out),
-    old_value_(sc.always_returns())
-{
-    sc.set_always_returns(false);
-}
-
-AutoCollectSemaFlow::~AutoCollectSemaFlow()
-{
-    if (out_->isValid())
-        out_->get() &= sc_.always_returns();
-    else
-        out_->init(sc_.always_returns());
-    sc_.set_always_returns(old_value_);
 }
 
 bool Semantics::CheckBreakStmt(BreakStmt* stmt) {
@@ -2373,7 +2346,6 @@ bool Semantics::CheckContinueStmt(ContinueStmt* stmt) {
 }
 
 bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
-    sc_->set_always_returns();
     sc_->loop_has_return() = true;
 
     auto fun = sc_->func();
@@ -2579,9 +2551,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
 
     bool has_break = false;
     bool has_return = false;
-    ke::Maybe<bool> always_returns;
     {
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
         ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
@@ -2597,14 +2567,11 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
 
     if (stmt->never_taken() && stmt->token() == tWHILE) {
         // Loop is never taken, don't touch the return status.
-    } else if ((stmt->token() == tDO || stmt->always_taken()) && !has_break) {
-        // Loop is always taken, and has no break statements.
-        if (stmt->always_taken() && has_return)
-            sc_->set_always_returns(true);
-
-        // Loop body ends in a return and has no break statements.
-        if (stmt->body()->flow_type() == Flow_Return)
+    } else if (stmt->always_taken() && !has_break) {
+        if (has_return) {
+            // Loop body ends in a return and has no break statements.
             stmt->set_flow_type(Flow_Return);
+        }
     }
 
     // :TODO: endless loop warning?
@@ -2638,9 +2605,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 
     bool has_break = false;
     bool has_return = false;
-    ke::Maybe<bool> always_returns;
     {
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
         ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
         ke::SaveAndSet<bool> auto_continue(&sc_->loop_has_continue(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
@@ -2668,10 +2633,8 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
     } else if (stmt->always_taken() && !has_break) {
         if (has_return) {
             // Loop is always taken, and has no break statements, and has a return statement.
-            sc_->set_always_returns(true);
-        }
-        if (body->flow_type() == Flow_Return && !has_break)
             stmt->set_flow_type(Flow_Return);
+        }
     }
 
     if (stmt->scope())
@@ -2689,7 +2652,6 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
 
-    ke::Maybe<bool> always_returns;
     ke::Maybe<FlowType> flow;
 
     auto update_flow = [&](FlowType other) -> void {
@@ -2724,22 +2686,16 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
                 report(expr, 40) << value;
         }
 
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
         if (CheckStmt(case_entry.second))
             update_flow(case_entry.second->flow_type());
     }
 
     if (stmt->default_case()) {
-        AutoCollectSemaFlow flow(*sc_, &always_returns);
         if (CheckStmt(stmt->default_case()))
             update_flow(stmt->default_case()->flow_type());
     } else {
-        always_returns.init(false);
         update_flow(Flow_None);
     }
-
-    if (*always_returns)
-        sc_->set_always_returns(true);
 
     stmt->set_flow_type(*flow);
 
@@ -2837,7 +2793,6 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     bool ok = CheckStmt(body, STMT_OWNS_HEAP);
 
     info->set_returns_value(sc_->returns_value());
-    info->set_always_returns(sc_->always_returns());
 
     if (!info->returns_value()) {
         if (fwd && fwd->return_type()->isVoid() && decl.type.type->isInt() &&
@@ -2874,21 +2829,11 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 }
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
-    if (info->returns_value() && info->always_returns())
+    if (info->returns_value() && info->body()->flow_type() == Flow_Return)
         return;
 
     if (info->MustReturnValue())
         ReportFunctionReturnError(info);
-
-    // Synthesize a return statement.
-    std::vector<Stmt*> stmts = {
-        info->body(),
-        new ReturnStmt(info->end_pos(), nullptr),
-    };
-
-    auto new_body = new BlockStmt(info->body()->pos(), stmts);
-    new_body->set_flow_type(Flow_Return);
-    info->set_body(new_body);
 }
 
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
