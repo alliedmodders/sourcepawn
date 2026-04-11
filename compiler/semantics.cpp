@@ -2232,14 +2232,6 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
         FlowType b = stmt->on_false()->flow_type();
         if (a == b)
             stmt->set_flow_type(a);
-        else if (a != Flow_None && b != Flow_None)
-            stmt->set_flow_type(Flow_Mixed);
-    } else if (stmt->on_true()->flow_type() != Flow_None) {
-        // Ideally, we'd take the "on-true" flow type and propagate it upward.
-        // But that's not accurate, because it's really mixed with an implicit
-        // fallthrough. There's no nice way to handle this and the flow tracker
-        // is already way too complex.
-        stmt->set_flow_type(Flow_Mixed);
     }
 
     if (*always_returns)
@@ -2333,16 +2325,15 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
     for (const auto& stmt : block->stmts()) {
         cc_.reports()->ResetErrorFlag();
 
-        if (ok && !sc_->warned_unreachable() && (sc_->always_returns() ||
-            (block->flow_type() != Flow_None && block->flow_type() != Flow_Mixed)))
+        if (ok && !sc_->warned_unreachable() &&
+            (sc_->always_returns() || block->flow_type() != Flow_None))
         {
             report(stmt, 225);
             sc_->set_warned_unreachable();
         }
         ok &= CheckStmt(stmt);
 
-        FlowType flow = stmt->flow_type();
-        if (flow != Flow_None && block->flow_type() == Flow_None)
+        if (FlowType flow = stmt->flow_type(); flow != Flow_None)
             block->set_flow_type(flow);
     }
 
@@ -2703,10 +2694,8 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 
     auto update_flow = [&](FlowType other) -> void {
         if (flow) {
-            if (*flow == Flow_None || other == Flow_None)
+            if (*flow != other)
                 *flow = Flow_None;
-            else if (*flow != other)
-                *flow = Flow_Mixed;
         } else {
             flow.init(other);
         }

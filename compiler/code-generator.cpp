@@ -1451,9 +1451,8 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
     EmitStmt(stmt->on_true());
     if (stmt->on_false()) {
         Label flab2;
-        if (!stmt->on_true()->IsTerminal()) {
+        if (stmt->on_true()->flow_type() == Flow_None)
             __ emit(OP_JUMP, &flab2);
-        }
         __ bind(&flab1);
         EmitStmt(stmt->on_false());
         if (flab2.used())
@@ -1739,8 +1738,8 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
 
         EmitStmt(body);
 
-        __ bind(&loop_cx.continue_to);
-        if (body->flow_type() != Flow_Break && body->flow_type() != Flow_Return) {
+        if (!IsTerminalFlow(body->flow_type()) || loop_cx.continue_to.used()) {
+            __ bind(&loop_cx.continue_to);
             if (cond->tree_has_heap_allocs()) {
                 // Need to create a temporary heap scope here.
                 Label on_true, join;
@@ -1778,7 +1777,7 @@ CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt)
             EmitTest(cond, false, &loop_cx.break_to);
         }
         EmitStmt(body);
-        if (!body->IsTerminal())
+        if (body->flow_type() == Flow_None)
             __ emit(OP_JUMP, &loop_cx.continue_to);
     }
 
@@ -1804,9 +1803,7 @@ CodeGenerator::EmitLoopControl(int token)
         __ emit(OP_JUMP, &loop_->continue_to);
 }
 
-void
-CodeGenerator::EmitForStmt(ForStmt* stmt)
-{
+void CodeGenerator::EmitForStmt(ForStmt* stmt) {
     ke::Maybe<AutoEnterScope> debug_scope;
 
     auto scope = stmt->scope();
@@ -1823,10 +1820,8 @@ CodeGenerator::EmitForStmt(ForStmt* stmt)
 
     auto body = stmt->body();
     bool body_always_exits = false;
-    if (body->flow_type() == Flow_Return || body->flow_type() == Flow_Break) {
-        if (!stmt->has_continue())
-            body_always_exits = true;
-    }
+    if (IsTerminalFlow(body->flow_type()) && !stmt->has_continue())
+        body_always_exits = true;
 
     auto advance = stmt->advance();
     auto cond = stmt->cond();
@@ -1910,7 +1905,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
         }
 
         EmitStmt(stmt);
-        if (!stmt->IsTerminal())
+        if (stmt->flow_type() == Flow_None)
             __ emit(OP_JUMP, &exit_label);
     }
 
@@ -1920,7 +1915,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
         __ bind(&default_label);
 
         EmitStmt(stmt->default_case());
-        if (!stmt->default_case()->IsTerminal())
+        if (stmt->default_case()->flow_type() == Flow_None)
             __ emit(OP_JUMP, &exit_label);
 
         defcase = &default_label;
@@ -2193,7 +2188,7 @@ void CodeGenerator::TrackHeapAlloc(ParseNode* node, MemuseType type, int size) {
 
 void CodeGenerator::EnterHeapScope(FlowType flow_type) {
     EnterMemoryScope(heap_scopes_);
-    if (flow_type == Flow_None || flow_type == Flow_Mixed) {
+    if (flow_type != Flow_Return) {
         heap_scopes_.back().needs_restore = true;
         __ emit(OP_HEAP_SAVE);
     }
