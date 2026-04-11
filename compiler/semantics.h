@@ -76,24 +76,6 @@ class SemaContext
     bool returns_value() const { return returns_value_; }
     void set_returns_value() { returns_value_ = true; }
 
-    // Indicates that the current context only ever exits its control flow
-    // through a return statement. For example,
-    //
-    //     for (;;) {
-    //         if (a) return;
-    //         if (b) break;
-    //     }
-    //
-    // .. can exit through "break". If this line is omitted, "always_returns"
-    // will be true. If the loop had a conditional, this would imply an implicit
-    // break statement.
-    //
-    // This is different from Stmt::flow_type, which indicates whether the
-    // statement unconditionally ends in a certain keyword.
-    bool always_returns() const { return always_returns_; }
-    void set_always_returns() { always_returns_ = true; }
-    void set_always_returns(bool value) { always_returns_ = value; }
-
     bool& loop_has_break() { return loop_has_break_; }
     bool& loop_has_continue() { return loop_has_continue_; }
     bool& loop_has_return() { return loop_has_return_; }
@@ -128,7 +110,6 @@ class SemaContext
     Stmt* void_return_ = nullptr;
     bool warned_mixed_returns_ = false;
     bool returns_value_ = false;
-    bool always_returns_ = false;
     bool loop_has_break_ = false;
     bool loop_has_continue_ = false;
     bool loop_has_return_ = false;
@@ -300,18 +281,6 @@ class AutoCreateScope final
     SymbolScope* prev_;
     AutoCreateScope* prev_creator_;
     std::vector<SymbolScope*> pending_;
-};
-
-class AutoCollectSemaFlow final
-{
-  public:
-    AutoCollectSemaFlow(SemaContext& sc, ke::Maybe<bool>* out);
-    ~AutoCollectSemaFlow();
-
-  private:
-    SemaContext& sc_;
-    ke::Maybe<bool>* out_;
-    bool old_value_;
 };
 
 void ReportFunctionReturnError(FunctionDecl* decl);

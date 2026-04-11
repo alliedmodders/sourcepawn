@@ -1978,7 +1978,11 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
 
     assert(!has_stack_or_heap_scopes());
 
-    // If return keyword is missing, we added it in the semantic pass.
+    if (info->body()->flow_type() != Flow_Return) {
+        __ emit(OP_ZERO_PRI);
+        __ emit(OP_RETN);
+    }
+
     __ emit(OP_ENDPROC);
 
     heap_scopes_.clear();
