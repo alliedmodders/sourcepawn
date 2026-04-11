@@ -99,11 +99,14 @@ class ParseNode : public PoolObject
 
 enum FlowType {
     Flow_None,
-    Flow_Break,
     Flow_Continue,
+    Flow_Break,
     Flow_Return,
-    Flow_Mixed
 };
+
+static inline bool IsTerminalFlow(FlowType type) {
+    return type == Flow_Return || type == Flow_Break;
+}
 
 class Stmt : public ParseNode
 {
@@ -123,8 +126,6 @@ class Stmt : public ParseNode
 
     FlowType flow_type() const { return flow_type_; }
     void set_flow_type(FlowType type) { flow_type_ = type; }
-
-    bool IsTerminal() const;
 
     StmtKind kind() const { return kind_; }
     bool is(StmtKind k) const { return kind() == k; }
