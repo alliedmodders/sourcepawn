@@ -1,0 +1,1 @@
+(6) : error 466: void result cannot be used in an expression
