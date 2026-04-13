@@ -910,6 +910,11 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
         return true;
     }
 
+    if (right_val.type()->isVoid()) {
+        report(expr_, 466);
+        return false;
+    }
+
     if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
         if (left_val.type() != right_val.type()) {
             report(expr_, 134) << left_val.type() << right_val.type();
@@ -2077,6 +2082,10 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                     return nullptr;
                 }
             }
+        }
+        if (val->type()->isVoid()) {
+            report(param, 466);
+            return nullptr;
         }
         if (val->type()->isInt64()) {
             // Hack: allow this since we don't have typed varargs right now.
