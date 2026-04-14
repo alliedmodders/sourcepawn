@@ -466,6 +466,10 @@ bool Semantics::CheckScalarType(Expr* expr) {
         report(expr, 447);
         return false;
     }
+    if (val.type()->isVoid()) {
+        report(expr, 466);
+        return false;
+    }
     return true;
 }
 
