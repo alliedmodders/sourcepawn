@@ -134,8 +134,11 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
 
     // We allow this even on function signature checks as a convenient shorthand,
     // even though it violates standard contravariance rules.
-    if (formal->isAny())
+    if (formal->isAny()) {
+        if (actual->isVoid())
+            return DiagnoseFailure();
         return true;
+    }
 
     if (formal->isFunction())
         return CheckFunction();
