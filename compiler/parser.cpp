@@ -917,7 +917,7 @@ Parser::hier2()
                 return nullptr;
 
             while (nparens--) {
-                if (!lexer_->match(')'))
+                if (!lexer_->need(')'))
                     break;
             }
 
