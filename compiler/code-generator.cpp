@@ -1626,7 +1626,7 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
                 __ emit(OP_LOAD_S_PRI, var->addr());
             else if (!var->type()->isComposite())
-                __ emit(OP_LOAD_PRI, var->addr());
+                __ emit(OP_LOAD_PRI, var->label());
             break;
         }
     }
