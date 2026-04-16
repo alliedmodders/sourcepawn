@@ -140,13 +140,13 @@ class SmxAssemblyBuffer : public ByteBuffer
           else
             emit(OP_ADDR_PRI, sym->addr());
         } else {
-          emit(OP_CONST_PRI, sym->addr());
+          emit(OP_CONST_PRI, sym->label());
         }
       } else {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
           emit(OP_ADDR_ALT, sym->addr());
         else
-          emit(OP_CONST_ALT, sym->addr());
+          emit(OP_CONST_ALT, sym->label());
       }
     }
   }
