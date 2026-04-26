@@ -1931,7 +1931,11 @@ bool Lexer::lex_number(full_token_t* tok) {
         backtrack();
     }
 
-    if (value > UINT_MAX) {
+    int64_t i64 = value;
+
+    if (value > UINT_MAX ||
+        (base == 10 && (i64 < INT_MIN || i64 > INT_MAX)))
+    {
         tok->id = tNUMBER64;
         tok->atom = cc_.atom(std::to_string(value));
     } else {
