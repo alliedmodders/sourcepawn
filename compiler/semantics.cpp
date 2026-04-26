@@ -560,8 +560,10 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                 // Special case for -INT_MIN, since we can't eat the '-' during lexing.
                 if (auto num64 = Number64Expr::ToInt64(expr); num64) {
                     int64_t value = -*num64;
-                    if (value >= INT_MIN && value <= INT_MAX)
+                    if (value >= INT_MIN && value <= INT_MAX) {
                         out_val.set_constval(value);
+                        out_val.set_type(types_->type_int());
+                    }
                 }
             }
             break;
