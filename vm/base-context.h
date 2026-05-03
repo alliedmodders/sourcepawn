@@ -44,6 +44,9 @@ class BasePluginContext : public SourcePawn::IPluginContext
     IFrameIterator* CreateFrameIterator() override;
     void DestroyFrameIterator(IFrameIterator* it) override;
 
+    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
+    void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
+
     // Removed functions.
     int PushCell(cell_t value) override;
     int PushCellArray(cell_t* local_addr, cell_t** phys_addr, cell_t array[],
