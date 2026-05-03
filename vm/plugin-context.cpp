@@ -85,19 +85,11 @@ PluginContext::Initialize() {
     return true;
 }
 
-int
-PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
+int PluginContext::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
     cell_t* addr;
     ucell_t realmem;
 
-#if 0
-  if (cells > CELLBOUNDMAX)
-  {
-    return SP_ERROR_ARAM;
-  }
-#else
     assert(cells < CELLBOUNDMAX);
-#endif
 
     realmem = cells * sizeof(cell_t);
 
@@ -127,35 +119,16 @@ PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_a
     return SP_ERROR_NONE;
 }
 
-int
-PluginContext::HeapPop(cell_t local_addr) {
-    cell_t cellcount;
-    cell_t* addr;
-
-    /* check the bounds of this address */
-    local_addr -= sizeof(cell_t);
-    if (local_addr < (cell_t)data_size_ || local_addr >= sp_)
-        return SP_ERROR_INVALID_ADDRESS;
-
-    addr = (cell_t*)(memory_ + local_addr);
-    cellcount = (*addr) * sizeof(cell_t);
-    /* check if this memory count looks valid */
-    if ((signed)(hp_ - cellcount - sizeof(cell_t)) != local_addr)
-        return SP_ERROR_INVALID_ADDRESS;
-
-    hp_ = local_addr;
-
-    return SP_ERROR_NONE;
+int PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
+    return SP_ERROR_INVALID_INSTRUCTION;
 }
 
-int
-PluginContext::HeapRelease(cell_t local_addr) {
-    if (local_addr < (cell_t)data_size_)
-        return SP_ERROR_INVALID_ADDRESS;
+int PluginContext::HeapPop(cell_t) {
+    return SP_ERROR_INVALID_INSTRUCTION;
+}
 
-    hp_ = local_addr - sizeof(cell_t);
-
-    return SP_ERROR_NONE;
+int PluginContext::HeapRelease(cell_t) {
+    return SP_ERROR_INVALID_INSTRUCTION;
 }
 
 int

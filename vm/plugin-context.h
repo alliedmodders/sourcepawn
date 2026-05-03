@@ -34,9 +34,9 @@ class PluginContext final : public BasePluginContext
     bool Initialize();
 
   public: //IPluginContext
-    int HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) override;
-    int HeapPop(cell_t local_addr) override;
-    int HeapRelease(cell_t local_addr) override;
+    [[deprecated]] int HeapAlloc(unsigned int, cell_t*, cell_t**) override;
+    [[deprecated]] int HeapPop(cell_t) override;
+    [[deprecated]] int HeapRelease(cell_t) override;
     int FindNativeByName(const char* name, uint32_t* index) override;
     int GetNativeByIndex(uint32_t index, sp_native_t** native) override;
     uint32_t GetNativesNum() override;
@@ -67,6 +67,8 @@ class PluginContext final : public BasePluginContext
     bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) override;
     IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
     bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
+
+    int AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr);
 
     size_t HeapSize() const {
         return mem_size_;
