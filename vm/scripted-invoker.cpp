@@ -189,8 +189,7 @@ ScriptedInvoker::Execute(cell_t* result) {
     return SP_ERROR_NONE;
 }
 
-bool
-ScriptedInvoker::Invoke(cell_t* result) {
+bool ScriptedInvoker::Invoke(cell_t* result) {
     if (!IsRunnable()) {
         Cancel();
         env_->ReportError(SP_ERROR_NOT_RUNNABLE);
@@ -201,6 +200,11 @@ ScriptedInvoker::Invoke(cell_t* result) {
         env_->ReportError(err);
         return false;
     }
+
+    context_->EnterHeapScope();
+    ke::ScopeGuard leave_heap_scope([this]() -> void {
+        context_->LeaveHeapScope();
+    });
 
     //This is for re-entrancy!
     cell_t temp_params[SP_MAX_EXEC_PARAMS];
@@ -221,8 +225,8 @@ ScriptedInvoker::Invoke(cell_t* result) {
         if (temp_info[i].marked) {
             if (!temp_info[i].str.is_sz) {
                 /* Allocate a normal/generic array */
-                int err = context_->HeapAlloc(temp_info[i].size, &temp_info[i].local_addr,
-                                              &temp_info[i].phys_addr);
+                int err = context_->AllocArray(temp_info[i].size, &temp_info[i].local_addr,
+                                               &temp_info[i].phys_addr);
                 if (err != SP_ERROR_NONE) {
                     env_->ReportError(err);
                     ok = false;
@@ -238,7 +242,7 @@ ScriptedInvoker::Invoke(cell_t* result) {
 
                 /* Allocate the buffer */
                 int err =
-                    context_->HeapAlloc(cells, &temp_info[i].local_addr, &temp_info[i].phys_addr);
+                    context_->AllocArray(cells, &temp_info[i].local_addr, &temp_info[i].phys_addr);
                 if (err != SP_ERROR_NONE) {
                     env_->ReportError(err);
                     ok = false;
@@ -302,9 +306,6 @@ ScriptedInvoker::Invoke(cell_t* result) {
                 }
             }
         }
-
-        if (int err = context_->HeapPop(temp_info[i].local_addr))
-            env_->ReportError(err);
     }
 
     return !env_->hasPendingException();

@@ -758,37 +758,22 @@ class IPluginContext
     virtual IPluginDebugInfo* GetDebugInfo() = 0;
 
     /**
-     * @brief Allocates memory on the secondary stack of a plugin.
-     * Note that although called a heap, it is in fact a stack.
-     *
-     * @param cells      Number of cells to allocate.
-     * @param local_addr  Will be filled with data offset to heap.
-     * @param phys_addr    Physical address to heap memory.
+     * @brief Deprecated; do not use.
      */
-    virtual int HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) = 0;
+    [[deprecated]]
+    virtual int HeapAlloc(unsigned int, cell_t*, cell_t**) = 0;
 
     /**
-     * @brief Pops a heap address off the heap stack.  Use this to free memory allocated with
-     *  SP_HeapAlloc().
-     * Note that in SourcePawn, the heap is in fact a bottom-up stack.  Deallocations
-     *  with this native should be performed in precisely the REVERSE order.
-     *
-     * @param local_addr  Local address to free.
-      */
-    virtual int HeapPop(cell_t local_addr) = 0;
+     * @brief Deprecated; do not use.
+     */
+    [[deprecated]]
+    virtual int HeapPop(cell_t) = 0;
 
     /**
-     * @brief Releases a heap address using a different method than SP_HeapPop().
-     * This allows you to release in any order.  However, if you allocate N
-     *  objects, release only some of them, then begin allocating again,
-     *  you cannot go back and starting freeing the originals.
-     * In other words, for each chain of allocations, if you start deallocating,
-     *  then allocating more in a chain, you must only deallocate from the current
-     *  allocation chain.  This is basically HeapPop() except on a larger scale.
-     *
-     * @param local_addr  Local address to free.
-      */
-    virtual int HeapRelease(cell_t local_addr) = 0;
+     * @brief Deprecated; do not use.
+     */
+    [[deprecated]]
+    virtual int HeapRelease(cell_t) = 0;
 
     /**
      * @brief Deprecated, use IPluginRuntime instead.
@@ -1199,6 +1184,9 @@ class IPluginContext
      * EnterHeapScope and LeaveHeapScope, or AutoEnterHeapScope).
      *
      * If |init| is not specified, the resulting array will be zeroed.
+     *
+     * The address stored in |local_addr| must not be passed to LocalToPhysAddr.
+     * Instead, LocalToArrayPtr() should be used instead.
      *
      * If an error occurs, it is automatically reported.
      *
