@@ -1259,8 +1259,6 @@ class IPluginContext
     /**
      * @brief Convert a local address to an ARRAY_PTR handle.
      *
-     * Not supported for plugins compiled with SourcePawn 1.10 or earlier.
-     *
      * @param base      Array base.
      * @param out       Array pointer handle.
      */
@@ -1941,6 +1939,7 @@ class DetectExceptions : public ExceptionHandler
         catch_ = false;
     }
 };
-}; // namespace SourcePawn
+
+} // namespace SourcePawn
 
 #endif //_INCLUDE_SOURCEPAWN_VM_API_H_
