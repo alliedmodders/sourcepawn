@@ -218,3 +218,17 @@ void
 BasePluginContext::DestroyFrameIterator(IFrameIterator* it) {
     delete static_cast<FrameIterator*>(it);
 }
+
+int BasePluginContext::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
+    cell_t* phys;
+    if (int err = LocalToPhysAddr(base, &phys))
+        return err;
+    *out = reinterpret_cast<ARRAY_PTR>(phys);
+    return SP_ERROR_NONE;
+}
+
+void* BasePluginContext::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
+    if (size)
+        *size = 0;
+    return reinterpret_cast<void*>(handle);
+}

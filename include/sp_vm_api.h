@@ -23,8 +23,8 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0x11
-#define SOURCEPAWN_API_VERSION 0x0215
+#define SOURCEPAWN_ENGINE2_API_VERSION 0x12
+#define SOURCEPAWN_API_VERSION 0x0216
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -390,6 +390,9 @@ class IPluginDebugInfo
 };
 
 class ICompilation;
+
+struct ARRAY_HANDLE;
+typedef ARRAY_HANDLE* ARRAY_PTR;
 
 /**
    * @brief Interface to managing a runtime plugin.
@@ -1252,6 +1255,38 @@ class IPluginContext
      * the function is invalid or null.
      */
     virtual IPluginFunction* GetFunctionByIdOrError(funcid_t func) = 0;
+
+    /**
+     * @brief Convert a local address to an ARRAY_PTR handle.
+     *
+     * Not supported for plugins compiled with SourcePawn 1.10 or earlier.
+     *
+     * @param base      Array base.
+     * @param out       Array pointer handle.
+     */
+    virtual int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) = 0;
+
+    /**
+     * @brief Return the data vector for an array.
+     *
+     * For character arrays, the pointer should be casted to a uint8_t* or char*.
+     * For int64 arrays, the pointer should be casted to an int64_t* or uint64_t*.
+     * For all other types, the pointer should be casted to a cell_t*.
+     *
+     * If UsesDirectArrays() is false, note that |data[i]| will not yield an
+     * interior array pointer if the array has interior arrays. Instead, the
+     * formula is:
+     *
+     *      array_base + (i * sizeof(cell_t)) + data[i]
+     *
+     * @param handle    Array pointer handle.
+     * @param size      Optional pointer to store size of the array. If zero,
+     *                  and the return pointer is not null, then the array
+     *                  length is not supported.
+     * @return          Pointer to the data vector for the array, or null if
+     *                  the array has no data vector (zero length).
+     */
+    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
 };
 
 class AutoEnterHeapScope

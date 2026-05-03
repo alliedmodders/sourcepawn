@@ -308,19 +308,30 @@ static cell_t AssertEq(IPluginContext* cx, const cell_t* params)
 
 static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 {
-  cell_t* phys_in;
+  ARRAY_PTR array;
   cell_t* phys_out;
+  uint32_t size;
 
   if (!cx->GetRuntime()->UsesDirectArrays())
     return 0;
 
   int err;
-  if ((err = cx->LocalToPhysAddr(params[1], &phys_in)) != SP_ERROR_NONE)
+  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument");
+
+  cell_t* phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  if (size != 0 && (uint32_t)params[2] >= size)
+    return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 0)");
+
+  if ((err = cx->LocalToArrayPtr(phys_in[params[2]], &array)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array level 0");
+
+  phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  if (size != 0 && (uint32_t)params[3] >= size)
+    return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 1)");
+
   if ((err = cx->LocalToPhysAddr(params[4], &phys_out)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument");
-  if ((err = cx->LocalToPhysAddr(phys_in[params[2]], &phys_in)) != SP_ERROR_NONE)
-    return cx->ThrowNativeErrorEx(err, "Could not read array level 0");
 
   *phys_out = phys_in[params[3]];
   return 1;
@@ -328,11 +339,12 @@ static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 
 static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
 {
-  cell_t* flat_array;
+  ARRAY_PTR array;
 
   int err;
-  if ((err = cx->LocalToPhysAddr(params[1], &flat_array)) != SP_ERROR_NONE)
+  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument 1");
+  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
 
   IPluginFunction* fn = cx->GetFunctionById(params[4]);
   if (!fn)
