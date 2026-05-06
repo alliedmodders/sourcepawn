@@ -113,8 +113,9 @@ void CodeGenerator::FinishSmx() {
     rtti_->finish(smx_);
 }
 
-void CodeGenerator::AddDebugLine(int linenr) {
-    rtti_->AddDebugLine(asm_.position(), linenr);
+void CodeGenerator::AddDebugLine(const token_pos_t& pos) {
+    auto line = cc_.sources()->GetLineAndCol(pos, nullptr);
+    rtti_->AddDebugLine(asm_.position(), line);
 }
 
 void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
@@ -139,7 +140,7 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
     std::list<std::pair<uint32_t, BuiltinType>> prev_used_temp_slots;
 
     if (fun_) {
-        AddDebugLine(stmt->pos().line);
+        AddDebugLine(stmt->pos());
         EmitBreak();
 
         std::swap(prev_used_temp_slots, used_temp_slots_);
@@ -1953,7 +1954,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     auto debug_method = AddFunctionEntry(info);
 
     __ emit(OP_PROC);
-    AddDebugLine(info->pos().line);
+    AddDebugLine(info->pos());
     EmitBreak();
     current_stack_ = 0;
     locals_ = {};
