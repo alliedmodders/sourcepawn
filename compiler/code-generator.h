@@ -120,7 +120,7 @@ class CodeGenerator final
 
     using DebugSymbol = std::pair<Decl*, uint32_t>;
     void AddDebugFile(const std::string& line);
-    void AddDebugLine(int linenr);
+    void AddDebugLine(const token_pos_t& pos);
     void AddDebugSymbol(Decl* sym, uint32_t pc);
     void AddDebugSymbols(tr::vector<DebugSymbol>* list);
     void EnqueueDebugSymbol(Decl* decl, uint32_t pc);

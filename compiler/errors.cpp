@@ -171,15 +171,7 @@ MessageBuilder::~MessageBuilder()
         report.file = cc.sources()->opened_files().at(report.fileno);
     else if (!cc.sources()->opened_files().empty())
         report.file = cc.sources()->opened_files().at(0);
-
-    uint32_t actual_line = cc.sources()->GetLineAndCol(where_, &report.col);
-
-    // Rely on tokline when it's there, but... we should ditch it here, we
-    // have the technology.
-    if (where_.valid() && !where_.line)
-        where_.line = actual_line;
-    report.lineno = std::max(where_.line, 1);
-
+    report.lineno = cc.sources()->GetLineAndCol(where_, &report.col);
     report.type = DeduceErrorType(number_);
 
     std::ostringstream out;
