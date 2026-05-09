@@ -2093,10 +2093,12 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             report(param, 466);
             return nullptr;
         }
-        if (val->type()->isInt64()) {
+
+        Type* type = val->type();
+        if (type->isInt64() || (type->isReference() && type->inner()->isInt64())) {
             // Hack: allow this since we don't have typed varargs right now.
-        } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), val->type())) {
-            report(param, 213) << arg->type() << val->type();
+        } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), type)) {
+            report(param, 213) << arg->type() << type;
         }
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
