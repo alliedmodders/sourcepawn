@@ -36,7 +36,7 @@ Supported CPUs
 --------------
 
 SourcePawn "should" run on any architecture. It has been tested on ARMv7, ARMv8, x86, and x86\_64.
-However, only x86 currently has a just-in-time (JIT) compiler. Other architectures fallback to an
+However, only x86 and x86_64 support a just-in-time (JIT) compiler. Other architectures fallback to an
 interpreter (albeit, a very simple and efficient one).
 
 When emitting binaries, SourcePawn does not take platform endianness into account. Thus, a `.smx`
