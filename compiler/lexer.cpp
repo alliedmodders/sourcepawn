@@ -2217,6 +2217,14 @@ int Lexer::peek_same_line() {
         return next_token()->id ? next_token()->id : tEOL;
     }
 
+    // Save the line of the current (last consumed) token before lexing ahead.
+    // lex_tok() may trigger macro expansion which calls nested lex() and
+    // advances the cursor by multiple positions. After lexpush(), the cursor
+    // may not point to the original token. We snapshot the line/file here
+    // so the comparison below uses the correct values.
+    uint32_t last_line = current_token()->start.line;
+    auto last_file = current_token()->start;
+
     // Make sure the next token is lexed, then buffer it.
     full_token_t next = lex_tok();
     if (next.id == 0 || next.id == tEOL)
@@ -2226,8 +2234,8 @@ int Lexer::peek_same_line() {
 
     // If the next token starts on the line the last token ends, then the next
     // token is considered on the same line.
-    if (next.start.line == current_token()->start.line &&
-        IsSameSourceFile(current_token()->start, next_token()->start))
+    if (next.start.line == last_line &&
+        IsSameSourceFile(last_file, next_token()->start))
     {
         return next.id;
     }
@@ -2668,8 +2676,19 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
 
     std::unordered_map<int, std::string> macro_args;
     if (macro->args) {
-        if (!match('('))
+        // Nested lex() calls below (match, need) advance the token buffer
+        // cursor. Save and restore state so the caller's position is not
+        // corrupted by macro argument parsing.
+        size_t saved_cursor = token_buffer_->cursor;
+        size_t saved_depth = token_buffer_->depth;
+        int saved_num_tokens = token_buffer_->num_tokens;
+
+        if (!match('(')) {
+            token_buffer_->cursor = saved_cursor;
+            token_buffer_->depth = saved_depth;
+            token_buffer_->num_tokens = saved_num_tokens;
             return false;
+        }
 
         auto saved_pos = pos();
 
@@ -2682,6 +2701,19 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
             macro_args.emplace(argn, std::move(arg_str));
         }
         need(')');
+
+        // Discard tokens consumed by nested lex() during arg parsing.
+        // Clear all polluted slots (from saved_cursor up to the current
+        // cursor) to prevent stale data from leaking into subsequent
+        // peek_same_line() calls.
+        int slots_polluted = token_buffer_->num_tokens - saved_num_tokens;
+        for (int i = 0; i < slots_polluted && i < MAX_TOKEN_DEPTH; i++) {
+            size_t slot = (saved_cursor + i) % MAX_TOKEN_DEPTH;
+            token_buffer_->tokens[slot] = {};
+        }
+        token_buffer_->cursor = saved_cursor;
+        token_buffer_->depth = saved_depth;
+        token_buffer_->num_tokens = saved_num_tokens;
 
         if (macro_args.size() != macro->args.get().size()) {
             report(saved_pos, 429) << macro->args.get().size() << macro_args.size();
