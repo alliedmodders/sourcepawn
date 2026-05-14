@@ -2684,8 +2684,11 @@ bool Lexer::EnterMacro(std::shared_ptr<MacroEntry> macro) {
         int saved_num_tokens = token_buffer_->num_tokens;
 
         if (!match('(')) {
+            // match() failed: lex() peeked at the next token, found it
+            // wasn't '(', and called lexpush().  depth is now 1 and the
+            // pushed-back token must be replayed.  Only rewind cursor
+            // and num_tokens; leave depth alone.
             token_buffer_->cursor = saved_cursor;
-            token_buffer_->depth = saved_depth;
             token_buffer_->num_tokens = saved_num_tokens;
             return false;
         }
