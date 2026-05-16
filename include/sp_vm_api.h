@@ -192,7 +192,6 @@ class ICallable
 
     /**
      * @brief Cancels a function call that is being pushed but not yet executed.
-     * This can be used be reset for CallFunction() use.
      */
     virtual void Cancel() = 0;
 
@@ -283,81 +282,6 @@ class IPluginFunction : public ICallable
 /**
    * @brief Interface to managing a debug context at runtime.
    */
-class IPluginDebugInfo
-{
-  public:
-    /**
-     * @brief Given a code pointer, finds the file it is associated with.
-     *
-     * @param addr    Code address offset.
-     * @param filename  Pointer to store filename pointer in.
-     */
-    virtual int LookupFile(ucell_t addr, const char** filename) = 0;
-
-    /**
-     * @brief Given a code pointer, finds the function it is associated with.
-     *
-     * @param addr    Code address offset.
-     * @param name    Pointer to store function name pointer in.
-     */
-    virtual int LookupFunction(ucell_t addr, const char** name) = 0;
-
-    /**
-     * @brief Given a code pointer, finds the line it is associated with.
-     *
-     * @param addr    Code address offset.
-     * @param line    Pointer to store line number in.
-     */
-    virtual int LookupLine(ucell_t addr, uint32_t* line) = 0;
-
-    /**
-     * @brief Given the name of a function and a source file, finds the code pointer
-     * of the start of the function.
-     *
-     * @param function  Name of the function to lookup.
-     * @param file      Name of the file containing the function to lookup.
-     * @param addr      Output pointer to store address of function in.
-     */
-    virtual int LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) = 0;
-
-    /**
-     * @brief Given a line number and a source file, finds the code pointer of the line.
-     *
-     * @param line    The line number.
-     * @param file    Name of the file containing the line to lookup.
-     * @param addr    Output pointer to store address of line in.
-     */
-    virtual int LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) = 0;
-
-    /**
-     * @brief Returns the number of source files compiled into this plugin.
-     */
-    virtual size_t NumFiles() = 0;
-
-    /**
-     * @brief Returns the full file name and path of the source file
-     * at the given index.
-     *
-     * @param index   Index of selected file in the list of source files.
-     * @return        Full file name of source file or NULL if not found.
-     */
-    virtual const char* GetFileName(size_t index) = 0;
-
-    /**
-     * @brief Returns the number of functions defined in this plugin.
-     */
-    virtual size_t NumFunctions() = 0;
-
-    /**
-     * @brief Returns the function name at the given index.
-     *
-     * @param index   Index of the function in the list of functions.
-     * @param file    Output pointer to store filename where the function is defined in.
-     * @return        Name of the function or NULL if not found.
-     */
-    virtual const char* GetFunctionName(size_t index, const char** file) = 0;
-};
-
 class ICompilation;
 
 struct ARRAY_HANDLE;
@@ -373,13 +297,6 @@ class IPluginRuntime
      * @brief Virtual destructor (you may call delete).
      */
     virtual ~IPluginRuntime() {}
-
-    /**
-     * @brief Returns debug info.
-     *
-     * @return        IPluginDebugInfo, or NULL if no debug info found.
-     */
-    virtual IPluginDebugInfo* GetDebugInfo() = 0;
 
     /**
      * @brief Finds a native by name.

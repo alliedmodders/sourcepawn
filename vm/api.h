@@ -35,8 +35,6 @@ class SourcePawnEngine : public ISourcePawnEngine
     void SetReadWrite(void* ptr) override;
     void SetReadExecute(void* ptr) override;
     void FreePageMemory(void* ptr) override;
-    void SetReadWriteExecute(void* ptr);
-    const char* GetErrorString(int err);
     int SetDebugBreakHandler(SPVM_DEBUGBREAK handler) override;
 };
 

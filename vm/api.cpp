@@ -49,11 +49,6 @@ using namespace SourcePawn;
 SourcePawnEngine::SourcePawnEngine() {
 }
 
-const char*
-SourcePawnEngine::GetErrorString(int error) {
-    return Environment::get()->GetErrorString(error);
-}
-
 void*
 SourcePawnEngine::ExecAlloc(size_t size) {
 #if defined WIN32
@@ -104,12 +99,6 @@ SourcePawnEngine::ExecFree(void* address) {
 #elif defined __GNUC__
     free(address);
 #endif
-}
-
-void
-SourcePawnEngine::SetReadWriteExecute(void* ptr) {
-    //:TODO:  g_ExeMemory.SetRWE(ptr);
-    SetReadExecute(ptr);
 }
 
 void*
