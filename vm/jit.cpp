@@ -40,7 +40,7 @@ using namespace SourcePawn;
 CompilerBase::CompilerBase(PluginRuntime* rt, MethodInfo* method)
  : env_(Environment::get()),
    rt_(rt),
-   context_(rt->GetBaseContext()),
+   context_(rt),
    image_(rt_->image()),
    method_info_(method),
    error_(SP_ERROR_NONE),

@@ -16,6 +16,7 @@
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <sp_vm_types.h>
+#include "base-method-info.h"
 #include "control-flow.h"
 
 namespace sp {
@@ -23,7 +24,7 @@ namespace sp {
 class PluginRuntime;
 class CompiledFunction;
 
-class MethodInfo final : public ke::Refcounted<MethodInfo>
+class MethodInfo final : public BaseMethodInfo
 {
   public:
     MethodInfo(PluginRuntime* rt, uint32_t codeOffset);
@@ -44,11 +45,11 @@ class MethodInfo final : public ke::Refcounted<MethodInfo>
     uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
     int validationError() const { return validation_error_; }
-    uint32_t pcode_offset() const { return pcode_offset_; }
+    uint32_t pcode_offset() const override { return pcode_offset_; }
     int32_t max_stack() const { return max_stack_; }
 
     void setCompiledFunction(CompiledFunction* fun);
-    CompiledFunction* jit() const {
+    CompiledFunction* jit() const override {
         return jit_.get();
     }
 

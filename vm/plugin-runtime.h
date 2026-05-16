@@ -19,6 +19,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
+#include "base-runtime.h"
 #include "smx-image.h"
 #include "scripted-invoker.h"
 
@@ -42,14 +43,14 @@ struct NativeEntry : public sp_native_t {
 };
 
 /* Jit wants fast access to this so we expose things as public */
-class PluginRuntime : public SourcePawn::IPluginRuntime,
+class PluginRuntime : public BaseRuntime,
                       public ke::InlineListNode<PluginRuntime>
 {
   public:
     PluginRuntime(SmxImage* image);
     ~PluginRuntime();
 
-    bool Initialize();
+    bool Initialize() override;
 
   public:
     bool IsDebugging() override;
@@ -64,29 +65,20 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     uint32_t GetPubVarsNum() override;
     IPluginFunction* GetFunctionByName(const char* public_name) override;
     IPluginFunction* GetFunctionById(funcid_t func_id) override;
-    IPluginContext* GetDefaultContext() override;
-    void SetPauseState(bool paused) override;
-    bool IsPaused() override;
     size_t GetMemUsage() override;
-    unsigned char* GetCodeHash() override;
-    unsigned char* GetDataHash() override;
-    void SetNames(const char* fullname, const char* name);
     unsigned GetNativeReplacement(size_t index);
     ScriptedInvoker* GetPublicFunction(size_t index);
     int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
                             void* data) override;
-    int UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
+    int UpdateNativeBindingObject(uint32_t index, SourcePawn::INativeCallback* callback, uint32_t flags,
                                   void* data) override;
     const sp_native_t* GetNative(uint32_t index) override;
-    const char* GetFilename() override {
-        return full_name_.c_str();
-    }
     bool PerformFullValidation();
     bool UsesDirectArrays() override;
     bool UsesHeapScopes();
 
     // Mark builtin natives as bound.
-    void InstallBuiltinNatives();
+    void InstallBuiltinNatives() override;
 
     // Return the method if it was previously analyzed; null otherwise.
     RefPtr<MethodInfo> GetMethod(cell_t pcode_offset) const;
@@ -100,12 +92,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
 
     NativeEntry* NativeAt(size_t index) {
         return &natives_[index];
-    }
-
-    PluginContext* GetBaseContext();
-
-    const char* Name() const {
-        return name_.c_str();
     }
 
   public: // IPluginContext
@@ -128,21 +114,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
     bool IsInExec() override;
 
-    // Generic API access.
-    void SetKey(int k, void* value) override;
-    bool GetKey(int k, void** value) override;
-    SourcePawn::ISourcePawnEngine2* APIv2() override;
-    void ReportError(const char* fmt, ...) override;
-    void ReportErrorVA(const char* fmt, va_list ap) override;
-    void ReportFatalError(const char* fmt, ...) override;
-    void ReportFatalErrorVA(const char* fmt, va_list ap) override;
-    void ReportErrorNumber(int error) override;
-    cell_t ThrowNativeErrorEx(int error, const char* msg, ...) override;
-    cell_t ThrowNativeError(const char* msg, ...) override;
-    int GetLastNativeError() override;
-    cell_t BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...) override;
-    IFrameIterator* CreateFrameIterator() override;
-    void DestroyFrameIterator(IFrameIterator* it) override;
     int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
     void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
 
@@ -252,10 +223,9 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
         return this;
     }
 
-  public:
-    typedef SmxImage::Code Code;
-    typedef SmxImage::Data Data;
+    ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
 
+  public:
     const Code& code() const {
         return code_;
     }
@@ -279,13 +249,8 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     };
 
   private:
-    std::unique_ptr<sp::SmxImage> image_;
     std::unique_ptr<uint8_t[]> aligned_code_;
     std::unique_ptr<floattbl_t[]> float_table_;
-    std::string name_;
-    std::string full_name_;
-    Code code_;
-    Data data_;
     std::unique_ptr<NativeEntry[]> natives_;
     std::unique_ptr<sp_public_t[]> publics_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;
@@ -319,19 +284,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
 
     FunctionMap function_map_;
     std::vector<RefPtr<MethodInfo>> methods_;
-
-    // Pause state.
-    bool paused_;
-
-    // Checksumming.
-    bool computed_code_hash_;
-    bool computed_data_hash_;
-    unsigned char code_hash_[16];
-    unsigned char data_hash_[16];
-
-    Environment* env_;
-    void* m_keys[4];
-    bool m_keys_set[4];
 };
 
 } // namespace sp

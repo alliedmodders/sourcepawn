@@ -18,6 +18,7 @@ if module.compiler.family == 'gcc':
 
 module.sources += [
   'api.cpp',
+  'base-runtime.cpp',
   'builtins.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',

@@ -37,27 +37,13 @@ using namespace SourcePawn;
 static const size_t kMinHeapSize = 16384;
 
 PluginRuntime::PluginRuntime(SmxImage* image)
- : image_(image),
+ : BaseRuntime(image),
    memory_(nullptr),
    data_size_(0),
    mem_size_(0),
    m_pNullVec(nullptr),
-   m_pNullString(nullptr),
-   paused_(false),
-   computed_code_hash_(false),
-   computed_data_hash_(false),
-   env_(Environment::get())
+   m_pNullString(nullptr)
 {
-    code_ = image_->DescribeCode();
-    data_ = image_->DescribeData();
-    memset(code_hash_, 0, sizeof(code_hash_));
-    memset(data_hash_, 0, sizeof(data_hash_));
-
-    for (int i = 0; i < 4; i++) {
-        m_keys[i] = nullptr;
-        m_keys_set[i] = false;
-    }
-
     data_size_ = data_.length;
     mem_size_ = image_->HeapSize();
 
@@ -245,12 +231,6 @@ PluginRuntime::GetNativeReplacement(size_t index) {
     if (!float_table_[index].found || float_table_[index].index == OP_NOP)
         return (unsigned)OP_NOP;
     return float_table_[index].index;
-}
-
-void
-PluginRuntime::SetNames(const char* fullname, const char* name) {
-    name_ = name;
-    full_name_ = fullname;
 }
 
 RefPtr<MethodInfo>
@@ -457,11 +437,6 @@ PluginRuntime::GetPubVarsNum() {
     return image_->NumPubvars();
 }
 
-IPluginContext*
-PluginRuntime::GetDefaultContext() {
-    return this;
-}
-
 IPluginFunction*
 PluginRuntime::GetFunctionById(funcid_t func_id) {
     ScriptedInvoker* pFunc = NULL;
@@ -510,48 +485,9 @@ PluginRuntime::IsDebugging() {
     return true;
 }
 
-void
-PluginRuntime::SetPauseState(bool paused) {
-    paused_ = paused;
-}
-
-bool
-PluginRuntime::IsPaused() {
-    return paused_;
-}
-
 size_t
 PluginRuntime::GetMemUsage() {
     return sizeof(*this) + image_->ImageSize() + (aligned_code_ ? code_.length : 0) + HeapSize();
-}
-
-unsigned char*
-PluginRuntime::GetCodeHash() {
-    if (!computed_code_hash_) {
-        MD5 md5_pcode;
-        md5_pcode.update((const unsigned char*)code_.bytes, code_.length);
-        md5_pcode.finalize();
-        md5_pcode.raw_digest(code_hash_);
-        computed_code_hash_ = true;
-    }
-    return code_hash_;
-}
-
-unsigned char*
-PluginRuntime::GetDataHash() {
-    if (!computed_data_hash_) {
-        MD5 md5_data;
-        md5_data.update((const unsigned char*)data_.bytes, data_.length);
-        md5_data.finalize();
-        md5_data.raw_digest(data_hash_);
-        computed_data_hash_ = true;
-    }
-    return data_hash_;
-}
-
-PluginContext*
-PluginRuntime::GetBaseContext() {
-    return this;
 }
 
 bool
@@ -1488,107 +1424,9 @@ PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
     return nullptr;
 }
 
-void
-PluginRuntime::SetKey(int k, void* value) {
-    if (k < 1 || k > 4)
-        return;
-
-    m_keys[k - 1] = value;
-    m_keys_set[k - 1] = true;
-}
-
-bool
-PluginRuntime::GetKey(int k, void** value) {
-    if (k < 1 || k > 4 || m_keys_set[k - 1] == false)
-        return false;
-
-    *value = m_keys[k - 1];
-    return true;
-}
-
-ISourcePawnEngine2*
-PluginRuntime::APIv2() {
-    return env_->APIv2();
-}
-
-void
-PluginRuntime::ReportError(const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    env_->ReportErrorVA(fmt, ap);
-    va_end(ap);
-}
-
-void
-PluginRuntime::ReportErrorVA(const char* fmt, va_list ap) {
-    env_->ReportErrorVA(fmt, ap);
-}
-
-void
-PluginRuntime::ReportFatalError(const char* fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    env_->ReportErrorVA(SP_ERROR_FATAL, fmt, ap);
-    va_end(ap);
-}
-
-void
-PluginRuntime::ReportFatalErrorVA(const char* fmt, va_list ap) {
-    env_->ReportErrorVA(SP_ERROR_FATAL, fmt, ap);
-}
-
-void
-PluginRuntime::ReportErrorNumber(int error) {
-    env_->ReportError(error);
-}
-
-cell_t
-PluginRuntime::ThrowNativeErrorEx(int error, const char* msg, ...) {
-    va_list ap;
-    va_start(ap, msg);
-    if (msg)
-        env_->ReportErrorVA(error, msg, ap);
-    else
-        env_->ReportError(error);
-    va_end(ap);
-    return 0;
-}
-
-cell_t
-PluginRuntime::ThrowNativeError(const char* msg, ...) {
-    va_list ap;
-    va_start(ap, msg);
-    env_->ReportErrorVA(SP_ERROR_NATIVE, msg, ap);
-    va_end(ap);
-    return 0;
-}
-
-int
-PluginRuntime::GetLastNativeError() {
-    Environment* env = env_;
-    if (!env->hasPendingException())
-        return SP_ERROR_NONE;
-    return env->getPendingExceptionCode();
-}
-
-cell_t
-PluginRuntime::BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...) {
-    va_list ap;
-    va_start(ap, msg);
-    env_->BlamePluginErrorVA(pf, msg, ap);
-    va_end(ap);
-    return 0;
-}
-
-IFrameIterator*
-PluginRuntime::CreateFrameIterator() {
-    FrameIterator* it = new FrameIterator();
-    return it;
-}
-
-void
-PluginRuntime::DestroyFrameIterator(IFrameIterator* it) {
-    delete static_cast<FrameIterator*>(it);
+ke::RefPtr<BaseMethodInfo>
+PluginRuntime::GetMethodFromFrameId(uint32_t frame_id) const {
+    return GetMethod(frame_id);
 }
 
 int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
