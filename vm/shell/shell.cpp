@@ -252,11 +252,12 @@ static cell_t CallWithString(IPluginContext* cx, const cell_t* params) {
   int sz_flags = params[4];
   int cp_flags = params[5];
 
-  fn->PushStringEx(buf, length, sz_flags, cp_flags);
-  fn->PushCell(length);
+  CallArgs args;
+  args.PushString(buf, length, sz_flags | cp_flags);
+  args.PushCell(length);
 
   cell_t rval;
-  if (!fn->Invoke(&rval))
+  if (!fn->Invoke(args, &rval))
     return 0;
   return rval;
 }
@@ -358,10 +359,12 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
     return 0;
 
   cell_t ignore;
-  fn->PushCell(addr);
-  fn->PushCell(params[2]);
-  fn->PushCell(params[3]);
-  fn->Execute(&ignore);
+  CallArgs args;
+  args.PushCell(addr);
+  args.PushCell(params[2]);
+  args.PushCell(params[3]);
+  if (!fn->Invoke(args, &ignore))
+    return 0;
   return 0;
 }
 

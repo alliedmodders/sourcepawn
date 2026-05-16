@@ -45,6 +45,10 @@ typedef uint32_t funcid_t; /**< Function index code */
 
 #include "sp_typeutil.h"
 
+namespace sp {
+static constexpr uint32_t kApiVersion = 1;
+} // namespace sp
+
 #define SP_MAX_EXEC_PARAMS 32 /**< Maximum number of parameters in a function signature */
 #define SP_MAX_CALL_ARGUMENTS \
     127 /**< Maximum number of arguments when calling a function (relates to the bit pattern of sEXPRSTART) */

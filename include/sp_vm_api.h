@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include "sp_vm_types.h"
+#include "sp_callable.h"
 
 /** SourcePawn Engine API Versions */
 
@@ -39,14 +40,6 @@ class ISourcePawnEnvironment;
 class IVirtualMachine;
 typedef ISourcePawnEnvironment ISourcePawnEngine;
 typedef ISourcePawnEnvironment ISourcePawnEngine2;
-
-/* Parameter flags */
-#define SM_PARAM_COPYBACK (1 << 0) /**< Copy an array/reference back after call */
-
-/* String parameter flags (separate from parameter flags) */
-#define SM_PARAM_STRING_UTF8 (1 << 0)   /**< String should be UTF-8 handled */
-#define SM_PARAM_STRING_COPY (1 << 1)   /**< String should be copied into the plugin */
-#define SM_PARAM_STRING_BINARY (1 << 2) /**< String should be handled as binary data */
 
 /**
    * @brief Pseudo-NULL reference types.
@@ -98,114 +91,12 @@ class INativeCallback : public IRefcountedObject
     virtual cell_t Invoke(IPluginContext* ctx, const cell_t* params) = 0;
 };
 
-/**
- * @brief Represents what a function needs to implement in order to be callable.
- */
-class ICallable
-{
-  public:
-    /**
-     * @brief Pushes a cell onto the current call.
-     *
-     * @param cell    Parameter value to push.
-     * @return      Error code, if any.
-     */
-    virtual int PushCell(cell_t cell) = 0;
-
-    /**
-     * @brief Pushes a cell by reference onto the current call.
-     * NOTE: On Execute, the pointer passed will be modified if copyback is enabled.
-     * NOTE: By reference parameters are cached and thus are not read until execution.
-     *     This means you cannot push a pointer, change it, and push it again and expect
-     *       two different values to come out.
-     *
-     * @param cell    Address containing parameter value to push.
-     * @param flags    Copy-back flags.
-     * @return      Error code, if any.
-     */
-    virtual int PushCellByRef(cell_t* cell, int flags = SM_PARAM_COPYBACK) = 0;
-
-    /**
-     * @brief Pushes a float onto the current call.
-     *
-     * @param number  Parameter value to push.
-     * @return      Error code, if any.
-     */
-    virtual int PushFloat(float number) = 0;
-
-    /**
-     * @brief Pushes a float onto the current call by reference.
-     * NOTE: On Execute, the pointer passed will be modified if copyback is enabled.
-     * NOTE: By reference parameters are cached and thus are not read until execution.
-     *     This means you cannot push a pointer, change it, and push it again and expect
-     *       two different values to come out.
-     *
-     * @param number  Parameter value to push.
-     * @param flags    Copy-back flags.
-     * @return      Error code, if any.
-     */
-    virtual int PushFloatByRef(float* number, int flags = SM_PARAM_COPYBACK) = 0;
-
-    /**
-     * @brief Pushes an array of cells onto the current call.
-     *
-     * On Execute, the pointer passed will be modified if non-NULL and copy-back
-     * is enabled.
-     *
-     * By reference parameters are cached and thus are not read until execution.
-     * This means you cannot push a pointer, change it, and push it again and expect
-     * two different values to come out.
-     *
-     * @param inarray  Array to copy, NULL if no initial array should be copied.
-     * @param cells    Number of cells to allocate and optionally read from the input array.
-     * @param flags    Whether or not changes should be copied back to the input array.
-     * @return      Error code, if any.
-     */
-    virtual int PushArray(cell_t* inarray, unsigned int cells, int flags = 0) = 0;
-
-    /**
-     * @brief Pushes a string onto the current call.
-     *
-     * @param string  String to push.
-     * @return      Error code, if any.
-     */
-    virtual int PushString(const char* string) = 0;
-
-    /**
-     * @brief Pushes a string or string buffer.
-     *
-     * NOTE: On Execute, the pointer passed will be modified if copy-back is enabled.
-     *
-     * @param buffer  Pointer to string buffer.
-     * @param length  Length of buffer.
-     * @param sz_flags  String flags.  In copy mode, the string will be copied
-     *          according to the handling (ascii, utf-8, binary, etc).
-     * @param cp_flags  Copy-back flags.
-     * @return      Error code, if any.
-     */
-    virtual int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags) = 0;
-
-    /**
-     * @brief Cancels a function call that is being pushed but not yet executed.
-     */
-    virtual void Cancel() = 0;
-
-    /**
-     * @brief Pushes an int64 value onto the current call.
-     *
-     * @param number    Parameter to push.
-     * @return          Error code, if any.
-     */
-    virtual int PushInt64(int64_t value) = 0;
-};
-
-/**
+ /**
    * @brief Encapsulates a function call in a plugin.
    *
-   * NOTE: Function calls must be atomic to one execution context.
    * NOTE: This object should not be deleted.  It lives for the lifetime of the plugin.
    */
-class IPluginFunction : public ICallable
+class IPluginFunction
 {
   public:
     /**
@@ -253,6 +144,26 @@ class IPluginFunction : public ICallable
     virtual IPluginRuntime* GetParentRuntime() = 0;
 
     /**
+     * @brief Returns a name to identify this function for debugging purposes.
+     *
+     * @return       String name.
+     */
+    virtual const char* DebugName() = 0;
+
+    // These functions are provided for source-level compatibility, but are
+    // deprecated. Invoke() should be used instead. Errors are never returned.
+    virtual void Cancel() = 0;
+    virtual int PushCell(cell_t cell) = 0;
+    virtual int PushCellByRef(cell_t* cell, int flags = SM_PARAM_COPYBACK) = 0;
+    virtual int PushFloat(float number) = 0;
+    virtual int PushFloatByRef(float* number, int flags = SM_PARAM_COPYBACK) = 0;
+    virtual int PushArray(cell_t* inarray, unsigned int cells, int flags = 0) = 0;
+    virtual int PushString(const char* string) = 0;
+    virtual int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags) = 0;
+    virtual int PushInt64(int64_t value) = 0;
+    virtual bool Invoke(cell_t* rval = nullptr) = 0;
+
+    /**
      * @brief Executes the function, resets the pushed parameter list, and
      * performs any copybacks.
      *
@@ -262,16 +173,9 @@ class IPluginFunction : public ICallable
      * handled via ExceptionHandler or propagated to its caller.
      *
      * @param result    Pointer to store return value in.
-     * @return        True on success, false on error.
+     * @return          True on success, false on error.
      */
-    virtual bool Invoke(cell_t* rval = nullptr) = 0;
-
-    /**
-     * @brief Returns a name to identify this function for debugging purposes.
-     *
-     * @return       String name.
-     */
-    virtual const char* DebugName() = 0;
+    virtual bool Invoke(const sp::CallArgs& args, cell_t* rval = nullptr) = 0;
 };
 
 /**
@@ -951,6 +855,9 @@ class ISourcePawnEnvironment
     ISourcePawnEnvironment* Environment() { return this; }
     ISourcePawnEngine* APIv1() { return this; }
     ISourcePawnEngine2* APIv2() { return this; }
+
+    // Return the API version of this SourcePawn VM.
+    virtual uint32_t GetApiVersion() = 0;
 
     /**
      * @brief Allocates executable memory.

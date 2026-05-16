@@ -63,9 +63,8 @@ class ScriptedInvoker : public IPluginFunction
     bool IsRunnable() override;
     funcid_t GetFunctionID() override;
     IPluginRuntime* GetParentRuntime() override;
-    const char* DebugName() override {
-        return full_name_.get();
-    }
+    const char* DebugName() override { return full_name_.get(); }
+    bool Invoke(const sp::CallArgs& args, cell_t* rval = nullptr) override;
 
   public:
     sp_public_t* Public() const {
@@ -76,16 +75,9 @@ class ScriptedInvoker : public IPluginFunction
     RefPtr<MethodInfo> AcquireMethod();
 
   private:
-    int _PushString(const char* string, int sz_flags, int cp_flags, size_t len);
-    int SetError(int err);
-
-  private:
     Environment* env_;
     PluginContext* context_;
-    cell_t m_params[SP_MAX_EXEC_PARAMS];
-    ParamInfo m_info[SP_MAX_EXEC_PARAMS];
-    unsigned int m_curparam;
-    int m_errorstate;
+    CallArgs default_args_;
     funcid_t m_FnId;
     std::unique_ptr<char[]> full_name_;
     sp_public_t* public_;
