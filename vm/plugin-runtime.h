@@ -24,10 +24,14 @@
 
 namespace sp {
 
+static const cell_t STACK_MARGIN = 16 * sizeof(cell_t);
+
 using namespace ke;
 
-class PluginContext;
+class PluginRuntime;
 class MethodInfo;
+
+typedef PluginRuntime PluginContext;
 
 struct NativeEntry : public sp_native_t {
     NativeEntry()
@@ -38,7 +42,8 @@ struct NativeEntry : public sp_native_t {
 };
 
 /* Jit wants fast access to this so we expose things as public */
-class PluginRuntime : public SourcePawn::IPluginRuntime,
+class PluginRuntime : public SourcePawn::IPluginContext,
+                      public SourcePawn::IPluginRuntime,
                       public ke::InlineListNode<PluginRuntime>
 {
   public:
@@ -48,24 +53,24 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     bool Initialize();
 
   public:
-    virtual bool IsDebugging() override;
-    virtual int FindNativeByName(const char* name, uint32_t* index) override;
-    virtual uint32_t GetNativesNum() override;
-    virtual int FindPublicByName(const char* name, uint32_t* index) override;
-    virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;
-    virtual uint32_t GetPublicsNum() override;
-    virtual int GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar) override;
-    virtual int FindPubvarByName(const char* name, uint32_t* index) override;
-    virtual int GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) override;
-    virtual uint32_t GetPubVarsNum() override;
-    virtual IPluginFunction* GetFunctionByName(const char* public_name) override;
-    virtual IPluginFunction* GetFunctionById(funcid_t func_id) override;
-    virtual IPluginContext* GetDefaultContext() override;
-    virtual void SetPauseState(bool paused) override;
-    virtual bool IsPaused() override;
-    virtual size_t GetMemUsage() override;
-    virtual unsigned char* GetCodeHash() override;
-    virtual unsigned char* GetDataHash() override;
+    bool IsDebugging() override;
+    int FindNativeByName(const char* name, uint32_t* index) override;
+    uint32_t GetNativesNum() override;
+    int FindPublicByName(const char* name, uint32_t* index) override;
+    int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;
+    uint32_t GetPublicsNum() override;
+    int GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar) override;
+    int FindPubvarByName(const char* name, uint32_t* index) override;
+    int GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) override;
+    uint32_t GetPubVarsNum() override;
+    IPluginFunction* GetFunctionByName(const char* public_name) override;
+    IPluginFunction* GetFunctionById(funcid_t func_id) override;
+    IPluginContext* GetDefaultContext() override;
+    void SetPauseState(bool paused) override;
+    bool IsPaused() override;
+    size_t GetMemUsage() override;
+    unsigned char* GetCodeHash() override;
+    unsigned char* GetDataHash() override;
     void SetNames(const char* fullname, const char* name);
     unsigned GetNativeReplacement(size_t index);
     ScriptedInvoker* GetPublicFunction(size_t index);
@@ -104,6 +109,150 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
         return name_.c_str();
     }
 
+  public: // IPluginContext
+    int LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) override;
+    int LocalToString(cell_t local_addr, char** addr) override;
+    int StringToLocal(cell_t local_addr, size_t chars, const char* source) override;
+    int StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source,
+                          size_t* wrtnbytes) override;
+    cell_t* GetNullRef(SP_NULL_TYPE type) override;
+    int LocalToStringNULL(cell_t local_addr, char** addr) override;
+    IPluginRuntime* GetRuntime() override;
+    cell_t* GetLocalParams() override;
+    bool HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
+                          const cell_t* init) override;
+    void EnterHeapScope() override;
+    void LeaveHeapScope() override;
+    cell_t GetNullFunctionValue() override;
+    bool IsNullFunctionId(funcid_t func) override;
+    bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) override;
+    IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
+    bool IsInExec() override;
+
+    // Generic API access.
+    void SetKey(int k, void* value) override;
+    bool GetKey(int k, void** value) override;
+    SourcePawn::ISourcePawnEngine2* APIv2() override;
+    void ReportError(const char* fmt, ...) override;
+    void ReportErrorVA(const char* fmt, va_list ap) override;
+    void ReportFatalError(const char* fmt, ...) override;
+    void ReportFatalErrorVA(const char* fmt, va_list ap) override;
+    void ReportErrorNumber(int error) override;
+    cell_t ThrowNativeErrorEx(int error, const char* msg, ...) override;
+    cell_t ThrowNativeError(const char* msg, ...) override;
+    int GetLastNativeError() override;
+    cell_t BlamePluginError(SourcePawn::IPluginFunction* pf, const char* msg, ...) override;
+    IFrameIterator* CreateFrameIterator() override;
+    void DestroyFrameIterator(IFrameIterator* it) override;
+    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
+    void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
+
+  public:
+    bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
+
+    int AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr);
+
+    size_t HeapSize() const {
+        return mem_size_;
+    }
+    uint8_t* memory() const {
+        return memory_;
+    }
+    size_t DataSize() const {
+        return data_size_;
+    }
+
+    static inline size_t offsetOfSp() {
+        return offsetof(PluginRuntime, sp_);
+    }
+    static inline size_t offsetOfHp() {
+        return offsetof(PluginRuntime, hp_);
+    }
+    static inline size_t offsetOfFrm() {
+        return offsetof(PluginRuntime, frm_);
+    }
+    static inline size_t offsetOfMemory() {
+        return offsetof(PluginRuntime, memory_);
+    }
+    static inline size_t offsetOfHpScope() {
+        return offsetof(PluginRuntime, hp_scope_);
+    }
+
+    int32_t* addressOfSp() {
+        return &sp_;
+    }
+    cell_t* addressOfFrm() {
+        return &frm_;
+    }
+    cell_t* addressOfHp() {
+        return &hp_;
+    }
+    cell_t* addressOfHpScope() {
+        return &hp_scope_;
+    }
+
+    cell_t frm() const {
+        return frm_;
+    }
+    cell_t sp() const {
+        return sp_;
+    }
+    cell_t hp() const {
+        return hp_;
+    }
+
+    int popTrackerAndSetHeap();
+    int pushTracker(uint32_t amount);
+
+    // Note: this is allowed even in legacy plugins, since the underlying
+    // mechanism doesn't actually require opcode support. The heap code
+    // support bit only indicates that we should *not* use the tracker.
+    bool enterHeapScope();
+    bool leaveHeapScope();
+
+    int generateArray(cell_t dims, cell_t* stk, bool autozero);
+    int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
+
+    // These functions will report an error on failure.
+    bool pushAmxFrame();
+    bool popAmxFrame();
+    bool pushStack(cell_t value);
+    bool popStack(cell_t* out);
+    bool pushHeap(cell_t value);
+    bool popHeap(cell_t* out);
+    bool addStack(cell_t amount);
+    bool getFrameValue(cell_t offset, cell_t* out);
+    bool setFrameValue(cell_t offset, cell_t value);
+    bool getCellValue(cell_t address, cell_t* out);
+    bool setCellValue(cell_t address, cell_t value);
+    bool heapAlloc(cell_t amount, cell_t* out);
+    cell_t* heapAllocEx(cell_t amount, cell_t* out);
+    cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
+    bool initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
+                   cell_t data_fill_size, cell_t fill_value);
+
+    cell_t* throwIfBadAddress(cell_t addr);
+
+    int64_t* acquireInt64Addr(cell_t address) {
+        cell_t* addr = acquireAddrRange(address, sizeof(int64_t));
+        if (!addr)
+            return nullptr;
+        return reinterpret_cast<int64_t*>(addr);
+    }
+
+    int64_t* acquireInt64Slot(cell_t offset) {
+        cell_t* addr = throwIfBadAddress(frm_ + offset);
+        assert(addr);
+        return reinterpret_cast<int64_t*>(addr);
+    }
+
+    PluginContext* context() {
+        return this;
+    }
+    PluginRuntime* runtime() {
+        return this;
+    }
+
   public:
     typedef SmxImage::Code Code;
     typedef SmxImage::Data Data;
@@ -116,9 +265,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     }
     SmxImage* image() const {
         return image_.get();
-    }
-    PluginContext* context() const {
-        return context_.get();
     }
 
   private:
@@ -145,7 +291,22 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     std::unique_ptr<sp_public_t[]> publics_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;
     std::unique_ptr<ScriptedInvoker*[]> entrypoints_;
-    std::unique_ptr<PluginContext> context_;
+
+    uint8_t* memory_;
+    uint32_t data_size_;
+    uint32_t mem_size_;
+
+    cell_t* m_pNullVec;
+    cell_t* m_pNullString;
+
+    // "Stack top", for convenience.
+    cell_t stp_;
+
+    // Stack, heap, and frame pointer.
+    cell_t sp_;
+    cell_t hp_;
+    cell_t frm_;
+    cell_t hp_scope_;
 
     struct FunctionMapPolicy {
         static inline uint32_t hash(ucell_t value) {
@@ -168,6 +329,10 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     bool computed_data_hash_;
     unsigned char code_hash_[16];
     unsigned char data_hash_[16];
+
+    Environment* env_;
+    void* m_keys[4];
+    bool m_keys_set[4];
 };
 
 } // namespace sp

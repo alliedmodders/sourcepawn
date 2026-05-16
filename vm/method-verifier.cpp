@@ -17,7 +17,6 @@
 #include "graph-builder.h"
 #include "method-verifier.h"
 #include "opcodes.h"
-#include "plugin-context.h"
 #include "plugin-runtime.h"
 
 namespace sp {

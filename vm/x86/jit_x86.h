@@ -24,7 +24,6 @@
 #include "jit.h"
 #include "macro-assembler.h"
 #include "opcodes.h"
-#include "plugin-context.h"
 #include "plugin-runtime.h"
 
 using namespace SourcePawn;

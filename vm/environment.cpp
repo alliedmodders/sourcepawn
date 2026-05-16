@@ -16,7 +16,7 @@
 #include "compiled-function.h"
 #include "debug-metadata.h"
 #include "method-info.h"
-#include "plugin-context.h"
+#include "plugin-runtime.h"
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
 #    include "jit.h"

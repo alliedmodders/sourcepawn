@@ -31,7 +31,7 @@ namespace sp {
 using namespace SourcePawn;
 
 class PluginRuntime;
-class PluginContext;
+typedef PluginRuntime PluginContext;
 class SmxImage;
 
 struct BackwardJump {

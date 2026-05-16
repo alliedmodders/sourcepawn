@@ -27,7 +27,8 @@ namespace sp {
 
 using namespace SourcePawn;
 
-class PluginContext;
+class PluginRuntime;
+typedef PluginRuntime PluginContext;
 
 // We create x86 stack frames like:
 //   [return address]

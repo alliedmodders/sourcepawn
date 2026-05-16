@@ -32,8 +32,8 @@ namespace sp {
 
 using namespace SourcePawn;
 
-class PluginContext;
 class PluginRuntime;
+typedef PluginRuntime PluginContext;
 class MethodInfo;
 struct FrameLayout;
 
