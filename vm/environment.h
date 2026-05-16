@@ -59,6 +59,8 @@ class Environment : public ISourcePawnEnvironment
     // active code running on the stack.
     void Shutdown();
 
+    uint32_t GetApiVersion() override { return kApiVersion; }
+
     // ISourcePawnEnvironment (from Engine/Engine2)
     void* AllocatePageMemory(size_t size) override;
     void SetReadWrite(void* ptr) override;
