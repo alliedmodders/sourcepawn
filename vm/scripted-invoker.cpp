@@ -16,7 +16,6 @@
 #include <string.h>
 #include "environment.h"
 #include "method-info.h"
-#include "plugin-context.h"
 #include "plugin-runtime.h"
 
 /********************

@@ -24,7 +24,7 @@ using namespace ke;
 using namespace SourcePawn;
 
 class PluginRuntime;
-class PluginContext;
+typedef PluginRuntime PluginContext;
 class CompiledFunction;
 class MethodInfo;
 

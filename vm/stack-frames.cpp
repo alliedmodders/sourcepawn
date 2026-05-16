@@ -14,7 +14,6 @@
 #include "compiled-function.h"
 #include "environment.h"
 #include "method-info.h"
-#include "plugin-context.h"
 #include "plugin-runtime.h"
 #if defined(KE_ARCH_X86)
 #    include "x86/frames-x86.h"

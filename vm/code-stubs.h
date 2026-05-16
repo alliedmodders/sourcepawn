@@ -21,7 +21,8 @@
 
 namespace sp {
 
-class PluginContext;
+class PluginRuntime;
+typedef PluginRuntime PluginContext;
 class Environment;
 
 typedef int (*InvokeStubFn)(PluginContext* cx, void* code, cell_t* rval);

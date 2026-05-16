@@ -18,7 +18,6 @@ if module.compiler.family == 'gcc':
 
 module.sources += [
   'api.cpp',
-  'base-context.cpp',
   'builtins.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',
@@ -34,7 +33,6 @@ module.sources += [
   'method-info.cpp',
   'method-verifier.cpp',
   'opcodes.cpp',
-  'plugin-context.cpp',
   'plugin-runtime.cpp',
   'rtti.cpp',
   'runtime-helpers.cpp',

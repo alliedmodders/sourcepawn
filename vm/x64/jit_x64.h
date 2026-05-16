@@ -18,7 +18,7 @@
 
 #include "jit.h"
 #include "constants-x64.h"
-#include "plugin-context.h"
+#include "plugin-runtime.h"
 
 namespace sp {
 

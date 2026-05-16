@@ -21,7 +21,8 @@
 
 namespace sp {
 
-class PluginContext;
+class PluginRuntime;
+typedef PluginRuntime PluginContext;
 struct NativeEntry;
 
 cell_t NativeInvokeThunk(PluginContext* ctx, NativeEntry* entry, const cell_t* params);

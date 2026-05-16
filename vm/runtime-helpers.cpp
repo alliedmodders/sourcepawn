@@ -17,7 +17,7 @@
 #include "runtime-helpers.h"
 
 #include "environment.h"
-#include "plugin-context.h"
+#include "plugin-runtime.h"
 
 namespace sp {
 

@@ -16,7 +16,7 @@
 #include "debug-metadata.h"
 #include "linking.h"
 #include "macro-assembler-x64.h"
-#include "plugin-context.h"
+#include "plugin-runtime.h"
 
 #define __ masm.
 

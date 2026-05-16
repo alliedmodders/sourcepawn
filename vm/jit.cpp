@@ -22,7 +22,6 @@
 #include "method-info.h"
 #include "opcodes.h"
 #include "pcode-reader.h"
-#include "plugin-context.h"
 #include "plugin-runtime.h"
 #include "stack-frames.h"
 #include "watchdog_timer.h"

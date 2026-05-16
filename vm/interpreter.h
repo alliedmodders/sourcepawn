@@ -30,8 +30,8 @@ namespace sp {
 using namespace ke;
 
 class Environment;
-class PluginContext;
 class PluginRuntime;
+typedef PluginRuntime PluginContext;
 class MethodInfo;
 
 class InterpRegs
