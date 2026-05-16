@@ -54,13 +54,12 @@ Analyze(const char* file)
       cell_t local_addr;
       cell_t* info;
 
-      IPluginContext* cx = rt->GetDefaultContext();
-      cx->GetPubvarAddrs(index, &local_addr, &info);
+      rt->GetPubvarAddrs(index, &local_addr, &info);
 
       fprintf(stderr, "Plugin info:\n");
       for (size_t i = 0; i < 5; i++) {
         char* str;
-        if (cx->LocalToString(info[i], &str) == SP_ERROR_NONE)
+        if (rt->LocalToString(info[i], &str) == SP_ERROR_NONE)
           fprintf(stderr, "%s\n", str);
       }
     }

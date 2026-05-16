@@ -210,7 +210,7 @@ static cell_t DoNothing(IPluginContext* cx, const cell_t* params)
   return 1;
 }
 
-static void BindNative(IPluginRuntime* rt, const char* name, SPVM_NATIVE_FUNC fn)
+static void BindNative(sp::BaseRuntime* rt, const char* name, SPVM_NATIVE_FUNC fn)
 {
   int err;
   uint32_t index;
@@ -220,7 +220,7 @@ static void BindNative(IPluginRuntime* rt, const char* name, SPVM_NATIVE_FUNC fn
   rt->UpdateNativeBinding(index, fn, 0, nullptr);
 }
 
-static void BindNative(IPluginRuntime* rt, const char* name, INativeCallback* callback)
+static void BindNative(sp::BaseRuntime* rt, const char* name, INativeCallback* callback)
 {
   int err;
   uint32_t index;
@@ -478,11 +478,9 @@ static int Execute(const char* file)
   if (!fun)
     return 0;
 
-  IPluginContext* cx = rt->GetDefaultContext();
-
   int result;
   {
-    ExceptionHandler eh(cx);
+    ExceptionHandler eh(rt.get());
     if (!fun->Invoke(&result)) {
       fprintf(stderr, "Error executing main: %s\n", eh.Message());
       return 1;

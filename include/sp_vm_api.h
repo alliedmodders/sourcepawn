@@ -26,10 +26,11 @@
 
 namespace SourceMod {
 struct IdentityToken_t;
-};
+} // namespace SourceMod
 namespace sp {
+class BaseRuntime;
 class Environment;
-};
+} // namespace sp
 
 namespace SourcePawn {
 class ExceptionHandler;
@@ -376,44 +377,6 @@ class IPluginRuntime
     virtual ~IPluginRuntime() {}
 
     /**
-     * @brief Finds a native by name.
-     *
-     * @param name      Name of native.
-     * @param index      Optionally filled with native index number.
-     */
-    virtual int FindNativeByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Gets the number of natives.
-     *
-     * @return        Filled with the number of natives.
-     */
-    virtual uint32_t GetNativesNum() = 0;
-
-    /**
-     * @brief Finds a public function by name.
-     *
-     * @param name      Name of public
-     * @param index      Optionally filled with public index number.
-     */
-    virtual int FindPublicByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Gets public function info by index.
-     *
-     * @param index      Public function index number.
-     * @param publicptr    Optionally filled with pointer to public structure.
-     */
-    virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) = 0;
-
-    /**
-     * @brief Gets the number of public functions.
-     *
-     * @return        Filled with the number of public functions.
-     */
-    virtual uint32_t GetPublicsNum() = 0;
-
-    /**
      * @brief Gets public variable info by index.
      *
      * @param index      Public variable index number.
@@ -462,26 +425,11 @@ class IPluginRuntime
     virtual IPluginFunction* GetFunctionById(funcid_t func_id) = 0;
 
     /**
-     * @brief Returns the default context.  The default context
-     * should not be destroyed.
-     *
-     * @return          Default context pointer.
-     */
-    virtual IPluginContext* GetDefaultContext() = 0;
-
-    /**
      * @brief Returns true if the plugin is in debug mode.
      *
      * @return        True if in debug mode, false otherwise.
      */
     virtual bool IsDebugging() = 0;
-
-    /**
-     * @brief Sets whether or not the plugin is paused (cannot be run).
-     *
-     * @param pause      Pause state.
-     */
-    virtual void SetPauseState(bool paused) = 0;
 
     /**
      * @brief Returns whether or not the plugin is paused (runnable).
@@ -498,54 +446,9 @@ class IPluginRuntime
     virtual size_t GetMemUsage() = 0;
 
     /**
-     * @brief Returns the MD5 hash of the plugin's P-Code.
-     *
-     * @return        16-byte buffer with MD5 hash of the plugin's P-Code.
-     */
-    virtual unsigned char* GetCodeHash() = 0;
-
-    /**
-     * @brief Returns the MD5 hash of the plugin's Data.
-     *
-     * @return        16-byte buffer with MD5 hash of the plugin's Data.
-     */
-    virtual unsigned char* GetDataHash() = 0;
-
-    /**
-     * @brief Update the native binding at the given index.
-     *
-     * @param pfn       Native function pointer.
-     * @param flags     Native flags.
-     * @param user      User data pointer.
-     */
-    virtual int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
-                                    void* data) = 0;
-
-    /**
-     * @brief Returns the native at the given index.
-     *
-     * @param index     Native index.
-     * @return          Native pointer, or NULL on failure.
-     */
-    virtual const sp_native_t* GetNative(uint32_t index) = 0;
-
-    /**
      * @brief Return the file or location this plugin was loaded from.
      */
     virtual const char* GetFilename() = 0;
-
-    /**
-     * @brief Update the native binding at the given index.
-     *
-     * The given object will be AddRef'd immediately, and Released on failure.
-     * Thus, the caller can pass a newborn object with refcount == 0.
-     *
-     * @param native    Native callback object.
-     * @param flags     Native flags.
-     * @param user      User data pointer.
-     */
-    virtual int UpdateNativeBindingObject(uint32_t index, INativeCallback* native, uint32_t flags,
-                                          void* data) = 0;
 
     /**
      * @brief Returns whether the plugin was compiled with direct array support.
@@ -670,28 +573,6 @@ class IPluginRuntime
     virtual int GetLastNativeError() = 0;
 
     /**
-     * @brief Returns the local parameter stack, starting from the
-     * cell that contains the number of parameters passed.
-     *
-     * Local parameters are the parameters passed to the function
-     * from which a native was called (and thus this can only be
-     * called inside a native).
-     *
-     * @return        Parameter stack.
-     */
-    virtual cell_t* GetLocalParams() = 0;
-
-    /**
-     * @brief Sets a local "key" that can be used for fast lookup.
-     *
-     * Only the "owner" of the context should be setting this.
-     *
-     * @param key      Key number (values allowed: 1 through 4).
-     * @param value      Pointer value.
-     */
-    virtual void SetKey(int k, void* value) = 0;
-
-    /**
      * @brief Retrieves a previously set "key."
      *
      * @param key      Key number (values allowed: 1 through 4).
@@ -699,14 +580,6 @@ class IPluginRuntime
      * @return        True on success, false on failure.
      */
     virtual bool GetKey(int k, void** value) = 0;
-
-    /**
-     * @brief Return a pointer to the ISourcePawnEngine2 that is active.
-     * This is a convenience function.
-     *
-     * @return             API pointer.
-     */
-    virtual ISourcePawnEngine2* APIv2() = 0;
 
     /**
      * @brief Report an error.
@@ -867,13 +740,27 @@ class IPluginRuntime
      */
     virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
 
+    /**
+     * Downcast for embedder convenience.
+     */
+    virtual sp::BaseRuntime* GetBaseRuntime() = 0;
+
+    /**
+     * Return the parent environment.
+     */
+    virtual ISourcePawnEnvironment* GetEnvironment() = 0;
+
   public:
+    // Source-level compatibility helper.
     SourceMod::IdentityToken_t* GetIdentity() {
         SourceMod::IdentityToken_t* token;
         if (!GetKey(1, (void**)&token))
             return nullptr;
         return token;
     }
+
+    // Source-level compatibility helper.
+    IPluginRuntime* GetDefaultContext() { return this; }
 };
 
 class AutoEnterHeapScope
@@ -1143,14 +1030,14 @@ class ExceptionHandler
     friend class sp::Environment;
 
   public:
-    ExceptionHandler(ISourcePawnEngine2* api)
-     : env_(api->Environment()),
+    ExceptionHandler(ISourcePawnEnvironment* api)
+     : env_(api),
        catch_(true)
     {
         env_->EnterExceptionHandlingScope(this);
     }
     ExceptionHandler(IPluginContext* ctx)
-     : env_(ctx->APIv2()->Environment()),
+     : env_(ctx->GetEnvironment()),
        catch_(true)
     {
         env_->EnterExceptionHandlingScope(this);
