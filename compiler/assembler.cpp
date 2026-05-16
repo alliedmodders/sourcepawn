@@ -48,6 +48,8 @@
 #include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
+#include "vm/api.h"
+#include "vm/environment.h"
 
 namespace sp {
 namespace cc {
@@ -67,11 +69,11 @@ FailedValidation(const std::string& message)
 static void
 VerifyBinary(const char* file, void* buffer, size_t size)
 {
-    std::unique_ptr<ISourcePawnEnvironment> env(ISourcePawnEnvironment::New());
+    std::unique_ptr<Environment> env(Environment::New());
     if (!env)
         FailedValidation("could not initialize environment");
 
-    auto api = env->APIv2();
+    auto api = env->api2();
 
     char msgbuf[255];
     std::unique_ptr<IPluginRuntime> rt(api->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,

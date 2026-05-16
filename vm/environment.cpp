@@ -72,8 +72,6 @@ Environment::get() {
 
 bool
 Environment::Initialize() {
-    api_v1_ = std::make_unique<SourcePawnEngine>();
-    api_v2_ = std::make_unique<SourcePawnEngine2>();
     watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
     builtins_ = std::make_unique<BuiltinNatives>();
     code_alloc_ = std::make_unique<CodeAllocator>();
@@ -95,9 +93,9 @@ Environment::Shutdown() {
     sEnvironment = nullptr;
 }
 
-void
-Environment::SetJitEnabled(bool enabled) {
+bool Environment::SetJitEnabled(bool enabled) {
     jit_enabled_ = enabled && IsJitAvailable();
+    return jit_enabled_ == enabled;
 }
 
 bool
@@ -128,16 +126,6 @@ Environment::DisableProfiling() {
 bool
 Environment::InstallWatchdogTimer(int timeout_ms) {
     return watchdog_timer_->Initialize(timeout_ms);
-}
-
-ISourcePawnEngine*
-Environment::APIv1() {
-    return api_v1_.get();
-}
-
-ISourcePawnEngine2*
-Environment::APIv2() {
-    return api_v2_.get();
 }
 
 static const char* sErrorMsgTable[] = {
@@ -532,7 +520,133 @@ Environment::IsJitAvailable() {
 #endif
 }
 
-ISourcePawnEnvironment*
-ISourcePawnEnvironment::New() {
-    return Environment::New();
+void* Environment::AllocatePageMemory(size_t size) {
+    CodeChunk chunk = AllocateCode(size + sizeof(CodeChunk));
+    CodeChunk* hidden = (CodeChunk*)chunk.address();
+    new (hidden) CodeChunk(chunk);
+    return hidden + 1;
+}
+
+void Environment::SetReadExecute(void* ptr) {
+    /* already re */
+}
+
+void Environment::SetReadWrite(void* ptr) {
+    /* already rw */
+}
+
+void Environment::FreePageMemory(void* ptr) {
+    assert(ptr);
+    CodeChunk* hidden = (CodeChunk*)((uint8_t*)ptr - sizeof(CodeChunk));
+    hidden->~CodeChunk();
+}
+
+IDebugListener* Environment::SetDebugListener(IDebugListener* pListener) {
+    IDebugListener* old = debugger_;
+    SetDebugger(pListener);
+    return old;
+}
+
+int Environment::SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
+    if (!IsDebugBreakEnabled())
+        return SP_ERROR_NOTDEBUGGING;
+
+    debug_break_handler_ = handler;
+    return SP_ERROR_NONE;
+}
+
+#if !defined(SOURCEPAWN_VERSION)
+#    define SOURCEPAWN_VERSION "SourcePawn 1.10"
+#endif
+
+const char* Environment::GetEngineName() {
+    const char* info = "";
+#if !defined(SP_HAS_JIT)
+    info = ", interp-x86";
+#else
+    if (!IsJitEnabled()) {
+        info = ", interp-x86";
+    } else {
+#    if defined(KE_ARCH_X86)
+        info = ", jit-x86";
+#    else
+        info = ", unknown";
+#    endif
+    }
+#endif
+
+    ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s%s", SOURCEPAWN_VERSION, info);
+    return engine_name_;
+}
+
+const char* Environment::GetVersionString() {
+    return SOURCEPAWN_VERSION;
+}
+
+void Environment::SetProfilingTool(IProfilingTool* tool) {
+    SetProfiler(tool);
+}
+
+static IPluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error,
+                                 size_t maxlength)
+{
+    if (!image->validate()) {
+        const char* errorMessage = image->errorMessage();
+        if (!errorMessage)
+            errorMessage = "binary parse error";
+        UTIL_Format(error, maxlength, "%s", errorMessage);
+        return nullptr;
+    }
+
+    PluginRuntime* pRuntime = new PluginRuntime(image.release());
+    if (!pRuntime->Initialize()) {
+        delete pRuntime;
+
+        UTIL_Format(error, maxlength, "out of memory");
+        return nullptr;
+    }
+
+    size_t len = strlen(file);
+    for (size_t i = len - 1; i < len; i--) {
+        if (file[i] == '/'
+#if defined WIN32
+            || file[i] == '\\'
+#endif
+        ) {
+            pRuntime->SetNames(file, &file[i + 1]);
+            break;
+        }
+    }
+
+    if (*pRuntime->Name() == '\0')
+        pRuntime->SetNames(file, file);
+
+    return pRuntime;
+}
+
+IPluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
+    FILE* fp = fopen(file, "rb");
+
+    if (!fp) {
+        UTIL_Format(error, maxlength, "file not found");
+        return nullptr;
+    }
+
+    std::unique_ptr<SmxImage> image(new SmxImage(fp));
+    fclose(fp);
+
+    return LoadImage(std::move(image), file, error, maxlength);
+}
+
+IPluginRuntime* Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                                  void (*dtor)(uint8_t*), char* error, size_t maxlength)
+{
+    std::unique_ptr<SmxImage> image;
+
+    if (dtor)
+        image = std::make_unique<SmxImage>(addr, size, dtor);
+    else
+        image = std::make_unique<SmxImage>(addr, size);
+
+    return LoadImage(std::move(image), file, error, maxlength);
 }

@@ -41,20 +41,6 @@ BasePluginContext::GetKey(int k, void** value) {
     return true;
 }
 
-SourceMod::IdentityToken_t*
-BasePluginContext::GetIdentity() {
-    SourceMod::IdentityToken_t* tok;
-
-    if (GetKey(1, (void**)&tok))
-        return tok;
-    return NULL;
-}
-
-sp_context_t*
-BasePluginContext::GetContext() {
-    return reinterpret_cast<sp_context_t*>((IPluginContext*)this);
-}
-
 bool
 BasePluginContext::IsDebugging() {
     return true;

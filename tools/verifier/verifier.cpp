@@ -11,6 +11,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "vm/environment.h"
+#include "vm/api.h"
 #include "vm/method-verifier.h"
 #include <amtl/experimental/am-argparser.h>
 #include <set>
@@ -27,7 +28,7 @@ bool sVerbose = false;
 static bool
 Verify(IPluginRuntime* rt)
 {
-  ExceptionHandler eh(sEnv->APIv2());
+  ExceptionHandler eh(sEnv->api2());
   if (!rt->PerformFullValidation()) {
       const char* message = eh.HasException() ? eh.Message() : "unknown error";
       fprintf(stderr, "Binary validation failed: %s\n", message);
@@ -40,7 +41,7 @@ static bool
 Analyze(const char* file)
 {
   char error[255];
-  std::unique_ptr<IPluginRuntime> rt(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<IPluginRuntime> rt(sEnv->api2()->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
     fprintf(stdout, "Could not load .smx file: %s\n", error);
     return false;

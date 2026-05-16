@@ -20,46 +20,6 @@ namespace sp {
 
 using namespace SourcePawn;
 
-class SourcePawnEngine : public ISourcePawnEngine
-{
-  public:
-    SourcePawnEngine();
-
-    IDebugListener* SetDebugListener(IDebugListener* pListener) override;
-    unsigned int GetEngineAPIVersion() override;
-    void* AllocatePageMemory(size_t size) override;
-    void SetReadWrite(void* ptr) override;
-    void SetReadExecute(void* ptr) override;
-    void FreePageMemory(void* ptr) override;
-    int SetDebugBreakHandler(SPVM_DEBUGBREAK handler) override;
-};
-
-class SourcePawnEngine2 : public ISourcePawnEngine2
-{
-  public:
-    SourcePawnEngine2();
-
-    unsigned int GetAPIVersion() override;
-    const char* GetEngineName() override;
-    const char* GetVersionString() override;
-    IDebugListener* SetDebugListener(IDebugListener* listener) override;
-    const char* GetErrorString(int err) override;
-    bool InstallWatchdogTimer(size_t timeout_ms) override;
-    bool SetJitEnabled(bool enabled) override;
-    bool IsJitEnabled() override;
-    void EnableProfiling() override;
-    void DisableProfiling() override;
-    void SetProfilingTool(IProfilingTool* tool) override;
-    IPluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength) override;
-    ISourcePawnEnvironment* Environment() override;
-    IPluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                         void (*dtor)(uint8_t*), char* error,
-                                         size_t maxlength) override;
-
-  private:
-    char engine_name_[256];
-};
-
 extern size_t UTIL_Format(char* buffer, size_t maxlength, const char* fmt, ...);
 extern size_t UTIL_FormatVA(char* buffer, size_t maxlength, const char* fmt, va_list ap);
 

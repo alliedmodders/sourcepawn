@@ -23,8 +23,6 @@
 #include "sp_vm_types.h"
 
 /** SourcePawn Engine API Versions */
-#define SOURCEPAWN_ENGINE2_API_VERSION 0x12
-#define SOURCEPAWN_API_VERSION 0x0216
 
 namespace SourceMod {
 struct IdentityToken_t;
@@ -33,14 +31,13 @@ namespace sp {
 class Environment;
 };
 
-struct sp_context_s;
-typedef struct sp_context_s sp_context_t;
-
 namespace SourcePawn {
-class IVirtualMachine;
+class ExceptionHandler;
 class IPluginRuntime;
-class ISourcePawnEngine2;
 class ISourcePawnEnvironment;
+class IVirtualMachine;
+typedef ISourcePawnEnvironment ISourcePawnEngine;
+typedef ISourcePawnEnvironment ISourcePawnEngine2;
 
 /* Parameter flags */
 #define SM_PARAM_COPYBACK (1 << 0) /**< Copy an array/reference back after call */
@@ -91,9 +88,6 @@ class IRefcountedObject
 class INativeCallback : public IRefcountedObject
 {
   public:
-    // @brief Return the SOURCEPAWN_API_VERSION this was compiled against.
-    virtual int GetApiVersion() const { return SOURCEPAWN_API_VERSION; }
-
     // @brief Called when a plugin invokes this native. The signature is the same
     // as a normal native callback.
     //
@@ -588,15 +582,6 @@ class IPluginContext
     virtual ~IPluginContext(){};
 
     /**
-     * @brief Deprecated, do not use.
-     *
-     * Returns the pointer of this object, casted to an opaque structure.
-     *
-     * @return        Returns this.
-     */
-    virtual sp_context_t* GetContext() = 0;
-
-    /**
      * @brief Returns true if the plugin is in debug mode.
      *
      * @return        True if in debug mode, false otherwise.
@@ -749,15 +734,6 @@ class IPluginContext
      * @return          A new IPluginFunction pointer, NULL if not found.
      */
     virtual IPluginFunction* GetFunctionById(funcid_t func_id) = 0;
-
-    /**
-     * @brief Returns the identity token for this context.
-     *
-     * Note: This is a compatibility shim and is the same as GetKey(1).
-     *
-     * @return      Identity token.
-     */
-    virtual SourceMod::IdentityToken_t* GetIdentity() = 0;
 
     /**
      * @brief Returns a NULL reference based on one of the available NULL
@@ -1005,6 +981,15 @@ class IPluginContext
      *                  the array has no data vector (zero length).
      */
     virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
+
+
+  public:
+    SourceMod::IdentityToken_t* GetIdentity() {
+        SourceMod::IdentityToken_t* token;
+        if (!GetKey(1, (void**)&token))
+            return nullptr;
+        return token;
+    }
 };
 
 class AutoEnterHeapScope
@@ -1031,11 +1016,6 @@ class AutoEnterHeapScope
   private:
     IPluginContext* cx_;
 };
-
-/**
-   * @brief Removed.
-   */
-class IContextTrace;
 
 /**
    * @brief Information about a reported error.
@@ -1103,11 +1083,6 @@ class IDebugListener
      */
     virtual void ReportError(const IErrorReport& report, IFrameIterator& iter) = 0;
 };
-
-/**
-   * @brief Removed.
-   */
-class IProfiler;
 
 /**
    * @brief Encapsulates a profiling tool that may be attached to SourcePawn.
@@ -1196,28 +1171,15 @@ struct sp_plugin_s;
 typedef struct sp_plugin_s sp_plugin_t;
 
 /**
-   * @brief Contains helper functions used by VMs and the host app
+   * @brief This class is the API for SourcePawn.
    */
-class ISourcePawnEngine
+class ISourcePawnEnvironment
 {
   public:
-    /**
-     * @brief Sets the debug listener.
-     *
-     * This should be called once on application startup. It is
-     * not considered part of the userland API and may change at any time.
-     *
-     * @param listener  Pointer to an IDebugListener.
-     * @return      Old IDebugListener, or NULL if none.
-     */
-    virtual IDebugListener* SetDebugListener(IDebugListener* listener) = 0;
-
-    /**
-     * @brief Returns the engine API version.
-     *
-     * @return      Engine API version.
-     */
-    virtual unsigned int GetEngineAPIVersion() = 0;
+    // Helper functions for source-level compatibility.
+    ISourcePawnEnvironment* Environment() { return this; }
+    ISourcePawnEngine* APIv1() { return this; }
+    ISourcePawnEngine2* APIv2() { return this; }
 
     /**
      * @brief Allocates executable memory.
@@ -1248,55 +1210,6 @@ class ISourcePawnEngine
      */
     virtual void FreePageMemory(void* ptr) = 0;
 
-    /*
-     * @brief Installs a debug break handler.
-     *
-     * This should be called once on application startup.
-     *
-     * @param handler  Function pointer to debug break handler.
-     * @return         SP_ERROR_* code.
-     */
-    virtual int SetDebugBreakHandler(SPVM_DEBUGBREAK handler) = 0;
-};
-
-class ExceptionHandler;
-
-/**
-   * @brief Outlines the interface a Virtual Machine (JIT) must expose
-   */
-class ISourcePawnEngine2
-{
-  public:
-    /**
-     * @brief Returns the second engine API version.
-     *
-     * @return      API version.
-     */
-    virtual unsigned int GetAPIVersion() = 0;
-
-    /**
-     * @brief Returns the string name of a VM implementation.
-     */
-    virtual const char* GetEngineName() = 0;
-
-    /**
-     * @brief Returns a version string.
-     *
-     * @return      Versioning string.
-     */
-    virtual const char* GetVersionString() = 0;
-
-    /**
-     * @brief Sets the debug listener.
-     *
-     * This should be called once on application startup. It is
-     * not considered part of the userland API and may change at any time.
-     *
-     * @param listener  Pointer to an IDebugListener.
-     * @return      Old IDebugListener, or NULL if none.
-     */
-    virtual IDebugListener* SetDebugListener(IDebugListener* listener) = 0;
-
     /**
      * @brief Returns the string representation of an error message.
      *
@@ -1307,108 +1220,6 @@ class ISourcePawnEngine2
      * @return      Error string, or NULL if not found.
      */
     virtual const char* GetErrorString(int err) = 0;
-
-    /**
-     * @brief Initiates the watchdog timer with the specified timeout
-     * length. This cannot be called more than once.
-     *
-     * @param timeout  Timeout, in ms.
-     * @return      True on success, false on failure.
-     */
-    virtual bool InstallWatchdogTimer(size_t timeout_ms) = 0;
-
-    /**
-     * @brief Sets whether the JIT is enabled or disabled.
-     *
-     * @param enabled  True or false to enable or disable.
-     * @return      True if successful, false otherwise.
-     */
-    virtual bool SetJitEnabled(bool enabled) = 0;
-
-    /**
-     * @brief Returns whether the JIT is enabled.
-     *
-     * @return      True if the JIT is enabled, false otherwise.
-     */
-    virtual bool IsJitEnabled() = 0;
-
-    /**
-     * @brief Enables profiling. SetProfilingTool() must have been called.
-     *
-     * Note that this does not activate the profiling tool. It only enables
-     * notifications to the profiling tool. SourcePawn will send events to
-     * the profiling tool even if the tool itself is reported as inactive.
-     */
-    virtual void EnableProfiling() = 0;
-
-    /**
-     * @brief Disables profiling.
-     */
-    virtual void DisableProfiling() = 0;
-
-    /**
-     * @brief Sets the profiling tool.
-     *
-     * @param tool      Profiling tool.
-     */
-    virtual void SetProfilingTool(IProfilingTool* tool) = 0;
-
-    /**
-     * @brief Loads a plugin from disk.
-     *
-     * @param file    Path to the file to compile.
-     * @param errpr    Buffer to store an error message (optional).
-     * @param maxlength  Maximum length of the error buffer.
-     * @return    New runtime pointer, or NULL on failure.
-     */
-    virtual IPluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength) = 0;
-
-    /**
-     * @brief Returns the environment.
-     */
-    virtual ISourcePawnEnvironment* Environment() = 0;
-
-    /**
-     * @brief Loads a plugin from memory.
-     *
-     * @param file    Path for display purposes.
-     * @param addr    Plugin structure.
-     * @param size    Plugin structure size.
-     * @param dtor    If non-null, a destructor indicating that ownership of |addr|
-     *                is being transferred. The destructor is invoked even on failure.
-     * @param errpr    Buffer to store an error message (optional).
-     * @param maxlength  Maximum length of the error buffer.
-     * @return    New runtime pointer, or NULL on failure.
-     */
-    virtual IPluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                                 void (*dtor)(uint8_t*), char* error,
-                                                 size_t maxlength) = 0;
-};
-
-// @brief This class is the v3 API for SourcePawn. It provides access to
-// the original v1 and v2 APIs as well.
-class ISourcePawnEnvironment
-{
-  public:
-    static ISourcePawnEnvironment* New();
-
-    // The Environment must be freed with the delete keyword. This
-    // automatically calls Shutdown().
-    virtual ~ISourcePawnEnvironment() {}
-
-    // @brief Return the API version.
-    virtual int ApiVersion() = 0;
-
-    // @brief Return a pointer to the v1 API.
-    virtual ISourcePawnEngine* APIv1() = 0;
-
-    // @brief Return a pointer to the v2 API.
-    virtual ISourcePawnEngine2* APIv2() = 0;
-
-    // @brief Destroy the environment, releasing all resources and freeing
-    // all plugin memory. This should not be called while plugins have
-    // active code running on the stack.
-    virtual void Shutdown() = 0;
 
     // @brief Enters an exception handling scope. This is intended to be
     // used on the stack and must have a corresponding call to
@@ -1426,14 +1237,6 @@ class ISourcePawnEnvironment
 
     // @brief Returns the message of the pending exception.
     virtual const char* GetPendingExceptionMessage(const ExceptionHandler* handler) = 0;
-
-    // @brief Enables the line debugger callbacks. This must be called
-    // before any plugins are loaded.
-    virtual bool EnableDebugBreak() = 0;
-
-    // @brief See JIT_DEBUG_* flags.
-    // Must be set before any plugin code is executed.
-    virtual void SetDebugMetadataFlags(int flags) = 0;
 };
 
 // @brief A helper class for handling exceptions.
@@ -1470,10 +1273,6 @@ class ExceptionHandler
     }
     ~ExceptionHandler() {
         env_->LeaveExceptionHandlingScope(this);
-    }
-
-    virtual uint32_t ApiVersion() const {
-        return SOURCEPAWN_API_VERSION;
     }
 
     // Propagates the exception instead of catching it. After calling this,
