@@ -48,26 +48,22 @@ class ScriptedInvoker : public IPluginFunction
     virtual ~ScriptedInvoker();
 
   public:
-    int PushCell(cell_t cell);
-    int PushCellByRef(cell_t* cell, int flags);
-    int PushFloat(float number);
-    int PushFloatByRef(float* number, int flags);
-    int PushArray(cell_t* inarray, unsigned int cells, int copyback);
-    int PushString(const char* string);
-    int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags);
-    int PushInt64(int64_t value);
-    int Execute(cell_t* result);
-    void Cancel();
-    int CallFunction(const cell_t* params, unsigned int num_params, cell_t* result);
-    IPluginContext* GetParentContext();
-    bool Invoke(cell_t* result);
-    bool IsRunnable();
-    funcid_t GetFunctionID();
-    int Execute2(IPluginContext* ctx, cell_t* result);
-    int CallFunction2(IPluginContext* ctx, const cell_t* params, unsigned int num_params,
-                      cell_t* result);
-    IPluginRuntime* GetParentRuntime();
-    const char* DebugName() {
+    int PushCell(cell_t cell) override;
+    int PushCellByRef(cell_t* cell, int flags) override;
+    int PushFloat(float number) override;
+    int PushFloatByRef(float* number, int flags) override;
+    int PushArray(cell_t* inarray, unsigned int cells, int copyback) override;
+    int PushString(const char* string) override;
+    int PushStringEx(char* buffer, size_t length, int sz_flags, int cp_flags) override;
+    int PushInt64(int64_t value) override;
+    int Execute(cell_t* result) override;
+    void Cancel() override;
+    IPluginContext* GetParentContext() override;
+    bool Invoke(cell_t* result) override;
+    bool IsRunnable() override;
+    funcid_t GetFunctionID() override;
+    IPluginRuntime* GetParentRuntime() override;
+    const char* DebugName() override {
         return full_name_.get();
     }
 

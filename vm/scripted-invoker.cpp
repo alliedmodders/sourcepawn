@@ -51,19 +51,6 @@ ScriptedInvoker::IsRunnable() {
     return !context_->runtime()->IsPaused();
 }
 
-int
-ScriptedInvoker::CallFunction(const cell_t* params, unsigned int num_params, cell_t* result) {
-    Environment::get()->ReportError(SP_ERROR_ABORTED);
-    return SP_ERROR_ABORTED;
-}
-
-int
-ScriptedInvoker::CallFunction2(IPluginContext* pContext, const cell_t* params,
-                               unsigned int num_params, cell_t* result) {
-    Environment::get()->ReportError(SP_ERROR_ABORTED);
-    return SP_ERROR_ABORTED;
-}
-
 IPluginContext*
 ScriptedInvoker::GetParentContext() {
     return context_;
@@ -309,12 +296,6 @@ bool ScriptedInvoker::Invoke(cell_t* result) {
     }
 
     return !env_->hasPendingException();
-}
-
-int
-ScriptedInvoker::Execute2(IPluginContext* ctx, cell_t* result) {
-    Environment::get()->ReportError(SP_ERROR_ABORTED);
-    return SP_ERROR_ABORTED;
 }
 
 IPluginRuntime*

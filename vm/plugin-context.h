@@ -34,11 +34,7 @@ class PluginContext final : public BasePluginContext
     bool Initialize();
 
   public: //IPluginContext
-    [[deprecated]] int HeapAlloc(unsigned int, cell_t*, cell_t**) override;
-    [[deprecated]] int HeapPop(cell_t) override;
-    [[deprecated]] int HeapRelease(cell_t) override;
     int FindNativeByName(const char* name, uint32_t* index) override;
-    int GetNativeByIndex(uint32_t index, sp_native_t** native) override;
     uint32_t GetNativesNum() override;
     int FindPublicByName(const char* name, uint32_t* index) override;
     int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;

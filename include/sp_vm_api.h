@@ -229,16 +229,6 @@ class IPluginFunction : public ICallable
     virtual int Execute(cell_t* result) = 0;
 
     /**
-     * @brief This function is deprecated. If invoked, it reports an error.
-     *
-     * @param params    Unused.
-     * @param num_params  Unused.
-     * @param result    Unused.
-     * @return        SP_ERROR_ABORTED.
-     */
-    virtual int CallFunction(const cell_t* params, unsigned int num_params, cell_t* result) = 0;
-
-    /**
      * @brief Deprecated, do not use.
      *
      * @return        GetDefaultContext() of parent runtime.
@@ -260,27 +250,6 @@ class IPluginFunction : public ICallable
      * @return        Function id.
      */
     virtual funcid_t GetFunctionID() = 0;
-
-    /**
-     * @brief This function is deprecated. If invoked, it reports an error.
-     *
-     * @param ctx      Unused.
-     * @param result    Unused.
-     * @return        SP_ERROR_ABORTED.
-     */
-    virtual int Execute2(IPluginContext* ctx, cell_t* result) = 0;
-
-    /**
-     * @brief This function is deprecated. If invoked, it reports an error.
-     *
-     * @param ctx      Unused.
-     * @param params    Unused.
-     * @param num_params  Unused.
-     * @param result    Unused.
-     * @return        SP_ERROR_ABORTED.
-     */
-    virtual int CallFunction2(IPluginContext* ctx, const cell_t* params, unsigned int num_params,
-                              cell_t* result) = 0;
 
     /**
      * @brief Returns parent plugin's runtime
@@ -421,15 +390,6 @@ class IPluginRuntime
     virtual int FindNativeByName(const char* name, uint32_t* index) = 0;
 
     /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param index      Unused.
-     * @param native    Unused.
-     * @return          Returns SP_ERROR_PARAM.
-     */
-    virtual int GetNativeByIndex(uint32_t index, sp_native_t** native) = 0;
-
-    /**
      * @brief Gets the number of natives.
      *
      * @return        Filled with the number of natives.
@@ -521,13 +481,6 @@ class IPluginRuntime
      * @return        True if in debug mode, false otherwise.
      */
     virtual bool IsDebugging() = 0;
-
-    /**
-     * @brief If |co| is non-NULL, destroys |co|. No other action is taken.
-     *
-     * @return        Returns SP_ERROR_NONE.
-     */
-    virtual int ApplyCompilationOptions(ICompilation* co) = 0;
 
     /**
      * @brief Sets whether or not the plugin is paused (cannot be run).
@@ -720,13 +673,6 @@ class IPluginContext
     virtual ~IPluginContext(){};
 
     /**
-     * @brief Deprecated, does nothing.
-     *
-     * @return        NULL.
-     */
-    virtual IVirtualMachine* GetVirtualMachine() = 0;
-
-    /**
      * @brief Deprecated, do not use.
      *
      * Returns the pointer of this object, casted to an opaque structure.
@@ -743,54 +689,12 @@ class IPluginContext
     virtual bool IsDebugging() = 0;
 
     /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param newpfn   Unused.
-     * @param oldpfn   Unused.
-     */
-    virtual int SetDebugBreak(void* newpfn, void* oldpfn) = 0;
-
-    /**
-     * @brief Deprecated, do not use.
-     *
-     * @return        NULL.
-     */
-    virtual IPluginDebugInfo* GetDebugInfo() = 0;
-
-    /**
-     * @brief Deprecated; do not use.
-     */
-    [[deprecated]]
-    virtual int HeapAlloc(unsigned int, cell_t*, cell_t**) = 0;
-
-    /**
-     * @brief Deprecated; do not use.
-     */
-    [[deprecated]]
-    virtual int HeapPop(cell_t) = 0;
-
-    /**
-     * @brief Deprecated; do not use.
-     */
-    [[deprecated]]
-    virtual int HeapRelease(cell_t) = 0;
-
-    /**
      * @brief Deprecated, use IPluginRuntime instead.
      *
      * @param name      Name of native.
      * @param index      Optionally filled with native index number.
      */
     virtual int FindNativeByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param index      Unused.
-     * @param native    Unused.
-     * @return          Returns SP_ERROR_PARAM.
-     */
-    virtual int GetNativeByIndex(uint32_t index, sp_native_t** native) = 0;
 
     /**
      * @brief Deprecated, use IPluginRuntime instead.
@@ -893,73 +797,6 @@ class IPluginContext
                                   size_t* wrtnbytes) = 0;
 
     /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param value      Unused.
-     */
-    virtual int PushCell(cell_t value) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param local_addr  Unused.
-     * @param phys_addr    Unused.
-     * @param array      Unused.
-     * @param numcells    Unused.
-     */
-    virtual int PushCellArray(cell_t* local_addr, cell_t** phys_addr, cell_t array[],
-                              unsigned int numcells) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param local_addr  Unused.
-     * @param phys_addr    Unused.
-     * @param string    Unused.
-     */
-    virtual int PushString(cell_t* local_addr, char** phys_addr, const char* string) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param array      Unused.
-     * @param numcells    Unused.
-     */
-    virtual int PushCellsFromArray(cell_t array[], unsigned int numcells) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param natives    Deprecated; do not use.
-     * @param num      Deprecated; do not use.
-     * @param overwrite    Deprecated; do not use.
-     */
-    virtual int BindNatives(const sp_nativeinfo_t* natives, unsigned int num, int overwrite) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param native    Deprecated; do not use.
-     */
-    virtual int BindNative(const sp_nativeinfo_t* native) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param native    Unused.
-     */
-    virtual int BindNativeToAny(SPVM_NATIVE_FUNC native) = 0;
-
-    /**
-     * @brief Deprecated, does nothing.
-     *
-     * @param code_addr    Unused.
-     * @param result    Unused.
-     * @return        SP_ERROR_ABORTED.
-     */
-    virtual int Execute(uint32_t code_addr, cell_t* result) = 0;
-
-    /**
      * @brief Throws a error and halts any current execution.
      *
      * This function is deprecated. Use ReportError() instead.
@@ -1026,14 +863,6 @@ class IPluginContext
     virtual int LocalToStringNULL(cell_t local_addr, char** addr) = 0;
 
     /**
-     * @brief Deprecated; do not use.
-     *
-     * @param index      Deprecated; do not use.
-     * @param native    Deprecated; do not use.
-     */
-    virtual int BindNativeToIndex(uint32_t index, SPVM_NATIVE_FUNC native) = 0;
-
-    /**
      * @brief Returns if there is currently an execution in progress.
      *
      * @return        True if in exec, false otherwise.
@@ -1046,18 +875,6 @@ class IPluginContext
      * @return        Parent runtime.
      */
     virtual IPluginRuntime* GetRuntime() = 0;
-
-    /**
-     * @brief This function is deprecated. If invoked, it reports an error.
-     *
-     * @param function    Unused.
-     * @param params    Unused.
-     * @param num_params  Unused.
-     * @param result    Unused.
-     * @return        SP_ERROR_ABORTED.
-     */
-    virtual int Execute2(IPluginFunction* function, const cell_t* params, unsigned int num_params,
-                         cell_t* result) = 0;
 
     /**
      * @brief Returns whether a context is in an error state.
@@ -1355,14 +1172,6 @@ class IDebugListener
 {
   public:
     /**
-     * @brief No longer invoked.
-     *
-     * @param ctx    Unused.
-     * @param error    Unused.
-     */
-    virtual void OnContextExecuteError(IPluginContext* ctx, IContextTrace* error) {}
-
-    /**
      * @brief Called on debug spew.
      *
      * @param msg    Message text.
@@ -1478,21 +1287,6 @@ class ISourcePawnEngine
 {
   public:
     /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual sp_plugin_t* LoadFromFilePointer(FILE* fp, int* err) = 0;
-
-    /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual sp_plugin_t* LoadFromMemory(void* base, sp_plugin_t* plugin, int* err) = 0;
-
-    /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual int FreeFromMemory(sp_plugin_t* plugin) = 0;
-
-    /**
      * @brief Allocates large blocks of temporary memory.
      *
      * @param size    Size of memory to allocate.
@@ -1534,11 +1328,6 @@ class ISourcePawnEngine
      * @return      Old IDebugListener, or NULL if none.
      */
     virtual IDebugListener* SetDebugListener(IDebugListener* listener) = 0;
-
-    /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual unsigned int GetContextCallCount() = 0;
 
     /**
      * @brief Returns the engine API version.
@@ -1615,13 +1404,6 @@ class ISourcePawnEngine2
     virtual const char* GetVersionString() = 0;
 
     /**
-     * @brief Deprecated. Returns null.
-     *
-     * @return      Null.
-     */
-    virtual ICompilation* StartCompilation() = 0;
-
-    /**
      * @brief Loads a plugin from disk.
      *
      * If a compilation object is supplied, it is destroyed upon
@@ -1635,18 +1417,6 @@ class ISourcePawnEngine2
     virtual IPluginRuntime* LoadPlugin(ICompilation* co, const char* file, int* err) = 0;
 
     /**
-     * @brief Deprecated, do not use.
-     *
-     * @return          NULL.
-     */
-    virtual SPVM_NATIVE_FUNC CreateFakeNative(SPVM_FAKENATIVE_FUNC, void*) = 0;
-
-    /**
-     * @brief Deprecated, do not use.
-     */
-    virtual void DestroyFakeNative(SPVM_NATIVE_FUNC) = 0;
-
-    /**
      * @brief Sets the debug listener.
      *
      * This should be called once on application startup. It is
@@ -1658,13 +1428,6 @@ class ISourcePawnEngine2
     virtual IDebugListener* SetDebugListener(IDebugListener* listener) = 0;
 
     /**
-     * @brief Deprecated.
-     *
-     * @param profiler  Deprecated.
-     */
-    virtual void SetProfiler(IProfiler* profiler) = 0;
-
-    /**
      * @brief Returns the string representation of an error message.
      *
      * This function is deprecated and should not be used. The exception
@@ -1674,23 +1437,6 @@ class ISourcePawnEngine2
      * @return      Error string, or NULL if not found.
      */
     virtual const char* GetErrorString(int err) = 0;
-
-    /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual bool Initialize() = 0;
-
-    /**
-     * @brief Deprecated. Does nothing.
-     */
-    virtual void Shutdown() = 0;
-
-    /**
-     * @brief No longer implemented. Returns NULL.
-     *
-     * @return      NULL.
-     */
-    virtual IPluginRuntime* CreateEmptyRuntime(const char* name, uint32_t memory) = 0;
 
     /**
      * @brief Initiates the watchdog timer with the specified timeout

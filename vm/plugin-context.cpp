@@ -119,26 +119,9 @@ int PluginContext::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** p
     return SP_ERROR_NONE;
 }
 
-int PluginContext::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
-    return SP_ERROR_INVALID_INSTRUCTION;
-}
-
-int PluginContext::HeapPop(cell_t) {
-    return SP_ERROR_INVALID_INSTRUCTION;
-}
-
-int PluginContext::HeapRelease(cell_t) {
-    return SP_ERROR_INVALID_INSTRUCTION;
-}
-
 int
 PluginContext::FindNativeByName(const char* name, uint32_t* index) {
     return m_pRuntime->FindNativeByName(name, index);
-}
-
-int
-PluginContext::GetNativeByIndex(uint32_t index, sp_native_t** native) {
-    return m_pRuntime->GetNativeByIndex(index, native);
 }
 
 uint32_t

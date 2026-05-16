@@ -122,27 +122,6 @@ SourcePawnEngine::BaseFree(void* memory) {
     free(memory);
 }
 
-sp_plugin_t*
-SourcePawnEngine::LoadFromFilePointer(FILE* fp, int* err) {
-    if (err != NULL)
-        *err = SP_ERROR_ABORTED;
-
-    return NULL;
-}
-
-sp_plugin_t*
-SourcePawnEngine::LoadFromMemory(void* base, sp_plugin_t* plugin, int* err) {
-    if (err != NULL)
-        *err = SP_ERROR_ABORTED;
-
-    return NULL;
-}
-
-int
-SourcePawnEngine::FreeFromMemory(sp_plugin_t* plugin) {
-    return SP_ERROR_ABORTED;
-}
-
 IDebugListener*
 SourcePawnEngine::SetDebugListener(IDebugListener* pListener) {
     IDebugListener* old = Environment::get()->debugger();
@@ -162,11 +141,6 @@ SourcePawnEngine::SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
 unsigned int
 SourcePawnEngine::GetEngineAPIVersion() {
     return 5;
-}
-
-unsigned int
-SourcePawnEngine::GetContextCallCount() {
-    return 0;
 }
 
 // ////// //
@@ -286,15 +260,6 @@ SourcePawnEngine2::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t 
     return LoadImage(std::move(image), file, error, maxlength);
 }
 
-SPVM_NATIVE_FUNC
-SourcePawnEngine2::CreateFakeNative(SPVM_FAKENATIVE_FUNC, void*) {
-    return nullptr;
-}
-
-void
-SourcePawnEngine2::DestroyFakeNative(SPVM_NATIVE_FUNC) {
-}
-
 #if !defined(SOURCEPAWN_VERSION)
 #    define SOURCEPAWN_VERSION "SourcePawn 1.10"
 #endif
@@ -341,28 +306,9 @@ SourcePawnEngine2::GetAPIVersion() {
     return SOURCEPAWN_ENGINE2_API_VERSION;
 }
 
-ICompilation*
-SourcePawnEngine2::StartCompilation() {
-    return nullptr;
-}
-
 const char*
 SourcePawnEngine2::GetErrorString(int err) {
     return Environment::get()->GetErrorString(err);
-}
-
-bool
-SourcePawnEngine2::Initialize() {
-    return true;
-}
-
-void
-SourcePawnEngine2::Shutdown() {
-}
-
-IPluginRuntime*
-SourcePawnEngine2::CreateEmptyRuntime(const char*, uint32_t) {
-  return nullptr;
 }
 
 bool
@@ -379,11 +325,6 @@ SourcePawnEngine2::SetJitEnabled(bool enabled) {
 bool
 SourcePawnEngine2::IsJitEnabled() {
     return Environment::get()->IsJitEnabled();
-}
-
-void
-SourcePawnEngine2::SetProfiler(IProfiler* profiler) {
-    // Deprecated.
 }
 
 void

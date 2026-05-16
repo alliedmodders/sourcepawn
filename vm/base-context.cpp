@@ -50,11 +50,6 @@ BasePluginContext::GetIdentity() {
     return NULL;
 }
 
-IVirtualMachine*
-BasePluginContext::GetVirtualMachine() {
-    return NULL;
-}
-
 sp_context_t*
 BasePluginContext::GetContext() {
     return reinterpret_cast<sp_context_t*>((IPluginContext*)this);
@@ -63,69 +58,6 @@ BasePluginContext::GetContext() {
 bool
 BasePluginContext::IsDebugging() {
     return true;
-}
-
-int
-BasePluginContext::SetDebugBreak(void* newpfn, void* oldpfn) {
-    return SP_ERROR_ABORTED;
-}
-
-IPluginDebugInfo*
-BasePluginContext::GetDebugInfo() {
-    return NULL;
-}
-
-int
-BasePluginContext::Execute(uint32_t code_addr, cell_t* result) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::BindNatives(const sp_nativeinfo_t* natives, unsigned int num, int overwrite) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::BindNative(const sp_nativeinfo_t* native) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::BindNativeToIndex(uint32_t index, SPVM_NATIVE_FUNC func) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::BindNativeToAny(SPVM_NATIVE_FUNC native) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::PushCell(cell_t value) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::PushCellsFromArray(cell_t array[], unsigned int numcells) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::PushCellArray(cell_t* local_addr, cell_t** phys_addr, cell_t array[],
-                                 unsigned int numcells) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::PushString(cell_t* local_addr, char** phys_addr, const char* string) {
-    return SP_ERROR_ABORTED;
-}
-
-int
-BasePluginContext::Execute2(IPluginFunction* function, const cell_t* params,
-                            unsigned int num_params, cell_t* result) {
-    ReportErrorNumber(SP_ERROR_ABORTED);
-    return SP_ERROR_ABORTED;
 }
 
 ISourcePawnEngine2*

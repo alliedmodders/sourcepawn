@@ -52,7 +52,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     virtual bool IsDebugging() override;
     virtual IPluginDebugInfo* GetDebugInfo() override;
     virtual int FindNativeByName(const char* name, uint32_t* index) override;
-    virtual int GetNativeByIndex(uint32_t index, sp_native_t** native) override;
     virtual uint32_t GetNativesNum() override;
     virtual int FindPublicByName(const char* name, uint32_t* index) override;
     virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) override;
@@ -64,7 +63,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     virtual IPluginFunction* GetFunctionByName(const char* public_name) override;
     virtual IPluginFunction* GetFunctionById(funcid_t func_id) override;
     virtual IPluginContext* GetDefaultContext() override;
-    virtual int ApplyCompilationOptions(ICompilation* co) override;
     virtual void SetPauseState(bool paused) override;
     virtual bool IsPaused() override;
     virtual size_t GetMemUsage() override;
