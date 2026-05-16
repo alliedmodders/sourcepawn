@@ -282,8 +282,6 @@ class IPluginFunction : public ICallable
 /**
    * @brief Interface to managing a debug context at runtime.
    */
-class ICompilation;
-
 struct ARRAY_HANDLE;
 typedef ARRAY_HANDLE* ARRAY_PTR;
 
@@ -1319,19 +1317,6 @@ class ISourcePawnEngine2
      * @return      Versioning string.
      */
     virtual const char* GetVersionString() = 0;
-
-    /**
-     * @brief Loads a plugin from disk.
-     *
-     * If a compilation object is supplied, it is destroyed upon
-     * the function's return.
-     *
-     * @param co    Must be NULL.
-     * @param file    Path to the file to compile.
-     * @param err    Error code (filled on failure); required.
-     * @return    New runtime pointer, or NULL on failure.
-     */
-    virtual IPluginRuntime* LoadPlugin(ICompilation* co, const char* file, int* err) = 0;
 
     /**
      * @brief Sets the debug listener.

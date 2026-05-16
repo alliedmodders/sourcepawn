@@ -161,30 +161,6 @@ sp::UTIL_Format(char* buffer, size_t maxlength, const char* fmt, ...) {
     return len;
 }
 
-IPluginRuntime*
-SourcePawnEngine2::LoadPlugin(ICompilation* co, const char* file, int* err) {
-    if (co) {
-        if (err)
-            *err = SP_ERROR_PARAM;
-        return nullptr;
-    }
-
-    IPluginRuntime* rt = LoadBinaryFromFile(file, nullptr, 0);
-    if (!rt) {
-        if (err) {
-            if (FILE* fp = fopen(file, "rb")) {
-                fclose(fp);
-                *err = SP_ERROR_FILE_FORMAT;
-            } else {
-                *err = SP_ERROR_NOT_FOUND;
-            }
-        }
-        return nullptr;
-    }
-
-    return rt;
-}
-
 static IPluginRuntime*
 LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
     if (!image->validate()) {

@@ -46,7 +46,6 @@ class SourcePawnEngine2 : public ISourcePawnEngine2
     unsigned int GetAPIVersion() override;
     const char* GetEngineName() override;
     const char* GetVersionString() override;
-    IPluginRuntime* LoadPlugin(ICompilation* co, const char* file, int* err) override;
     IDebugListener* SetDebugListener(IDebugListener* listener) override;
     const char* GetErrorString(int err) override;
     bool InstallWatchdogTimer(size_t timeout_ms) override;
