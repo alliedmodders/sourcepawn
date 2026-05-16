@@ -25,10 +25,6 @@ class SourcePawnEngine : public ISourcePawnEngine
   public:
     SourcePawnEngine();
 
-    void* BaseAlloc(size_t size) override;
-    void BaseFree(void* memory) override;
-    void* ExecAlloc(size_t size) override;
-    void ExecFree(void* address) override;
     IDebugListener* SetDebugListener(IDebugListener* pListener) override;
     unsigned int GetEngineAPIVersion() override;
     void* AllocatePageMemory(size_t size) override;

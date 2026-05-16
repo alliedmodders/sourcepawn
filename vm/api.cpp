@@ -50,24 +50,6 @@ SourcePawnEngine::SourcePawnEngine() {
 }
 
 void*
-SourcePawnEngine::ExecAlloc(size_t size) {
-#if defined WIN32
-    return VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-#elif defined __GNUC__
-#    if defined __APPLE__
-    void* base = valloc(size);
-#    else
-    void* base = memalign(sysconf(_SC_PAGESIZE), size);
-#    endif
-    if (mprotect(base, size, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
-        free(base);
-        return NULL;
-    }
-    return base;
-#endif
-}
-
-void*
 SourcePawnEngine::AllocatePageMemory(size_t size) {
     CodeChunk chunk = Environment::get()->AllocateCode(size + sizeof(CodeChunk));
     CodeChunk* hidden = (CodeChunk*)chunk.address();
@@ -90,25 +72,6 @@ SourcePawnEngine::FreePageMemory(void* ptr) {
     assert(ptr);
     CodeChunk* hidden = (CodeChunk*)((uint8_t*)ptr - sizeof(CodeChunk));
     hidden->~CodeChunk();
-}
-
-void
-SourcePawnEngine::ExecFree(void* address) {
-#if defined WIN32
-    VirtualFree(address, 0, MEM_RELEASE);
-#elif defined __GNUC__
-    free(address);
-#endif
-}
-
-void*
-SourcePawnEngine::BaseAlloc(size_t size) {
-    return malloc(size);
-}
-
-void
-SourcePawnEngine::BaseFree(void* memory) {
-    free(memory);
 }
 
 IDebugListener*

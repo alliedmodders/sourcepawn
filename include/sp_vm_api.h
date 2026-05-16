@@ -1202,38 +1202,6 @@ class ISourcePawnEngine
 {
   public:
     /**
-     * @brief Allocates large blocks of temporary memory.
-     *
-     * @param size    Size of memory to allocate.
-     * @return      Pointer to memory, NULL if allocation failed.
-     */
-    virtual void* BaseAlloc(size_t size) = 0;
-
-    /**
-     * @brief Frees memory allocated with BaseAlloc.
-     *
-     * @param memory  Memory address to free.
-     */
-    virtual void BaseFree(void* memory) = 0;
-
-    /**
-     * @brief Allocates executable memory.
-     * @deprecated Use AllocPageMemory()
-     *
-     * @param size    Size of memory to allocate.
-     * @return      Pointer to memory, NULL if allocation failed.
-     */
-    virtual void* ExecAlloc(size_t size) = 0;
-
-    /**
-     * @brief Frees executable memory.
-     * @deprecated Use FreePageMemory()
-     *
-     * @param address  Address to free.
-     */
-    virtual void ExecFree(void* address) = 0;
-
-    /**
      * @brief Sets the debug listener.
      *
      * This should be called once on application startup. It is
