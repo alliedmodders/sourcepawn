@@ -1436,25 +1436,6 @@ class ISourcePawnEnvironment
     virtual void SetDebugMetadataFlags(int flags) = 0;
 };
 
-// @brief This class is the entry-point to using SourcePawn from a DLL.
-class ISourcePawnFactory
-{
-  public:
-    // @brief Return the API version.
-    virtual int ApiVersion() = 0;
-
-    // @brief Initializes a new environment on the current thread.
-    // Currently, at most one environment may be created in a process.
-    virtual ISourcePawnEnvironment* NewEnvironment() = 0;
-
-    // @brief Returns the environment for the calling thread.
-    virtual ISourcePawnEnvironment* CurrentEnvironment() = 0;
-};
-
-// @brief A function named "GetSourcePawnFactory" is exported from the
-// SourcePawn DLL, conforming to the following signature:
-typedef ISourcePawnFactory* (*GetSourcePawnFactoryFn)(int apiVersion);
-
 // @brief A helper class for handling exceptions.
 //
 // ExceptionHandlers can be used to detect, catch, and re-throw VM errors
