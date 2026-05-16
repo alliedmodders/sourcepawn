@@ -12,6 +12,7 @@
 //
 #include "vm/environment.h"
 #include "vm/api.h"
+#include "vm/plugin-runtime.h"
 #include "vm/method-verifier.h"
 #include <amtl/experimental/am-argparser.h>
 #include <set>
@@ -26,9 +27,9 @@ Environment *sEnv = nullptr;
 bool sVerbose = false;
 
 static bool
-Verify(IPluginRuntime* rt)
+Verify(sp::PluginRuntime* rt)
 {
-  ExceptionHandler eh(sEnv->api2());
+  ExceptionHandler eh(sEnv);
   if (!rt->PerformFullValidation()) {
       const char* message = eh.HasException() ? eh.Message() : "unknown error";
       fprintf(stderr, "Binary validation failed: %s\n", message);
@@ -41,7 +42,7 @@ static bool
 Analyze(const char* file)
 {
   char error[255];
-  std::unique_ptr<IPluginRuntime> rt(sEnv->api2()->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<sp::PluginRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
     fprintf(stdout, "Could not load .smx file: %s\n", error);
     return false;
@@ -92,7 +93,7 @@ int main(int argc, char **argv)
   sVerbose = (getenv("VERBOSE") && getenv("VERBOSE")[0] == '1') || verbose.value();
 
   if ((sEnv = Environment::New()) == nullptr) {
-    fprintf(stderr, "Could not initialize ISourcePawnEngine2\n");
+    fprintf(stderr, "Could not initialize ISourcePawnEnvironment\n");
     return 1;
   }
 

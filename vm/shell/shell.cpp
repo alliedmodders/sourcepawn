@@ -441,40 +441,38 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 static int Execute(const char* file)
 {
   char error[255];
-  std::unique_ptr<IPluginRuntime> rtb(sEnv->api2()->LoadBinaryFromFile(file, error, sizeof(error)));
-  if (!rtb) {
+  std::unique_ptr<PluginRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  if (!rt) {
     fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
     return 1;
   }
 
-  PluginRuntime* rt = PluginRuntime::FromAPI(rtb.get());
-
   ke::RefPtr<DynamicNative> dynamic_native(new DynamicNative());
 
   rt->InstallBuiltinNatives();
-  BindNative(rt, "print", Print);
-  BindNative(rt, "printnum", PrintNum);
-  BindNative(rt, "printnum64", PrintNum64);
-  BindNative(rt, "writenum", WriteNum);
-  BindNative(rt, "printnums", PrintNums);
-  BindNative(rt, "printnums64", PrintNums64);
-  BindNative(rt, "printfloat", PrintFloat);
-  BindNative(rt, "writefloat", WriteFloat);
-  BindNative(rt, "donothing", DoNothing);
-  BindNative(rt, "execute", DoExecute);
-  BindNative(rt, "invoke", DoInvoke);
-  BindNative(rt, "dump_stack_trace", DumpStackTrace);
-  BindNative(rt, "report_error", ReportError);
-  BindNative(rt, "Handle.~Handle", DoNothing);
-  BindNative(rt, "dynamic_native", dynamic_native.get());
-  BindNative(rt, "access_2d_array", Access2DArray);
-  BindNative(rt, "copy_2d_array_to_callback", Copy2dArrayToCallback);
-  BindNative(rt, "call_with_string", CallWithString);
-  BindNative(rt, "assert_eq", AssertEq);
-  BindNative(rt, "printf", Printf);
-  BindNative(rt, "print_test_struct", PrintTestStruct);
-  BindNative(rt, "add_test_structs", AddTestStructs);
-  BindNative(rt, "add_int64", AddInt64);
+  BindNative(rt.get(), "print", Print);
+  BindNative(rt.get(), "printnum", PrintNum);
+  BindNative(rt.get(), "printnum64", PrintNum64);
+  BindNative(rt.get(), "writenum", WriteNum);
+  BindNative(rt.get(), "printnums", PrintNums);
+  BindNative(rt.get(), "printnums64", PrintNums64);
+  BindNative(rt.get(), "printfloat", PrintFloat);
+  BindNative(rt.get(), "writefloat", WriteFloat);
+  BindNative(rt.get(), "donothing", DoNothing);
+  BindNative(rt.get(), "execute", DoExecute);
+  BindNative(rt.get(), "invoke", DoInvoke);
+  BindNative(rt.get(), "dump_stack_trace", DumpStackTrace);
+  BindNative(rt.get(), "report_error", ReportError);
+  BindNative(rt.get(), "Handle.~Handle", DoNothing);
+  BindNative(rt.get(), "dynamic_native", dynamic_native.get());
+  BindNative(rt.get(), "access_2d_array", Access2DArray);
+  BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
+  BindNative(rt.get(), "call_with_string", CallWithString);
+  BindNative(rt.get(), "assert_eq", AssertEq);
+  BindNative(rt.get(), "printf", Printf);
+  BindNative(rt.get(), "print_test_struct", PrintTestStruct);
+  BindNative(rt.get(), "add_test_structs", AddTestStructs);
+  BindNative(rt.get(), "add_int64", AddInt64);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

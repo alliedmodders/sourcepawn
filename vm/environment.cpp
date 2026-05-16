@@ -587,9 +587,7 @@ void Environment::SetProfilingTool(IProfilingTool* tool) {
     SetProfiler(tool);
 }
 
-static IPluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error,
-                                 size_t maxlength)
-{
+static PluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
     if (!image->validate()) {
         const char* errorMessage = image->errorMessage();
         if (!errorMessage)
@@ -624,7 +622,7 @@ static IPluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* fi
     return pRuntime;
 }
 
-IPluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
+PluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
     FILE* fp = fopen(file, "rb");
 
     if (!fp) {
@@ -638,8 +636,8 @@ IPluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, s
     return LoadImage(std::move(image), file, error, maxlength);
 }
 
-IPluginRuntime* Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                                  void (*dtor)(uint8_t*), char* error, size_t maxlength)
+PluginRuntime* Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                                 void (*dtor)(uint8_t*), char* error, size_t maxlength)
 {
     std::unique_ptr<SmxImage> image;
 

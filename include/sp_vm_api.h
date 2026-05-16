@@ -463,12 +463,6 @@ class IPluginRuntime
                                           void* data) = 0;
 
     /**
-     * @brief Perform a full validation. Normally validation is lazy to improve
-     * load-time performance. This validates all methods immediately.
-     */
-    virtual bool PerformFullValidation() = 0;
-
-    /**
      * @brief Returns whether the plugin was compiled with direct array support.
      *
      * Direct arrays were introduced in SourcePawn 1.11. Any plugin with this
@@ -808,12 +802,6 @@ class IPluginContext
      * @return        True on success, false on failure.
      */
     virtual bool GetKey(int k, void** value) = 0;
-
-    /**
-     * @brief If an exception is pending, this removes the exception. It
-     * is deprecated and should not be used.
-     */
-    virtual void ClearLastNativeError() = 0;
 
     /**
      * @brief Return a pointer to the ISourcePawnEngine2 that is active.

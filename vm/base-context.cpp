@@ -82,12 +82,6 @@ BasePluginContext::ReportErrorNumber(int error) {
     env_->ReportError(error);
 }
 
-void
-BasePluginContext::ClearLastNativeError() {
-    if (env_->hasPendingException())
-        env_->clearPendingException();
-}
-
 cell_t
 BasePluginContext::ThrowNativeErrorEx(int error, const char* msg, ...) {
     va_list ap;

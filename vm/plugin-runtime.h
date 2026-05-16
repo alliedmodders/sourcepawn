@@ -77,7 +77,7 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     const char* GetFilename() override {
         return full_name_.c_str();
     }
-    bool PerformFullValidation() override;
+    bool PerformFullValidation();
     bool UsesDirectArrays() override;
     bool UsesHeapScopes();
 
@@ -102,10 +102,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
 
     const char* Name() const {
         return name_.c_str();
-    }
-
-    static PluginRuntime* FromAPI(IPluginRuntime* rt) {
-        return static_cast<PluginRuntime*>(rt);
     }
 
   public:
