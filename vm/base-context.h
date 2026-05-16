@@ -35,7 +35,6 @@ class BasePluginContext : public SourcePawn::IPluginContext
     void ReportFatalError(const char* fmt, ...) override;
     void ReportFatalErrorVA(const char* fmt, va_list ap) override;
     void ReportErrorNumber(int error) override;
-    void ClearLastNativeError() override;
     cell_t ThrowNativeErrorEx(int error, const char* msg, ...) override;
     cell_t ThrowNativeError(const char* msg, ...) override;
     int GetLastNativeError() override;

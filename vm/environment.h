@@ -68,9 +68,6 @@ class Environment : public ISourcePawnEnvironment
     // Access the current Environment.
     static Environment* get();
 
-    Environment* api1() { return this; }
-    Environment* api2() { return this; }
-
     bool InstallWatchdogTimer(int timeout_ms);
 
     void EnterExceptionHandlingScope(ExceptionHandler* handler) override;
@@ -105,10 +102,10 @@ class Environment : public ISourcePawnEnvironment
     IDebugListener* SetDebugListener(IDebugListener* listener);
     bool SetJitEnabled(bool enabled);
     void SetProfilingTool(IProfilingTool* tool);
-    IPluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
-    IPluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                         void (*dtor)(uint8_t*), char* error,
-                                         size_t maxlength);
+    PluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
+    PluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                        void (*dtor)(uint8_t*), char* error,
+                                        size_t maxlength);
 
     // Allocate and free executable memory.
     CodeChunk AllocateCode(size_t size);

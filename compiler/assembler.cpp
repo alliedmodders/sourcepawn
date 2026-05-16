@@ -48,8 +48,8 @@
 #include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
-#include "vm/api.h"
 #include "vm/environment.h"
+#include "vm/plugin-runtime.h"
 
 namespace sp {
 namespace cc {
@@ -73,15 +73,13 @@ VerifyBinary(const char* file, void* buffer, size_t size)
     if (!env)
         FailedValidation("could not initialize environment");
 
-    auto api = env->api2();
-
     char msgbuf[255];
-    std::unique_ptr<IPluginRuntime> rt(api->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
-                                                                 nullptr, msgbuf,  sizeof(msgbuf)));
+    std::unique_ptr<PluginRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
+                                                                nullptr, msgbuf, sizeof(msgbuf)));
     if (!rt)
         FailedValidation(msgbuf);
 
-    ExceptionHandler eh(api);
+    ExceptionHandler eh(env.get());
     if (!rt->PerformFullValidation()) {
         const char* message = eh.HasException() ? eh.Message() : "unknown error";
         FailedValidation(message);
