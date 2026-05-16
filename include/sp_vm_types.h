@@ -106,7 +106,8 @@ typedef uint32_t funcid_t; /**< Function index code */
  **********************************************/
 
 namespace SourcePawn {
-class IPluginContext;
+class IPluginRuntime;
+typedef IPluginRuntime IPluginContext;
 class IVirtualMachine;
 class IProfiler;
 class IErrorReport;
