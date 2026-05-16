@@ -39,7 +39,6 @@ struct NativeEntry : public sp_native_t {
 
 /* Jit wants fast access to this so we expose things as public */
 class PluginRuntime : public SourcePawn::IPluginRuntime,
-                      public SourcePawn::IPluginDebugInfo,
                       public ke::InlineListNode<PluginRuntime>
 {
   public:
@@ -50,7 +49,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
 
   public:
     virtual bool IsDebugging() override;
-    virtual IPluginDebugInfo* GetDebugInfo() override;
     virtual int FindNativeByName(const char* name, uint32_t* index) override;
     virtual uint32_t GetNativesNum() override;
     virtual int FindPublicByName(const char* name, uint32_t* index) override;
@@ -76,15 +74,6 @@ class PluginRuntime : public SourcePawn::IPluginRuntime,
     int UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
                                   void* data) override;
     const sp_native_t* GetNative(uint32_t index) override;
-    int LookupLine(ucell_t addr, uint32_t* line) override;
-    int LookupFunction(ucell_t addr, const char** name) override;
-    int LookupFile(ucell_t addr, const char** filename) override;
-    size_t NumFiles() override;
-    const char* GetFileName(size_t index) override;
-    size_t NumFunctions() override;
-    const char* GetFunctionName(size_t index, const char** filename) override;
-    int LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) override;
-    int LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) override;
     const char* GetFilename() override {
         return full_name_.c_str();
     }

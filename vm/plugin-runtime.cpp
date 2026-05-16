@@ -406,11 +406,6 @@ PluginRuntime::GetDefaultContext() {
     return context_.get();
 }
 
-IPluginDebugInfo*
-PluginRuntime::GetDebugInfo() {
-    return this;
-}
-
 IPluginFunction*
 PluginRuntime::GetFunctionById(funcid_t func_id) {
     ScriptedInvoker* pFunc = NULL;
@@ -504,67 +499,6 @@ PluginRuntime::GetBaseContext() {
     return context_.get();
 }
 
-int
-PluginRuntime::LookupLine(ucell_t addr, uint32_t* line) {
-    if (!image_->LookupLine(addr, line))
-        return SP_ERROR_NOT_FOUND;
-    return SP_ERROR_NONE;
-}
-
-int
-PluginRuntime::LookupFunction(ucell_t addr, const char** out) {
-    const char* name = image_->LookupFunction(addr);
-    if (!name)
-        return SP_ERROR_NOT_FOUND;
-    if (out)
-        *out = name;
-    return SP_ERROR_NONE;
-}
-
-int
-PluginRuntime::LookupFile(ucell_t addr, const char** out) {
-    const char* name = image_->LookupFile(addr);
-    if (!name)
-        return SP_ERROR_NOT_FOUND;
-    if (out)
-        *out = name;
-    return SP_ERROR_NONE;
-}
-
-size_t
-PluginRuntime::NumFiles() {
-    return image_->NumFiles();
-}
-
-const char*
-PluginRuntime::GetFileName(size_t index) {
-    return image_->GetFileName(index);
-}
-
-size_t
-PluginRuntime::NumFunctions() {
-    return image_->NumFunctions();
-}
-
-const char*
-PluginRuntime::GetFunctionName(size_t index, const char** filename) {
-    return image_->GetFunctionName(index, filename);
-}
-
-int
-PluginRuntime::LookupFunctionAddress(const char* function, const char* file, ucell_t* addr) {
-    if (!image_->LookupFunctionAddress(function, file, addr))
-        return SP_ERROR_NOT_FOUND;
-    return SP_ERROR_NONE;
-}
-
-int
-PluginRuntime::LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) {
-    if (!image_->LookupLineAddress(line, file, addr))
-        return SP_ERROR_NOT_FOUND;
-    return SP_ERROR_NONE;
-}
-
 bool
 PluginRuntime::PerformFullValidation() {
     std::unordered_set<cell_t> seen;
@@ -595,9 +529,8 @@ PluginRuntime::PerformFullValidation() {
         cell_t offset = work.front();
         work.pop_front();
 
-        const char* name;
-        int err = GetDebugInfo()->LookupFunction(offset, &name);
-        if (err != SP_ERROR_NONE)
+        const char* name = image_->LookupFunction(offset);
+        if (!name)
             name = "<unknown>";
 
         MethodVerifier verifier(this, offset);

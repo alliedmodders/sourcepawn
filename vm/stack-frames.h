@@ -67,7 +67,7 @@ GetExitFramePayload(uintptr_t stack_val) {
 class JitInvokeFrame;
 class InterpInvokeFrame;
 
-// An InvokeFrame represents one activation of Execute2().
+// An InvokeFrame represents one activation of Invoke().
 class InvokeFrame
 {
   protected:
