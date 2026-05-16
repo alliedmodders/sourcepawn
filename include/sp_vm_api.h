@@ -274,6 +274,91 @@ class IPluginFunction : public ICallable
 };
 
 /**
+   * @brief Allows inspecting the stack frames of the SourcePawn environment.
+   *
+   * Invoking VM functions while iterating frames will cause the iterator
+   * to become corrupt.
+   *
+   * Frames iterate in most-recent to least-recent order.
+   */
+class IFrameIterator
+{
+  public:
+    /**
+     * @brief Returns whether or not there are more frames to read.
+     *
+     * @return          True if there are more frames to read, false otherwise.
+     */
+    virtual bool Done() const = 0;
+
+    /**
+     * @brief Advances to the next frame.
+     *
+     * Note that the iterator starts at either a valid frame or no frame.
+     */
+    virtual void Next() = 0;
+
+    /**
+     * @brief Resets the iterator to the top of the stack.
+     */
+    virtual void Reset() = 0;
+
+    /**
+     * @brief Returns the context owning the current frame, if any.
+     *
+     * @return          Context, or null.
+     */
+    virtual IPluginContext* Context() const = 0;
+
+    /**
+     * @brief Returns whether or not the current frame is a native frame. If it
+     * is, line numbers and file paths are not available.
+     *
+     * @return          True if a native frame, false otherwise.
+     */
+    virtual bool IsNativeFrame() const = 0;
+
+    /**
+     * @brief Returns true if the frame is a scripted frame.
+     *
+     * @return          True if a scripted frame, false otherwise.
+     */
+    virtual bool IsScriptedFrame() const = 0;
+
+    /**
+     * @brief Returns the line number of the current frame, or 0 if none is
+     * available.
+     *
+     * @return          Line number on success, 0 on failure.
+     */
+    virtual unsigned LineNumber() const = 0;
+
+    /**
+     * @brief Returns the function name of the current frame, or null if
+     * none could be computed.
+     *
+     * @return          Function name on success, null on failure.
+     */
+    virtual const char* FunctionName() const = 0;
+
+    /**
+     * @brief Returns the file path of the function of the current frame,
+     * or none could be computed.
+     *
+     * @return          File path on success, null on failure.
+     */
+    virtual const char* FilePath() const = 0;
+
+    /**
+     * @brief Returns true if the frame is an internal frame and should not be
+     * used for display.
+     *
+     * @return          True if an internal frame, false otherwise.
+     */
+    virtual bool IsInternalFrame() const = 0;
+};
+
+/**
    * @brief Interface to managing a debug context at runtime.
    */
 struct ARRAY_HANDLE;
@@ -479,178 +564,6 @@ class IPluginRuntime
      * had relative indirection vectors.
      */
     virtual bool UsesDirectArrays() = 0;
-};
-
-/**
-   * @brief Allows inspecting the stack frames of the SourcePawn environment.
-   *
-   * Invoking VM functions while iterating frames will cause the iterator
-   * to become corrupt.
-   *
-   * Frames iterate in most-recent to least-recent order.
-   */
-class IFrameIterator
-{
-  public:
-    /**
-     * @brief Returns whether or not there are more frames to read.
-     *
-     * @return          True if there are more frames to read, false otherwise.
-     */
-    virtual bool Done() const = 0;
-
-    /**
-     * @brief Advances to the next frame.
-     *
-     * Note that the iterator starts at either a valid frame or no frame.
-     */
-    virtual void Next() = 0;
-
-    /**
-     * @brief Resets the iterator to the top of the stack.
-     */
-    virtual void Reset() = 0;
-
-    /**
-     * @brief Returns the context owning the current frame, if any.
-     *
-     * @return          Context, or null.
-     */
-    virtual IPluginContext* Context() const = 0;
-
-    /**
-     * @brief Returns whether or not the current frame is a native frame. If it
-     * is, line numbers and file paths are not available.
-     *
-     * @return          True if a native frame, false otherwise.
-     */
-    virtual bool IsNativeFrame() const = 0;
-
-    /**
-     * @brief Returns true if the frame is a scripted frame.
-     *
-     * @return          True if a scripted frame, false otherwise.
-     */
-    virtual bool IsScriptedFrame() const = 0;
-
-    /**
-     * @brief Returns the line number of the current frame, or 0 if none is
-     * available.
-     *
-     * @return          Line number on success, 0 on failure.
-     */
-    virtual unsigned LineNumber() const = 0;
-
-    /**
-     * @brief Returns the function name of the current frame, or null if
-     * none could be computed.
-     *
-     * @return          Function name on success, null on failure.
-     */
-    virtual const char* FunctionName() const = 0;
-
-    /**
-     * @brief Returns the file path of the function of the current frame,
-     * or none could be computed.
-     *
-     * @return          File path on success, null on failure.
-     */
-    virtual const char* FilePath() const = 0;
-
-    /**
-     * @brief Returns true if the frame is an internal frame and should not be
-     * used for display.
-     *
-     * @return          True if an internal frame, false otherwise.
-     */
-    virtual bool IsInternalFrame() const = 0;
-};
-
-/**
-   * @brief Interface to managing a context at runtime.
-   */
-class IPluginContext
-{
-  public:
-    /** Virtual destructor */
-    virtual ~IPluginContext(){};
-
-    /**
-     * @brief Returns true if the plugin is in debug mode.
-     *
-     * @return        True if in debug mode, false otherwise.
-     */
-    virtual bool IsDebugging() = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param name      Name of native.
-     * @param index      Optionally filled with native index number.
-     */
-    virtual int FindNativeByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @return        Filled with the number of natives.
-     */
-    virtual uint32_t GetNativesNum() = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param name      Name of public
-     * @param index      Optionally filled with public index number.
-     */
-    virtual int FindPublicByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param index      Public function index number.
-     * @param publicptr    Optionally filled with pointer to public structure.
-     */
-    virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @return        Filled with the number of public functions.
-     */
-    virtual uint32_t GetPublicsNum() = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param index      Public variable index number.
-     * @param pubvar    Optionally filled with pointer to pubvar structure.
-     */
-    virtual int GetPubvarByIndex(uint32_t index, sp_pubvar_t** pubvar) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param name      Name of pubvar
-     * @param index      Optionally filled with pubvar index number.
-     */
-    virtual int FindPubvarByName(const char* name, uint32_t* index) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @param index      Index of public variable.
-     * @param local_addr  Address to store local address in.
-     * @param phys_addr    Address to store physically relocated in.
-     */
-    virtual int GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) = 0;
-
-    /**
-     * @brief Deprecated, use IPluginRuntime instead.
-     *
-     * @return        Number of public variables.
-     */
-    virtual uint32_t GetPubVarsNum() = 0;
 
     /**
      * @brief Converts a plugin reference to a physical address
@@ -712,22 +625,6 @@ class IPluginContext
      * @return      0 for convenience.
      */
     virtual cell_t ThrowNativeError(const char* msg, ...) = 0;
-
-    /**
-     * @brief Returns a function by name.
-     *
-     * @param public_name    Name of the function.
-     * @return          A new IPluginFunction pointer, NULL if not found.
-     */
-    virtual IPluginFunction* GetFunctionByName(const char* public_name) = 0;
-
-    /**
-     * @brief Returns a function by its id.
-     *
-     * @param func_id      Function ID.
-     * @return          A new IPluginFunction pointer, NULL if not found.
-     */
-    virtual IPluginFunction* GetFunctionById(funcid_t func_id) = 0;
 
     /**
      * @brief Returns a NULL reference based on one of the available NULL
@@ -969,7 +866,6 @@ class IPluginContext
      *                  the array has no data vector (zero length).
      */
     virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
-
 
   public:
     SourceMod::IdentityToken_t* GetIdentity() {

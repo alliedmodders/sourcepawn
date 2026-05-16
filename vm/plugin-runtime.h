@@ -42,8 +42,7 @@ struct NativeEntry : public sp_native_t {
 };
 
 /* Jit wants fast access to this so we expose things as public */
-class PluginRuntime : public SourcePawn::IPluginContext,
-                      public SourcePawn::IPluginRuntime,
+class PluginRuntime : public SourcePawn::IPluginRuntime,
                       public ke::InlineListNode<PluginRuntime>
 {
   public:
