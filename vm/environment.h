@@ -54,15 +54,22 @@ class Environment : public ISourcePawnEnvironment
 
     static Environment* New();
 
-    void Shutdown() override;
-    ISourcePawnEngine* APIv1() override;
-    ISourcePawnEngine2* APIv2() override;
-    int ApiVersion() override {
-        return SOURCEPAWN_API_VERSION;
-    }
+    // @brief Destroy the environment, releasing all resources and freeing
+    // all plugin memory. This should not be called while plugins have
+    // active code running on the stack.
+    void Shutdown();
+
+    // ISourcePawnEnvironment (from Engine/Engine2)
+    void* AllocatePageMemory(size_t size) override;
+    void SetReadWrite(void* ptr) override;
+    void SetReadExecute(void* ptr) override;
+    void FreePageMemory(void* ptr) override;
 
     // Access the current Environment.
     static Environment* get();
+
+    Environment* api1() { return this; }
+    Environment* api2() { return this; }
 
     bool InstallWatchdogTimer(int timeout_ms);
 
@@ -70,17 +77,38 @@ class Environment : public ISourcePawnEnvironment
     void LeaveExceptionHandlingScope(ExceptionHandler* handler) override;
     bool HasPendingException(const ExceptionHandler* handler) override;
     const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
-    bool EnableDebugBreak() override;
-    void SetDebugMetadataFlags(int flags) override;
+
+    /**
+     * @brief Enables the line debugger callbacks. This must be called
+     * before any plugins are loaded.
+     */
+    bool EnableDebugBreak();
+
+    /**
+     * @brief See JIT_DEBUG_* flags.
+     * Must be set before any plugin code is executed.
+     */
+    void SetDebugMetadataFlags(int flags);
 
     // Runtime functions.
-    const char* GetErrorString(int err);
+    const char* GetErrorString(int err) override;
     void ReportError(int code);
     void ReportError(int code, const char* message);
     void ReportErrorFmt(int code, const char* message, ...);
     void ReportErrorVA(const char* fmt, va_list ap);
     void ReportErrorVA(int code, const char* fmt, va_list ap);
     void BlamePluginErrorVA(SourcePawn::IPluginFunction* pf, const char* fmt, va_list ap);
+
+    // Engine2 methods that weren't in the interface but were in the implementation.
+    const char* GetEngineName();
+    const char* GetVersionString();
+    IDebugListener* SetDebugListener(IDebugListener* listener);
+    bool SetJitEnabled(bool enabled);
+    void SetProfilingTool(IProfilingTool* tool);
+    IPluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
+    IPluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                         void (*dtor)(uint8_t*), char* error,
+                                         size_t maxlength);
 
     // Allocate and free executable memory.
     CodeChunk AllocateCode(size_t size);
@@ -118,7 +146,6 @@ class Environment : public ISourcePawnEnvironment
     void EnableProfiling();
     void DisableProfiling();
 
-    void SetJitEnabled(bool enabled);
     bool IsJitEnabled() const {
         return jit_enabled_;
     }
@@ -133,9 +160,7 @@ class Environment : public ISourcePawnEnvironment
     bool IsDebugBreakEnabled() const {
         return debug_break_enabled_;
     }
-    void SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
-        debug_break_handler_ = handler;
-    }
+    int SetDebugBreakHandler(SPVM_DEBUGBREAK handler);
     SPVM_DEBUGBREAK debugbreak() const {
         return debug_break_handler_;
     }
@@ -202,8 +227,6 @@ class Environment : public ISourcePawnEnvironment
     void DispatchReport(const ErrorReport& report);
 
   private:
-    std::unique_ptr<ISourcePawnEngine> api_v1_;
-    std::unique_ptr<ISourcePawnEngine2> api_v2_;
     std::unique_ptr<WatchdogTimer> watchdog_timer_;
     std::unique_ptr<BuiltinNatives> builtins_;
     ke::Mutex mutex_;
@@ -215,6 +238,7 @@ class Environment : public ISourcePawnEnvironment
     ExceptionHandler* eh_top_;
     int exception_code_;
     char exception_message_[1024];
+    char engine_name_[256];
 
     int debug_metadata_flags_;
 

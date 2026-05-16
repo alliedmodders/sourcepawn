@@ -15,6 +15,7 @@
 #include <stdarg.h>
 #include <amtl/am-cxx.h>
 #include <amtl/experimental/am-argparser.h>
+#include "api.h"
 #include "environment.h"
 #include "stack-frames.h"
 
@@ -440,7 +441,7 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 static int Execute(const char* file)
 {
   char error[255];
-  std::unique_ptr<IPluginRuntime> rtb(sEnv->APIv2()->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<IPluginRuntime> rtb(sEnv->api2()->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rtb) {
     fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
     return 1;
@@ -538,14 +539,13 @@ int main(int argc, char** argv)
 
   if (show_version.value()) {
     fprintf(stdout, "SourcePawn version: %s\n", SM_VERSION_STRING);
-    fprintf(stdout, "API version: %x/%x\n", SOURCEPAWN_API_VERSION, SOURCEPAWN_ENGINE2_API_VERSION);
     if (sEnv->IsJitAvailable())
       fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
     return 0;
   }
 
   if ((sEnv = Environment::New()) == nullptr) {
-    fprintf(stderr, "Could not initialize ISourcePawnEngine2\n");
+    fprintf(stderr, "Could not initialize ISourcePawnEnvironment\n");
     return 1;
   }
 

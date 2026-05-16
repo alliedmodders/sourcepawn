@@ -29,7 +29,6 @@ class BasePluginContext : public SourcePawn::IPluginContext
     // Generic API access.
     void SetKey(int k, void* value) override;
     bool GetKey(int k, void** value) override;
-    SourceMod::IdentityToken_t* GetIdentity() override;
     SourcePawn::ISourcePawnEngine2* APIv2() override;
     void ReportError(const char* fmt, ...) override;
     void ReportErrorVA(const char* fmt, va_list ap) override;
@@ -47,7 +46,6 @@ class BasePluginContext : public SourcePawn::IPluginContext
     int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
     void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
 
-    sp_context_t* GetContext() override;
     bool IsDebugging() override;
 
   protected:
