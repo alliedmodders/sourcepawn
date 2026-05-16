@@ -25,15 +25,11 @@ class SourcePawnEngine : public ISourcePawnEngine
   public:
     SourcePawnEngine();
 
-    sp_plugin_t* LoadFromFilePointer(FILE* fp, int* err) override;
-    sp_plugin_t* LoadFromMemory(void* base, sp_plugin_t* plugin, int* err) override;
-    int FreeFromMemory(sp_plugin_t* plugin) override;
     void* BaseAlloc(size_t size) override;
     void BaseFree(void* memory) override;
     void* ExecAlloc(size_t size) override;
     void ExecFree(void* address) override;
     IDebugListener* SetDebugListener(IDebugListener* pListener) override;
-    unsigned int GetContextCallCount() override;
     unsigned int GetEngineAPIVersion() override;
     void* AllocatePageMemory(size_t size) override;
     void SetReadWrite(void* ptr) override;
@@ -53,18 +49,11 @@ class SourcePawnEngine2 : public ISourcePawnEngine2
     const char* GetEngineName() override;
     const char* GetVersionString() override;
     IPluginRuntime* LoadPlugin(ICompilation* co, const char* file, int* err) override;
-    SPVM_NATIVE_FUNC CreateFakeNative(SPVM_FAKENATIVE_FUNC callback, void* pData) override;
-    void DestroyFakeNative(SPVM_NATIVE_FUNC func) override;
     IDebugListener* SetDebugListener(IDebugListener* listener) override;
-    ICompilation* StartCompilation() override;
     const char* GetErrorString(int err) override;
-    bool Initialize() override;
-    void Shutdown() override;
-    IPluginRuntime* CreateEmptyRuntime(const char* name, uint32_t memory) override;
     bool InstallWatchdogTimer(size_t timeout_ms) override;
     bool SetJitEnabled(bool enabled) override;
     bool IsJitEnabled() override;
-    void SetProfiler(IProfiler* profiler) override;
     void EnableProfiling() override;
     void DisableProfiling() override;
     void SetProfilingTool(IProfilingTool* tool) override;

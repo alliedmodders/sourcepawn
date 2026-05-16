@@ -47,24 +47,8 @@ class BasePluginContext : public SourcePawn::IPluginContext
     int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
     void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
 
-    // Removed functions.
-    int PushCell(cell_t value) override;
-    int PushCellArray(cell_t* local_addr, cell_t** phys_addr, cell_t array[],
-                      unsigned int numcells) override;
-    int PushString(cell_t* local_addr, char** phys_addr, const char* string) override;
-    int PushCellsFromArray(cell_t array[], unsigned int numcells) override;
-    int BindNatives(const sp_nativeinfo_t* natives, unsigned int num, int overwrite) override;
-    int BindNative(const sp_nativeinfo_t* native) override;
-    int BindNativeToAny(SPVM_NATIVE_FUNC native) override;
-    int BindNativeToIndex(uint32_t index, SPVM_NATIVE_FUNC native) override;
-    SourcePawn::IVirtualMachine* GetVirtualMachine() override;
     sp_context_t* GetContext() override;
     bool IsDebugging() override;
-    int SetDebugBreak(void* newpfn, void* oldpfn) override;
-    SourcePawn::IPluginDebugInfo* GetDebugInfo() override;
-    int Execute(uint32_t code_addr, cell_t* result) override;
-    int Execute2(SourcePawn::IPluginFunction* function, const cell_t* params,
-                 unsigned int num_params, cell_t* result) override;
 
   protected:
     Environment* env_;

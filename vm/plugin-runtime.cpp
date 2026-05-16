@@ -255,11 +255,6 @@ PluginRuntime::FindNativeByName(const char* name, uint32_t* index) {
 }
 
 int
-PluginRuntime::GetNativeByIndex(uint32_t index, sp_native_t** native) {
-    return SP_ERROR_PARAM;
-}
-
-int
 PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
                                    void* data) {
     if (index >= image_->NumNatives())
@@ -507,11 +502,6 @@ PluginRuntime::GetDataHash() {
 PluginContext*
 PluginRuntime::GetBaseContext() {
     return context_.get();
-}
-
-int
-PluginRuntime::ApplyCompilationOptions(ICompilation* co) {
-    return SP_ERROR_NONE;
 }
 
 int
