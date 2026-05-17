@@ -2524,6 +2524,7 @@ Parser::parse_new_typeexpr(typeinfo_t* type, const full_token_t* first, int flag
         }
     }
 
+    type->is_new = true;
     return true;
 }
 
