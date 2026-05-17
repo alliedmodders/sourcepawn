@@ -60,7 +60,6 @@ struct CallArgs {
         argv[argc].u.addr = cell;
         argv[argc].flags = flags;
         argv[argc].type = ARG_CELL_BY_REF;
-        argv[argc].flags = 0;
         argc++;
     }
 
