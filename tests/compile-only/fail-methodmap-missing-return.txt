@@ -1,0 +1,3 @@
+(3) : error 400: function "ReturnVal.ReturnVal" must return a value
+(7) : error 400: function "ReturnVal.test" must return a value
+(11) : error 400: function "ReturnVal.Prop.get" must return a value
