@@ -52,6 +52,12 @@ typedef Array2dCallback = function void (const int[][] array, int length, int st
 native void copy_2d_array_to_callback(const int[] flat_array, int length, int stride,
                                       Array2dCallback callback);
 
+typedef NullVectorCallback = function void (const float[] vec);
+native void call_with_null_vector(NullVectorCallback fn);
+
+typedef NullStringCallback = function void (const char[] str);
+native void call_with_null_string(NullStringCallback fn);
+
 native void assert_eq(any a1, any a2);
 
 native void print_test_struct(TestStruct x);

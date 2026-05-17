@@ -101,6 +101,18 @@ void ScriptedInvoker::Cancel() {
     default_args_.Reset();
 }
 
+static int GetPubvarAddr(IPluginRuntime* rt, const char* name, cell_t* local_addr) {
+    uint32_t index;
+    if (int err = rt->FindPubvarByName(name, &index); err != SP_ERROR_NONE)
+        return err;
+
+    cell_t* phys_addr;
+    if (int err = rt->GetPubvarAddrs(index, local_addr, &phys_addr); err != SP_ERROR_NONE)
+        return err;
+
+    return SP_ERROR_NONE;
+}
+
 bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
     assert(!env_->hasPendingException());
 
@@ -185,6 +197,20 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                     }
                 } else {
                     *reinterpret_cast<cell_t*>(addr) = 0;
+                }
+                break;
+            }
+            case CallArgs::ARG_NULL_VECTOR: {
+                if (int err = GetPubvarAddr(context_, "NULL_VECTOR", &params[i]); err != SP_ERROR_NONE) {
+                    env_->ReportError(err);
+                    return false;
+                }
+                break;
+            }
+            case CallArgs::ARG_NULL_STRING: {
+                if (int err = GetPubvarAddr(context_, "NULL_STRING", &params[i]); err != SP_ERROR_NONE) {
+                    env_->ReportError(err);
+                    return false;
                 }
                 break;
             }

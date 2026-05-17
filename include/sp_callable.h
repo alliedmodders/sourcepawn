@@ -14,6 +14,7 @@
 
 #include <string.h>
 
+#include <algorithm>
 #include <array>
 
 #include <sp_typeutil.h>
@@ -30,6 +31,16 @@
 namespace sp {
 
 struct CallArgs {
+    CallArgs() {}
+
+    CallArgs(const CallArgs& other)
+      : api_version(other.api_version),
+        argc(other.argc),
+        error(other.error)
+    {
+        std::copy_n(other.argv.begin(), other.argc, argv.begin());
+    }
+
     void PushCell(cell_t cell) {
         if (argc >= argv.size()) {
             error = true;
@@ -37,9 +48,10 @@ struct CallArgs {
         }
         argv[argc].u.value = cell;
         argv[argc].type = ARG_CELL;
+        argv[argc].flags = 0;
         argc++;
-        return;
     }
+
     void PushCellByRef(cell_t* cell, int flags = SM_PARAM_COPYBACK) {
         if (argc >= argv.size()) {
             error = true;
@@ -48,15 +60,32 @@ struct CallArgs {
         argv[argc].u.addr = cell;
         argv[argc].flags = flags;
         argv[argc].type = ARG_CELL_BY_REF;
+        argv[argc].flags = 0;
         argc++;
-        return;
     }
+
     void PushFloat(float number) {
-        return PushCell(sp_ftoc(number));
+        if (argc >= argv.size()) {
+            error = true;
+            return;
+        }
+        argv[argc].u.value = sp_ftoc(number);
+        argv[argc].type = ARG_CELL;
+        argv[argc].flags = FLAG_CELL_TYPE_FLOAT;
+        argc++;
     }
+
     void PushFloatByRef(float* number, int flags = SM_PARAM_COPYBACK) {
-        return PushCellByRef(reinterpret_cast<cell_t*>(number), flags);
+        if (argc >= argv.size()) {
+            error = true;
+            return;
+        }
+        argv[argc].u.addr = number;
+        argv[argc].flags = flags | FLAG_CELL_TYPE_FLOAT;
+        argv[argc].type = ARG_CELL_BY_REF;
+        argc++;
     }
+
     void PushArray(cell_t* inarray, unsigned int cells, int flags = 0) {
         if (argc >= argv.size()) {
             error = true;
@@ -67,8 +96,8 @@ struct CallArgs {
         argv[argc].type = ARG_ARRAY;
         argv[argc].array_size = cells;
         argc++;
-        return;
     }
+
     void PushString(const char* string) {
         if (argc >= argv.size()) {
             error = true;
@@ -79,8 +108,8 @@ struct CallArgs {
         argv[argc].type = ARG_CHAR_ARRAY;
         argv[argc].array_size = strlen(string) + 1;
         argc++;
-        return;
     }
+
     void PushString(char* buffer, size_t length, int flags) {
         if (argc >= argv.size()) {
             error = true;
@@ -91,8 +120,8 @@ struct CallArgs {
         argv[argc].type = ARG_CHAR_ARRAY;
         argv[argc].array_size = length;
         argc++;
-        return;
     }
+
     void PushInt64(int64_t value) {
         if (argc >= argv.size()) {
             error = true;
@@ -101,7 +130,22 @@ struct CallArgs {
         argv[argc].u.i64 = value;
         argv[argc].type = ARG_INT64;
         argc++;
-        return;
+    }
+
+    void PushNullVector() {
+        if (argc >= argv.size()) {
+            error = true;
+            return;
+        }
+        argv[argc++].type = ARG_NULL_VECTOR;
+    }
+
+    void PushNullString() {
+        if (argc >= argv.size()) {
+            error = true;
+            return;
+        }
+        argv[argc++].type = ARG_NULL_STRING;
     }
 
     void Reset() {
@@ -115,13 +159,32 @@ struct CallArgs {
         ARG_ARRAY,
         ARG_CHAR_ARRAY,
         ARG_INT64,
+        ARG_NULL_VECTOR,
+        ARG_NULL_STRING,
     };
+
+    enum Flag {
+        FLAG_COPYBACK = SM_PARAM_COPYBACK,
+        FLAG_STRING_UTF8 = SM_PARAM_STRING_UTF8,
+        FLAG_STRING_COPY = SM_PARAM_STRING_COPY,
+        FLAG_STRING_BINARY = SM_PARAM_STRING_BINARY,
+        FLAG_CELL_TYPE_FLOAT = (1 << 4),
+    };
+
+    CallArgs& operator =(const CallArgs& other) {
+        api_version = other.api_version;
+        argc = other.argc;
+        error = other.error;
+        std::copy_n(other.argv.begin(), other.argc, argv.begin());
+        return *this;
+    }
 
     int api_version = kApiVersion;
 
     struct ArgInfo {
         union {
             cell_t value;
+            float f32;
             void* addr;
             int64_t i64;
         } u;
