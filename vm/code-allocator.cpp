@@ -125,11 +125,11 @@ CodePool::AllocateFor(size_t askBytes) {
 }
 
 CodePool::CodePool(uint8_t* start, size_t size)
- : start_(start)
- , ptr_(start)
- , end_(start + size)
- , size_(size) {
-}
+ : start_(start),
+   ptr_(start),
+   end_(start + size),
+   size_(size)
+{}
 
 CodePool::~CodePool() {
 #if defined(_WIN32)

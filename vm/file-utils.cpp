@@ -32,8 +32,9 @@ sp::DetectFileType(FILE* fp) {
 }
 
 FileReader::FileReader(FILE* fp)
- : buffer_(nullptr, DefaultFree)
- , length_(0) {
+ : buffer_(nullptr, DefaultFree),
+   length_(0)
+{
     if (fseek(fp, 0, SEEK_END) != 0)
         return;
     long size = ftell(fp);
@@ -50,8 +51,9 @@ FileReader::FileReader(FILE* fp)
 }
 
 FileReader::FileReader(const uint8_t* addr, size_t length)
- : buffer_(nullptr, DefaultFree)
- , length_(length) {
+ : buffer_(nullptr, DefaultFree),
+   length_(length)
+{
     buffer_.reset(static_cast<uint8_t*>(malloc(length)));
     if (!buffer_)
         return;
@@ -59,8 +61,9 @@ FileReader::FileReader(const uint8_t* addr, size_t length)
 }
 
 FileReader::FileReader(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
- : buffer_(addr, dtor)
- , length_(length) {
+ : buffer_(addr, dtor),
+   length_(length)
+{
 }
 
 void
