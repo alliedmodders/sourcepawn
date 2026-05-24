@@ -262,33 +262,6 @@ static cell_t CallWithString(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
-static cell_t CallWithNullVector(IPluginContext* cx, const cell_t* params) {
-  auto fn = cx->GetFunctionById(params[1]);
-  if (!fn)
-    return cx->ThrowNativeError("Could not find function");
-
-  CallArgs args;
-  args.PushNullVector();
-
-  cell_t rval;
-  if (!fn->Invoke(args, &rval))
-    return 0;
-  return rval;
-}
-
-static cell_t CallWithNullString(IPluginContext* cx, const cell_t* params) {
-  auto fn = cx->GetFunctionById(params[1]);
-  if (!fn)
-    return cx->ThrowNativeError("Could not find function");
-
-  CallArgs args;
-  args.PushNullString();
-
-  cell_t rval;
-  if (!fn->Invoke(args, &rval))
-    return 0;
-  return rval;
-}
 
 static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
@@ -499,8 +472,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "access_2d_array", Access2DArray);
   BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt.get(), "call_with_string", CallWithString);
-  BindNative(rt.get(), "call_with_null_vector", CallWithNullVector);
-  BindNative(rt.get(), "call_with_null_string", CallWithNullString);
+
   BindNative(rt.get(), "assert_eq", AssertEq);
   BindNative(rt.get(), "printf", Printf);
   BindNative(rt.get(), "print_test_struct", PrintTestStruct);

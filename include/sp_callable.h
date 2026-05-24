@@ -131,21 +131,7 @@ struct CallArgs {
         argc++;
     }
 
-    void PushNullVector() {
-        if (argc >= argv.size()) {
-            error = true;
-            return;
-        }
-        argv[argc++].type = ARG_NULL_VECTOR;
-    }
 
-    void PushNullString() {
-        if (argc >= argv.size()) {
-            error = true;
-            return;
-        }
-        argv[argc++].type = ARG_NULL_STRING;
-    }
 
     void Reset() {
         argc = 0;
@@ -158,8 +144,7 @@ struct CallArgs {
         ARG_ARRAY,
         ARG_CHAR_ARRAY,
         ARG_INT64,
-        ARG_NULL_VECTOR,
-        ARG_NULL_STRING,
+
     };
 
     enum Flag {
