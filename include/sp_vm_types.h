@@ -46,7 +46,10 @@ typedef uint32_t funcid_t; /**< Function index code */
 #include "sp_typeutil.h"
 
 namespace sp {
-static constexpr uint32_t kApiVersion = 1;
+static constexpr uint32_t kApiVersion = 2;
+
+// Minimum version that is backward compatible.
+static constexpr uint32_t kApiMinVersion = 2;
 } // namespace sp
 
 #define SP_MAX_EXEC_PARAMS 32 /**< Maximum number of parameters in a function signature */
