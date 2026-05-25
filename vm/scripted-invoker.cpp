@@ -262,9 +262,10 @@ int ScriptedInvoker::Execute(cell_t* result) {
 }
 
 bool ScriptedInvoker::Invoke(cell_t* result) {
-    bool ok = Invoke(default_args_, result);
+    auto local_args = default_args_;
     default_args_.Reset();
-    return ok;
+
+    return Invoke(local_args, result);
 }
 
 IPluginRuntime* ScriptedInvoker::GetParentRuntime() {
