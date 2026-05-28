@@ -46,7 +46,7 @@ typedef uint32_t funcid_t; /**< Function index code */
 #include "sp_typeutil.h"
 
 namespace sp {
-static constexpr uint32_t kApiVersion = 2;
+static constexpr uint32_t kApiVersion = 3;
 
 // Minimum version that is backward compatible.
 static constexpr uint32_t kApiMinVersion = 2;

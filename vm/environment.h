@@ -76,6 +76,7 @@ class Environment : public ISourcePawnEnvironment
     void LeaveExceptionHandlingScope(ExceptionHandler* handler) override;
     bool HasPendingException(const ExceptionHandler* handler) override;
     const char* GetPendingExceptionMessage(const ExceptionHandler* handler) override;
+    int GetPendingExceptionCode(const ExceptionHandler* handler) override;
 
     /**
      * @brief Enables the line debugger callbacks. This must be called

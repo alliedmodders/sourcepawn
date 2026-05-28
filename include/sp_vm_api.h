@@ -915,6 +915,9 @@ class ISourcePawnEnvironment
 
     // @brief Returns the message of the pending exception.
     virtual const char* GetPendingExceptionMessage(const ExceptionHandler* handler) = 0;
+
+    // @brief Returns the code of the pending exception.
+    virtual int GetPendingExceptionCode(const ExceptionHandler* handler) = 0;
 };
 
 // @brief A helper class for handling exceptions.
@@ -967,6 +970,10 @@ class ExceptionHandler
 
     const char* Message() const {
         return env_->GetPendingExceptionMessage(this);
+    }
+
+    int Code() const {
+        return env_->GetPendingExceptionCode(this);
     }
 
   private:
