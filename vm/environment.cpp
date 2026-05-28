@@ -478,6 +478,12 @@ Environment::GetPendingExceptionMessage(const ExceptionHandler* handler) {
     return exception_message_;
 }
 
+int Environment::GetPendingExceptionCode(const ExceptionHandler* handler) {
+    assert(handler == eh_top_);
+    assert(HasPendingException(handler));
+    return exception_code_;
+}
+
 bool
 Environment::hasPendingException() const {
     return exception_code_ != SP_ERROR_NONE;
