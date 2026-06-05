@@ -1935,7 +1935,7 @@ bool Compiler::visitSTOR_S_PRI_I64(cell_t slot) {
 bool Compiler::visitZERO_S_I64(cell_t slot) {
     __ movl(Operand(frm, StackOffset(slot)), 0);
     __ movl(Operand(frm, StackOffset(slot) + 4), 0);
-    return false;
+    return true;
 }
 
 bool Compiler::visitSTOR_S_C(cell_t slot, cell_t value) {
