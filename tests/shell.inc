@@ -20,6 +20,7 @@ native void report_error();
 native void unbound_native();
 native int donothing();
 native int64 add_int64(int64 a, int64 b);
+native void donothing_varargs(...);
 
 // dumb version of printf(), only supports %f, %d, %s.
 native void printf(const char[] fmt, any:...);

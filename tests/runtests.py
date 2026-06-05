@@ -83,40 +83,12 @@ class TestPlan(object):
     return self.args.arch == arch
 
   def find_executable(self, path):
-    if os.path.exists(path):
-      pass
-    elif os.path.exists(path + '.js'):
-      path += '.js'
-    elif os.path.exists(path + '.exe'):
-      path += '.exe'
-    else:
-      return None
-    return path
+    return testutil.find_executable(path)
 
   def find_executables_in(self, path, name):
-    kPlatformNames = {
-        'Linux': 'linux',
-        'Darwin': 'mac',
-        'Windows': 'windows',
-    }
-
-    found = []
-    for subdir in os.listdir(path):
-      parts = subdir.split('-')
-      if len(parts) < 2:
-        continue
-      our_platform = kPlatformNames.get(platform.system(), platform.system())
-      if parts[0] != our_platform:
-        continue
-      if not self.match_arch(parts[1]):
-        continue
-
-      prefix = os.path.join(path, subdir, name)
-      full_path = self.find_executable(prefix)
-      if not full_path:
-        continue
-      found.append((parts[1], os.path.abspath(full_path)))
-    return found
+    return testutil.find_executables_in(
+        path, name, arch_filter=lambda arch: self.match_arch(arch)
+    )
 
   def find_shells(self):
     search_in = os.path.join(self.args.objdir, 'spshell')
@@ -191,6 +163,9 @@ class TestPlan(object):
     manifest_path = os.path.join(folder, 'manifest.ini')
     if os.path.exists(manifest_path):
       manifest = testutil.parse_manifest(manifest_path, local_folder, manifest)
+      folder_type = manifest_get(manifest, 'folder', 'type')
+      if folder_type is not None and folder_type != 'tests':
+        return
       if manifest_get(manifest, 'folder', 'skip') == 'true':
         return
 
