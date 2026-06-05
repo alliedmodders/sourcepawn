@@ -140,6 +140,11 @@ static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+static cell_t DoNothingVarargs(IPluginContext* cx, const cell_t* params)
+{
+  return 0;
+}
+
 static cell_t PrintNums(IPluginContext* cx, const cell_t* params)
 {
   for (size_t i = 1; i <= size_t(params[0]); i++) {
@@ -252,8 +257,16 @@ static cell_t CallWithString(IPluginContext* cx, const cell_t* params) {
   int sz_flags = params[4];
   int cp_flags = params[5];
 
+  int translated_flags = cp_flags;
+  if (sz_flags & (1 << 0))
+    translated_flags |= SM_PARAM_STRING_UTF8;
+  if (sz_flags & (1 << 1))
+    translated_flags |= SM_PARAM_STRING_COPY;
+  if (sz_flags & (1 << 2))
+    translated_flags |= SM_PARAM_STRING_BINARY;
+
   CallArgs args;
-  args.PushString(buf, length, sz_flags | cp_flags);
+  args.PushString(buf, length, translated_flags);
   args.PushCell(length);
 
   cell_t rval;
@@ -478,6 +491,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "print_test_struct", PrintTestStruct);
   BindNative(rt.get(), "add_test_structs", AddTestStructs);
   BindNative(rt.get(), "add_int64", AddInt64);
+  BindNative(rt.get(), "donothing_varargs", DoNothingVarargs);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)

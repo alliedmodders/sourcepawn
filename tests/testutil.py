@@ -1,5 +1,6 @@
 # vim: set ts=2 sw=2 tw=99 et:
 import os
+import platform
 import shutil
 import tempfile
 import subprocess
@@ -94,3 +95,44 @@ def manifest_get(manifest, filename, key, default_value = None):
     if key in manifest['folder']:
       return manifest['folder'][key]
   return default_value
+
+
+def find_executable(path):
+  if os.path.exists(path):
+    pass
+  elif os.path.exists(path + '.js'):
+    path += '.js'
+  elif os.path.exists(path + '.exe'):
+    path += '.exe'
+  else:
+    return None
+  return path
+
+
+def find_executables_in(search_path, name, arch_filter=None):
+  kPlatformNames = {
+      'Linux': 'linux',
+      'Darwin': 'mac',
+      'Windows': 'windows',
+  }
+  our_platform = kPlatformNames.get(platform.system(), platform.system().lower())
+
+  if not os.path.isdir(search_path):
+    return []
+
+  found = []
+  for subdir in os.listdir(search_path):
+    parts = subdir.split('-')
+    if len(parts) < 2:
+      continue
+    if parts[0] != our_platform:
+      continue
+    if arch_filter and not arch_filter(parts[1]):
+      continue
+
+    prefix = os.path.join(search_path, subdir, name)
+    full_path = find_executable(prefix)
+    if not full_path:
+      continue
+    found.append((parts[1], os.path.abspath(full_path)))
+  return found

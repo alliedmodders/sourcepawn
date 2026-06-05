@@ -1,8 +1,9 @@
 #include <shell>
 
 public main() {
-    for (int i = 0; i < 100000000; i++) {
-        donothing();
+    int a, b, c;
+    for (int i = 0; i < 50000000; i++) {
+        donothing_varargs(i, c, b, a);
     }
 }
 
