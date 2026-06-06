@@ -136,25 +136,23 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         }
 
         void* addr = nullptr;
-        uint32_t nbytes = 0;
         switch (arg.type) {
             case CallArgs::ARG_CELL_BY_REF: {
-                nbytes = sizeof(cell_t);
+                uint32_t nbytes = sizeof(cell_t);
                 if ((addr = context_->heapAllocEx(nbytes, &params[i])) == nullptr)
                     return false;
                 *reinterpret_cast<cell_t*>(addr) = *reinterpret_cast<cell_t*>(arg.u.addr);
                 break;
             }
             case CallArgs::ARG_INT64: {
-                nbytes = sizeof(int64_t);
+                uint32_t nbytes = sizeof(int64_t);
                 if ((addr = context_->heapAllocEx(nbytes, &params[i])) == nullptr)
                     return false;
                 *reinterpret_cast<int64_t*>(addr) = *reinterpret_cast<int64_t*>(arg.u.addr);
                 break;
             }
             case CallArgs::ARG_ARRAY: {
-                nbytes = arg.array_size * sizeof(cell_t);
-                int err = context_->AllocArray(nbytes, &params[i],
+                int err = context_->AllocArray(arg.array_size, &params[i],
                                                reinterpret_cast<cell_t**>(&addr));
                 if (err != SP_ERROR_NONE) {
                     env_->ReportError(err);
@@ -165,9 +163,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
             }
             case CallArgs::ARG_CHAR_ARRAY: {
                 uint32_t ncells = (arg.array_size + sizeof(cell_t) - 1) / sizeof(cell_t);
-                nbytes = ncells * sizeof(cell_t);
-
-                int err = context_->AllocArray(nbytes, &params[i],
+                int err = context_->AllocArray(ncells, &params[i],
                                                reinterpret_cast<cell_t**>(&addr));
                 if (err != SP_ERROR_NONE) {
                     env_->ReportError(err);

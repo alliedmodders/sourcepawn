@@ -47,6 +47,9 @@ typedef StringCallback = function void (char[] buffer, int length);
 native int call_with_string(StringCallback fn, char[] buffer, int length, int sz_flags,
                             int cp_flags);
 
+typedef ArrayCallback = function void (const int[] array, int length);
+native int call_with_array(ArrayCallback fn, const int[] array, int length);
+
 typedef Array2dCallback = function void (const int[][] array, int length, int stride);
 
 // Create a 2D array from the given "flat" array, length and stride.

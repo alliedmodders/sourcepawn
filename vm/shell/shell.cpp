@@ -275,6 +275,29 @@ static cell_t CallWithString(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
+static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  ARRAY_PTR array;
+  int err;
+  if ((err = cx->LocalToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array");
+
+  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  int length = params[3];
+
+  CallArgs args;
+  args.PushArray(flat_array, length);
+  args.PushCell(length);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
 
 static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
@@ -485,6 +508,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "access_2d_array", Access2DArray);
   BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt.get(), "call_with_string", CallWithString);
+  BindNative(rt.get(), "call_with_array", CallWithArray);
 
   BindNative(rt.get(), "assert_eq", AssertEq);
   BindNative(rt.get(), "printf", Printf);
