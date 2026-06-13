@@ -40,6 +40,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
+
+#if defined(__clang__)
+# pragma clang diagnostic push
+# pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #include <locale>
 #include <codecvt>
 
@@ -47,13 +54,6 @@
 
 #include "errors.h"
 #include "sc.h"
-
-#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
-
-#if defined(__clang__)
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
 
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
 #if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000
