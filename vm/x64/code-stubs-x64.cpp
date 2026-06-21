@@ -45,6 +45,11 @@ CodeStubs::CompileInvokeStub()
     __ push(dat);
     __ push(frm);
     frame_items += 5;
+#if defined(KE_WINDOWS)
+    __ push(rdi);
+    __ push(rsi);
+    frame_items += 2;
+#endif
 
     size_t frame_items_to_restore = frame_items;
 
@@ -84,20 +89,29 @@ CodeStubs::CompileInvokeStub()
     //
     //      return_address
     //      rbp
-    //      rcx
+    //      r10
     //      context_reg
     //      env_reg
     //      stk
     //      dat
-    //      frm <-- restore RSP to here.
+    //      frm
+    // #if defined(KE_WINDOWS)
+    //      rdi
+    //      rsi
+    // #endif
+    //      <-- restore RSP to here -->
     //      ArgReg2
     //      alignment
     //
-    // The delta between rbp to frm is frame_items_to_restore minus the entries
-    // for return_address and rbp.
+    // The delta between rbp to frm (or rsi on Windows) is frame_items_to_restore
+    // minus the entries for return_address and rbp.
     int32_t offset_to_rsp = (frame_items_to_restore - 2) * sizeof(intptr_t);
     __ lea(rsp, Operand(rbp, -offset_to_rsp));
 
+#if defined(KE_WINDOWS)
+    __ pop(rsi);
+    __ pop(rdi);
+#endif
     __ pop(frm);
     __ pop(dat);
     __ pop(stk);
