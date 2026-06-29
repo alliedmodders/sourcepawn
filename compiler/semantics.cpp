@@ -1208,6 +1208,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     expr->set_lvalue(inner->lvalue());
 
     Type* ltype = out_val.type();
+    if (atype == ltype)
+        return true;
 
     auto actual_array =  ltype->as<ArrayType>();
     if (actual_array) {

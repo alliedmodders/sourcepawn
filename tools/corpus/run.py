@@ -100,7 +100,7 @@ class Runner(object):
         self.work_ = queue.LifoQueue()
         self.completed_ = queue.Queue()
         self.progress_ = 0
-        self.skip_set_ = set()
+        self.skip_map_ = {}
         self.missing_includes_ = {}
         self.log_ = sys.stderr
         self.failed_ = 0
@@ -123,13 +123,14 @@ class Runner(object):
         if os.path.exists(self.skip_file_path_):
             with open(self.skip_file_path_, 'rt') as fp:
                 for line in fp.readlines():
-                    self.skip_set_.add(line.strip())
+                    file = line.strip()
+                    self.skip_map_[file.lower()] = file
 
         if self.args_.retry_bad:
-            self.files_ = [file for file in self.skip_set_]
+            self.files_ = [file for file in self.skip_map_.values()]
         else:
             self.files_ = [os.path.relpath(file, self.args_.corpus) for file in self.files_]
-            self.files_ = [file for file in self.files_ if file not in self.skip_set_]
+            self.files_ = [file for file in self.files_ if file.lower() not in self.skip_map_]
 
     def run(self):
         progressbar.streams.wrap_stderr()
@@ -148,9 +149,9 @@ class Runner(object):
             print("Missing include {} used {} times.".format(include, encounters))
 
         # Re-sort the skip list.
-        if self.skip_set_ and self.args_.commit:
+        if self.skip_map_ and self.args_.commit:
             with open(self.skip_file_path_, 'wt') as fp:
-                for path in sorted(self.skip_set_):
+                for path in sorted(self.skip_map_.values()):
                     fp.write(path + "\n")
 
         return self.failed_
@@ -287,9 +288,12 @@ class Runner(object):
                     remove = True
                 elif rv == DIAGNOSE_QUIT:
                     self.should_quit_ = True
+                if self.args_.fail_fast:
+                    self.should_quit_ = True
             elif self.args_.remove_bad:
                 if self.args_.commit:
                     remove = True
+                self.failed_ += 1
             elif not self.args_.remove_good:
                 # Normal testing mode.
                 self.failed_ += 1
@@ -304,10 +308,10 @@ class Runner(object):
                 if self.args_.commit:
                     remove = True
             elif self.args_.retry_bad:
-                self.skip_set_.discard(path)
+                del self.skip_map_[path.lower()]
 
         if remove:
-            self.skip_set_.add(path)
+            self.skip_map_[path.lower()] = path
 
 def diagnose_error(path, output):
     print("Error compiling {}:".format(path))
