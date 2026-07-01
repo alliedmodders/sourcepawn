@@ -918,6 +918,14 @@ class ISourcePawnEnvironment
 
     // @brief Returns the code of the pending exception.
     virtual int GetPendingExceptionCode(const ExceptionHandler* handler) = 0;
+
+
+    /**
+     * @brief Returns the version string.
+     *
+     * @return      The version string.
+     */
+    virtual const char* GetVersionString() = 0;
 };
 
 // @brief A helper class for handling exceptions.
