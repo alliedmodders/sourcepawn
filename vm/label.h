@@ -172,6 +172,13 @@ class CodeLabelBase
         status_ = (pc << 1);
         assert(ToOffset(status_) == pc);
     }
+    int32_t addPendingUse(int32_t pc) {
+        assert(!bound());
+        int32_t prev = used() ? ToOffset(status_) : 0;
+        status_ = (pc << 1);
+        assert(ToOffset(status_) == pc);
+        return prev;
+    }
     void bind(uint32_t offset) {
         assert(!bound());
         status_ = (offset << 1) | kBound;

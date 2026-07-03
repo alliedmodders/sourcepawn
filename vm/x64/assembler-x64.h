@@ -451,8 +451,15 @@ class Assembler : public AssemblerBase
             }
 
             // Finally, we've recovered the location to patch.
-            assert(data_index < address_table_.size());
-            address_table_[data_index] = pc();
+            for (;;) {
+                assert(data_index < address_table_.size());
+                int32_t next = int32_t(address_table_[data_index]);
+                assert(next <= 0);
+                address_table_[data_index] = pc();
+                if (!next)
+                    break;
+                data_index = uint32_t(-next - 1);
+            }
         }
         label->bind(pc());
     }
@@ -497,8 +504,9 @@ class Assembler : public AssemblerBase
         if (label->bound()) {
             address_table_.emplace_back(label->offset());
         } else {
-            address_table_.emplace_back(0);
-            label->use(-address_table_.size()); // 1-indexed to avoid -0.
+            int32_t prev = label->addPendingUse(-int32_t(address_table_.size() + 1));
+            assert(prev <= 0);
+            address_table_.emplace_back(uintptr_t(intptr_t(prev)));
         }
         address_table_reloc_.emplace_back((uint32_t)address_table_.size() - 1);
     }
