@@ -130,12 +130,13 @@ class SilentLabel : public Label
     }
 };
 
-// A CodeLabel is a special form of Label intended for addresses that
-// are within the code buffer, and thus aren't known yet, and will be
-// automatically fixed up later.
+// Some platforms (ARM, x64) cannot encode all possible branch targets
+// in a single instruction. This is problematic when generating code that
+// either needs absolute addresses to itself, or needs to reference code
+// outside of the trivially encodable address range.
 //
-// Unlike normal Labels, these do not store a list of incoming uses.
-// They can only have one point of use.
+// CodeLabel, unlike Label, guarantees that absolute branch targets are
+// encodable, not just relative branch targets.
 class CodeLabelBase
 {
     // If set on status_, the label is bound.
