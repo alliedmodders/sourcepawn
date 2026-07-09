@@ -863,14 +863,29 @@ class Assembler : public AssemblerBase
         emit3_sse(0x66, 0x0f, 0x6e, dest, src);
     }
 
+    void movss(FloatRegister dest, const Operand& src) {
+        emit3_sse(0xf3, 0x0f, 0x10, dest, src);
+    }
+    void addss(FloatRegister dest, const Operand& src) {
+        emit3_sse(0xf3, 0x0f, 0x58, dest, src);
+    }
     void addss(FloatRegister dest, FloatRegister src) {
         emit3_sse(0xf3, 0x0f, 0x58, dest, src);
+    }
+    void subss(FloatRegister dest, const Operand& src) {
+        emit3_sse(0xf3, 0x0f, 0x5c, dest, src);
     }
     void subss(FloatRegister dest, FloatRegister src) {
         emit3_sse(0xf3, 0x0f, 0x5c, dest, src);
     }
+    void mulss(FloatRegister dest, const Operand& src) {
+        emit3_sse(0xf3, 0x0f, 0x59, dest, src);
+    }
     void mulss(FloatRegister dest, FloatRegister src) {
         emit3_sse(0xf3, 0x0f, 0x59, dest, src);
+    }
+    void divss(FloatRegister dest, const Operand& src) {
+        emit3_sse(0xf3, 0x0f, 0x5e, dest, src);
     }
     void divss(FloatRegister dest, FloatRegister src) {
         emit3_sse(0xf3, 0x0f, 0x5e, dest, src);

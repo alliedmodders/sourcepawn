@@ -952,28 +952,42 @@ bool Compiler::visitFABS() {
 }
 
 bool Compiler::visitFLOAT() {
-    assert(false);
-    return false;
+    __ cvtsi2ss(xmm0, Operand(stk, 0));
+    __ movd(pri, xmm0);
+    __ addq(stk, 4);
+    return true;
 }
 
 bool Compiler::visitFLOATADD() {
-    assert(false);
-    return false;
+    __ movss(xmm0, Operand(stk, 0));
+    __ addss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+    __ addq(stk, 8);
+    return true;
 }
 
 bool Compiler::visitFLOATSUB() {
-    assert(false);
-    return false;
+    __ movss(xmm0, Operand(stk, 0));
+    __ subss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+    __ addq(stk, 8);
+    return true;
 }
 
 bool Compiler::visitFLOATMUL() {
-    assert(false);
-    return false;
+    __ movss(xmm0, Operand(stk, 0));
+    __ mulss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+    __ addq(stk, 8);
+    return true;
 }
 
 bool Compiler::visitFLOATDIV() {
-    assert(false);
-    return false;
+    __ movss(xmm0, Operand(stk, 0));
+    __ divss(xmm0, Operand(stk, 4));
+    __ movd(pri, xmm0);
+    __ addq(stk, 8);
+    return true;
 }
 
 bool Compiler::visitRND_TO_NEAREST() {
@@ -1005,18 +1019,106 @@ bool Compiler::visitRND_TO_ZERO() {
 }
 
 bool Compiler::visitFLOATCMP() {
-    assert(false);
-    return false;
+    // This is the old float cmp, which returns ordered results. In newly
+    // compiled code it should not be used or generated.
+    //
+    // Note that the checks here are inverted: the test is |rhs OP lhs|.
+    Label bl, ab, done;
+    __ movss(xmm0, Operand(stk, 4));
+    __ ucomiss(Operand(stk, 0), xmm0);
+    __ j(above, &ab);
+    __ j(below, &bl);
+    __ xorl(pri, pri);
+    __ jmp(&done);
+    __ bind(&ab);
+    __ movl(pri, -1);
+    __ jmp(&done);
+    __ bind(&bl);
+    __ movl(pri, 1);
+    __ bind(&done);
+    __ addq(stk, 8);
+    return true;
+}
+
+ConditionCode
+ToFloatConditionCode(CompareOp op) {
+    switch (op) {
+        case CompareOp::Sgrtr:
+            return above;
+        case CompareOp::Sgeq:
+            return above_equal;
+        case CompareOp::Sleq:
+            return below_equal;
+        case CompareOp::Sless:
+            return below;
+        case CompareOp::Eq:
+            return equal;
+        case CompareOp::Neq:
+            return not_equal;
+        default:
+            assert(false);
+            return zero;
+    }
+}
+
+void Compiler::emitFloatCmp(ConditionCode cc) {
+    unsigned lhs = 4;
+    unsigned rhs = 0;
+    if (cc == below || cc == below_equal) {
+        // NaN results in ZF=1 PF=1 CF=1
+        //
+        // ja/jae check for ZF,CF=0 and CF=0. If we make all relational compares
+        // look like ja/jae, we'll guarantee all NaN comparisons will fail (which
+        // would not be true for jb/jbe, unless we checked with jp).
+        if (cc == below)
+            cc = above;
+        else
+            cc = above_equal;
+        rhs = 4;
+        lhs = 0;
+    }
+
+    __ movss(xmm0, Operand(stk, rhs));
+    __ ucomiss(Operand(stk, lhs), xmm0);
+
+    // An equal or not-equal needs special handling for the parity bit.
+    if (cc == equal || cc == not_equal) {
+        // If NaN, PF=1, ZF=1, and E/Z tests ZF=1.
+        //
+        // If NaN, PF=1, ZF=1 and NE/NZ tests Z=0. But, we want any != with NaNs
+        // to return true, including NaN != NaN.
+        //
+        // To make checks simpler, we set |pri| to the expected value of a NaN
+        // beforehand. This also clears the top bits of |pri| for setcc.
+        Label done;
+        __ movl(pri, (cc == equal) ? 0 : 1);
+        __ j(parity, &done);
+        __ set(cc, r8_al);
+        __ bind(&done);
+    } else {
+        __ movl(pri, 0);
+        __ set(cc, r8_al);
+    }
+    __ addq(stk, 8);
 }
 
 bool Compiler::visitFLOAT_CMP_OP(CompareOp op) {
-    assert(false);
-    return false;
+    emitFloatCmp(ToFloatConditionCode(op));
+    return true;
 }
 
 bool Compiler::visitFLOAT_NOT() {
-    assert(false);
-    return false;
+    __ xorps(xmm0, xmm0);
+    __ ucomiss(Operand(stk, 0), xmm0);
+
+    // See emitFloatCmp() - this is a shorter version.
+    Label done;
+    __ movl(pri, 1);
+    __ j(parity, &done);
+    __ set(zero, r8_al);
+    __ bind(&done);
+    __ addq(stk, 4);
+    return true;
 }
 
 bool Compiler::visitHALT(cell_t value) {
@@ -1530,27 +1632,6 @@ bool Compiler::visitSUB_ALT_F32() {
     __ subss(xmm0, xmm1);
     __ movd(pri, xmm0);
     return true;
-}
-
-ConditionCode
-ToFloatConditionCode(CompareOp op) {
-    switch (op) {
-        case CompareOp::Sgrtr:
-            return above;
-        case CompareOp::Sgeq:
-            return above_equal;
-        case CompareOp::Sleq:
-            return below_equal;
-        case CompareOp::Sless:
-            return below;
-        case CompareOp::Eq:
-            return equal;
-        case CompareOp::Neq:
-            return not_equal;
-        default:
-            assert(false);
-            return zero;
-    }
 }
 
 bool Compiler::visitCompareOpF32(CompareOp op) {
