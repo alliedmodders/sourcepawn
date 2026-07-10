@@ -699,6 +699,10 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             report(array->pos(), 41);
             return true;
         }
+        if (rank->inner()->isInt64()) {
+            report(array->exprs().back()->pos(), 68) << rank->inner();
+            return false;
+        }
         if (prev1.isValid() && prev2.isValid() && !rank->inner()->isInt()) {
             // Unknown stepping type.
             report(array->exprs().back()->pos(), 68) << rank->inner();
@@ -1033,6 +1037,8 @@ CompoundEmitter::EmitPadding(size_t rank_size, QualType type, size_t emitted, bo
         rank_size = char_array_cells(rank_size);
     else if (auto es = type->asEnumStruct())
         rank_size *= es->array_size();
+    else if (type->isInt64())
+        rank_size *= 2;
 
     if (rank_size > emitted) {
         if (ellipses) {
