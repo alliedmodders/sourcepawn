@@ -20,6 +20,7 @@
 #include <deque>
 #include <unordered_set>
 
+#include <smx/smx-headers.h>
 #include <smx/smx-v1-opcodes.h>
 #include "builtins.h"
 #include "compiled-function.h"
@@ -191,13 +192,17 @@ static const NativeMapping sNativeMap[] = {
 void
 PluginRuntime::SetupFloatNativeRemapping() {
     float_table_ = std::make_unique<floattbl_t[]>(image_->NumNatives());
+    BuiltinNatives* builtins = Environment::get()->builtins();
+
     for (size_t i = 0; i < image_->NumNatives(); i++) {
         const char* name = image_->GetNative(i);
         const NativeMapping* iter = sNativeMap;
         while (iter->name) {
             if (strcmp(name, iter->name) == 0) {
-                float_table_[i].found = true;
-                float_table_[i].index = iter->opcode;
+                if (builtins->Lookup(name) || iter->opcode == OP_NOP) {
+                    float_table_[i].found = true;
+                    float_table_[i].index = iter->opcode;
+                }
                 break;
             }
             iter++;

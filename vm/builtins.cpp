@@ -126,12 +126,40 @@ FloatNot(IPluginContext* pCtx, const cell_t* params) {
     return val ? 0 : 1;
 }
 
+static cell_t FloatAbs(IPluginContext* pCtx, const cell_t* params) {
+    return sp_ftoc(fabsf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToCeil(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(ceilf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToZero(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(truncf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToFloor(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(floorf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToNearest(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(roundf(sp_ctof(params[1])));
+}
+
 sp_nativeinfo_t gBuiltinFloatNatives[] = {
     {"__float_ctor", FloatCtor}, {"__float_mul", FloatMul}, {"__float_div", FloatDiv},
     {"__float_mod", FloatMod},   {"__float_add", FloatAdd}, {"__float_sub", FloatSub},
     {"__float_gt", FloatGt},     {"__float_ge", FloatGe},   {"__float_lt", FloatLt},
     {"__float_le", FloatLe},     {"__float_eq", FloatEq},   {"__float_ne", FloatNe},
-    {"__float_not", FloatNot},   {nullptr, nullptr},
+    {"__float_not", FloatNot},
+
+    // Legacy float natives for SourceMod compatibility.
+    {"FloatAbs", FloatAbs},
+    {"RoundToCeil", RoundToCeil},
+    {"RoundToZero", RoundToZero},
+    {"RoundToFloor", RoundToFloor},
+    {"RoundToNearest", RoundToNearest},
+    {nullptr, nullptr},
 };
 
 } // namespace sp
