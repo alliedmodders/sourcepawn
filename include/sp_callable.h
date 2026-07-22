@@ -127,6 +127,7 @@ struct CallArgs {
             return;
         }
         argv[argc].u.i64 = value;
+        argv[argc].flags = 0;
         argv[argc].type = ARG_INT64;
         argc++;
     }
