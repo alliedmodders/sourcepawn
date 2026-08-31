@@ -1478,7 +1478,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto index = expr->index();
     if (!CheckRvalue(base))
         return false;
-    if (base->lvalue() && base->val().ident == iACCESSOR)
+    if (base->lvalue())
         base = expr->set_base(new RvalueExpr(base));
 
     const auto& base_val = base->val();
@@ -1527,13 +1527,6 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
 
     auto& out_val = expr->val();
     out_val = base_val;
-
-    if (array->inner()->isArray()) {
-        // Note: Intermediate arrays are not l-values.
-        out_val.ident = iEXPRESSION;
-        out_val.set_type(array->inner());
-        return true;
-    }
 
     /* set type to fetch... INDIRECTLY */
     if (array->isCharArray())
@@ -1637,8 +1630,11 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     }
 
     Type* base_type = base_val.type();
-    if (auto es = base_type->asEnumStruct())
+    if (auto es = base_type->asEnumStruct()) {
+        if (base->lvalue())
+            base = expr->set_base(new RvalueExpr(base));
         return CheckEnumStructFieldAccessExpr(expr, base_type, es, from_call);
+    }
     if (base_type->isReference())
         base_type = base_type->inner();
 
@@ -1814,13 +1810,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     Type* field_type = field->type_info().type;
 
     val.set_type(field_type);
-    if (field_type->isArray()) {
-        // Already an r-value.
-        val.ident = iEXPRESSION;
-    } else {
-        // Need LOAD_I to convert to r-value.
-        val.ident = iARRAYCELL;
-    }
+    val.ident = iARRAYCELL;
     return true;
 }
 
@@ -2001,8 +1991,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     }
 
     bool namedparams = false;
-    for (const auto& param : call->args()) {
+    for (const auto& entry : call->args()) {
         unsigned int argpos;
+
+        Expr* param = entry;
         if (auto named = param->as<NamedArgExpr>()) {
             int pos = fun->FindNamedArg(named->name);
             if (pos < 0) {
@@ -2011,6 +2003,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             }
             argpos = pos;
             argidx = pos;
+            param = named->expr;
         } else {
             if (namedparams) {
                 report(call, 44); // positional parameters must precede named parameters
@@ -2072,6 +2065,17 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         new (&call->args()) PoolArray<Expr*>(ps.argv);
     }
     return true;
+}
+
+static inline bool CanImplicitSliceArgument(const value* val, ArrayType* to) {
+    if (to->inner()->isArray() && !to->inner()->isEnumStruct())
+        return false;
+    if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
+        if (val->type()->isEnumStruct() || val->type()->isArray())
+            return false;
+        return true;
+    }
+    return false;
 }
 
 Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
@@ -2179,12 +2183,19 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             }
             checktag(arg->type()->inner(), val->type());
         }
-    } else if (arg->type()->isArray()) {
+    } else if (auto to_array = arg->type()->as<ArrayType>()) {
         // If the input type is an index into an array, create an implicit
         // array type to represent the slice.
-        Type* type = val->type();
-        if ((val->ident == iARRAYCELL || val->ident == iARRAYCHAR) && !type->isEnumStruct())
-            type = types_->defineArray(type, 0);
+        QualType type;
+        if (CanImplicitSliceArgument(val, to_array)) {
+            type = types_->defineArray(val->type(), 0);
+        } else if (lvalue) {
+            param = new RvalueExpr(param);
+            val = &param->val();
+        }
+
+        if (!type)
+            type = param->val().type();
 
         TypeChecker tc(param, arg->type(), QualType(type), TypeChecker::Argument);
         if (!tc.Coerce())
@@ -2302,8 +2313,11 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
 
 bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckExpr(expr))
+    if (!CheckRvalue(expr))
         return false;
+    if (expr->lvalue())
+        expr = stmt->set_expr(new RvalueExpr(expr));
+
     if (!expr->HasSideEffects())
         report(expr, 215);
     return true;

@@ -478,6 +478,8 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         return;
     }
 
+    assert(!expr->lvalue() || !!(flags & EMIT_ALLOW_LVALUE));
+
     switch (expr->kind()) {
         case ExprKind::UnaryExpr:
             EmitUnary(expr->to<UnaryExpr>());
@@ -498,7 +500,7 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
             EmitTernaryExpr(expr->to<TernaryExpr>(), flags);
             break;
         case ExprKind::CastExpr:
-            EmitCastExpr(expr->to<CastExpr>());
+            EmitCastExpr(expr->to<CastExpr>(), flags);
             break;
         case ExprKind::SymbolExpr:
             EmitSymbolExpr(expr->to<SymbolExpr>());
@@ -651,10 +653,24 @@ CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* targ
     return false;
 }
 
-void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
-    EmitExpr(expr->expr());
+const value& CodeGenerator::BindLvalue(Expr* expr) {
+    const auto& val = expr->val();
+    switch (val.ident) {
+        case iVARIABLE:
+            break;
+        case iARRAYCELL:
+        case iARRAYCHAR:
+        case iACCESSOR:
+            EmitExpr(expr, EMIT_ALLOW_LVALUE);
+            break;
+        default:
+            assert(false);
+    }
+    return val;
+}
 
-    const auto& val = expr->expr()->val();
+void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
+    const auto& val = BindLvalue(expr->expr());
 
     Type* type = val.type();
     if (type->isReference())
@@ -708,25 +724,33 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     auto token = expr->token();
     auto oper = NormalizeBinaryToken(token);
 
-    EmitExpr(left);
+    if (expr->array_copy_length()) {
+        auto val = BindLvalue(left);
+        if (val.ident == iVARIABLE)
+            __ address(val.sym);
+
+        assert(IsAssignOp(token));
+        assert(!oper);
+
+        EmitExpr(right);
+        if (!(flags & EMIT_DISCARD_RESULT))
+            __ emit(OP_DUP_ROTATE);
+        __ emit(OP_MOVS, expr->array_copy_length() * sizeof(cell));
+        return;
+    }
 
     if (IsAssignOp(token)) {
-        // assign-modify needs the base address twice (load, store).
-        if (!left_val.canRematerialize() && oper)
-            __ emit(OP_DUP);
+        BindLvalue(left);
 
-        if (oper)
+        if (oper) {
+            // assign-modify needs the base address twice (load, store).
+            if (!left_val.canRematerialize())
+                __ emit(OP_DUP);
+
             EmitRvalue(left_val);
-
-        if (expr->array_copy_length()) {
-            assert(!oper);
-
-            EmitExpr(right);
-            if (!(flags & EMIT_DISCARD_RESULT))
-                __ emit(OP_DUP_ROTATE);
-            __ emit(OP_MOVS, expr->array_copy_length() * sizeof(cell));
-            return;
         }
+    } else {
+        EmitExpr(left);
     }
 
     assert(!expr->array_copy_length());
@@ -1136,13 +1160,16 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     for (size_t i = argv.size() - 1; i < argv.size(); i--) {
         const auto& expr = argv[i];
 
-        EmitExpr(expr);
+        bool lvalue = expr->lvalue();
+        if (lvalue)
+            BindLvalue(expr);
+        else
+            EmitExpr(expr);
 
         if (expr->as<DefaultArgExpr>())
             continue;
 
         const auto& val = expr->val();
-        bool lvalue = expr->lvalue();
 
         ArgDecl* arg;
         if (i < arginfov.size()) {
@@ -1159,17 +1186,19 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                 assert(lvalue);
                 /* treat a "const" variable passed to a function with a non-const
                  * "variable argument list" as a constant here */
-                if (val.sym->is_const() && !arg->type_info().is_const) {
-                    EmitRvalue(val);
+                if (val.sym->is_const() && !arg->type_info().is_const)
                     needs_temp = true;
-                } else if (lvalue) {
-                    __ address(val.sym);
-                } else {
-                    needs_temp = true;
-                }
             } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
                 needs_temp = !val.type()->isComposite();
             }
+
+            if (lvalue) {
+                if (needs_temp)
+                    EmitRvalue(val);
+                else if (val.ident == iVARIABLE)
+                    __ address(val.sym);
+            }
+
             if (needs_temp) {
                 if (val.type()->isInt64()) {
                     auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
@@ -1419,19 +1448,22 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
-    if (zap && v.sym && v.sym->is_const())
-        zap = false;
-
-    EmitExpr(expr);
+    if (zap) {
+        if (v.ident == iVARIABLE && v.sym->is_const())
+            zap = false;
+        else if (v.ident == iACCESSOR && !v.accessor()->setter())
+            zap = false;
+    }
 
     if (expr->lvalue()) {
-        if (zap && v.ident == iACCESSOR && !v.accessor()->setter())
-            zap = false;
+        BindLvalue(expr);
 
         if (zap && !v.canRematerialize())
             __ emit(OP_DUP);
 
         EmitRvalue(v);
+    } else {
+        EmitExpr(expr);
     }
 
     EmitCall(stmt->map()->dtor(), 1);
@@ -1444,19 +1476,8 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 }
 
 void CodeGenerator::EmitRvalue(RvalueExpr* expr) {
-    auto lval = expr->lval();
-    switch (lval->val().ident) {
-        case iARRAYCELL:
-        case iARRAYCHAR:
-        case iACCESSOR:
-            EmitExpr(expr->lval());
-            break;
-        case iVARIABLE:
-            break;
-        default:
-            assert(false);
-    }
-    EmitRvalue(lval->val());
+    const auto& val = BindLvalue(expr->lval());
+    EmitRvalue(val);
 }
 
 void CodeGenerator::EmitRvalue(const value& lval) {
@@ -1522,6 +1543,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 __ emit(OP_STOR_I_I64);
             else
                 __ emit(OP_STOR_I);
+            assert(!lval.type()->isComposite());
             break;
         case iARRAYCHAR:
             __ emit(OP_STRB_I);
@@ -1972,9 +1994,9 @@ static inline bool CoercesToInt64(Type* type) {
     return type->isInt() || type->isAny();
 }
 
-void CodeGenerator::EmitCastExpr(CastExpr* expr) {
+void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
     auto from = expr->expr();
-    EmitExpr(from);
+    EmitExpr(from, flags & EMIT_ALLOW_LVALUE);
 
     if (CoercesToInt64(expr->val().type()) && from->val().type()->isInt64()) {
         __ emit(OP_TRUNCATE_I64);

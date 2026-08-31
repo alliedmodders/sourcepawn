@@ -85,6 +85,7 @@ class CodeGenerator final
     enum EmitFlags {
         EMIT_DEFAULT = 0,
         EMIT_DISCARD_RESULT = (1 << 0),
+        EMIT_ALLOW_LVALUE = (1 << 1),
     };
 
     void EmitExpr(Expr* expr, unsigned int flags = EMIT_DEFAULT);
@@ -105,7 +106,7 @@ class CodeGenerator final
     void EmitNewArrayExpr(NewArrayExpr* expr);
     void EmitNumber64Expr(Number64Expr* expr);
     void EmitSimpleCastExpr(SimpleCastExpr* expr);
-    void EmitCastExpr(CastExpr* expr);
+    void EmitCastExpr(CastExpr* expr, unsigned int flags);
     void EmitRvalue(RvalueExpr* expr);
     void EmitCommaExpr(CommaExpr* expr, unsigned int flags);
 
@@ -136,6 +137,20 @@ class CodeGenerator final
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
     void EmitLoopControl(int token);
+
+    // Emit any precursor instructions needed to load or store from an l-value.
+    //
+    // SymbolExpr:
+    //   iVARIABLE: nothing is pushed.
+    //
+    // IndexExpr, base[index]:
+    //   iARRAYCHAR: &base[index] is pushed.
+    //   iARRAYCELL: &base[index] is pushed, and loaded if the inner type is not
+    //               a value type (inner arrays are not considered value types).
+    //
+    // FieldAccessExpr: base.field
+    //   iACCESSOR: |base| is pushed.
+    const value& BindLvalue(Expr* expr);
 
   private:
     enum MemuseType {

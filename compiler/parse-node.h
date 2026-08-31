@@ -1304,6 +1304,7 @@ class ExprStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ExprStmt; }
 
     Expr* expr() const { return expr_; }
+    Expr* set_expr(Expr* expr) { return expr_ = expr; }
 
   private:
     Expr* expr_;
