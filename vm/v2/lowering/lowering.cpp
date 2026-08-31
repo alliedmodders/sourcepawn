@@ -51,6 +51,18 @@ struct LoweringData : public IBlockData {
     bool propagated;
 };
 
+static inline LLOp LowerJumpToCompareOp(OPCODE op) {
+    switch (op) {
+        case OP_JEQ:    return LL_EQ_I32;
+        case OP_JNEQ:   return LL_NEQ_I32;
+        case OP_JSLESS: return LL_SLESS_I32;
+        case OP_JSLEQ:  return LL_SLEQ_I32;
+        case OP_JSGRTR: return LL_SGRTR_I32;
+        case OP_JSGEQ:  return LL_SGEQ_I32;
+        default:        assert(false); return LL_NOP;
+    }
+}
+
 class MethodLowerer
 {
   public:
@@ -112,6 +124,7 @@ class MethodLowerer
     VReg AllocateTemp(const TypeDesc* type);
     VReg AllocateTempCells(uint16_t cells, bool is_gcobj = false);
     void FreeReg(VReg reg);
+    void FreeReg(VReg* reg);
 
     ExprNode* CreateLocalNode(const TypeDesc* type, VReg reg) {
         return pool_.make<ExprNode>(ExprNode::kReg, type, reg, false);
@@ -1530,7 +1543,20 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             reader_.read<cell_t>();
 
             VReg val_reg = EmitNode(val);
-            emit(op == OP_JZER ? LL_JZER : LL_JNZ, val_reg);
+
+            // If the register will need to be freed, we can't easily place an
+            // LL_RELEASE instruction without a lot of gross machinery. If we
+            // place it before the jump, it'll read a null. If we place it
+            // after, the other branch will leak. We don't have an easy way to
+            // wait for the join point block. Instead, the simplest workaround
+            // is to emit a TEST instruction and convert the register to a bool.
+            VReg test_reg = val_reg;
+            if (val->type->IsHeapItem() && val_reg.owned) {
+                test_reg = AllocateTemp(cell_type_);
+                emit(LL_TEST_I32, val_reg, test_reg);
+            }
+
+            emit(op == OP_JZER ? LL_JZER : LL_JNZ, test_reg);
 
             Block* target_block = block_->successors()[1];
             EmitJumpTarget(target_block);
@@ -1543,6 +1569,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             }
 
             FreeReg(val_reg);
+            if (test_reg != val_reg)
+                FreeReg(test_reg);
             break;
         }
 
@@ -1570,10 +1598,25 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             FlushEmitStack();
 
+            VReg cmp_reg;
             VReg left_reg = EmitNode(left);
             VReg right_reg = EmitNode(right);
 
-            emit(llop, left_reg, right_reg);
+            if ((left->type->IsHeapItem() && left_reg.owned) ||
+                (right->type->IsHeapItem() && right_reg.owned))
+            {
+                // See JZER/JNZ for why this is necessary.
+                cmp_reg = AllocateTemp(cell_type_);
+                emit(LowerJumpToCompareOp(op), left_reg, right_reg, cmp_reg);
+
+                FreeReg(&left_reg);
+                FreeReg(&right_reg);
+
+                emit(LL_JNZ, cmp_reg);
+            } else {
+                emit(llop, left_reg, right_reg);
+            }
+
             EmitJumpTarget(block_->successors()[1]);
 
             Block* fallthrough_block = block_->successors()[0];
@@ -1585,6 +1628,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             FreeReg(left_reg);
             FreeReg(right_reg);
+            FreeReg(cmp_reg);
             break;
         }
 
@@ -2236,6 +2280,11 @@ VReg MethodLowerer::AllocateTempCells(uint16_t cells, bool is_gcobj) {
 
     num_temp_regs_ += cells;
     return VReg(reg, cells, true);
+}
+
+void MethodLowerer::FreeReg(VReg* reg) {
+    FreeReg(*reg);
+    *reg = {};
 }
 
 void MethodLowerer::FreeReg(VReg reg) {
