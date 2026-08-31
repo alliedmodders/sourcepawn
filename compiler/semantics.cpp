@@ -520,7 +520,7 @@ bool Expr::HasSideEffects() {
 bool Semantics::CheckScalarType(Expr* expr) {
     const auto& val = expr->val();
     if (val.type()->isArray()) {
-        if (val.sym)
+        if (val.sym())
             report(expr, 456) << val.type();
         else
             report(expr, 29);
@@ -665,7 +665,7 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
 
     const auto& expr_val = expr->val();
     if (expr_val.ident != iACCESSOR) {
-        if (expr_val.sym && expr_val.sym->is_const()) {
+        if (expr_val.sym() && expr_val.sym()->is_const()) {
             report(incdec, 22); /* assignment to const argument */
             return false;
         }
@@ -752,7 +752,7 @@ bool BinaryExprChecker::Check() {
 
     if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
-        if (Decl* sym = left_->val().sym) {
+        if (Decl* sym = left_->val().sym()) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
@@ -906,7 +906,7 @@ bool BinaryExprChecker::CheckAssignmentLHS() {
     const auto& left_val = left_->val();
 
     // may not change "constant" parameters
-    if (!expr_->initializer() && left_val.sym && left_val.sym->is_const()) {
+    if (!expr_->initializer() && left_val.sym() && left_val.sym()->is_const()) {
         report(expr_, 22);
         return false;
     }
@@ -920,8 +920,8 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     if (left_val.ident == iVARIABLE) {
         const auto& right_val = right_->val();
         int oper_tok = NormalizeBinaryToken(expr_->token());
-        if (right_val.ident == iVARIABLE && right_val.sym == left_val.sym && !oper_tok)
-            report(expr_, 226) << left_val.sym->name(); // self-assignment
+        if (right_val.ident == iVARIABLE && right_val.sym() == left_val.sym() && !oper_tok)
+            report(expr_, 226) << left_val.sym()->name(); // self-assignment
     }
 
     if (left_val.type()->as<ArrayType>()) {
@@ -1132,7 +1132,6 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     } else {
         val.ident = iEXPRESSION;
     }
-    val.sym = nullptr;
     val.set_type(types_->type_bool());
     return true;
 }
@@ -1380,21 +1379,20 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     switch (decl->kind()) {
         case StmtKind::VarDecl:
         case StmtKind::ArgDecl:
-            val.set_variable(decl, decl->type());
+            val.set_variable(decl->as<VarDeclBase>(), decl->type());
             return true;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
-            val.ident = iCONSTEXPR;
             val.set_constval(decl->ConstVal());
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
         case StmtKind::MethodmapMethodDecl:
-            val.ident = iFUNCTN;
+            val.set_function(decl->as<FunctionDecl>());
             break;
         case StmtKind::EnumStructDecl:
         case StmtKind::MethodmapDecl:
-            val.ident = iTYPENAME;
+            val.set_typename(decl);
             break;
         case StmtKind::EnumDecl: {
             auto es = decl->as<EnumDecl>();
@@ -1402,13 +1400,12 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
                 report(expr, 174) << decl->name();
                 return false;
             }
-            val.ident = iTYPENAME;
+            val.set_typename(decl);
             break;
         }
         default:
             assert(false);
     }
-    val.sym = decl;
 
     QualType type = decl->type();
     val.set_type(type);
@@ -1535,7 +1532,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                 if (index_val.constval() < 0 ||
                     (array->size() != 0 && array->size() <= index_val.constval()))
                 {
-                    report(index, 32) << base_val.sym->name(); /* array index out of bounds */
+                    report(index, 32);
                     return false;
                 }
             } else {
@@ -1543,7 +1540,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                 if (index_val.constval() < 0 ||
                     (array->size() != 0 && array->size() <= index_val.constval()))
                 {
-                    report(index, 32) << base_val.sym->name(); /* array index out of bounds */
+                    report(index, 32);
                     return false;
                 }
             }
@@ -1553,8 +1550,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto& out_val = expr->val();
     out_val = base_val;
 
-    out_val.set_slice(iARRAYELEM, base_val.sym);
-    out_val.set_type(array->inner());
+    out_val.set_slice(iARRAYELEM, QualType(array->inner()));
     return true;
 }
 
@@ -1632,10 +1628,10 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
 
     auto& val = expr->val();
     if (base_val.ident == iTYPENAME) {
-        auto map = MethodmapDecl::LookupMethodmap(base_val.sym);
+        auto map = MethodmapDecl::LookupMethodmap(base_val.typename_decl());
         auto member = map ? map->FindMember(expr->name()) : nullptr;
         if (!member || !member->as<MethodmapMethodDecl>()) {
-            report(expr, 444) << base_val.sym->name() << expr->name();
+            report(expr, 444) << base_val.typename_decl()->name() << expr->name();
             return false;
         }
         auto method = member->as<MethodmapMethodDecl>();
@@ -1644,8 +1640,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
             return false;
         }
         expr->set_resolved(method);
-        val.ident = iFUNCTN;
-        val.sym = method;
+        val.set_function(method);
         markusage(method, uREAD);
         return true;
     }
@@ -1693,8 +1688,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return false;
     }
 
-    val.ident = iFUNCTN;
-    val.sym = method;
+    val.set_function(method);
     markusage(method, uREAD);
     return true;
 }
@@ -1734,7 +1728,7 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 base = expr->set_base(new RvalueExpr(base));
             if (resolved->as<LayoutFieldDecl>() || !method->is_static())
                 call->set_implicit_this(base);
-            return val.sym->as<FunctionDecl>()->canonical();
+            return val.fun()->canonical();
         }
         case ExprKind::SymbolExpr: {
             call->set_implicit_this(nullptr);
@@ -1819,9 +1813,8 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
             return false;
         }
 
-        val.ident = iFUNCTN;
-        val.sym = fun;
-        markusage(val.sym, uREAD);
+        val.set_function(fun);
+        markusage(fun, uREAD);
         return true;
     }
 
@@ -1904,7 +1897,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             return true;
 
         case iTYPENAME: {
-            auto es = cv.sym->as<EnumStructDecl>();
+            auto es = cv.typename_decl()->as<EnumStructDecl>();
             if (!es) {
                 report(child, 72);
                 return false;
@@ -2141,7 +2134,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
         // Always pass by reference.
         if (val->ident == iVARIABLE) {
-            if (val->sym->is_const() && !arg->type_info().is_const) {
+            if (val->sym()->is_const() && !arg->type_info().is_const) {
                 // Treat a "const" variable passed to a function with a
                 // non-const "variable argument list" as a constant here.
                 if (!lvalue) {
@@ -2173,7 +2166,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
-        if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
+        if (val->sym() && val->sym()->is_const() && !arg->type_info().is_const) {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
@@ -2210,7 +2203,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             }
         }
 
-        if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
+        if (val->sym() && val->sym()->is_const() && !arg->type_info().is_const) {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }

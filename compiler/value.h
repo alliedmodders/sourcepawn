@@ -29,19 +29,26 @@ namespace sp {
 namespace cc {
 
 class Decl;
+class FunctionDecl;
 class MethodmapPropertyDecl;
+class VarDeclBase;
 
 struct value {
-    value() : ident(iINVALID), sym(nullptr), type_(nullptr) {}
+    value() : ident(iINVALID), type_(nullptr) {}
 
     IdentifierKind ident : 6;
-    Decl* sym;
     QualType type_;
 
     Type* type() const { return *type_; }
     QualType qualified() const { return type_; }
     void set_type(Type* type) { type_ = QualType(type); }
     void set_type(QualType type) { type_ = type; }
+
+    VarDeclBase* sym() const {
+        if (ident != iVARIABLE)
+            return nullptr;
+        return sym_;
+    }
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
@@ -55,16 +62,19 @@ struct value {
         }
     }
 
-    void set_variable(Decl* decl, QualType type) {
+    void set_variable(VarDeclBase* decl, QualType type) {
         this->ident = iVARIABLE;
-        this->sym = decl;
+        this->sym_ = decl;
         set_type(type);
     }
     void set_expr(QualType type) {
         this->ident = iEXPRESSION;
         set_type(type);
     }
-
+    void set_typename(Decl* decl) {
+        this->ident = iTYPENAME;
+        this->decl_ = decl;
+    }
     MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
             return nullptr;
@@ -82,10 +92,22 @@ struct value {
         ident = iCONSTEXPR;
         constval_ = val;
     }
-
-    void set_slice(IdentifierKind ident, Decl* sym) {
+    void set_slice(IdentifierKind ident, QualType type) {
+        assert(ident == iARRAYELEM);
         this->ident = ident;
-        this->sym = sym;
+        set_type(type);
+    }
+    void set_function(FunctionDecl* fun) {
+        this->ident = iFUNCTN;
+        this->fun_ = fun;
+    }
+    Decl* typename_decl() const {
+        assert(ident == iTYPENAME);
+        return decl_;
+    }
+    FunctionDecl* fun() const {
+        assert(ident == iFUNCTN);
+        return fun_;
     }
 
     union {
@@ -93,6 +115,12 @@ struct value {
         MethodmapPropertyDecl* accessor_;
         // when ident == iCONSTEXPR
         cell constval_;
+        // when ident == iVARIABLE
+        VarDeclBase* sym_;
+        // when ident == iFUNCTN
+        FunctionDecl* fun_;
+        // when ident == iTYPENAME
+        Decl* decl_;
     };
 
     static value ErrorValue() {

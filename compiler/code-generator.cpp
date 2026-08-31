@@ -1352,11 +1352,11 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         bool needs_temp = false;
         if (arg->type_info().is_varargs) {
             if (val.ident == iVARIABLE && !val.type()->isComposite()) {
-                assert(val.sym);
+                assert(val.sym());
                 assert(lvalue);
                 /* treat a "const" variable passed to a function with a non-const
                  * "variable argument list" as a constant here */
-                if (val.sym->is_const() && !arg->type_info().is_const)
+                if (val.sym()->is_const() && !arg->type_info().is_const)
                     needs_temp = true;
             } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
                 needs_temp = !val.type()->isComposite();
@@ -1366,7 +1366,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                 if (needs_temp)
                     EmitRvalue(val);
                 else if (val.ident == iVARIABLE)
-                    EmitAddress(val.sym->as<VarDeclBase>());
+                    EmitAddress(val.sym());
             }
 
             if (needs_temp) {
@@ -1381,7 +1381,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             }
         } else if (arg->type_info().type->isReference()) {
             if (val.ident == iVARIABLE && !val.type()->isComposite())
-                EmitAddress(val.sym->as<VarDeclBase>());
+                EmitAddress(val.sym());
         }
 
         // Always pass int64s by reference, as a hack for backward compatibility
@@ -1557,7 +1557,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
     if (zap) {
-        if (v.ident == iVARIABLE && v.sym->is_const())
+        if (v.ident == iVARIABLE && v.sym()->is_const())
             zap = false;
         else if (v.ident == iACCESSOR && !v.accessor()->setter())
             zap = false;
@@ -1621,7 +1621,7 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             break;
         case iVARIABLE: {
             if (lval.type()->isReference()) {
-                auto var = lval.sym->as<VarDeclBase>();
+                auto var = lval.sym();
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
                 __ emit(OP_LOAD_S, VarSlot(var->addr()));
                 if (lval.type()->inner()->isInt64())
@@ -1636,7 +1636,7 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             [[fallthrough]];
         }
         default: {
-            auto var = lval.sym->as<VarDeclBase>();
+            auto var = lval.sym();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
                 if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
                     // int64 arguments are passed by-ref for compatibility.
@@ -1697,7 +1697,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
             break;
         case iVARIABLE: {
             if (lval.type()->isReference()) {
-                auto var = lval.sym->as<VarDeclBase>();
+                auto var = lval.sym();
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
 
                 __ emit(OP_LOAD_S, VarSlot(var->addr()));
@@ -1711,7 +1711,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
             [[fallthrough]];
         }
         default: {
-            auto var = lval.sym->as<VarDeclBase>();
+            auto var = lval.sym();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
                 if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));

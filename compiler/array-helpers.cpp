@@ -324,8 +324,8 @@ bool ArrayTypeResolver::ResolveDimExprs() {
 
             // sLOCAL guarantees we have a decl.
             decl_->set_implicit_dynamic_array();
-        } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym &&
-                   v.sym->as<EnumDecl>())
+        } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym() &&
+                   v.sym()->as<EnumDecl>())
         {
             report(expr->pos(), 153);
             return false;

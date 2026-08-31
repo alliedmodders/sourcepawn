@@ -56,7 +56,7 @@ static const char* errmsg[] = {
     /*029*/ "invalid expression, assumed zero\n",
     /*030*/ "compound statement not closed at the end of file (started at line %d)\n",
     /*031*/ "unknown directive\n",
-    /*032*/ "array index out of bounds (variable \"%s\")\n",
+    /*032*/ "array index out of bounds\n",
     /*033*/ "operator invalid for type \"%s\"\n",
     /*034*/ "argument does not have a default value (argument %d)\n",
     /*035*/ "argument type mismatch (argument %d)\n",
