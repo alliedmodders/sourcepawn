@@ -385,6 +385,11 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
         return ValidateEnumStructInitializer(decl->type()->asEnumStruct(), init);
     }
 
+    if (init->as<StructExpr>()) {
+        report(init->pos(), 428);
+        return false;
+    }
+
     // Non-literal initialization (e.g. from a function result).
     if (!CheckRvalue(init))
         return false;
@@ -588,6 +593,11 @@ bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
         case ExprKind::FunctionExpr:
             return CheckFunctionExpr(expr->to<FunctionExpr>());
+        case ExprKind::StructInitFieldExpr:
+            return CheckWrappedExpr(expr, expr->to<StructInitFieldExpr>()->value);
+        case ExprKind::DefaultArgExpr:
+        case ExprKind::SpreadArgsExpr:
+            return true;
         default:
             assert(false);
             report(expr, 420) << (int)expr->kind();

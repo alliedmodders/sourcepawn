@@ -307,7 +307,7 @@ static const char* errmsg_ex[] = {
     /*425*/ "exponential must be followed by integer\n",
     /*426*/ "macro arguments must be %% followed by a single digit\n",
     /*427*/ "macro argument %%%d already used\n",
-    /*428*/ "unused\n",
+    /*428*/ "cannot use pstruct initializers for enum structs\n",
     /*429*/ "wrong number of macro arguments (expected %s, got %s)\n",
     /*430*/ "invalid macro definition\n",
     /*431*/ "script uses too much memory, cannot compile\n",
