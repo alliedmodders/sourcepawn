@@ -882,11 +882,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             LowerUnary(LL_CVT_F32, float32_type_);
             break;
         case OP_CVT_F64: {
-            const TypeDesc* src_type = stack_.back()->type;
-            if (src_type->kind() == TypeKind::Float32)
-                LowerUnary(LL_CVT_F32_F64, float64_type_);
-            else
+            if (stack_.back()->type->kind() == TypeKind::Float32) {
+                ExprNode* val = popStack();
+                pushStack(CreateOpNode(float64_type_, LL_CVT_F32_F64, val, nullptr));
+            } else {
                 LowerUnary(LL_CVT_F64, float64_type_);
+            }
             break;
         }
 
