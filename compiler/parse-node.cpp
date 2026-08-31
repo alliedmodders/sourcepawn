@@ -255,7 +255,18 @@ MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
     return nullptr;
 }
 
-Decl* MethodmapDecl::FindMember(Atom* name) const {
+Decl* LayoutDecl::FindMember(Atom* name) {
+    switch (kind()) {
+        case StmtKind::MethodmapDecl:
+            return to<MethodmapDecl>()->FindMember(name);
+        case StmtKind::ClassDecl:
+            return to<ClassDecl>()->FindMember(name);
+        default:
+            return nullptr;
+    }
+}
+
+Decl* MethodmapDecl::FindMember(Atom* name) {
     for (const auto& prop : properties_) {
         if (prop->name() == name)
             return prop;
@@ -266,6 +277,18 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     }
     if (parent_)
         return parent_->FindMember(name);
+    return nullptr;
+}
+
+Decl* ClassDecl::FindMember(Atom* name) {
+    for (const auto& prop : properties_) {
+        if (prop->name() == name)
+            return prop;
+    }
+    for (const auto& method : methods_) {
+        if (method->decl_name() == name)
+            return method;
+    }
     return nullptr;
 }
 

@@ -1833,15 +1833,21 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
 
     auto& val = expr->val();
     if (base_val.ident == iTYPENAME) {
-        auto map = MethodmapDecl::LookupMethodmap(base_val.typename_decl());
-        auto member = map ? map->FindMember(expr->name()) : nullptr;
+        Decl* typename_decl = base_val.typename_decl();
+        auto layout = typename_decl->as<LayoutDecl>();
+        if (!layout) {
+            report(expr, 444) << typename_decl->name() << expr->name();
+            return false;
+        }
+
+        auto member = layout->FindMember(expr->name());
         if (!member || !member->as<MemberFunctionDecl>()) {
-            report(expr, 444) << base_val.typename_decl()->name() << expr->name();
+            report(expr, 444) << typename_decl->name() << expr->name();
             return false;
         }
         auto method = member->as<MemberFunctionDecl>();
         if (!method->is_static()) {
-            report(expr, 176) << method->decl_name() << map->name();
+            report(expr, 176) << method->decl_name() << typename_decl->name();
             return false;
         }
         expr->set_resolved(method);

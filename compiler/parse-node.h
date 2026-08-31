@@ -1835,6 +1835,8 @@ class LayoutDecl : public Decl
                node->kind() == StmtKind::ClassDecl;
     }
 
+    Decl* FindMember(Atom* name);
+
     PoolArray<PropertyDecl*>& properties() { return properties_; }
     const PoolArray<PropertyDecl*>& properties() const { return properties_; }
 
@@ -1961,6 +1963,8 @@ class ClassDecl : public LayoutDecl
     QualType type() const { return QualType(type_); }
     MemberFunctionDecl* ctor() const { return ctor_; }
 
+    Decl* FindMember(Atom* name);
+
   private:
     Type* type_ = nullptr;
     MemberFunctionDecl* ctor_ = nullptr;
@@ -2041,7 +2045,7 @@ class MethodmapDecl : public LayoutDecl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapDecl; }
 
-    Decl* FindMember(Atom* name) const;
+    Decl* FindMember(Atom* name);
 
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
