@@ -18,9 +18,9 @@
 #include <vector>
 
 #include <amtl/am-string.h>
-#include "v2/interp/ll-op.h"
-#include "v2/interp/llcode.h"
-#include "v2/interp/lowering.h"
+#include "v2/lowering/ll-op.h"
+#include "v2/lowering/llcode.h"
+#include "v2/lowering/lowering.h"
 #include "v2/method-info.h"
 #include "v2/runtime.h"
 #include "vm/binary-reader.h"

@@ -14,7 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
-#include "v2/interp/lowering.h"
+#include "v2/lowering/lowering.h"
 
 #include <assert.h>
 #include <string.h>
@@ -28,9 +28,9 @@
 #include "binary-reader.h"
 #include "type-desc.h"
 #include "v2/control-flow.h"
-#include "v2/interp/llcode.h"
-#include "v2/interp/ll-op.h"
-#include "v2/interp/lowering-assembler.h"
+#include "v2/lowering/llcode.h"
+#include "v2/lowering/ll-op.h"
+#include "v2/lowering/lowering-assembler.h"
 #include "v2/method-info.h"
 #include "v2/opcodes.h"
 #include "v2/runtime.h"

@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
-#include "v2/interp/interpreter.h"
+#include "v2/interpreter.h"
 
 #include <cstddef>
 #include <fenv.h>
@@ -31,9 +31,9 @@
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
-#include "v2/interp/llcode.h"
-#include "v2/interp/ll-op.h"
-#include "v2/interp/lowering.h"
+#include "v2/lowering/llcode.h"
+#include "v2/lowering/ll-op.h"
+#include "v2/lowering/lowering.h"
 #include "v2/method-info.h"
 #include "v2/runtime-helpers.h"
 #include "v2/runtime.h"
