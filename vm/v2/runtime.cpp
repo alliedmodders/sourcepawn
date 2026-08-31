@@ -543,7 +543,7 @@ bool Runtime::UsesDirectArrays() {
 bool Runtime::CallGlobalCtor() {
     cell_t ignore_result = 0;
 
-    auto ctor_index = image_->FindRttiMethod(".ctor");
+    auto ctor_index = image_->FindRttiMethod(".init");
     if (!ctor_index)
         return true;
 

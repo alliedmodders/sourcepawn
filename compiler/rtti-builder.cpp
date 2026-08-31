@@ -172,8 +172,10 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_
         report(fun, 484);
 
     smx_rtti_method& method = methods_->add();
-    if (auto mf = fun->as<MemberFunctionDecl>(); mf && mf->is_ctor())
-        method.name = names_->add(*cc_.atoms(), ".constructor");
+
+    auto mf = fun->as<MemberFunctionDecl>();
+    if (mf && mf->is_ctor() && mf->parent()->as<ClassDecl>())
+        method.name = names_->add(*cc_.atoms(), ".ctor");
     else
         method.name = names_->add(fun->name());
     method.pcode_start = pcode_start;

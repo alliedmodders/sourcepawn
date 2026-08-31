@@ -1752,7 +1752,7 @@ class FunctionDecl : public Decl
     bool returns_value_ SP_BITFIELD(1);  // whether any path returns a value
     int lambda_count_ = 0;
     bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
-    bool is_global_ctor_ SP_BITFIELD(1); // global constructor (.ctor)
+    bool is_global_ctor_ SP_BITFIELD(1); // global constructor (.init)
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
     bool checked_one_signature SP_BITFIELD(1);
     bool compared_prototype_args SP_BITFIELD(1);

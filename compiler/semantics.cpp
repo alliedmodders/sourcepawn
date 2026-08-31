@@ -92,13 +92,13 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
     assert(!file_ctors.empty());
 
     if (file_ctors.size() == 1) {
-        file_ctors[0]->set_name(cc_.atom(".ctor"));
+        file_ctors[0]->set_name(cc_.atom(".init"));
         tree->global_ctors() = PoolArray<FunctionDecl*>(file_ctors);
         return;
     }
 
     declinfo_t decl{};
-    decl.name = cc_.atom(".ctor");
+    decl.name = cc_.atom(".init");
     decl.type.type = types_->type_void();
 
     auto fun = new FunctionDecl(token_pos_t{}, decl);
@@ -124,7 +124,7 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
 FunctionDecl* Semantics::GenerateInitFunction(const std::vector<VarDeclBase*>& vars,
                                               uint32_t suffix)
 {
-    auto name = cc_.atom(".ctor." + std::to_string(suffix));
+    auto name = cc_.atom(".init." + std::to_string(suffix));
 
     declinfo_t decl{};
     decl.name = name;
