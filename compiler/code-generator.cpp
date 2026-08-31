@@ -2484,14 +2484,24 @@ void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
     }
 
     for (size_t i = 0; i < fun->NumUpvars(); i++) {
-        auto var = fun->GetUpvar(i);
+        auto upvar = fun->GetUpvar(i);
+        auto var = upvar->var();
 
-        // We can't BindLvalue because we don't have an expr, but we don't
-        // need one here technically.
-        if (var->type()->isCompositeValue())
+        if (upvar->enclosure() != fun_) {
+            // The upvar comes from a parent capture, and was implicitly
+            // propagated down through each intermediate closure's upvars. Thus,
+            // we can grab our copy from our own upvars.
+            auto parent_upvar = fun_->FindUpvarDecl(var);
+            assert(parent_upvar);
+
+            __ emit(OP_LOAD_UPVAR, UpvarIndex(parent_upvar->upvar_index()));
+        } else if (var->type()->isCompositeValue()) {
             EmitAddress(var);
-        else
+        } else {
+            // Note: We can't BindLvalue because we don't have an expr, but we
+            // don't need one here technically, since it's just a variable.
             EmitRvalue(ExprVal{var});
+        }
     }
 
     __ emit(OP_NEWCLOSURE, &fun->cg()->method_id);

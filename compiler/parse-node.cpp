@@ -210,7 +210,12 @@ UpvarDecl* FunctionDecl::AddUpvar(const token_pos_t& pos, FunctionDecl* owner, V
     if (!var->is_shared()) {
         uint16_t index = static_cast<uint16_t>(upvars_.size());
         upvar_decl->set_upvar_index(index);
-        upvars_.push_back(var);
+        upvars_.push_back(upvar_decl);
+
+        // If a non-shared upvar crosses any intermediate closures, we need to propagate it
+        // through each intermediate frame, otherwise there is no way to get the value.
+        for (FunctionDecl* iter = outer_; iter != nullptr && iter != owner; iter = iter->outer_)
+            iter->AddUpvar(pos, owner, var);
     }
 
     var->set_is_captured();
@@ -221,6 +226,12 @@ LayoutFieldDecl* FunctionDecl::GetSharedVarField(VarDeclBase* var) {
     auto iter = shared_vars_.find(var);
     assert(iter != shared_vars_.end());
     return iter->second;
+}
+
+UpvarDecl* FunctionDecl::FindUpvarDecl(VarDeclBase* var) const {
+    if (auto iter = upvar_decls_.find(var); iter != upvar_decls_.end())
+        return iter->second;
+    return nullptr;
 }
 
 FunctionType* CallExpr::callee_type() {

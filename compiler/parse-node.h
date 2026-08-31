@@ -1710,7 +1710,8 @@ class FunctionDecl : public Decl
     UpvarDecl* AddUpvar(const token_pos_t& pos, FunctionDecl* owner, VarDeclBase* var);
     LayoutFieldDecl* GetSharedVarField(VarDeclBase* var);
     size_t NumUpvars() const { return upvars_.size(); }
-    VarDeclBase* GetUpvar(size_t index) const { return upvars_[index]; }
+    UpvarDecl* GetUpvar(size_t index) const { return upvars_[index]; }
+    UpvarDecl* FindUpvarDecl(VarDeclBase* var) const;
 
     // Adds shared object handles as copy-capture upvars, so codegen treats them uniformly.
     void AddUpvarsForSharedObjects();
@@ -1783,7 +1784,7 @@ class FunctionDecl : public Decl
     FunctionDecl* outer_ = nullptr;
 
     // Variables this function has copy-captured from an outer function.
-    PoolList<VarDeclBase*> upvars_;
+    PoolList<UpvarDecl*> upvars_;
     PoolMap<VarDeclBase*, UpvarDecl*> upvar_decls_;
 
     // Local variables that were captured by reference in inner functions.
