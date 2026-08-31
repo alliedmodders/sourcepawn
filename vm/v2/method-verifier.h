@@ -43,7 +43,6 @@ class MethodVerifier final
     int32_t max_stack() const { return max_stack_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
-    int error() const { return error_; }
     ke::FixedArray<uint8_t>&& local_sizes() { return std::move(local_sizes_); }
 
   private:
@@ -138,7 +137,6 @@ class MethodVerifier final
     const uint8_t* prev_cip_;
     const uint8_t* stop_at_;
     ExternalFuncRefCallback collect_func_refs_;
-    int error_;
 };
 
 } // namespace sp::v2

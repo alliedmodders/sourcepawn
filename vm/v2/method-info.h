@@ -12,6 +12,8 @@
 //
 #pragma once
 
+#include <optional>
+
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <sp_vm_types.h>
@@ -42,11 +44,10 @@ class MethodInfo final : public BaseMethodInfo
         if (!checked_)
             InternalValidate();
         graph_ = nullptr;
-        return validation_error_ == SP_ERROR_NONE;
+        return *checked_;
     }
     uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
-    int validationError() const { return validation_error_; }
     uint32_t pcode_offset() const override;
     int32_t max_stack() const { return max_stack_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
@@ -77,8 +78,7 @@ class MethodInfo final : public BaseMethodInfo
     std::unique_ptr<CompiledFunction> jit_;
     ke::RefPtr<ControlFlowGraph> graph_;
 
-    bool checked_;
-    int validation_error_;
+    std::optional<bool> checked_;
     int32_t max_stack_;
     uint32_t max_eval_stack_depth_;
     uint32_t max_eval_stack_bytes_;

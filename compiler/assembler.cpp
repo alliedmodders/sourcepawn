@@ -73,13 +73,14 @@ VerifyBinary(const char* file, void* buffer, size_t size)
     if (!env)
         FailedValidation("could not initialize environment");
 
-    char msgbuf[255];
-    std::unique_ptr<BaseRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
-                                                                nullptr, msgbuf, sizeof(msgbuf)));
-    if (!rt)
-        FailedValidation(msgbuf);
-
     ExceptionHandler eh(env.get());
+    std::unique_ptr<sp::BaseRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
+                                                                 nullptr, true /* data_only */));
+    if (!rt) {
+        const char* message = eh.HasException() ? eh.Message() : "unknown error";
+        FailedValidation(message);
+    }
+
     if (!rt->PerformFullValidation()) {
         const char* message = eh.HasException() ? eh.Message() : "unknown error";
         FailedValidation(message);

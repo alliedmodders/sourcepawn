@@ -21,12 +21,11 @@ namespace sp::v2 {
 MethodInfo::MethodInfo(Runtime* rt, uint32_t method_index)
  : rt_(rt),
    method_index_(method_index),
-   checked_(false),
-   validation_error_(SP_ERROR_NONE),
    max_stack_(0),
    max_eval_stack_depth_(0),
    max_eval_stack_bytes_(0)
-{}
+{
+}
 
 uint32_t MethodInfo::pcode_offset() const {
     return rt_->image()->GetMethod(method_index_)->pcode_start;
@@ -47,14 +46,17 @@ MethodInfo::setCompiledFunction(CompiledFunction* fun) {
 
 void
 MethodInfo::InternalValidate() {
-    checked_ = true;
+    if (checked_.has_value())
+        return;
 
     MethodVerifier verifier(rt_, method_index_);
     graph_ = verifier.verify();
     if (!graph_) {
-        validation_error_ = verifier.error();
+        checked_ = {false};
         return;
     }
+
+    checked_ = {true};
     max_stack_ = verifier.max_stack();
     max_eval_stack_depth_ = verifier.max_eval_stack_depth();
     max_eval_stack_bytes_ = verifier.max_eval_stack_bytes();

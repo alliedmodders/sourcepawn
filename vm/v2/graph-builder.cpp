@@ -23,8 +23,7 @@ using namespace ke;
 
 GraphBuilder::GraphBuilder(Runtime* rt, const smx_rtti_method* method)
  : rt_(rt),
-   start_offset_(method->pcode_start),
-   error_code_(0)
+   start_offset_(method->pcode_start)
 {
     start_at_ = rt_->code().bytes + method->pcode_start;
     stop_at_ = rt_->code().bytes + method->pcode_end;
@@ -38,8 +37,6 @@ GraphBuilder::build() {
 
     if (!scan())
         return nullptr;
-
-    assert(!error_code_);
 
     graph_->computeOrdering();
     graph_->computeDominance();
@@ -445,7 +442,7 @@ GraphBuilder::cleanup() {
 
 bool
 GraphBuilder::error(int code) {
-    error_code_ = code;
+    rt_->ReportErrorNumber(code);
     return false;
 }
 

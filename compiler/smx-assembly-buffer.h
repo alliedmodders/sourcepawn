@@ -153,7 +153,7 @@ class SmxAssemblyBuffer : public ByteBuffer
         else
           emit(OP_ADDR_S, StackSlot(sym->addr()));
       } else {
-        emit(OP_PUSH_C, sym->addr());
+        emit(OP_PUSH_C, sym->label());
       }
     }
   }
@@ -165,7 +165,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
       emit(OP_ADDR_S, StackSlot(sym->addr()));
     } else {
-      emit(OP_PUSH_C, sym->addr());
+      emit(OP_PUSH_C, sym->label());
     }
     emit(OP_MOVS, size);
   }

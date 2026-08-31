@@ -340,10 +340,8 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
 
     // The JIT performs its own validation. Handle the interpreter here.
     {
-        if (!method->Validate()) {
-            cx->ReportErrorNumber(method->validationError());
+        if (!method->Validate())
             return false;
-        }
     }
 
     return v1::Interpreter::Run(cx, method, result);
@@ -386,38 +384,36 @@ bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, 
 
     // The JIT performs its own validation. Handle the interpreter here.
     {
-        if (!method->Validate()) {
-            cx->ReportErrorNumber(method->validationError());
+        if (!method->Validate())
             return false;
-        }
     }
 
     return v2::Interpreter::Run(cx, method, result);
 }
 
-static BaseRuntime*
-LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
-    if (!image->validate()) {
-        const char* errorMessage = image->errorMessage();
-        if (!errorMessage)
-            errorMessage = "binary parse error";
-        UTIL_Format(error, maxlength, "%s", errorMessage);
+static BaseRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file,
+                                    bool data_only)
+{
+    if (!image->validate())
         return nullptr;
-    }
 
-    BaseRuntime* pRuntime = nullptr;
+    std::unique_ptr<BaseRuntime> pRuntime;
     if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
-        pRuntime = new sp::v1::PluginRuntime(image.release());
+        pRuntime = std::make_unique<sp::v1::PluginRuntime>(image.release());
     } else {
-        pRuntime = new sp::v2::Runtime(image.release());
+        pRuntime = std::make_unique<sp::v2::Runtime>(image.release());
     }
 
+    ExceptionHandler eh(Environment::get());
     if (!pRuntime->Initialize()) {
-        delete pRuntime;
+        if (!eh.HasException())
+            Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
 
-        UTIL_Format(error, maxlength, "out of memory");
+        eh.Rethrow();
         return nullptr;
     }
+
+    assert(!eh.HasException());
 
     size_t len = strlen(file);
     for (size_t i = len - 1; i < len; i--) {
@@ -434,36 +430,33 @@ LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t
     if (*pRuntime->Name() == '\0')
         pRuntime->SetNames(file, file);
 
-    if (!pRuntime->CallGlobalCtor()) {
-        delete pRuntime;
-        UTIL_Format(error, maxlength, "failed to initialize globals");
+    if (!data_only && !pRuntime->CallGlobalCtor())
         return nullptr;
-    }
 
-    return pRuntime;
+    return pRuntime.release();
 }
 
 BaseRuntime*
-Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
+Environment::LoadBinaryFromFile(const char* file, bool data_only) {
     FILE* fp = fopen(file, "rb");
     if (!fp) {
-        UTIL_Format(error, maxlength, "could not open file");
+        ReportError(SP_ERROR_NOT_FOUND, "could not open file");
         return nullptr;
     }
 
     auto image = std::make_unique<SmxImage>(fp);
-    return LoadImage(std::move(image), file, error, maxlength);
+    return LoadImage(std::move(image), file, data_only);
 }
 
 BaseRuntime*
 Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                  void (*dtor)(uint8_t*), char* error, size_t maxlength) {
+                                  void (*dtor)(uint8_t*), bool data_only) {
     std::unique_ptr<SmxImage> image;
     if (dtor)
         image = std::make_unique<SmxImage>(addr, size, dtor);
     else
         image = std::make_unique<SmxImage>(addr, size);
-    return LoadImage(std::move(image), file, error, maxlength);
+    return LoadImage(std::move(image), file, data_only);
 }
 
 void
@@ -485,7 +478,6 @@ ErrorReport::ErrorReport(int code, const char* message, BaseRuntime* cx, IPlugin
    blame_(pf)
 {
 }
-
 
 const char*
 ErrorReport::Message() const {
@@ -629,41 +621,39 @@ int Environment::GetPendingExceptionCode(const ExceptionHandler* handler) {
     return exception_code_;
 }
 
-bool
-Environment::hasPendingException() const {
+bool Environment::hasPendingException() const {
     return exception_code_ != SP_ERROR_NONE;
 }
 
-void
-Environment::clearPendingException() {
+void Environment::clearPendingException() {
     exception_code_ = SP_ERROR_NONE;
 }
 
-int
-Environment::getPendingExceptionCode() const {
+void Environment::ClearPendingException(ExceptionHandler* handler) {
+    assert(handler == eh_top_);
+    clearPendingException();
+}
+
+int Environment::getPendingExceptionCode() const {
     return exception_code_;
 }
 
-void
-Environment::enterInvoke(InvokeFrame* frame) {
+void Environment::enterInvoke(InvokeFrame* frame) {
     if (!top_)
         frame_id_++;
     top_ = frame;
 }
 
-void
-Environment::leaveJitInvoke(JitInvokeFrame* frame) {
+void Environment::leaveJitInvoke(JitInvokeFrame* frame) {
     assert(frame == top_);
     exit_fp_ = frame->prev_exit_fp();
 }
 
-void
-Environment::leaveInvoke() {
+void Environment::leaveInvoke() {
     top_ = top_->prev();
 }
 
-bool
-Environment::IsJitAvailable() {
+bool Environment::IsJitAvailable() {
 #if defined(SP_HAS_JIT)
     return v1::CompilerBase::IsSupported();
 #else

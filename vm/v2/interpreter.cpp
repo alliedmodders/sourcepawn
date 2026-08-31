@@ -476,11 +476,8 @@ bool Interpreter::run() {
                         return false;
                 } else {
                     RefPtr<MethodInfo> target = cx_->AcquireMethod(method_index);
-                    if (!target->Validate()) {
-                        cx_->ReportErrorNumber(target->validationError());
+                    if (!target->Validate())
                         return false;
-                    }
-
                     {
                         // Update sp_ so that the callee can find its parameters.
                         auto updated_sp = (cell_t)((uint8_t*)eval_stack_ptr_ - cx_->memory());

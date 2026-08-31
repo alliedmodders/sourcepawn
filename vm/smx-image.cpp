@@ -29,6 +29,24 @@ SmxImage::SmxImage(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
  : FileReader(addr, length, dtor) {
 }
 
+bool SmxImage::error(const char* msg) {
+    Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg);
+    return false;
+}
+
+bool SmxImage::error(const std::string& msg) {
+    Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg.c_str());
+    return false;
+}
+
+bool SmxImage::errorf(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    Environment::get()->ReportErrorVA(SP_ERROR_FILE_FORMAT, fmt, ap);
+    va_end(ap);
+    return false;
+}
+
 // Validating SMX v1 scripts is fairly expensive. We reserve real validation
 // for v2.
 bool
@@ -383,12 +401,10 @@ SmxImage::validateRtti() {
         const char* table_name = mandatory_tables[i];
         const Section* section = findSection(table_name);
         if (!section) {
-            error_ = StringPrintf("missing %s section", table_name);
-            return false;
+            return errorf("missing %s section", table_name);
         }
         if (!validateRttiHeader(section)) {
-            error_ = StringPrintf("could not validate %s section", table_name);
-            return false;
+            return errorf("could not validate %s section", table_name);
         }
     }
 
@@ -406,8 +422,7 @@ SmxImage::validateRtti() {
         if (!section)
             continue;
         if (!validateRttiHeader(section)) {
-            error_ = StringPrintf("could not validate %s section", table_name);
-            return false;
+            return errorf("could not validate %s section", table_name);
         }
     }
 

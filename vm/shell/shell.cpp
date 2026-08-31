@@ -529,12 +529,12 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 
 static int Execute(const char* file)
 {
-  ExceptionHandler eh(sEnv->APIv2());
+  ExceptionHandler eh(sEnv);
 
-  char error[255];
-  std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file));
   if (!rt) {
-    fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
+    const char* message = eh.HasException() ? eh.Message() : "unknown error";
+    fprintf(stderr, "Could not load plugin %s: %s\n", file, message);
     return 1;
   }
 

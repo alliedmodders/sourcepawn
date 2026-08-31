@@ -916,6 +916,9 @@ class ISourcePawnEnvironment
     // @brief Returns the message of the pending exception.
     virtual const char* GetPendingExceptionMessage(const ExceptionHandler* handler) = 0;
 
+    // @brief Clears any pending exception.
+    virtual void ClearPendingException(ExceptionHandler* handler) = 0;
+
     // @brief Returns the code of the pending exception.
     virtual int GetPendingExceptionCode(const ExceptionHandler* handler) = 0;
 };
@@ -940,13 +943,13 @@ class ExceptionHandler
     friend class sp::Environment;
 
   public:
-    ExceptionHandler(ISourcePawnEnvironment* api)
-     : env_(api),
+    explicit ExceptionHandler(ISourcePawnEnvironment* env)
+     : env_(env),
        catch_(true)
     {
         env_->EnterExceptionHandlingScope(this);
     }
-    ExceptionHandler(IPluginContext* ctx)
+    explicit ExceptionHandler(IPluginContext* ctx)
      : env_(ctx->GetEnvironment()),
        catch_(true)
     {
@@ -964,11 +967,18 @@ class ExceptionHandler
         catch_ = false;
     }
 
+    // Remove the exception so another one can be thrown.
+    void ClearException() {
+        env_->ClearPendingException(this);
+    }
+
     bool HasException() const {
         return env_->HasPendingException(this);
     }
 
     const char* Message() const {
+        if (!HasException())
+            return nullptr;
         return env_->GetPendingExceptionMessage(this);
     }
 
@@ -997,7 +1007,7 @@ class ExceptionHandler
 class DetectExceptions : public ExceptionHandler
 {
   public:
-    DetectExceptions(ISourcePawnEngine2* api)
+    DetectExceptions(ISourcePawnEnvironment* api)
      : ExceptionHandler(api)
     {
         catch_ = false;

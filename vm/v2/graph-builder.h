@@ -41,10 +41,6 @@ class GraphBuilder
 
     ke::RefPtr<ControlFlowGraph> build();
 
-    int error_code() const {
-        return error_code_;
-    }
-
   private:
     bool prescan();
     bool prescan_jump_target(OPCODE op, cell_t target);
@@ -101,7 +97,6 @@ class GraphBuilder
     Runtime* rt_;
     uint32_t start_offset_;
     ke::RefPtr<ControlFlowGraph> graph_;
-    int error_code_;
 
     // Reader state.
     const uint8_t* start_at_;

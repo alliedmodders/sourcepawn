@@ -55,10 +55,6 @@ class SmxImage final : public FileReader
     const sp_file_hdr_t* hdr() const { return hdr_; }
     const char* names() const { return names_; }
 
-    const char* errorMessage() const {
-        return error_.c_str();
-    }
-
   public:
     Code DescribeCode() const;
     Data DescribeData() const;
@@ -211,10 +207,9 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
 
   protected:
-    bool error(const char* msg) {
-        error_ = msg;
-        return false;
-    }
+    bool error(const char* msg);
+    bool error(const std::string& msg);
+    bool errorf(const char* fmt, ...) KE_PRINTF_FUNCTION(2, 3);
     bool validateName(size_t offset) const;
     bool validateSection(const Section* section) const;
     bool validateRttiHeader(const Section* section) const;
@@ -272,7 +267,6 @@ class SmxImage final : public FileReader
 
   private:
     sp_file_hdr_t* hdr_ = nullptr;
-    std::string error_;
     const char* header_strings_ = nullptr;
     std::vector<Section> sections_;
 

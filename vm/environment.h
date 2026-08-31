@@ -97,6 +97,7 @@ class Environment : public ISourcePawnEnvironment
      * Must be set before any plugin code is executed.
      */
     void SetDebugMetadataFlags(int flags);
+    void ClearPendingException(ExceptionHandler* handler) override;
 
     // Runtime functions.
     const char* GetErrorString(int err) override;
@@ -141,9 +142,9 @@ class Environment : public ISourcePawnEnvironment
     bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
 
     // Loading.
-    BaseRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
+    BaseRuntime* LoadBinaryFromFile(const char* file, bool data_only = false);
     BaseRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                            void (*dtor)(uint8_t*), char* error, size_t maxlength);
+                                      void (*dtor)(uint8_t*), bool data_only = false);
 
     // Helpers.
     void SetProfiler(IProfilingTool* profiler) {

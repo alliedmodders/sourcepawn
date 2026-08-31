@@ -40,10 +40,11 @@ Verify(sp::BaseRuntime* rt)
 static bool
 Analyze(const char* file)
 {
-  char error[255];
-  std::unique_ptr<sp::BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  ExceptionHandler eh(sEnv);
+  std::unique_ptr<sp::BaseRuntime> rt(sEnv->LoadBinaryFromFile(file));
   if (!rt) {
-    fprintf(stdout, "Could not load .smx file: %s\n", error);
+    const char* message = eh.HasException() ? eh.Message() : "unknown error";
+    fprintf(stdout, "Could not load .smx file: %s\n", message);
     return false;
   }
 

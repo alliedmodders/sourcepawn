@@ -412,12 +412,22 @@ bool Runtime::PerformFullValidation() {
         if (method->flags & kRttiMethod_Native)
             continue;
 
-        const char* name = image_->names() + method->name;
+
+        ExceptionHandler eh(env);
 
         MethodVerifier verifier(this, i);
         if (!verifier.verify()) {
-            env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %s\n", name,
-                                env->GetErrorString(verifier.error()));
+            const char* name = image_->names() + method->name;
+            int code = SP_ERROR_FATAL;
+            std::string message = "unknown error";
+            if (eh.HasException()) {
+                code = eh.Code();
+                message = eh.Message();
+                eh.ClearException();
+            }
+
+            env->ReportErrorFmt(code, "%s: %s", name, message.c_str());
+            eh.Rethrow();
             return false;
         }
     }

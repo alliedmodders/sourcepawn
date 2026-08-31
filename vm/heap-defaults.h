@@ -13,10 +13,12 @@
 #pragma once
 
 #include <amtl/am-bits.h>
-#ifdef KE_64BIT
+#if defined(KE_64BIT)
 # include "heap-64bit.h"
-#else
+#elif defined(KE_32BIT)
 # include "heap-32bit.h"
+#else
+# error "KE_64BIT or KE_32BIT not defined"
 #endif
 
 namespace sp {

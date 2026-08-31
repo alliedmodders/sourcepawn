@@ -15,6 +15,7 @@
 
 #include <amtl/am-vector.h>
 #include "binary-reader.h"
+#include "environment.h"
 #include "graph-builder.h"
 #include "v2/method-verifier.h"
 #include "v2/opcodes.h"
@@ -36,8 +37,7 @@ MethodVerifier::MethodVerifier(Runtime* rt, uint32_t method_index)
    code_(nullptr),
    cip_(nullptr),
    prev_cip_(nullptr),
-   stop_at_(nullptr),
-   error_(SP_ERROR_NONE)
+   stop_at_(nullptr)
 {
     assert(datSize_ < memSize_);
     assert(heapSize_ <= memSize_ - datSize_);
@@ -60,10 +60,8 @@ MethodVerifier::verify() {
 
     GraphBuilder gb(rt_, method_);
     graph_ = gb.build();
-    if (!graph_) {
-        reportError(gb.error_code());
+    if (!graph_)
         return nullptr;
-    }
 
     AutoClearBlockData<VerifyData> acbd(graph_);
 
@@ -741,7 +739,7 @@ MethodVerifier::collectExternalFuncRefs(const ExternalFuncRefCallback& callback)
 bool
 MethodVerifier::reportError(int err) {
     // Break here to find why verification failed.
-    error_ = err;
+    rt_->ReportErrorNumber(err);
     return false;
 }
 
