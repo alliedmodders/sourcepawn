@@ -766,6 +766,10 @@ int main(int argc, char** argv)
     "-d", "--enable-debugging",
     Some(kIsDebug),
     "Enable debugging.");
+  ToggleOption leak_check(parser,
+    "l", "leak-check",
+    Some(false),
+    "Report leaked heap objects when runtimes are destroyed.");
 
   if (!parser.parse(argc, argv)) {
     parser.usage(stderr, argc, argv);
@@ -795,6 +799,14 @@ int main(int argc, char** argv)
   if (enable_debugging.value())
       sEnv->EnableDebugBreak();
 
+  bool has_leaks = false;
+  if (leak_check.value()) {
+    sEnv->SetLeakReportCallback([&](v2::Runtime*, const char* message) {
+      fprintf(stderr, "%s", message);
+      has_leaks = true;
+    });
+  }
+
   if (getenv("SPEW_INTERP_OPS"))
     sEnv->set_spew_interp_ops(true);
 
@@ -809,6 +821,9 @@ int main(int argc, char** argv)
   }
 
   int errcode = Execute(filename.value().c_str());
+
+  if (!errcode && has_leaks)
+    errcode = 1;
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

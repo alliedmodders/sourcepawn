@@ -20,6 +20,7 @@
 #include <limits.h>
 
 #include <deque>
+#include <string>
 #include <unordered_set>
 
 #include <amtl/am-bits.h>
@@ -72,7 +73,21 @@ Runtime::~Runtime() {
 
     env_->DeregisterRuntime(this);
 
-    assert(heap_.IsEmpty());
+    // Zap any references we might be holding, to make sure the leak report is
+    // as accurate as possible.
+    ClearCachedValues();
+
+    if (env_->HasLeakReportCallback()) {
+        std::string report = heap_.LiveObjectReport();
+        if (!report.empty())
+            env_->ReportLeak(this, report.c_str());
+    }
+}
+
+void Runtime::ClearCachedValues() {
+    methods_.clear();
+    entrypoints_.clear();
+    heap_scopes_.clear();
 }
 
 bool Runtime::Initialize() {

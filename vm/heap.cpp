@@ -12,8 +12,11 @@
 //
 #include "heap.h"
 
-#include <memory>
+#include <stdio.h>
+
 #include <algorithm>
+#include <memory>
+#include <string>
 
 #include <mimalloc.h>
 #include "environment.h"
@@ -34,25 +37,51 @@ bool RawHeap::Initialize() {
     return mi_heap_ != nullptr;
 }
 
-static bool mi_cdecl VisitBlocksForEmpty(const mi_heap_t*, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
-    if (block) {
-        *reinterpret_cast<bool*>(arg) = false;
-#ifndef NDEBUG
-        fprintf(stderr, "LEAKED BLOCK: %p, size %zu\n", block, block_size);
-#endif
+static std::string DescribeType(const TypeDesc* td) {
+    switch (td->kind()) {
+        case TypeKind::Array:
+        case TypeKind::ArraySlice:
+            return (td->kind() == TypeKind::Array ? "array of " : "slice of ") +
+                   DescribeType(td->array_elt());
+        case TypeKind::FixedArray:
+        case TypeKind::FlatArray:
+            return DescribeType(td->array_elt()) + "[" + std::to_string(td->array_size()) + "]";
+        case TypeKind::Reference:
+            return "ref to " + DescribeType(td->ref_type());
+        case TypeKind::Object:
+            return "object";
+        case TypeKind::Closure:
+            return "closure";
+        case TypeKind::Function:
+            return "function";
+        default:
+            return "cell";
     }
+}
+
+struct LeakVisitInfo {
+    std::string report;
+};
+
+static bool mi_cdecl VisitBlocksForLeaks(const mi_heap_t*, const mi_heap_area_t*, void* block, size_t block_size, void* arg) {
+    auto* info = reinterpret_cast<LeakVisitInfo*>(arg);
+    if (!block)
+        return true;
+
+    auto* item = reinterpret_cast<HeapItem*>(block);
+    std::string desc = DescribeType(item->td);
+    info->report += ke::StringPrintf("  %p: %s (%zu bytes)\n", block, desc.c_str(), block_size);
     return true;
 }
 
-bool RawHeap::IsEmpty() const {
+std::string Heap::LiveObjectReport() const {
     if (!mi_heap_)
-        return true;
-    bool is_empty = true;
-    mi_heap_visit_blocks(mi_heap_, false, VisitBlocksForEmpty, &is_empty);
-    return is_empty;
+        return {};
+
+    LeakVisitInfo info;
+    mi_heap_visit_blocks(mi_heap_, true, VisitBlocksForLeaks, &info);
+    return info.report;
 }
-
-
 
 void* RawHeap::AllocRaw(size_t bytes) {
     void* p = mi_heap_malloc(mi_heap_, bytes);

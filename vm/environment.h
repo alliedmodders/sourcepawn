@@ -13,6 +13,7 @@
 #ifndef _include_sourcepawn_vm_environment_h_
 #define _include_sourcepawn_vm_environment_h_
 
+#include <functional>
 #include <memory>
 
 #include <amtl/am-cxx.h>
@@ -187,6 +188,17 @@ class Environment : public ISourcePawnEnvironment
         return debugger_;
     }
 
+    void SetLeakReportCallback(std::function<void(v2::Runtime*, const char*)> fn) {
+        leak_report_fn_ = std::move(fn);
+    }
+    bool HasLeakReportCallback() const {
+        return !!leak_report_fn_;
+    }
+    void ReportLeak(v2::Runtime* rt, const char* message) {
+        if (leak_report_fn_)
+            leak_report_fn_(rt, message);
+    }
+
     bool IsDebugBreakEnabled() const {
         return debug_break_enabled_;
     }
@@ -261,6 +273,7 @@ class Environment : public ISourcePawnEnvironment
     SPVM_DEBUGBREAK debug_break_handler_;
 
     IDebugListener* debugger_;
+    std::function<void(v2::Runtime*, const char*)> leak_report_fn_;
     ExceptionHandler* eh_top_;
     int exception_code_;
     char exception_message_[1024];

@@ -169,6 +169,7 @@ class Runtime final : public BaseRuntime,
   private:
     bool InitializeContext();
     bool InitializeGlobals();
+    void ClearCachedValues();
 
   private:
     Environment* env_;

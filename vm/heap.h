@@ -12,13 +12,14 @@
 //
 #pragma once
 
-#include <new>
-#include <utility>
-#include <type_traits>
-
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include <new>
+#include <utility>
+#include <string>
+#include <type_traits>
 
 #include <amtl/am-bits.h>
 #include <amtl/am-refcounting.h>
@@ -65,7 +66,6 @@ class RawHeap {
     }
 
     void* AllocRaw(size_t bytes);
-    bool IsEmpty() const;
     void FreeRaw(void* ptr);
 
     template <typename T, typename... Args>
@@ -74,7 +74,7 @@ class RawHeap {
     template <typename T>
     typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type MakeRawPtr(size_t n);
 
-  private:
+  protected:
     VirtMem& virt_mem_;
     mi_heap_t* mi_heap_ = nullptr;
 };
@@ -95,6 +95,8 @@ class Heap : public RawHeap {
         obj->rc = 0;
         return Handle<T>(reinterpret_cast<T*>(obj));
     }
+
+    std::string LiveObjectReport() const;
 };
 
 template <typename T>
