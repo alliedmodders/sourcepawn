@@ -251,8 +251,6 @@ bool Expr::FoldToConstant() {
             return to<BinaryExpr>()->FoldToConstant();
         case ExprKind::TernaryExpr:
             return to<TernaryExpr>()->FoldToConstant();
-        case ExprKind::CastExpr:
-            return to<CastExpr>()->FoldToConstant();
         case ExprKind::SimpleCastExpr:
             return to<SimpleCastExpr>()->FoldToConstant();
         default:
@@ -261,17 +259,25 @@ bool Expr::FoldToConstant() {
 }
 
 bool CastExpr::FoldToConstant() {
-    cell val;
-    Type* from_type;
-    if (!expr_->EvalConst(&val, &from_type))
+    Type* from_type = expr_->val().type();
+    if (expr_->val().ident != iCONSTEXPR)
         return false;
+    if (from_type->isWideType() || from_type->isHeapItem())
+        return false;
+
+    cell val = expr_->val().const_cell();
+
     if (type()->isInt16())
         val = (cell_t)(int16_t)val;
     else if (type()->isInt8())
         val = (cell_t)(int8_t)val;
-    val_.set_constval(val);
-    val_.ident = iCONSTEXPR;
-    val_.set_type(type());
+    if (type()->isInt64()) {
+        // set_constval would leave const_int64_ uninitialized; route through
+        // set_const_int64 so EmitExpr's const_int64() read is well-defined.
+        val_.set_const_int64(type(), val);
+    } else {
+        val_.set_constval(type(), val);
+    }
     return true;
 }
 

@@ -1531,6 +1531,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         out_val.ident = iADDRESS;
 
     out_val.set_type(to_type);
+
+    expr->FoldToConstant();
     return true;
 }
 
