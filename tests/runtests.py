@@ -423,7 +423,7 @@ class TestRunner(object):
   def should_compile_only(self, test):
     if test.path.endswith('.smx'):
       return False
-    if test.type == 'compiler-output' or test.type == 'compile-only':
+    if test.type in ('compiler-output', 'compile-only', 'no-crash'):
       return True
     return self.plan.args.compile_only
 
@@ -525,6 +525,11 @@ class TestRunner(object):
     return True
 
   def compile_ok(self, mode, test, rc, stdout, stderr):
+    if test.type == 'no-crash':
+      if rc is not None and rc < 0:
+        self.out("FAIL: Compiler crashed (signal {0}).".format(-rc))
+        return False
+      return True
     if test.type != 'compiler-output':
       return rc == 0
 

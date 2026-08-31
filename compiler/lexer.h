@@ -267,7 +267,9 @@ class Lexer
         return false;
     }
     char advance() {
-        assert(state_.pos < state_.end);
+        assert(state_.pos <= state_.end);
+        if (state_.pos == state_.end)
+            return '\0';
         return *state_.pos++;
     }
     char peek() const {

@@ -858,6 +858,11 @@ Parser::plnge(const int* opstr, NewHierFn hier)
         auto pos = lexer_->pos();
         Expr* right = (this->*hier)();
 
+        if (!right) {
+            lexer_->lex();
+            break;
+        }
+
         int token = opstr[opidx];
         switch (token) {
             case tlOR:
@@ -888,6 +893,11 @@ Parser::plnge_rel(const int* opstr, NewHierFn hier)
     do {
         auto pos = lexer_->pos();
         Expr* right = (this->*hier)();
+
+        if (!right) {
+            lexer_->lex();
+            break;
+        }
 
         ops.push_back(CompareOp(pos, opstr[opidx], right));
     } while (nextop(&opidx, opstr));

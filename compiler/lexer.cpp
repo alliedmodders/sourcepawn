@@ -1152,6 +1152,10 @@ void Lexer::multilinestring_single(std::string* data, int quote_count) {
         if (c == '\\') {
             if (MaybeHandleLineContinuation())
                 continue;
+            if (state_.pos + 1 >= state_.end) {
+                data->push_back('\\');
+                break;
+            }
         }
         if (IsNewline(c))
             break;
@@ -1214,6 +1218,10 @@ void Lexer::packedstring(full_token_t* tok, char term) {
                     advance();
                 }
                 continue;
+            }
+            if (state_.pos + 1 >= state_.end) {
+                data.push_back('\\');
+                break;
             }
         }
         if (IsNewline(c))
@@ -2320,6 +2328,9 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         is_codepoint = &tmp_codepoint;
     *is_codepoint = false;
 
+    if (!more())
+        return -1;
+
     if (!match_char(ctrlchar_)) { /* no escape character */
         cell raw = peek_unsigned();
         if ((flags & kLitcharUtf8) && !(flags & kLitcharSkipping)) {
@@ -2341,6 +2352,9 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         advance();
         return raw;
     }
+
+    if (!more())
+        return -1;
 
     if (match_char(ctrlchar_))
         return ctrlchar_;
