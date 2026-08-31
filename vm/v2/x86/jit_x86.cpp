@@ -105,12 +105,6 @@ Compiler::visitXCHG() {
 }
 
 bool
-Compiler::visitZERO(cell_t offset) {
-    __ movl(Operand(dat, offset), 0);
-    return true;
-}
-
-bool
 Compiler::visitZERO_S(cell_t offset) {
     __ movl(Operand(frm, StackOffset(offset)), 0);
     return true;
@@ -124,45 +118,26 @@ Compiler::visitPUSH(PawnReg src) {
     return true;
 }
 
-bool
-Compiler::visitPUSH_C(const cell_t* vals, size_t nvals) {
-    for (size_t i = 1; i <= nvals; i++)
-        __ movl(Operand(stk, -(4 * int(i))), vals[i - 1]);
-    __ subl(stk, 4 * nvals);
+bool Compiler::visitPUSH_C(cell_t value) {
+    __ movl(Operand(stk, -4), value);
+    __ subl(stk, 4);
     return true;
 }
 
-bool
-Compiler::visitPUSH_ADR(const cell_t* offsets, size_t nvals) {
+bool Compiler::visitPUSH_ADR(cell_t slot) {
     // We temporarily relocate FRM to be a local address instead of an
     // absolute address.
-    __ subl(frm, dat);
-    for (size_t i = 1; i <= nvals; i++) {
-        __ lea(tmp, Operand(frm, StackOffset(offsets[i - 1])));
-        __ movl(Operand(stk, -(4 * int(i))), tmp);
-    }
-    __ subl(stk, 4 * nvals);
-    __ addl(frm, dat);
+    __ movl(tmp, Operand(frmAddr()));
+    __ lea(tmp, Operand(tmp, StackOffset(slot)));
+    __ movl(Operand(stk, -4), tmp);
+    __ subl(stk, 4);
     return true;
 }
 
-bool
-Compiler::visitPUSH_S(const cell_t* offsets, size_t nvals) {
-    for (size_t i = 1; i <= nvals; i++) {
-        __ movl(tmp, Operand(frm, StackOffset(offsets[i - 1])));
-        __ movl(Operand(stk, -(4 * int(i))), tmp);
-    }
-    __ subl(stk, 4 * nvals);
-    return true;
-}
-
-bool
-Compiler::visitPUSH(const cell_t* offsets, size_t nvals) {
-    for (size_t i = 1; i <= nvals; i++) {
-        __ movl(tmp, Operand(dat, offsets[i - 1]));
-        __ movl(Operand(stk, -(4 * int(i))), tmp);
-    }
-    __ subl(stk, 4 * nvals);
+bool Compiler::visitPUSH_S(cell_t slot) {
+    __ movl(tmp, Operand(frm, StackOffset(slot)));
+    __ movl(Operand(stk, -4), tmp);
+    __ subl(stk, 4);
     return true;
 }
 
@@ -176,12 +151,6 @@ Compiler::visitZERO(PawnReg dest) {
 bool
 Compiler::visitADD() {
     __ addl(pri, alt);
-    return true;
-}
-
-bool
-Compiler::visitSUB() {
-    __ subl(pri, alt);
     return true;
 }
 
@@ -335,45 +304,9 @@ Compiler::visitINC(PawnReg dest) {
 }
 
 bool
-Compiler::visitINC(cell_t offset) {
-    __ addl(Operand(dat, offset), 1);
-    return true;
-}
-
-bool
-Compiler::visitINC_S(cell_t offset) {
-    __ addl(Operand(frm, StackOffset(offset)), 1);
-    return true;
-}
-
-bool
-Compiler::visitINC_I() {
-    __ addl(Operand(dat, pri, NoScale), 1);
-    return true;
-}
-
-bool
 Compiler::visitDEC(PawnReg dest) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ subl(reg, 1);
-    return true;
-}
-
-bool
-Compiler::visitDEC(cell_t offset) {
-    __ subl(Operand(dat, offset), 1);
-    return true;
-}
-
-bool
-Compiler::visitDEC_S(cell_t offset) {
-    __ subl(Operand(frm, StackOffset(offset)), 1);
-    return true;
-}
-
-bool
-Compiler::visitDEC_I() {
-    __ subl(Operand(dat, pri, NoScale), 1);
     return true;
 }
 
@@ -385,23 +318,9 @@ Compiler::visitLOAD(PawnReg dest, cell_t srcaddr) {
 }
 
 bool
-Compiler::visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    visitLOAD(PawnReg::Pri, offsetForPri);
-    visitLOAD(PawnReg::Alt, offsetForAlt);
-    return true;
-}
-
-bool
 Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ movl(reg, Operand(frm, StackOffset(srcoffs)));
-    return true;
-}
-
-bool
-Compiler::visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    visitLOAD_S(PawnReg::Pri, offsetForPri);
-    visitLOAD_S(PawnReg::Alt, offsetForAlt);
     return true;
 }
 
@@ -470,25 +389,6 @@ Compiler::visitSWAP(PawnReg dest) {
     __ movl(tmp, Operand(stk, 0));
     __ movl(Operand(stk, 0), reg);
     __ movl(reg, tmp);
-    return true;
-}
-
-bool
-Compiler::visitLIDX() {
-    __ lea(pri, Operand(alt, pri, ScaleFour));
-    __ movl(pri, Operand(dat, pri, NoScale));
-    return true;
-}
-
-bool
-Compiler::visitCONST(cell_t offset, cell_t value) {
-    __ movl(Operand(dat, offset), value);
-    return true;
-}
-
-bool
-Compiler::visitCONST_S(cell_t offset, cell_t value) {
-    __ movl(Operand(frm, StackOffset(offset)), value);
     return true;
 }
 
@@ -637,143 +537,6 @@ Compiler::visitSTRADJUST_PRI() {
     return true;
 }
 
-bool
-Compiler::visitFABS() {
-    __ movl(pri, Operand(stk, 0));
-    __ andl(pri, 0x7fffffff);
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitFLOAT() {
-    __ cvtsi2ss(xmm0, Operand(edi, 0));
-    __ movd(pri, xmm0);
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitFLOATADD() {
-    __ movss(xmm0, Operand(stk, 0));
-    __ addss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-    __ addl(stk, 8);
-    return true;
-}
-
-bool
-Compiler::visitFLOATSUB() {
-    __ movss(xmm0, Operand(stk, 0));
-    __ subss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-    __ addl(stk, 8);
-    return true;
-}
-
-bool
-Compiler::visitFLOATMUL() {
-    __ movss(xmm0, Operand(stk, 0));
-    __ mulss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-    __ addl(stk, 8);
-    return true;
-}
-
-bool
-Compiler::visitFLOATDIV() {
-    __ movss(xmm0, Operand(stk, 0));
-    __ divss(xmm0, Operand(stk, 4));
-    __ movd(pri, xmm0);
-    __ addl(stk, 8);
-    return true;
-}
-
-bool
-Compiler::visitRND_TO_NEAREST() {
-    // Docs say that MXCSR must be preserved across function calls, so we
-    // assume that we'll always get the default round-to-nearest.
-    __ cvtss2si(pri, Operand(stk, 0));
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitRND_TO_CEIL() {
-    // Adapted from http://wurstcaptures.untergrund.net/assembler_tricks.html#fastfloorf
-    // (the above does not support the full integer range)
-    static float kRoundToCeil = -0.5f;
-    __ fld32(Operand(stk, 0));
-    __ fadd32(st0, st0);
-    __ fsubr32(Operand(ExternalAddress(&kRoundToCeil)));
-    __ subl(esp, 8);
-    __ fistp64(Operand(esp, 0));
-    __ pop(eax); // low word
-    __ pop(ecx); // high word
-    // divide 64-bit integer by 2 (shift right by 1)
-    __ shrd(eax, ecx, 1);
-    __ sarl(ecx, 1);
-    // negate 64-bit integer in eax:ecx
-    __ negl(eax);
-    __ adcl(ecx, 0);
-    __ negl(ecx);
-    // did this overflow? if so, return 0x80000000
-    Label ok;
-    __ testl(ecx, ecx);
-    __ j(zero, &ok);
-    __ cmpl(ecx, -1);
-    __ j(equal, &ok);
-    __ movl(pri, 0x80000000);
-    __ bind(&ok);
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitRND_TO_ZERO() {
-    __ cvttss2si(pri, Operand(stk, 0));
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitRND_TO_FLOOR() {
-    __ fld32(Operand(stk, 0));
-    __ subl(esp, 8);
-    __ fstcw(Operand(esp, 4));
-    __ movl(Operand(esp, 0), 0x7ff);
-    __ fldcw(Operand(esp, 0));
-    __ fistp32(Operand(esp, 0));
-    __ pop(eax);
-    __ fldcw(Operand(esp, 0));
-    __ addl(esp, 4);
-    __ addl(stk, 4);
-    return true;
-}
-
-bool
-Compiler::visitFLOATCMP() {
-    // This is the old float cmp, which returns ordered results. In newly
-    // compiled code it should not be used or generated.
-    //
-    // Note that the checks here are inverted: the test is |rhs OP lhs|.
-    Label bl, ab, done;
-    __ movss(xmm0, Operand(stk, 4));
-    __ ucomiss(Operand(stk, 0), xmm0);
-    __ j(above, &ab);
-    __ j(below, &bl);
-    __ xorl(pri, pri);
-    __ jmp(&done);
-    __ bind(&ab);
-    __ movl(pri, -1);
-    __ jmp(&done);
-    __ bind(&bl);
-    __ movl(pri, 1);
-    __ bind(&done);
-    __ addl(stk, 8);
-    return true;
-}
-
 ConditionCode ToFloatConditionCode(CompareOp op) {
     switch (op) {
         case CompareOp::Sgrtr:
@@ -792,28 +555,6 @@ ConditionCode ToFloatConditionCode(CompareOp op) {
             assert(false);
             return zero;
     }
-}
-
-bool
-Compiler::visitFLOAT_CMP_OP(CompareOp op) {
-    emitFloatCmp(ToFloatConditionCode(op));
-    return true;
-}
-
-bool
-Compiler::visitFLOAT_NOT() {
-    __ xorps(xmm0, xmm0);
-    __ ucomiss(Operand(stk, 0), xmm0);
-
-    // See emitFloatCmp() - this is a shorter version.
-    Label done;
-    __ movl(eax, 1);
-    __ j(parity, &done);
-    __ set(zero, r8_al);
-    __ bind(&done);
-
-    __ addl(stk, 4);
-    return true;
 }
 
 bool
@@ -949,14 +690,6 @@ Compiler::visitBREAK() {
     __ call(&debug_break_);
     emitCipMapping(op_cip_);
     return true;
-}
-
-bool
-Compiler::visitHALT(cell_t value) {
-    // We don't support this. It's included in the bytestream by default, but it
-    // must be unreachable.
-    reportError(SP_ERROR_INVALID_INSTRUCTION);
-    return false;
 }
 
 bool
@@ -1102,12 +835,6 @@ Compiler::visitSYSREQ_N(uint32_t native_index, uint32_t nparams) {
     __ subl(stk, 4);
     emitLegacyNativeCall(native_index, native);
     __ addl(stk, (nparams + 1) * sizeof(cell_t));
-    return true;
-}
-
-bool
-Compiler::visitSYSREQ_C(uint32_t native_index) {
-    emitLegacyNativeCall(native_index, rt_->NativeAt(native_index));
     return true;
 }
 

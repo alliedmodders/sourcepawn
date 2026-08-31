@@ -118,23 +118,13 @@ Interpreter::visitRETN() {
     return true;
 }
 
-bool
-Interpreter::visitPUSH_C(const cell_t* vals, size_t nvals) {
-    for (size_t i = 0; i < nvals; i++) {
-        if (!cx_->pushStack(vals[i]))
-            return false;
-    }
-    return true;
+bool Interpreter::visitPUSH_C(cell_t value) {
+    return cx_->pushStack(value);
 }
 
-bool
-Interpreter::visitPUSH_ADR(const cell_t* offsets, size_t nvals) {
-    for (size_t i = 0; i < nvals; i++) {
-        cell_t address = cx_->frm() + StackOffset(offsets[i]);
-        if (!cx_->pushStack(address))
-            return false;
-    }
-    return true;
+bool Interpreter::visitPUSH_ADR(cell_t slot) {
+    cell_t address = cx_->frm() + StackOffset(slot);
+    return cx_->pushStack(address);
 }
 
 bool
@@ -146,18 +136,6 @@ Interpreter::visitPUSH_I_I64() {
         return false;
     if (!cx_->pushStack(src[0]))
         return false;
-    return true;
-}
-
-bool
-Interpreter::visitPUSH(const cell_t* addresses, size_t nvals) {
-    for (size_t i = 0; i < nvals; i++) {
-        cell_t value;
-        if (!cx_->getCellValue(addresses[i], &value))
-            return false;
-        if (!cx_->pushStack(value))
-            return false;
-    }
     return true;
 }
 
@@ -210,11 +188,6 @@ Interpreter::visitPOP(PawnReg dest) {
 }
 
 bool
-Interpreter::visitSYSREQ_C(uint32_t native_index) {
-    return invokeNative(native_index);
-}
-
-bool
 Interpreter::visitSYSREQ_N(uint32_t native_index, uint32_t nparams) {
     if (!cx_->pushStack(nparams))
         return false;
@@ -236,11 +209,6 @@ Interpreter::visitZERO(PawnReg dest) {
 }
 
 bool
-Interpreter::visitZERO(cell_t address) {
-    return cx_->setCellValue(address, 0);
-}
-
-bool
 Interpreter::visitZERO_S(cell_t offset) {
     return cx_->setFrameValue(StackOffset(offset), 0);
 }
@@ -250,32 +218,17 @@ Interpreter::visitSTACK(cell_t amount) {
     return cx_->addStack(amount);
 }
 
-bool
-Interpreter::visitPUSH_S(const cell_t* offsets, size_t nvals) {
-    for (size_t i = 0; i < nvals; i++) {
-        cell_t value;
-        if (!cx_->getFrameValue(StackOffset(offsets[i]), &value))
-            return false;
-        if (!cx_->pushStack(value))
-            return false;
-    }
-    return true;
+bool Interpreter::visitPUSH_S(cell_t slot) {
+    cell_t value;
+    if (!cx_->getFrameValue(StackOffset(slot), &value))
+        return false;
+    return cx_->pushStack(value);
 }
 
 bool
 Interpreter::visitCONST(PawnReg dest, cell_t imm) {
     regs_[dest] = imm;
     return true;
-}
-
-bool
-Interpreter::visitCONST(cell_t address, cell_t value) {
-    return cx_->setCellValue(address, value);
-}
-
-bool
-Interpreter::visitCONST_S(cell_t offset, cell_t value) {
-    return cx_->setFrameValue(StackOffset(offset), value);
 }
 
 bool
@@ -392,78 +345,8 @@ Interpreter::visitINC(PawnReg dest) {
 }
 
 bool
-Interpreter::visitINC(cell_t address) {
-    cell_t* addr = cx_->throwIfBadAddress(address);
-    if (!addr)
-        return false;
-    *addr += 1;
-    return true;
-}
-
-bool
-Interpreter::visitINC_S(cell_t offset) {
-    cell_t value;
-    if (!cx_->getFrameValue(StackOffset(offset), &value))
-        return false;
-    return cx_->setFrameValue(StackOffset(offset), value + 1);
-}
-
-bool
-Interpreter::visitINC_I() {
-    cell_t* addr = cx_->throwIfBadAddress(regs_.pri());
-    if (!addr)
-        return false;
-    *addr += 1;
-    return true;
-}
-
-bool
 Interpreter::visitDEC(PawnReg dest) {
     regs_[dest] -= 1;
-    return true;
-}
-
-bool
-Interpreter::visitDEC(cell_t address) {
-    cell_t* addr = cx_->throwIfBadAddress(address);
-    if (!addr)
-        return false;
-    *addr -= 1;
-    return true;
-}
-
-bool
-Interpreter::visitDEC_S(cell_t offset) {
-    cell_t value;
-    if (!cx_->getFrameValue(StackOffset(offset), &value))
-        return false;
-    return cx_->setFrameValue(StackOffset(offset), value - 1);
-}
-
-bool
-Interpreter::visitDEC_I() {
-    cell_t* addr = cx_->throwIfBadAddress(regs_.pri());
-    if (!addr)
-        return false;
-    *addr -= 1;
-    return true;
-}
-
-bool
-Interpreter::visitLOAD_BOTH(cell_t addressForPri, cell_t addressForAlt) {
-    if (!cx_->getCellValue(addressForPri, &regs_.pri()))
-        return false;
-    if (!cx_->getCellValue(addressForAlt, &regs_.alt()))
-        return false;
-    return true;
-}
-
-bool
-Interpreter::visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    if (!cx_->getFrameValue(StackOffset(offsetForPri), &regs_.pri()))
-        return false;
-    if (!cx_->getFrameValue(StackOffset(offsetForAlt), &regs_.alt()))
-        return false;
     return true;
 }
 
@@ -482,12 +365,6 @@ Interpreter::visitOR() {
 bool
 Interpreter::visitXOR() {
     regs_.pri() ^= regs_.alt();
-    return true;
-}
-
-bool
-Interpreter::visitSUB() {
-    regs_.pri() -= regs_.alt();
     return true;
 }
 
@@ -696,12 +573,6 @@ Interpreter::visitIDXADDR() {
 }
 
 bool
-Interpreter::visitLIDX() {
-    cell_t address = regs_.alt() + (regs_.pri() * sizeof(cell_t));
-    return cx_->getCellValue(address, &regs_.pri());
-}
-
-bool
 Interpreter::visitLREF_S(PawnReg dest, cell_t srcoffs) {
     cell_t address;
     if (!cx_->getFrameValue(StackOffset(srcoffs), &address))
@@ -791,190 +662,6 @@ Interpreter::visitSWAP(PawnReg dest) {
 }
 
 bool
-Interpreter::visitFABS() {
-    if (!cx_->popStack(&regs_.pri()))
-        return false;
-    regs_.pri() &= 0x7fffffff;
-    return true;
-}
-
-bool
-Interpreter::visitFLOAT() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-    regs_.pri() = sp_ftoc(float(value));
-    return true;
-}
-
-bool
-Interpreter::visitFLOATADD() {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-    regs_.pri() = sp_ftoc(left + right);
-    return true;
-}
-
-bool
-Interpreter::visitFLOATSUB() {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-    regs_.pri() = sp_ftoc(left - right);
-    return true;
-}
-
-bool
-Interpreter::visitFLOATMUL() {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-    regs_.pri() = sp_ftoc(left * right);
-    return true;
-}
-
-bool
-Interpreter::visitFLOATDIV() {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-    regs_.pri() = sp_ftoc(left / right);
-    return true;
-}
-
-bool
-Interpreter::visitRND_TO_NEAREST() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-
-    int oldmethod = fegetround();
-    fesetround(FE_TONEAREST);
-
-    float f = sp_ctof(value);
-    regs_.pri() = lrintf(f);
-
-    fesetround(oldmethod);
-    return true;
-}
-
-bool
-Interpreter::visitRND_TO_FLOOR() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-
-    float f = sp_ctof(value);
-    regs_.pri() = int(floor(f));
-    return true;
-}
-
-bool
-Interpreter::visitRND_TO_CEIL() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-
-    float f = sp_ctof(value);
-    regs_.pri() = int(ceil(f));
-    return true;
-}
-
-bool
-Interpreter::visitRND_TO_ZERO() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-
-    float f = sp_ctof(value);
-    if (f >= 0.0f)
-        regs_.pri() = int(floor(f));
-    else
-        regs_.pri() = int(ceil(f));
-    return true;
-}
-
-bool
-Interpreter::visitFLOATCMP() {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-
-    if (left > right)
-        regs_.pri() = 1;
-    else if (left < right)
-        regs_.pri() = -1;
-    else
-        regs_.pri() = 0;
-    return true;
-}
-
-bool
-Interpreter::visitFLOAT_CMP_OP(CompareOp op) {
-    cell_t leftVal, rightVal;
-    if (!cx_->popStack(&leftVal) || !cx_->popStack(&rightVal))
-        return false;
-
-    float left = sp_ctof(leftVal);
-    float right = sp_ctof(rightVal);
-    if (ke::IsNaN(left) || ke::IsNaN(right)) {
-        regs_.pri() = 0;
-        return true;
-    }
-
-    switch (op) {
-        case CompareOp::Eq:
-            regs_.pri() = left == right;
-            break;
-        case CompareOp::Neq:
-            regs_.pri() = left != right;
-            break;
-        case CompareOp::Sless:
-            regs_.pri() = left < right;
-            break;
-        case CompareOp::Sleq:
-            regs_.pri() = left <= right;
-            break;
-        case CompareOp::Sgrtr:
-            regs_.pri() = left > right;
-            break;
-        case CompareOp::Sgeq:
-            regs_.pri() = left >= right;
-            break;
-        default:
-            assert(false);
-    }
-
-    return true;
-}
-
-bool
-Interpreter::visitFLOAT_NOT() {
-    cell_t value;
-    if (!cx_->popStack(&value))
-        return false;
-
-    float f = sp_ctof(value);
-    if (ke::IsNaN(f))
-        regs_.pri() = 1;
-    else
-        regs_.pri() = f ? 0 : 1;
-    return true;
-}
-
-bool
 Interpreter::visitGENARRAY(uint32_t dims, bool autozero) {
     cell_t* stack = cx_->acquireAddrRange(cx_->sp(), dims * sizeof(cell_t));
     if (!stack)
@@ -1011,14 +698,6 @@ Interpreter::visitBREAK() {
 
     InvokeDebugger(cx_, nullptr);
     return !env_->hasPendingException();
-}
-
-bool
-Interpreter::visitHALT(cell_t value) {
-    // We don't support this. It's included in the bytestream by default, but it
-    // must be unreachable.
-    cx_->ReportErrorNumber(SP_ERROR_INVALID_INSTRUCTION);
-    return false;
 }
 
 bool

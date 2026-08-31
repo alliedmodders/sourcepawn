@@ -74,8 +74,7 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     bool UsesDirectArrays() override;
     bool UsesHeapScopes();
 
-    // Mark builtin natives as bound.
-    void InstallBuiltinNatives() override;
+    void InstallBuiltinNatives() override {}
 
     // Return the method if it was previously analyzed; null otherwise.
     ke::RefPtr<BaseMethodInfo> GetMethod(cell_t pcode_offset) const;
@@ -217,20 +216,7 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     }
 
   private:
-    void SetupFloatNativeRemapping();
-
-    struct floattbl_t {
-        floattbl_t() {
-            found = false;
-            index = 0;
-        }
-        bool found;
-        unsigned int index;
-    };
-
-  private:
     std::unique_ptr<uint8_t[]> aligned_code_;
-    std::unique_ptr<floattbl_t[]> float_table_;
     std::unique_ptr<NativeEntry[]> natives_;
     std::unique_ptr<sp_public_t[]> publics_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;

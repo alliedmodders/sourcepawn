@@ -110,29 +110,6 @@ MethodVerifier::verify() {
     return graph_;
 }
 
-static inline bool
-ExtractPushConstant(const cell_t* cip, cell_t* value) {
-    switch (*cip) {
-        case OP_PUSH_C:
-            *value = cip[1];
-            return true;
-        case OP_PUSH2_C:
-            *value = cip[2];
-            return true;
-        case OP_PUSH3_C:
-            *value = cip[3];
-            return true;
-        case OP_PUSH4_C:
-            *value = cip[4];
-            return true;
-        case OP_PUSH5_C:
-            *value = cip[5];
-            return true;
-        default:
-            return false;
-    }
-}
-
 bool
 MethodVerifier::verifyOp(OPCODE op) {
     switch (op) {
@@ -141,7 +118,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_BREAK:
         case OP_LOAD_I:
         case OP_STOR_I:
-        case OP_LIDX:
         case OP_IDXADDR:
         case OP_MOVE_PRI:
         case OP_MOVE_ALT:
@@ -153,7 +129,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SDIV:
         case OP_SDIV_ALT:
         case OP_ADD:
-        case OP_SUB:
         case OP_SUB_ALT:
         case OP_AND:
         case OP_OR:
@@ -171,10 +146,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SGEQ:
         case OP_INC_PRI:
         case OP_INC_ALT:
-        case OP_INC_I:
         case OP_DEC_PRI:
         case OP_DEC_ALT:
-        case OP_DEC_I:
         case OP_STRADJUST_PRI:
         case OP_MOVE_I64:
         case OP_TRUNCATE_I64:
@@ -233,8 +206,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SREF_S_ALT:
         case OP_STOR_S_ALT:
         case OP_STOR_S_PRI:
-        case OP_INC_S:
-        case OP_DEC_S:
         case OP_ZERO_S:
         {
             cell_t offset = readCell();
@@ -283,10 +254,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_PRI:
         case OP_LOAD_ALT:
         case OP_STOR_PRI:
-        case OP_STOR_ALT:
-        case OP_INC:
-        case OP_DEC:
-        case OP_ZERO: {
+        case OP_STOR_ALT: {
             cell_t offset = readCell();
             return verifyDatOffset(offset);
         }
@@ -301,68 +269,25 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_PUSH_C:
-        case OP_PUSH2_C:
-        case OP_PUSH3_C:
-        case OP_PUSH4_C:
-        case OP_PUSH5_C: {
-            size_t n = 1;
-            if (op >= OP_PUSH2_C)
-                n = ((op - OP_PUSH2_C) / 4) + 2;
-
-            cip_ += n;
-            return pushStack(n);
-        }
-
-        case OP_PUSH:
-        case OP_PUSH2:
-        case OP_PUSH3:
-        case OP_PUSH4:
-        case OP_PUSH5: {
-            size_t n = 1;
-            if (op >= OP_PUSH2)
-                n = ((op - OP_PUSH2) / 4) + 2;
-
-            for (size_t i = 0; i < n; i++) {
-                cell_t offset = readCell();
-                if (!verifyDatOffset(offset))
-                    return false;
-            }
-            return pushStack(n);
+        case OP_PUSH_C: {
+            readCell();
+            return pushStack(1);
         }
 
         case OP_PUSH_S:
-        case OP_PUSH2_S:
-        case OP_PUSH3_S:
-        case OP_PUSH4_S:
-        case OP_PUSH5_S: {
-            size_t n = 1;
-            if (op >= OP_PUSH2_S)
-                n = ((op - OP_PUSH2_S) / 4) + 2;
-
-            for (size_t i = 0; i < n; i++) {
-                cell_t offset = readCell();
-                if (!verifyStackOffset(offset, sizeof(cell_t)))
-                    return false;
-            }
-            return pushStack(n);
+        {
+            cell_t offset = readCell();
+            if (!verifyStackOffset(offset, sizeof(cell_t)))
+                return false;
+            return pushStack(1);
         }
 
         case OP_PUSH_ADR:
-        case OP_PUSH2_ADR:
-        case OP_PUSH3_ADR:
-        case OP_PUSH4_ADR:
-        case OP_PUSH5_ADR: {
-            size_t n = 1;
-            if (op >= OP_PUSH2_ADR)
-                n = ((op - OP_PUSH2_ADR) / 4) + 2;
-
-            for (size_t i = 0; i < n; i++) {
-                cell_t offset = readCell();
-                if (!verifyStackOffset(offset, 0))
-                    return false;
-            }
-            return pushStack(n);
+        {
+            cell_t offset = readCell();
+            if (!verifyStackOffset(offset, 0))
+                return false;
+            return pushStack(1);
         }
 
         case OP_PUSH_I_I64:
@@ -371,11 +296,11 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_CALL: {
             // An OP_CALL must be preceded by a PUSH_C variant, and it must be in the
             // same block.
-            cell_t nparams;
-            if (!prev_cip_ || !ExtractPushConstant(prev_cip_, &nparams)) {
+            if (!prev_cip_ || *prev_cip_ != OP_PUSH_C) {
                 reportError(SP_ERROR_INVALID_INSTRUCTION);
                 return false;
             }
+            cell_t nparams = prev_cip_[1];
             cell_t offset = readCell();
             if (!verifyCallOffset(offset))
                 return false;
@@ -455,15 +380,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_SYSREQ_C: {
-            cell_t index = readCell();
-            if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            return true;
-        }
-
         case OP_SYSREQ_N: {
             cell_t index = readCell();
             if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
@@ -476,36 +392,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(nparams + 1))
                 return false;
             return verifyParamCount(nparams);
-        }
-
-        case OP_LOAD_BOTH: {
-            cell_t offs1 = readCell();
-            cell_t offs2 = readCell();
-            if (!verifyDatOffset(offs1) || !verifyDatOffset(offs2)) {
-                return false;
-            }
-            return true;
-        }
-
-        case OP_LOAD_S_BOTH: {
-            cell_t offs1 = readCell();
-            cell_t offs2 = readCell();
-            if (!verifyStackOffset(offs1, sizeof(cell_t)) || !verifyStackOffset(offs2, sizeof(cell_t))) {
-                return false;
-            }
-            return true;
-        }
-
-        case OP_CONST: {
-            cell_t offset = readCell();
-            cip_++;
-            return verifyDatOffset(offset);
-        }
-
-        case OP_CONST_S: {
-            cell_t offset = readCell();
-            cip_++;
-            return verifyStackOffset(offset, sizeof(cell_t));
         }
 
         case OP_GENARRAY:

@@ -289,11 +289,6 @@ bool Compiler::visitSTRB_I(cell_t width) {
     return true;
 }
 
-bool Compiler::visitLIDX() {
-    assert(false);
-    return false;
-}
-
 bool Compiler::visitIDXADDR() {
     __ movsxd(pri, pri);
     __ lea(pri, Operand(alt, pri, ScaleFour));
@@ -320,24 +315,16 @@ bool Compiler::visitPUSH(PawnReg src) {
     return true;
 }
 
-bool Compiler::visitPUSH_C(const cell_t* vals, size_t nvals) {
-    for (size_t i = 1; i <= nvals; i++)
-        __ movl(Operand(stk, -(4 * int(i))), vals[i - 1]);
-    __ subq(stk, 4 * nvals);
+bool Compiler::visitPUSH_C(cell_t value) {
+    __ movl(Operand(stk, -4), value);
+    __ subq(stk, 4);
     return true;
 }
 
-bool Compiler::visitPUSH(const cell_t* offsets, size_t nvals) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitPUSH_S(const cell_t* offsets, size_t nvals) {
-    for (size_t i = 1; i <= nvals; i++) {
-        __ movl(tmp, Operand(frm, StackOffset(offsets[i - 1])));
-        __ movl(Operand(stk, -(4 * int(i))), tmp);
-    }
-    __ subq(stk, 4 * nvals);
+bool Compiler::visitPUSH_S(cell_t slot) {
+    __ movl(tmp, Operand(frm, StackOffset(slot)));
+    __ movl(Operand(stk, -4), tmp);
+    __ subq(stk, 4);
     return true;
 }
 
@@ -573,11 +560,6 @@ bool Compiler::visitADD() {
     return true;
 }
 
-bool Compiler::visitSUB() {
-    assert(false);
-    return false;
-}
-
 bool Compiler::visitSUB_ALT() {
     __ movl(tmp, alt);
     __ subl(tmp, pri);
@@ -633,11 +615,6 @@ bool Compiler::visitZERO(PawnReg dest) {
     return true;
 }
 
-bool Compiler::visitZERO(cell_t offset) {
-    assert(false);
-    return false;
-}
-
 bool Compiler::visitZERO_S(cell_t offset) {
     __ movl(Operand(frm, StackOffset(offset)), 0);
     return true;
@@ -665,40 +642,10 @@ bool Compiler::visitINC(PawnReg dest) {
     return true;
 }
 
-bool Compiler::visitINC(cell_t offset) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitINC_S(cell_t offset) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitINC_I() {
-    assert(false);
-    return false;
-}
-
 bool Compiler::visitDEC(PawnReg dest) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ subl(reg, 1);
     return true;
-}
-
-bool Compiler::visitDEC(cell_t offset) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitDEC_S(cell_t offset) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitDEC_I() {
-    assert(false);
-    return false;
 }
 
 bool Compiler::visitMOVS(uint32_t amount) {
@@ -739,11 +686,6 @@ bool Compiler::visitBOUNDS(uint32_t limit) {
     return true;
 }
 
-bool Compiler::visitSYSREQ_C(uint32_t native_index) {
-    assert(false);
-    return false;
-}
-
 bool Compiler::visitSWAP(PawnReg dest) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ movl(tmp, Operand(stk, 0));
@@ -752,16 +694,13 @@ bool Compiler::visitSWAP(PawnReg dest) {
     return true;
 }
 
-bool Compiler::visitPUSH_ADR(const cell_t* offsets, size_t nvals) {
+bool Compiler::visitPUSH_ADR(cell_t slot) {
     // We temporarily relocate FRM to be a local address instead of an
     // absolute address.
-    __ subq(frm, dat);
-    for (size_t i = 1; i <= nvals; i++) {
-        __ lea(tmp, Operand(frm, StackOffset(offsets[i - 1])));
-        __ movl(Operand(stk, -(4 * int(i))), tmp);
-    }
-    __ subq(stk, 4 * nvals);
-    __ addq(frm, dat);
+    __ movl(tmp, frmAddr());
+    __ lea(tmp, Operand(tmp, StackOffset(slot)));
+    __ movl(Operand(stk, -4), tmp);
+    __ subq(stk, 4);
     return true;
 }
 
@@ -842,26 +781,6 @@ void Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) 
     __ j(not_zero, &return_reported_error_);
 }
 
-bool Compiler::visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitCONST(cell_t offset, cell_t value) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitCONST_S(cell_t offset, cell_t value) {
-    assert(false);
-    return false;
-}
-
 static int
 InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero) {
     return cx->generateFullArray(argc, argv, autozero);
@@ -927,86 +846,6 @@ bool Compiler::visitSTRADJUST_PRI() {
     __ addl(pri, 4);
     __ sarl(pri, 2);
     return true;
-}
-
-bool Compiler::visitFABS() {
-    __ movl(pri, Operand(stk, 0));
-    __ andl(pri, 0x7fffffff);
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitFLOAT() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOATADD() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOATSUB() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOATMUL() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOATDIV() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitRND_TO_NEAREST() {
-    // Docs say that MXCSR must be preserved across function calls, so we
-    // assume that we'll always get the defualt round-to-nearest.
-    __ cvtss2si(pri, Operand(stk, 0));
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitRND_TO_FLOOR() {
-    __ roundss_floor(xmm0, Operand(stk, 0));
-    __ cvttss2si(pri, xmm0);
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitRND_TO_CEIL() {
-    __ roundss_ceil(xmm0, Operand(stk, 0));
-    __ cvttss2si(pri, xmm0);
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitRND_TO_ZERO() {
-    __ cvttss2si(pri, Operand(stk, 0));
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitFLOATCMP() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOAT_CMP_OP(CompareOp op) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitFLOAT_NOT() {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitHALT(cell_t value) {
-    assert(false);
-    return false;
 }
 
 bool Compiler::visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) {

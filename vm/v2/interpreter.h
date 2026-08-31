@@ -63,28 +63,23 @@ class Interpreter final : public PcodeVisitor
     static bool Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval);
 
   public:
-    bool visitPUSH_C(const cell_t* vals, size_t nvals) override;
-    bool visitPUSH_ADR(const cell_t* offsets, size_t nvals) override;
+    bool visitPUSH_C(cell_t value) override;
+    bool visitPUSH_ADR(cell_t slot) override;
     bool visitCALL(cell_t offset) override;
     bool visitHEAP(cell_t amount) override;
     bool visitLOAD_I() override;
     bool visitSTOR_I() override;
     bool visitPUSH(PawnReg src) override;
-    bool visitPUSH(const cell_t* offsets, size_t nvals) override;
     bool visitPOP(PawnReg dest) override;
-    bool visitSYSREQ_C(uint32_t native_index) override;
     bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) override;
     bool visitZERO(PawnReg dest) override;
-    bool visitZERO(cell_t offset) override;
     bool visitZERO_S(cell_t offset) override;
     bool visitZERO_S_I64(cell_t offset) override;
     bool visitRETN() override;
     bool visitSTACK(cell_t amount) override;
-    bool visitPUSH_S(const cell_t* offsets, size_t nvals) override;
+    bool visitPUSH_S(cell_t offset) override;
     bool visitPUSH_I_I64() override;
     bool visitCONST(PawnReg dest, cell_t imm) override;
-    bool visitCONST(cell_t offset, cell_t value) override;
-    bool visitCONST_S(cell_t offset, cell_t value) override;
     bool visitJUMP(cell_t offset) override;
     bool visitJcmp(CompareOp op, cell_t offset) override;
     bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
@@ -95,15 +90,7 @@ class Interpreter final : public PcodeVisitor
     bool visitSMUL_C(cell_t value) override;
     bool visitADD() override;
     bool visitINC(PawnReg dest) override;
-    bool visitINC(cell_t offset) override;
-    bool visitINC_S(cell_t offset) override;
-    bool visitINC_I() override;
     bool visitDEC(PawnReg dest) override;
-    bool visitDEC(cell_t address) override;
-    bool visitDEC_S(cell_t offset) override;
-    bool visitDEC_I() override;
-    bool visitLOAD_BOTH(cell_t offsetForPri, cell_t offsetForAlt) override;
-    bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) override;
     bool visitAND() override;
     bool visitOR() override;
     bool visitXOR() override;
@@ -111,7 +98,6 @@ class Interpreter final : public PcodeVisitor
     bool visitSHR() override;
     bool visitSSHR() override;
     bool visitSHL_C(PawnReg dest, cell_t amount) override;
-    bool visitSUB() override;
     bool visitSUB_ALT() override;
     bool visitSMUL() override;
     bool visitSDIV(PawnReg dest) override;
@@ -127,7 +113,6 @@ class Interpreter final : public PcodeVisitor
     bool visitMOVE_I64() override;
     bool visitFILL(uint32_t amount) override;
     bool visitIDXADDR() override;
-    bool visitLIDX() override;
     bool visitLODB_I(cell_t width) override;
     bool visitSTRB_I(cell_t width) override;
     bool visitLOAD(PawnReg dest, cell_t srcaddr) override;
@@ -136,24 +121,10 @@ class Interpreter final : public PcodeVisitor
     bool visitXCHG() override;
     bool visitSWAP(PawnReg dest) override;
     bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override;
-    bool visitFABS() override;
-    bool visitFLOAT() override;
-    bool visitFLOATADD() override;
-    bool visitFLOATSUB() override;
-    bool visitFLOATMUL() override;
-    bool visitFLOATDIV() override;
-    bool visitRND_TO_NEAREST() override;
-    bool visitRND_TO_FLOOR() override;
-    bool visitRND_TO_CEIL() override;
-    bool visitRND_TO_ZERO() override;
-    bool visitFLOATCMP() override;
-    bool visitFLOAT_CMP_OP(CompareOp op) override;
-    bool visitFLOAT_NOT() override;
     bool visitBOUNDS(uint32_t limit) override;
     bool visitGENARRAY(uint32_t dims, bool autozero) override;
     bool visitSTRADJUST_PRI() override;
     bool visitBREAK() override;
-    bool visitHALT(cell_t value) override;
     bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                         cell_t data_fill_size, cell_t fill_value) override;
     bool visitHEAP_SAVE() override;

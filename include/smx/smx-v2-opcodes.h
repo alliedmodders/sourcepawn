@@ -55,7 +55,6 @@ namespace v2 {
     FOR_EACH(SREF_S_ALT, 22, "sref.s.alt", 2) \
     FOR_EACH(STOR_I, 23, "stor.i", 1) \
     FOR_EACH(STRB_I, 24, "strb.i", 2) \
-    FOR_EACH(LIDX, 25, "lidx", 1) \
     FOR_EACH(IDXADDR, 27, "idxaddr", 1) \
     FOR_EACH(MOVE_PRI, 33, "move.pri", 1) \
     FOR_EACH(MOVE_ALT, 34, "move.alt", 1) \
@@ -63,7 +62,6 @@ namespace v2 {
     FOR_EACH(PUSH_PRI, 36, "push.pri", 1) \
     FOR_EACH(PUSH_ALT, 37, "push.alt", 1) \
     FOR_EACH(PUSH_C, 39, "push.c", 2) \
-    FOR_EACH(PUSH, 40, "push", 2) \
     FOR_EACH(PUSH_S, 41, "push.s", 2) \
     FOR_EACH(POP_PRI, 42, "pop.pri", 1) \
     FOR_EACH(POP_ALT, 43, "pop.alt", 1) \
@@ -96,7 +94,6 @@ namespace v2 {
     FOR_EACH(SDIV_ALT_I32, 75, "sdiv.i32", 1) \
     FOR_EACH(SMOD_ALT_I32, 76, "smod.i32", 1) \
     FOR_EACH(ADD, 78, "add", 1) \
-    FOR_EACH(SUB, 79, "sub", 1) \
     FOR_EACH(SUB_ALT, 80, "sub.alt", 1) \
     FOR_EACH(AND, 81, "and", 1) \
     FOR_EACH(OR, 82, "or", 1) \
@@ -108,7 +105,6 @@ namespace v2 {
     FOR_EACH(SMUL_C, 88, "smul.c", 2) \
     FOR_EACH(ZERO_PRI, 89, "zero.pri", 1) \
     FOR_EACH(ZERO_ALT, 90, "zero.alt", 1) \
-    FOR_EACH(ZERO, 91, "zero", 2) \
     FOR_EACH(ZERO_S, 92, "zero.s", 2) \
     FOR_EACH(ZERO_S_I64, 93, "zero.s.i64", 2) \
     FOR_EACH(EQ, 95, "eq", 1) \
@@ -124,19 +120,12 @@ namespace v2 {
      * deprecated. \
      */ \
     FOR_EACH(INC_ALT, 108, "inc.alt", 1) \
-    FOR_EACH(INC, 109, "inc", 2) \
-    FOR_EACH(INC_S, 110, "inc.s", 2) \
-    FOR_EACH(INC_I, 111, "inc.i", 1) \
     FOR_EACH(DEC_PRI, 112, "dec.pri", 1) \
     FOR_EACH(DEC_ALT, 113, "dec.alt", 1) \
-    FOR_EACH(DEC, 114, "dec", 2) \
-    FOR_EACH(DEC_S, 115, "dec.s", 2) \
-    FOR_EACH(DEC_I, 116, "dec.i", 1) \
     FOR_EACH(MOVS, 117, "movs", 2) \
     FOR_EACH(FILL, 119, "fill", 2) \
     FOR_EACH(HALT, 120, "halt", 2) \
     FOR_EACH(BOUNDS, 121, "bounds", 2) \
-    FOR_EACH(SYSREQ_C, 123, "sysreq.c", 2) \
     FOR_EACH(SWITCH, 129, "switch", 2) \
     FOR_EACH(CASETBL, 130, "casetbl", -1) \
     FOR_EACH(SWAP_PRI, 131, "swap.pri", 1) \
@@ -145,26 +134,6 @@ namespace v2 {
     FOR_EACH(NOP, 134, "nop", 1) \
     FOR_EACH(SYSREQ_N, 135, "sysreq.n", 3) \
     FOR_EACH(BREAK, 137, "break", 1) \
-    FOR_EACH(PUSH2_C, 138, "push2.c", 3) \
-    FOR_EACH(PUSH2, 139, "push2", 3) \
-    FOR_EACH(PUSH2_S, 140, "push2.s", 3) \
-    FOR_EACH(PUSH2_ADR, 141, "push2.adr", 3) \
-    FOR_EACH(PUSH3_C, 142, "push3.c", 4) \
-    FOR_EACH(PUSH3, 143, "push3", 4) \
-    FOR_EACH(PUSH3_S, 144, "push3.s", 4) \
-    FOR_EACH(PUSH3_ADR, 145, "push3.adr", 4) \
-    FOR_EACH(PUSH4_C, 146, "push4.c", 5) \
-    FOR_EACH(PUSH4, 147, "push4", 5) \
-    FOR_EACH(PUSH4_S, 148, "push4.s", 5) \
-    FOR_EACH(PUSH4_ADR, 149, "push4.adr", 5) \
-    FOR_EACH(PUSH5_C, 150, "push5.c", 6) \
-    FOR_EACH(PUSH5, 151, "push5", 6) \
-    FOR_EACH(PUSH5_S, 152, "push5.s", 6) \
-    FOR_EACH(PUSH5_ADR, 153, "push5.adr", 6) \
-    FOR_EACH(LOAD_BOTH, 154, "load.both", 3) \
-    FOR_EACH(LOAD_S_BOTH, 155, "load.s.both", 3) \
-    FOR_EACH(CONST, 156, "const", 3) \
-    FOR_EACH(CONST_S, 157, "const.s", 3) \
     FOR_EACH(GENARRAY, 162, "genarray", 2) \
     FOR_EACH(GENARRAY_Z, 163, "genarray.z", 2) \
     FOR_EACH(STRADJUST_PRI, 164, "stradjust.pri", 1) \
@@ -227,28 +196,6 @@ enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
     OPCODE_LIST_V2(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
-
-    // These opcodes are internal to the compiler and not part of the ABI. They
-    // are used to implement peephole optimizations on legacy float natives. When
-    // kCodeFeatureTypedOps is present, most of these are unused.
-    OP_FABS,
-    OP_FLOAT,
-    OP_FLOATADD,
-    OP_FLOATSUB,
-    OP_FLOATMUL,
-    OP_FLOATDIV,
-    OP_RND_TO_NEAREST,
-    OP_RND_TO_FLOOR,
-    OP_RND_TO_CEIL,
-    OP_RND_TO_ZERO,
-    OP_FLOATCMP,
-    OP_FLOAT_GT,
-    OP_FLOAT_GE,
-    OP_FLOAT_LT,
-    OP_FLOAT_LE,
-    OP_FLOAT_NE,
-    OP_FLOAT_EQ,
-    OP_FLOAT_NOT,
     OPCODES_LAST
 };
 

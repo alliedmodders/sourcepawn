@@ -138,93 +138,10 @@ PluginRuntime::Initialize() {
         m_pNullString = NULL;
     }
 
-    SetupFloatNativeRemapping();
-
     if (!function_map_.init(32))
         return false;
 
     return true;
-}
-
-struct NativeMapping {
-    const char* name;
-    unsigned opcode;
-};
-
-static const NativeMapping sNativeMap[] = {
-    // Older versions for SourceMod.
-    {"FloatAbs", OP_FABS},
-    {"FloatAdd", OP_FLOATADD},
-    {"FloatSub", OP_FLOATSUB},
-    {"FloatMul", OP_FLOATMUL},
-    {"FloatDiv", OP_FLOATDIV},
-    {"float", OP_FLOAT},
-    {"FloatCompare", OP_FLOATCMP},
-    {"RoundToCeil", OP_RND_TO_CEIL},
-    {"RoundToZero", OP_RND_TO_ZERO},
-    {"RoundToFloor", OP_RND_TO_FLOOR},
-    {"RoundToNearest", OP_RND_TO_NEAREST},
-    {"__FLOAT_GT__", OP_FLOAT_GT},
-    {"__FLOAT_GE__", OP_FLOAT_GE},
-    {"__FLOAT_LT__", OP_FLOAT_LT},
-    {"__FLOAT_LE__", OP_FLOAT_LE},
-    {"__FLOAT_EQ__", OP_FLOAT_EQ},
-    {"__FLOAT_NE__", OP_FLOAT_NE},
-    {"__FLOAT_NOT__", OP_FLOAT_NOT},
-
-    // Newer versions for spshell/sp2.
-    {"__float_add", OP_FLOATADD},
-    {"__float_sub", OP_FLOATSUB},
-    {"__float_mul", OP_FLOATMUL},
-    {"__float_div", OP_FLOATDIV},
-    {"__float_mod", OP_NOP}, // No asm version
-    {"__float_ctor", OP_FLOAT},
-    {"__float_gt", OP_FLOAT_GT},
-    {"__float_ge", OP_FLOAT_GE},
-    {"__float_lt", OP_FLOAT_LT},
-    {"__float_ge", OP_FLOAT_GE},
-    {"__float_eq", OP_FLOAT_EQ},
-    {"__float_ne", OP_FLOAT_NE},
-    {"__float_not", OP_FLOAT_NOT},
-    {NULL, 0},
-};
-
-void
-PluginRuntime::SetupFloatNativeRemapping() {
-    float_table_ = std::make_unique<floattbl_t[]>(image_->NumNatives());
-    for (size_t i = 0; i < image_->NumNatives(); i++) {
-        const char* name = image_->GetNative(i);
-        const NativeMapping* iter = sNativeMap;
-        while (iter->name) {
-            if (strcmp(name, iter->name) == 0) {
-                float_table_[i].found = true;
-                float_table_[i].index = iter->opcode;
-                break;
-            }
-            iter++;
-        }
-    }
-}
-
-static cell_t
-NativeMustBeReplaced(IPluginContext* cx, const cell_t* params) {
-    cx->ThrowNativeError("This native was not replaced");
-    return 0;
-}
-
-void
-PluginRuntime::InstallBuiltinNatives() {
-    Environment* env = Environment::get();
-    for (size_t i = 0; i < image_->NumNatives(); i++) {
-        if (!float_table_[i].found)
-            continue;
-
-        const char* name = image_->GetNative(i);
-        SPVM_NATIVE_FUNC func = env->builtins()->Lookup(name);
-        if (!func)
-            func = NativeMustBeReplaced;
-        UpdateNativeBinding(i, func, 0, nullptr);
-    }
 }
 
 ke::RefPtr<BaseMethodInfo>

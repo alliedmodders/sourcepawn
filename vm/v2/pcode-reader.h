@@ -196,9 +196,6 @@ class PcodeReader
                 return visitor_->visitSTRB_I(val);
             }
 
-            case OP_LIDX:
-                return visitor_->visitLIDX();
-
             case OP_IDXADDR:
                 return visitor_->visitIDXADDR();
 
@@ -218,42 +215,15 @@ class PcodeReader
             }
 
             case OP_PUSH_C:
-            case OP_PUSH2_C:
-            case OP_PUSH3_C:
-            case OP_PUSH4_C:
-            case OP_PUSH5_C: {
-                size_t n = 1;
-                if (op >= OP_PUSH2_C)
-                    n = ((op - OP_PUSH2_C) / 4) + 2;
-
-                const cell_t* vec = getCells(n);
-                return visitor_->visitPUSH_C(vec, n);
-            }
-
-            case OP_PUSH:
-            case OP_PUSH2:
-            case OP_PUSH3:
-            case OP_PUSH4:
-            case OP_PUSH5: {
-                size_t n = 1;
-                if (op >= OP_PUSH2)
-                    n = ((op - OP_PUSH2) / 4) + 2;
-
-                const cell_t* vec = getCells(n);
-                return visitor_->visitPUSH(vec, n);
+            {
+                cell_t value = readCell();
+                return visitor_->visitPUSH_C(value);
             }
 
             case OP_PUSH_S:
-            case OP_PUSH2_S:
-            case OP_PUSH3_S:
-            case OP_PUSH4_S:
-            case OP_PUSH5_S: {
-                size_t n = 1;
-                if (op >= OP_PUSH2_S)
-                    n = ((op - OP_PUSH2_S) / 4) + 2;
-
-                const cell_t* vec = getCells(n);
-                return visitor_->visitPUSH_S(vec, n);
+            {
+                cell_t slot = readCell();
+                return visitor_->visitPUSH_S(slot);
             }
 
             case OP_PUSH_I_I64:
@@ -403,8 +373,6 @@ class PcodeReader
                 return visitor_->visitSMOD_ALT_I32();
             case OP_ADD:
                 return visitor_->visitADD();
-            case OP_SUB:
-                return visitor_->visitSUB();
             case OP_SUB_ALT:
                 return visitor_->visitSUB_ALT();
             case OP_AND:
@@ -435,11 +403,6 @@ class PcodeReader
 
             case OP_ZERO_ALT:
                 return visitor_->visitZERO(PawnReg::Alt);
-
-            case OP_ZERO: {
-                cell_t offset = readCell();
-                return visitor_->visitZERO(offset);
-            }
 
             case OP_ZERO_S: {
                 cell_t offset = readCell();
@@ -517,36 +480,10 @@ class PcodeReader
             case OP_INC_ALT:
                 return visitor_->visitINC(PawnReg::Alt);
 
-            case OP_INC: {
-                cell_t offset = readCell();
-                return visitor_->visitINC(offset);
-            }
-
-            case OP_INC_S: {
-                cell_t offset = readCell();
-                return visitor_->visitINC_S(offset);
-            }
-
-            case OP_INC_I:
-                return visitor_->visitINC_I();
-
             case OP_DEC_PRI:
                 return visitor_->visitDEC(PawnReg::Pri);
             case OP_DEC_ALT:
                 return visitor_->visitDEC(PawnReg::Alt);
-
-            case OP_DEC: {
-                cell_t offset = readCell();
-                return visitor_->visitDEC(offset);
-            }
-
-            case OP_DEC_S: {
-                cell_t offset = readCell();
-                return visitor_->visitDEC_S(offset);
-            }
-
-            case OP_DEC_I:
-                return visitor_->visitDEC_I();
 
             case OP_MOVS: {
                 cell_t val = readCell();
@@ -566,11 +503,6 @@ class PcodeReader
                 return visitor_->visitBOUNDS(value);
             }
 
-            case OP_SYSREQ_C: {
-                cell_t index = readCell();
-                return visitor_->visitSYSREQ_C(index);
-            }
-
             case OP_SWAP_PRI:
             case OP_SWAP_ALT: {
                 PawnReg reg = (op == OP_SWAP_PRI) ? PawnReg::Pri : PawnReg::Alt;
@@ -578,46 +510,15 @@ class PcodeReader
             }
 
             case OP_PUSH_ADR:
-            case OP_PUSH2_ADR:
-            case OP_PUSH3_ADR:
-            case OP_PUSH4_ADR:
-            case OP_PUSH5_ADR: {
-                size_t n = 1;
-                if (op >= OP_PUSH2_ADR)
-                    n = ((op - OP_PUSH2_ADR) / 4) + 2;
-
-                const cell_t* vec = getCells(n);
-                return visitor_->visitPUSH_ADR(vec, n);
+            {
+                cell_t slot = readCell();
+                return visitor_->visitPUSH_ADR(slot);
             }
 
             case OP_SYSREQ_N: {
                 cell_t index = readCell();
                 cell_t nparams = readCell();
                 return visitor_->visitSYSREQ_N(index, nparams);
-            }
-
-            case OP_LOAD_BOTH: {
-                cell_t offs1 = readCell();
-                cell_t offs2 = readCell();
-                return visitor_->visitLOAD_BOTH(offs1, offs2);
-            }
-
-            case OP_LOAD_S_BOTH: {
-                cell_t offs1 = readCell();
-                cell_t offs2 = readCell();
-                return visitor_->visitLOAD_S_BOTH(offs1, offs2);
-            }
-
-            case OP_CONST: {
-                cell_t offset = readCell();
-                cell_t value = readCell();
-                return visitor_->visitCONST(offset, value);
-            }
-
-            case OP_CONST_S: {
-                cell_t offset = readCell();
-                cell_t value = readCell();
-                return visitor_->visitCONST_S(offset, value);
             }
 
             case OP_GENARRAY:
@@ -628,58 +529,6 @@ class PcodeReader
 
             case OP_STRADJUST_PRI:
                 return visitor_->visitSTRADJUST_PRI();
-
-            case OP_FABS:
-                return visitor_->visitFABS();
-            case OP_FLOAT:
-                return visitor_->visitFLOAT();
-            case OP_FLOATADD:
-                return visitor_->visitFLOATADD();
-            case OP_FLOATSUB:
-                return visitor_->visitFLOATSUB();
-            case OP_FLOATMUL:
-                return visitor_->visitFLOATMUL();
-            case OP_FLOATDIV:
-                return visitor_->visitFLOATDIV();
-
-            case OP_RND_TO_NEAREST:
-                return visitor_->visitRND_TO_NEAREST();
-
-            case OP_RND_TO_CEIL:
-                return visitor_->visitRND_TO_CEIL();
-
-            case OP_RND_TO_ZERO:
-                return visitor_->visitRND_TO_ZERO();
-
-            case OP_RND_TO_FLOOR:
-                return visitor_->visitRND_TO_FLOOR();
-
-            // This is the old float cmp, which returns ordered results. In newly
-            // compiled code it should not be used or generated.
-            //
-            // Note that the checks here are inverted: the test is |rhs OP lhs|.
-            case OP_FLOATCMP:
-                return visitor_->visitFLOATCMP();
-
-            case OP_FLOAT_GT:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Sgrtr);
-            case OP_FLOAT_GE:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Sgeq);
-            case OP_FLOAT_LE:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Sleq);
-            case OP_FLOAT_LT:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Sless);
-            case OP_FLOAT_EQ:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Eq);
-            case OP_FLOAT_NE:
-                return visitor_->visitFLOAT_CMP_OP(CompareOp::Neq);
-            case OP_FLOAT_NOT:
-                return visitor_->visitFLOAT_NOT();
-
-            case OP_HALT: {
-                cell_t value = readCell();
-                return visitor_->visitHALT(value);
-            }
 
             case OP_SWITCH: {
                 cell_t tableOffset = readCell();

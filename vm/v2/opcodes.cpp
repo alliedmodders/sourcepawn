@@ -116,46 +116,20 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
                     int(((cell_t*)runtime->code().bytes + cip[1] / 4) - start));
             break;
 
-        case OP_SYSREQ_C:
         case OP_SYSREQ_N: {
             uint32_t index = cip[1];
             if (index < runtime->image()->NumNatives())
                 fprintf(fp, "%s", runtime->GetNative(index)->name);
-            if (op == OP_SYSREQ_N)
-                fprintf(fp, " ; (%d args, index %d)", cip[2], index);
-            else
-                fprintf(fp, " ; (index %d)", index);
+            fprintf(fp, " ; (%d args, index %d)", cip[2], index);
             break;
         }
 
-        case OP_PUSH2_C:
-        case OP_PUSH2:
-        case OP_PUSH2_S:
-        case OP_PUSH2_ADR:
         case OP_SDIV_ALT_I64:
             fprintf(fp, "%d, %d", cip[1], cip[2]);
             break;
 
-        case OP_PUSH3_C:
-        case OP_PUSH3:
-        case OP_PUSH3_S:
-        case OP_PUSH3_ADR:
         case OP_STOR_S_C_I64:
             fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
-            break;
-
-        case OP_PUSH4_C:
-        case OP_PUSH4:
-        case OP_PUSH4_S:
-        case OP_PUSH4_ADR:
-            fprintf(fp, "%d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4]);
-            break;
-
-        case OP_PUSH5_C:
-        case OP_PUSH5:
-        case OP_PUSH5_S:
-        case OP_PUSH5_ADR:
-            fprintf(fp, "%d, %d, %d, %d, %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
             break;
 
         case OP_INITARRAY_PRI:

@@ -10,9 +10,12 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include <sp_vm_api.h>
+#include <math.h>
+#include <fenv.h>
 #include <stdlib.h>
 #include <stdarg.h>
+
+#include <sp_vm_api.h>
 #include <amtl/am-cxx.h>
 #include <amtl/experimental/am-argparser.h>
 #include "api.h"
@@ -405,6 +408,52 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+static cell_t FloatAbs(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = (val >= 0.0f) ? val : -val;
+
+  return sp_ftoc(val);
+}
+
+static cell_t RoundToNearest(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+
+  int oldmethod = fegetround();
+  fesetround(FE_TONEAREST);
+  int result = lrintf(val);
+  fesetround(oldmethod);
+  return result;
+}
+
+static cell_t RoundToFloor(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = floor(val);
+
+  return static_cast<int>(val);
+}
+
+static cell_t RoundToCeil(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = ceil(val);
+
+  return static_cast<int>(val);
+}
+
+static cell_t RoundToZero(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  if (val >= 0.0f)
+    val = floor(val);
+  else
+    val = ceil(val);
+
+  return static_cast<int>(val);
+}
+
 #pragma pack(push, 1)
 struct TestStruct {
   cell_t x;
@@ -516,6 +565,13 @@ static int Execute(const char* file)
   BindNative(rt.get(), "add_test_structs", AddTestStructs);
   BindNative(rt.get(), "add_int64", AddInt64);
   BindNative(rt.get(), "donothing_varargs", DoNothingVarargs);
+
+  // These are hacks, since the legacy VM hardcodes them and the v2 VM does not.
+  BindNative(rt.get(), "FloatAbs", FloatAbs);
+  BindNative(rt.get(), "RoundToZero", RoundToZero);
+  BindNative(rt.get(), "RoundToCeil", RoundToCeil);
+  BindNative(rt.get(), "RoundToFloor", RoundToFloor);
+  BindNative(rt.get(), "RoundToNearest", RoundToNearest);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
