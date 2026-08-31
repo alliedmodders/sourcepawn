@@ -1,0 +1,1 @@
+(2) : error 464: cannot initialize a fixed-size array with a 'new' expression

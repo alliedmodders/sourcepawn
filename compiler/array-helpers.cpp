@@ -530,7 +530,10 @@ bool ArrayValidator::ValidateInitializer() {
     if (auto ctor = init_->as<NewArrayExpr>()) {
         auto iter = at_;
         do {
-            assert(!iter->size() || (decl_ && decl_->implicit_dynamic_array()));
+            if (iter->size() && !(decl_ && decl_->implicit_dynamic_array())) {
+                report(init_->pos(), 464);
+                return false;
+            }
             iter = iter->inner()->as<ArrayType>();
         } while (iter);
 

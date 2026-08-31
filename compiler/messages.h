@@ -343,7 +343,7 @@ static const char* errmsg_ex[] = {
     /*461*/ "operator '%s' not defined for types '%s' and '%s'\n",
     /*462*/ "implicit conversion of '%s' to '%s' can lose data\n",
     /*463*/ "builtin keyword is not allowed here\n",
-    /*464*/ "unused\n",
+    /*464*/ "cannot initialize a fixed-size array with a 'new' expression\n",
     /*465*/ "type '%s' cannot be used in a typedef\n",
     /*466*/ "void result cannot be used in an expression\n",
     /*467*/ "too many local slots used\n",
