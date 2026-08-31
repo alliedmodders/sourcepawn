@@ -76,8 +76,13 @@ bool TypeChecker::DiagnoseFunctionFailure() {
 }
 
 bool TypeChecker::CheckImpl() {
-    if (auto formal_array = formal_->as<ArrayType>())
+    if (auto formal_array = formal_->as<ArrayType>()) {
+        if (actual_->isNull()) {
+            if (!formal_array->is_fixed())
+                return true;
+        }
         return CheckArrays(formal_array, actual_->as<ArrayType>());
+    }
 
     Type* formal = *formal_;
     Type* actual = *actual_;
@@ -107,6 +112,8 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
     }
 
     if (actual->isNull()) {
+        if (formal->isNullable())
+            return true;
         if (auto map = formal->asMethodmap()) {
             if (map->nullable())
                 return true;
@@ -189,6 +196,12 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
 }
 
 bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
+    if (why_ != Argument && why_ != Return && !formal->is_fixed() && actual->is_flat()) {
+        if (!defer_.HasErrors())
+            report(pos_, 473) << actual_ << formal_;
+        return false;
+    }
+
     // When enum structs can contain nested references, we will have to forbid
     // coercion to |any|. Or, more likely, create a proper struct type.
     if (!actual) {

@@ -261,6 +261,11 @@ bool matchtag(Type* formal, Type* actual, int flags) {
     if (formal == actual)
         return true;
 
+    if (actual->isNull() && formal->isNullable())
+        return true;
+    if (formal->isNull() && actual->isNullable())
+        return true;
+
     if (formal->isChar() && actual->isInt())
         return true;
 

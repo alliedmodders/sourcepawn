@@ -221,7 +221,7 @@ static const char* errmsg[] = {
     /*183*/ "brackets after variable name indicates a fixed-size array, but "
 	    "size is missing or not constant\n",
     /*184*/ "implicit dynamic array has a dimension of unspecified size\n",
-    /*185*/ "unused\n",
+    /*185*/ "explicit dimension sizes must appear before unspecified ones\n",
 };
 
 static const char* warnmsg[] = {
@@ -357,4 +357,5 @@ static const char* errmsg_ex[] = {
     /*470*/ "string literal is too large\n",
     /*471*/ "default argument must be moved to the function prototype\n",
     /*472*/ "default value must be constant literal or global variable\n",
+    /*473*/ "no viable conversion from '%s' (stack array) to '%s' (heap array)\n",
 };

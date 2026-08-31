@@ -1186,6 +1186,7 @@ class StringExpr final : public Expr
     Atom* text() const {
         return text_;
     }
+    void set_text(Atom* text) { text_ = text; }
 
   private:
     Atom* text_;

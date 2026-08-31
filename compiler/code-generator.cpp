@@ -327,10 +327,15 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
                 if (!init)
                     continue;
                 __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
-            }
-            EmitArrayCtor(array, init, 0);
-            if (!array->is_flat())
+                EmitArrayCtor(array, init, 0);
+            } else if (array->is_fixed() || !init || init->as<NewArrayExpr>()) {
+                EmitArrayCtor(array, init, 0);
                 __ emit(OP_STOR_GLB, VarSlot(var->addr()));
+            } else {
+                // Dynamic array, reference copy.
+                EmitExpr(init);
+                __ emit(OP_STOR_GLB, VarSlot(var->addr()));
+            }
         } else if (var->type()->isEnumStruct()) {
             if (!init)
                 continue;
@@ -597,10 +602,15 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             if (!init_rhs)
                 return;
             __ emit(OP_ADDR_S, VarSlot(slot));
-        }
-        EmitArrayCtor(array, init_rhs, 0);
-        if (!array->is_flat())
+            EmitArrayCtor(array, init_rhs, 0);
+        } else if (array->is_fixed() || !init_rhs || init_rhs->as<NewArrayExpr>()) {
+            EmitArrayCtor(array, init_rhs, 0);
             __ emit(OP_STOR_S, VarSlot(slot));
+        } else {
+            // Dynamic array, reference copy.
+            EmitExpr(init_rhs);
+            __ emit(OP_STOR_S, VarSlot(slot));
+        }
     } else if (is_struct) {
         if (init_rhs) {
             __ emit(OP_ADDR_S, VarSlot(slot));
@@ -668,7 +678,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
 
     if (expr->val().ident == iCONSTEXPR) {
         if (!(flags & EMIT_DISCARD_RESULT)) {
-            if (expr->val().type()->isFloat())
+            if (expr->val().type()->isNull())
+                __ emit(OP_LOAD_NULL);
+            else if (expr->val().type()->isFloat())
                 __ emit(OP_PUSH_C_F32, expr->val().constval());
             else
                 __ PUSH_C(expr->val().constval());
@@ -1004,7 +1016,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     }
 
     assert(!expr->array_copy());
-    assert(!left_val.type()->isArray());
+    assert(!left_val.type()->isArray() || !left_val.type()->to<ArrayType>()->is_flat());
 
     EmitExpr(right);
     EmitBinaryTail(expr, oper, left, right);
@@ -1364,15 +1376,6 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
 void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
     EmitExpr(expr->base());
     EmitExpr(expr->index());
-
-    auto& base_val = expr->base()->val();
-    auto array_type = base_val.type()->as<ArrayType>();
-
-    // The indexed item is another array (multi-dimensional arrays).
-    if (array_type->inner()->isArray()) {
-        assert(expr->val().type()->isArray());
-        __ emit(OP_LOAD_ELEM_A);
-    }
 }
 
 void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
@@ -1627,10 +1630,12 @@ void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
     const auto& exprs = expr->exprs();
 
     // Find the number of dynamic dimensions leading up to the first fixed
-    // dimension.
+    // dimension or unspecified dimension (nullptr in exprs).
     size_t num_dynamic = 0;
     ArrayType* type = expr->type()->as<ArrayType>();
     while (type && !type->is_fixed()) {
+        if (num_dynamic >= exprs.size() || exprs[num_dynamic] == nullptr)
+            break;
         num_dynamic++;
         type = type->inner()->as<ArrayType>();
     }
@@ -1680,31 +1685,29 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     }
 
     auto type = fun_->return_type()->as<ArrayType>();
+    assert(!type->inner()->isArray());
 
-    if (type->inner()->isArray()) {
-        EmitExpr(stmt->expr());
-        __ emit(OP_JUMP, &ret_2d_array_);
-    } else {
-        __ load_hidden_arg(fun_);
-        EmitExpr(stmt->expr());
-        __ emit(OP_COPYARRAY);
-        __ emit(OP_RETV);
-    }
+    __ load_hidden_arg(fun_);
+    EmitExpr(stmt->expr());
+    __ emit(OP_COPYARRAY);
+    __ emit(OP_RETV);
 }
 
-void
-CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
-{
+void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
     if (stmt->expr()) {
         const auto& v = stmt->expr()->val();
-        if (v.type()->isArray() || v.type()->isEnumStruct()) {
-            EmitReturnArrayStmt(stmt);
-        } else if (v.type()->isInt64()) {
-            // Must copy to the hidden arg.
-            __ load_hidden_arg(fun_);
-            EmitExpr(stmt->expr());
-            __ emit(OP_STOR_I_I64);
-            __ emit(OP_RETV);
+        if (fun_->needs_hidden_arg()) {
+            if (v.type()->isEnumStruct() || v.type()->isArray()) {
+                EmitReturnArrayStmt(stmt);
+            } else if (v.type()->isInt64()) {
+                // Must copy to the hidden arg.
+                __ load_hidden_arg(fun_);
+                EmitExpr(stmt->expr());
+                __ emit(OP_STOR_I_I64);
+                __ emit(OP_RETV);
+            } else {
+                assert(false);
+            }
         } else {
             EmitExpr(stmt->expr());
             __ emit(OP_RETN);
@@ -1777,7 +1780,9 @@ void CodeGenerator::EmitRvalue(const value& lval) {
                 __ emit(OP_LOAD_ELEM_I32);
             else if (lval.type()->isCompositeValue())
                 __ emit(OP_IDXADDR);
-            else if (!lval.type()->isArray())
+            else if (lval.type()->isArray())
+                __ emit(OP_LOAD_ELEM_A);
+            else
                 assert(false);
             break;
         case iADDRESS:
@@ -1940,6 +1945,8 @@ void CodeGenerator::EmitAddress(const value& lval) {
         case iARRAYELEM:
             if (!lval.type()->isArray())
                 __ emit(OP_IDXADDR);
+            else
+                __ emit(OP_LOAD_ELEM_A);
             break;
         default:
             assert(false);
@@ -2174,7 +2181,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     locals_ = {};
     free_temp_slots_ = {};
     used_temp_slots_ = {};
-    ret_2d_array_ = {};
 
     {
         AutoEnterScope arg_scope(this, &local_syms_);
@@ -2195,13 +2201,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
         EmitStmt(info->body());
     }
 
-    if (ret_2d_array_.used()) {
-        __ bind(&ret_2d_array_);
-        std::vector<uint32_t> slots;
-        Emit2dArrayCopy(fun_->return_type()->as<ArrayType>(), slots);
-        __ emit(OP_RETV);
-    }
-
     if (info->body()->flow_type() != Flow_Return) {
         // MustReturnValue can be false, even for non-void functions. This
         // preserves compatibility with legacy scripts where "public" allowed
@@ -2217,51 +2216,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     uint32_t pcode_end = asm_.pc();
 
     rtti_->finish_method(info, debug_info_, std::move(locals_), pcode_end);
-}
-
-void CodeGenerator::Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slots) {
-    assert(type->size());
-    assert(type->inner()->isArray());
-
-    uint32_t iter_slot = AcquireTempSlot(fun_, BuiltinType::Int);
-    __ emit(OP_STOR_S_C, VarSlot(iter_slot), 0);
-
-    slots.emplace_back(iter_slot);
-
-    Label done, cont;
-    __ bind(&cont);
-    __ emit(OP_DUP);
-    __ emit(OP_LOAD_S, VarSlot(iter_slot));
-    __ emit(OP_IDXADDR);
-    __ emit(OP_LOAD_I_I32);
-
-    auto inner = type->inner()->as<ArrayType>();
-    if (inner->inner()->isArray()) {
-        Emit2dArrayCopy(inner, slots);
-    } else {
-        __ load_hidden_arg(fun_);
-        for (const auto& slot : slots) {
-            __ emit(OP_LOAD_S, VarSlot(slot));
-            __ emit(OP_IDXADDR);
-            __ emit(OP_LOAD_I_I32);
-        }
-        __ emit(OP_SWAP);
-        __ emit(OP_COPYARRAY);
-    }
-
-    __ emit(OP_LOAD_S, VarSlot(iter_slot));
-    __ emit(OP_INC);
-    __ emit(OP_DUP);
-    __ PUSH_C(type->size());
-    __ emit(OP_JSGEQ, &done);
-    __ emit(OP_STOR_S, VarSlot(iter_slot));
-    __ emit(OP_JUMP, &cont);
-    __ bind(&done);
-
-    slots.pop_back();
-
-    // Caller pushed a value.
-    __ emit(OP_POP);
 }
 
 void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {
@@ -2377,7 +2331,6 @@ CodeGenerator::EnterMemoryScope(tr::vector<MemoryScope>& frame)
     else
         frame.push_back(MemoryScope{frame.back().scope_id + 1});
 }
-
 
 int CodeGenerator::DynamicMemorySize() const {
     int custom = cc_.options()->pragma_dynamic;

@@ -29,6 +29,7 @@ enum class TypeKind : uint8_t {
     Char8,
     Any,
     TopFunction,
+    Null,
     Array,
     FixedArray,
     FlatArray,

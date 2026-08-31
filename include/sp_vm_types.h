@@ -104,7 +104,8 @@ static constexpr uint32_t kApiMinVersion = 2;
 #define SP_ERROR_INVALID_ARRAY_SIZE 33  /**< Invalid arrary size */
 #define SP_ERROR_NULL_DEREF 34          /**< Null object reference */
 #define SP_ERROR_RTTI 35                /**< Malformed type information */
-#define SP_MAX_ERROR_CODES 35
+#define SP_ERROR_SLICE_ESCAPE 36        /**< Slices cannot be returned or assigned outside of functions */
+#define SP_MAX_ERROR_CODES 36
 //Hey you! Update the string table if you add to the end of me! */
 
 /**********************************************

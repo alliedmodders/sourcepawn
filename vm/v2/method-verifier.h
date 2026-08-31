@@ -49,6 +49,7 @@ class MethodVerifier final
     const TypeDesc* any_type() const;
     const TypeDesc* int64_type() const;
     const TypeDesc* float32_type() const;
+    const TypeDesc* null_type() const;
 
   private:
     bool more() const {
@@ -131,7 +132,12 @@ class MethodVerifier final
 
     bool verifyLocalSlots();
 
-    bool ValidateStore(const TypeDesc* dest, const TypeDesc* src);
+    enum class StoreContext {
+        Store,
+        CallSite,
+    };
+
+    bool ValidateStore(const TypeDesc* dest, const TypeDesc* src, StoreContext ctx = StoreContext::Store);
 
   private:
     Runtime* rt_;

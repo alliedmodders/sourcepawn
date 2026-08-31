@@ -192,7 +192,9 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_FLD_A, 130, "load.fld.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_GLB_A, 131, "stor.glb.a", {LL_FMT_GLB_ID, LL_FMT_REG}) \
     FOR_EACH(STOR_FLD_A, 132, "stor.fld.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(COPYARRAY_FLAT_A, 133, "copyarray.flat.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG})
+    FOR_EACH(COPYARRAY_FLAT_A, 133, "copyarray.flat.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_S_A, 134, "stor.s.a", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(RETN_A, 135, "retn.a", {LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

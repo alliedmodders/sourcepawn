@@ -180,7 +180,8 @@ namespace v2 {
      */ \
     FOR_EACH(SLICE_AS, 87, "slice.as", 5) \
     FOR_EACH(STOR_I_A, 88, "stor.i.a", 1) \
-    FOR_EACH(STOR_ELEM_A, 89, "stor.elem.a", 1)
+    FOR_EACH(STOR_ELEM_A, 89, "stor.elem.a", 1) \
+    FOR_EACH(LOAD_NULL, 90, "load.null", 1)
 
 
 enum OPCODE {

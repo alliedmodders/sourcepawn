@@ -58,6 +58,10 @@ const TypeDesc* MethodVerifier::float32_type() const {
     return rt_->GetPrimitiveType(TypeKind::Float32);
 }
 
+const TypeDesc* MethodVerifier::null_type() const {
+    return rt_->GetPrimitiveType(TypeKind::Null);
+}
+
 ke::RefPtr<ControlFlowGraph>
 MethodVerifier::verify() {
     method_ = smx_->GetMethod(method_index_);
@@ -477,6 +481,10 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(float32_type());
         }
 
+        case OP_LOAD_NULL: {
+            return pushStack(null_type());
+        }
+
         case OP_CALL:
         case OP_CALLN: {
             uint32_t method_index = (uint32_t)readCell();
@@ -549,6 +557,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&src) || !popStack(&dest))
                 return false;
             if (!verifyArrayType(src) || !verifyArrayType(dest))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (dest->array_elt()->kind() == TypeKind::Array)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -810,7 +820,16 @@ bool MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
         if (t1 == t2)
             continue;
 
-        if (IsPodType(t1) && IsPodType(t2)) {
+        if (t1->kind() == TypeKind::Null || t2->kind() == TypeKind::Null) {
+            const TypeDesc* other_t = (t1->kind() == TypeKind::Null) ? t2 : t1;
+            if (other_t->kind() == TypeKind::Null) {
+                // both null — no change
+            } else if (other_t->IsHeapItem() || other_t->kind() == TypeKind::TopFunction) {
+                first->stack[i] = other_t;
+            } else {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+        } else if (IsPodType(t1) && IsPodType(t2)) {
             if (t1->slot_size() != t2->slot_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
@@ -1115,8 +1134,13 @@ bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t
             return false;
         if (i < arg_count) {
             const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - i];
-            if (arg_td->kind() == TypeKind::FlatArray && expected_td->kind() == TypeKind::FixedArray)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (expected_td->IsHeapItem()) {
+                if (!ValidateStore(expected_td, arg_td, StoreContext::CallSite))
+                    return false;
+            } else {
+                if (arg_td->kind() == TypeKind::FlatArray && expected_td->kind() == TypeKind::FixedArray)
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
         }
     }
     return true;
@@ -1189,7 +1213,13 @@ bool MethodVerifier::verifyLocalSlots() {
    return true;
 }
 
-bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src) {
+bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, StoreContext ctx) {
+    if (src->kind() == TypeKind::Null) {
+        if (dest->IsHeapItem() || dest->kind() == TypeKind::TopFunction)
+            return true;
+        return reportError(SP_ERROR_INVALID_INSTRUCTION);
+    }
+
     if (IsPodType(dest)) {
         if (!IsPodType(src) || dest->slot_size() != src->slot_size())
             return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -1197,8 +1227,22 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src) {
     }
 
     switch (dest->kind()) {
-        case TypeKind::Array:
-        case TypeKind::FixedArray:
+        case TypeKind::Array: {
+            if (src->kind() == TypeKind::ArraySlice) {
+                if (ctx != StoreContext::CallSite)
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            } else if (src->kind() != TypeKind::Array && src->kind() != TypeKind::FixedArray) {
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            }
+            if (dest->array_elt() != src->array_elt())
+                return ValidateStore(dest->array_elt(), src->array_elt(), ctx);
+            return true;
+        }
+        case TypeKind::FixedArray: {
+            if (dest != src)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            return true;
+        }
         case TypeKind::FlatArray:
         case TypeKind::ArraySlice:
         case TypeKind::Reference:

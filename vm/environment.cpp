@@ -188,6 +188,7 @@ static const char* sErrorMsgTable[] = {
     "Invalid array size",
     "Null object reference",
     "Malformed type information",
+    "Slices cannot be returned or assigned outside of functions",
 };
 
 const char*

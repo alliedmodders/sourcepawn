@@ -273,10 +273,14 @@ class Type : public PoolObject
     bool isHeapItem() const { return isArray(); }
     bool isTypedef() const { return kind_ == TypeKind::Typedef; }
     bool isCharArray() const;
+    bool isNonHeapNullable() const;
     bool isFlatArray() const;
+    bool isFixedArray() const;
+    bool isNonFlatArray() const;
     bool isCompositeValue() const;
     bool isPassByRef() const;
     bool isAddressType() const;
+    bool isNullable() const;
 
     // True if a value representation can be > 1 cell.
     bool isComposite() const { return isArray() || isEnumStruct(); }

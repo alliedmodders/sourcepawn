@@ -164,7 +164,7 @@ class TestPlan(object):
     if os.path.exists(manifest_path):
       manifest = testutil.parse_manifest(manifest_path, local_folder, manifest)
       folder_type = manifest_get(manifest, 'folder', 'type')
-      if folder_type is not None and folder_type != 'tests':
+      if folder_type is not None and folder_type == 'benchmark':
         return
       if manifest_get(manifest, 'folder', 'skip') == 'true':
         return
@@ -535,7 +535,7 @@ class TestRunner(object):
 
     if test_prefix == 'ok':
       return True
-    return self.compare_spcomp_output(test, stdout)
+    return self.compare_spcomp_output(test, stdout + stderr)
 
   def do_exec(self, argv, env = None):
     if self.plan.show_cli:

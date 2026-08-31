@@ -21,6 +21,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include "semantics.h"
 
+#include <string>
 #include <unordered_set>
 
 #include <amtl/am-raii.h>
@@ -336,7 +337,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         return false;
     }
 
-    TypeChecker tc(field, arg->type(), QualType(actual), TypeChecker::Assignment);
+    TypeChecker tc(field, arg->type(), QualType(actual), TypeChecker::Argument);
     if (!tc.Coerce())
         return false;
     return true;
@@ -729,15 +730,29 @@ class BinaryExprChecker final
 };
 
 bool BinaryExprChecker::Check() {
-    if (!sema_.CheckExpr(left_) || !sema_.CheckRvalue(right_))
+    if (!sema_.CheckExpr(left_))
         return false;
 
+    if (expr_->token() == '=') {
+        if (!sema_.CheckRvalue(right_, left_->val().type()))
+            return false;
+    } else {
+        if (!sema_.CheckRvalue(right_))
+            return false;
+    }
+
     int token = expr_->token();
+    bool is_null_compare = false;
     if (token != '=') {
-        if (!sema_.CheckScalarType(left_))
-            return false;
-        if (!sema_.CheckScalarType(right_))
-            return false;
+        is_null_compare = (token == tlEQ || token == tlNE) &&
+                          (left_->val().type()->isNullable() ||
+                           right_->val().type()->isNullable());
+        if (!is_null_compare) {
+            if (!sema_.CheckScalarType(left_))
+                return false;
+            if (!sema_.CheckScalarType(right_))
+                return false;
+        }
     }
 
     if (IsAssignOp(token)) {
@@ -788,7 +803,7 @@ bool BinaryExprChecker::Check() {
     auto* right_val = &right_->val();
 
     auto oper_tok = NormalizeBinaryToken(expr_->token());
-    if (oper_tok) {
+    if (oper_tok && !is_null_compare) {
         assert(token != '=');
 
         if (!SupportsOperators(left_val->type())) {
@@ -798,6 +813,14 @@ bool BinaryExprChecker::Check() {
         if (!SupportsOperators(right_val->type())) {
             report(right_, 33) << right_val->type();
             return false;
+        }
+    }
+
+    if (is_null_compare) {
+        if (left_val->type()->isArray() && right_val->type()->isArray()) {
+            TypeChecker tc(right_, left_val->type(), right_val->type(), TypeChecker::Assignment);
+            if (!tc.Check())
+                return false;
         }
     }
 
@@ -880,10 +903,12 @@ bool BinaryExprChecker::CheckAssignmentLHS() {
             return false;
         }
 
-        for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
-            if (!iter->size()) {
-                report(left_, 46);
-                return false;
+        if (left_array->is_flat()) {
+            for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
+                if (!iter->size()) {
+                    report(left_, 46);
+                    return false;
+                }
             }
         }
         return true;
@@ -919,18 +944,19 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
         if (!tc.Coerce())
             return false;
 
-        auto right_array = right_val.type()->to<ArrayType>();
-        if (right_array->inner()->isArray()) {
-            report(expr_, 23);
-            return false;
+        auto left_array = left_val.type()->to<ArrayType>();
+        if (left_array->size() > 0) {
+            auto right_array = right_val.type()->to<ArrayType>();
+            if (right_array->inner()->isArray()) {
+                report(expr_, 23);
+                return false;
+            }
+            if (right_array->size() == 0) {
+                report(expr_, 9);
+                return false;
+            }
+            expr_->set_array_copy(true);
         }
-
-        if (right_array->size() == 0) {
-            report(expr_, 9);
-            return false;
-        }
-
-        expr_->set_array_copy(true);
     } else {
         if (right_val.type()->isArray()) {
             // Hack. Special case array literals assigned to an enum struct,
@@ -994,6 +1020,8 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
         expr_->set_enum_struct_copy(true);
     } else if (!left_val.type()->isArray()) {
         matchtag(left_val.type(), right_val.type(), TRUE);
+
+        right_ = expr_->set_right(sema_.CoerceNull(right_, left_type));
     }
     return true;
 }
@@ -1197,15 +1225,25 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     return true;
 }
 
-bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
+bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     AutoErrorPos aep(expr->pos());
 
     auto first = expr->first();
     auto second = expr->second();
     auto third = expr->third();
 
-    if (!CheckRvalue(first) || !CheckRvalue(second) || !CheckRvalue(third))
+    if (!CheckRvalue(first))
         return false;
+
+    if (target) {
+        if (!CheckRvalue(second, target))
+            return false;
+        if (!CheckRvalue(third, target))
+            return false;
+    } else {
+        if (!CheckRvalue(second) || !CheckRvalue(third))
+            return false;
+    }
 
     if (first->lvalue()) {
         first = expr->set_first(new RvalueExpr(first));
@@ -1218,11 +1256,17 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     if (third->lvalue())
         third = expr->set_third(new RvalueExpr(third));
 
+    QualType out_type = second->val().qualified();
+
     if (second->val().type() != third->val().type()) {
         if (second->val().type()->isArray() && third->val().type()->isArray()) {
             auto left_array = second->val().type()->to<ArrayType>();
             auto right_array = third->val().type()->to<ArrayType>();
             int size = (left_array->size() == right_array->size()) ? left_array->size() : 0;
+
+            // If sizes aren't equal, decay the result type to be unsized.
+            if (!size)
+                out_type = types_->defineArray(left_array->inner(), 0);
 
             if (left_array->is_flat()) {
                 auto type = types_->defineArray(left_array->inner(), size);
@@ -1245,17 +1289,11 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
     if (!tc.Check())
         return false;
 
-    // Huge hack: for now, take the larger of two char arrays.
-    auto& val = expr->val();
-    val = left;
-    if (val.type()->isCharArray() && right.type()->isCharArray()) {
-        auto left_array = val.type()->to<ArrayType>();
-        auto right_array = right.type()->to<ArrayType>();
-        if (right_array->size() > left_array->size())
-            val = right;
-    }
+    second = expr->set_second(CoerceNull(second, right.type()));
+    third = expr->set_third(CoerceNull(third, left.type()));
 
-    val.ident = iEXPRESSION;
+    auto& val = expr->val();
+    val.set_expr(out_type);
     return true;
 }
 
@@ -1291,8 +1329,14 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     }
 
     auto inner = expr->expr();
-    if (!CheckExpr(inner))
-        return false;
+    if (auto array = inner->as<ArrayExpr>()) {
+        Type* target_array = types_->defineArray(to_type, (int)array->exprs().size());
+        if (!CheckRvalue(array, target_array))
+            return false;
+    } else {
+        if (!CheckExpr(inner))
+            return false;
+    }
 
     auto& out_val = expr->val();
 
@@ -1484,33 +1528,46 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
     return true;
 }
 
-bool Semantics::CheckArrayExpr(ArrayExpr* array) {
+
+bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
     AutoErrorPos aep(array->pos());
 
-    Type* last_type = nullptr;
-    for (const auto& expr : array->exprs()) {
-        if (!CheckExpr(expr))
-            return false;
+    if (!target) {
+        report(array->pos(), 142);
+        return false;
+    }
+    auto array_target = target->as<ArrayType>();
+    if (!array_target) {
+        report(array->pos(), 142);
+        return false;
+    }
 
-        const auto& val = expr->val();
-        if (val.ident != iCONSTEXPR) {
-            report(expr, 8);
-            return false;
-        }
-        if (!last_type) {
-            last_type = val.type();
-            continue;
-        }
+    Type* formal_elt = array_target->inner();
 
-        TypeChecker tc(array, last_type, val.type(), TypeChecker::Generic);
-        if (!tc.Check())
-            return false;
+    for (const auto& entry : array->exprs()) {
+        if (entry->as<ArrayExpr>()) {
+            if (!CheckRvalue(entry, formal_elt))
+                return false;
+        } else {
+            if (!CheckExpr(entry))
+                return false;
+
+            const auto& val = entry->val();
+            if (val.ident != iCONSTEXPR) {
+                report(entry, 8);
+                return false;
+            }
+
+            TypeChecker tc(entry, formal_elt, val.type(), TypeChecker::Assignment);
+            if (!tc.Coerce())
+                return false;
+        }
     }
 
     auto& val = array->val();
     val.ident = iEXPRESSION;
-    val.set_type(types_->defineArray(last_type, (int)array->exprs().size()));
-    return true;
+    val.set_type(types_->defineArray(formal_elt, (int)array->exprs().size()));
+    return CheckRvalue(array->pos(), array->val());
 }
 
 bool Semantics::CheckIndexExpr(IndexExpr* expr) {
@@ -1610,9 +1667,21 @@ bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
     return true;
 }
 
-bool Semantics::CheckStringExpr(StringExpr* expr) {
+bool Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
     auto& val = expr->val();
     val.ident = iEXPRESSION;
+
+    auto arr = target ? target->as<ArrayType>() : nullptr;
+    if (arr && arr->size() > 0 && arr->inner()->isChar()) {
+        size_t needed = arr->size();
+        size_t current = expr->text()->length() + 1;
+        if (current < needed) {
+            std::string new_str = expr->text()->str();
+            new_str.append((needed - 1) - new_str.length(), '\0');
+            expr->set_text(cc_.atom(new_str));
+        }
+    }
+
     val.set_type(types_->defineArray(types_->type_char(), (cell)expr->text()->length() + 1));
     return true;
 }
@@ -2137,7 +2206,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     }
 
     if (param != call->implicit_this()) {
-        if (!CheckRvalue(param))
+        if (!CheckRvalue(param, *arg->type()))
             return nullptr;
     }
 
@@ -2182,6 +2251,10 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         }
         if (auto slice = ParamNeedsSliceWrapper(param, nullptr))
             param = slice;
+        if (param->lvalue() && val->type()->isNonFlatArray()) {
+            param = new RvalueExpr(param);
+            val = &param->val();
+        }
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
 
@@ -2248,6 +2321,8 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         if (!tc.Coerce())
             return nullptr;
     }
+    if (param)
+        param = CoerceNull(param, *arg->type());
     return param;
 }
 
@@ -2276,9 +2351,7 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
 }
 
 bool Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
-    // We can't handle random refarrays floating around yet, so forbid this.
-    report(expr, 142);
-    return false;
+    return CheckNewArrayExprForArrayInitializer(expr);
 }
 
 bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
@@ -2291,7 +2364,17 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     val.ident = iEXPRESSION;
 
     PoolList<int> dims;
+    bool seen_null = false;
     for (auto& expr : na->exprs()) {
+        if (!expr) {
+            seen_null = true;
+            dims.emplace_back(0);
+            continue;
+        }
+        if (seen_null) {
+            report(na, 185);
+            return false;
+        }
         if (!CheckRvalue(expr))
             return false;
         if (expr->lvalue())
@@ -2314,6 +2397,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     }
     assert(na->type()->isArray());
 
+    val.set_type(na->type());
     na->set_analysis_result(true);
     return true;
 }
@@ -2504,7 +2588,9 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     if (!tc.Coerce())
         return false;
 
-    if (v.type()->isArray() || v.type()->isEnumStruct()) {
+    expr = stmt->set_expr(CoerceNull(expr, fun->return_type()));
+
+    if (expr->val().type()->isEnumStruct() || expr->val().type()->isFixedArray()) {
         if (!CheckCompoundReturnStmt(stmt))
             return false;
     }
@@ -2536,6 +2622,8 @@ bool Semantics::CheckCompoundReturnStmt(ReturnStmt* stmt) {
         auto info = new FunctionDecl::ReturnArrayInfo;
         curfunc->set_return_array(info);
         curfunc->update_return_type(val.type());
+        if (val.type()->isFlatArray() || val.type()->isEnumStruct())
+            curfunc->set_needs_hidden_arg();
     }
     return true;
 }
@@ -2829,7 +2917,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             report(info->pos(), 141);
     }
 
-    if (info->return_type()->isArray() ||
+    if (info->return_type()->isFlatArray() ||
         info->return_type()->isEnumStruct() ||
         info->return_type()->isInt64())
     {
@@ -3070,7 +3158,18 @@ void Semantics::DeduceMaybeUsed() {
     }
 }
 
-bool Semantics::CheckRvalue(Expr* expr) {
+bool Semantics::CheckRvalue(Expr* expr, Type* target) {
+    switch (expr->kind()) {
+        case ExprKind::ArrayExpr:
+            return CheckArrayExpr(expr->to<ArrayExpr>(), target);
+        case ExprKind::TernaryExpr:
+            return CheckTernaryExpr(expr->to<TernaryExpr>(), target);
+        case ExprKind::StringExpr:
+            return CheckStringExpr(expr->to<StringExpr>(), target);
+        default:
+            break;
+    }
+
     if (!CheckExpr(expr))
         return false;
     return CheckRvalue(expr->pos(), expr->val());
@@ -3109,6 +3208,14 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     to->val().ident = iEXPRESSION;
     to->val().set_type(types_->GetBuiltin(type));
     return to;
+}
+
+Expr* Semantics::CoerceNull(Expr* expr, Type* formal) {
+    if (expr->val().type()->isNull() && !formal->isNonFlatArray()) {
+        expr->val().set_type(types_->type_int());
+        expr->val().set_constval(0);
+    }
+    return expr;
 }
 
 static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {

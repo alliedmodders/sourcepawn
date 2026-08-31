@@ -445,13 +445,6 @@ bool VarDeclBase::Bind(SemaContext& sc) {
 
     bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
-    if (type_.type->isArray() && (!type_.has_postdims || implicit_dynamic_array())) {
-        if (vclass_ == sGLOBAL)
-            error(pos_, 162);
-        else if (vclass_ == sSTATIC)
-            error(pos_, 165);
-    }
-
     if (type()->isPstruct()) {
         type_.is_const = true;
     } else {
@@ -623,7 +616,8 @@ NewArrayExpr::Bind(SemaContext& sc)
 
     bool ok = true;
     for (const auto& expr : exprs_)
-        ok &= expr->Bind(sc);
+        if (expr)
+            ok &= expr->Bind(sc);
     return ok;
 }
 

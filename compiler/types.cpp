@@ -102,10 +102,31 @@ bool Type::isCharArray() const {
     return isArray() && inner()->isChar();
 }
 
+bool Type::isNonHeapNullable() const {
+    auto map = asMethodmap();
+    return map && map->nullable();
+}
+
 bool Type::isFlatArray() const {
     if (auto array = as<ArrayType>())
         return array->is_flat();
     return false;
+}
+
+bool Type::isFixedArray() const {
+    if (auto array = as<ArrayType>())
+        return array->is_fixed();
+    return false;
+}
+
+bool Type::isNonFlatArray() const {
+    return isArray() && !isFlatArray();
+}
+
+bool Type::isNullable() const {
+    if (auto array = as<ArrayType>())
+        return !array->is_flat();
+    return isNull();
 }
 
 bool Type::isCompositeValue() const {

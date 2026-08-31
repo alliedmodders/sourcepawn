@@ -464,7 +464,7 @@ bool ArrayValidator::Validate() {
     // size array.
     auto iter = at_;
     do {
-        if (!iter->size() && decl_ && decl_->vclass() != sARGUMENT) {
+        if (iter->is_flat() && !iter->size() && decl_ && decl_->vclass() != sARGUMENT) {
             report(decl_->pos(), 46) << decl_->name();
             return true;
         }
@@ -535,7 +535,22 @@ bool ArrayValidator::ValidateInitializer() {
         return true;
     }
 
-    // Probably not a dynamic array, check for a fixed initializer.
+    // For dynamic (heap) arrays, allow initialization from another array
+    // expression (reference copy).
+    if (at_ && !at_->is_fixed()) {
+        if (init_->as<ArrayExpr>() && decl_ && decl_->vclass() != sARGUMENT) {
+            report(init_->pos(), 160);
+            return false;
+        }
+        if (!sema_->CheckRvalue(init_, at_))
+            return false;
+        if (init_->lvalue())
+            decl_->init()->set_right(new RvalueExpr(init_));
+        TypeChecker tc(init_, at_, init_->val().type(), TypeChecker::Assignment);
+        return tc.Coerce();
+    }
+
+    // Not a dynamic array, check for a fixed initializer.
     return ValidateRank(at_, init_);
 }
 
@@ -838,8 +853,10 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     // the appropriate NEWARRAY or NEWBULKARRAY opcode via EmitNewArrayExpr.
     if (!decl->init_rhs() && decl->vclass() != sARGUMENT) {
         if (auto array = decl->type()->as<ArrayType>(); array && !array->is_flat()) {
-            if (!AddImplicitDynamicInitializer(decl))
-                return false;
+            if (array->is_fixed()) {
+                if (!AddImplicitDynamicInitializer(decl))
+                    return false;
+            }
         }
     }
 

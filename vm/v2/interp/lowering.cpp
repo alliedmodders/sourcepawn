@@ -138,6 +138,7 @@ class MethodLowerer
        cell_type_(graph->rt()->GetPrimitiveType(TypeKind::Int32)),
        int64_type_(graph->rt()->GetPrimitiveType(TypeKind::Int64)),
        float32_type_(graph->rt()->GetPrimitiveType(TypeKind::Float32)),
+       null_type_(graph->rt()->GetPrimitiveType(TypeKind::Null)),
        reader_(nullptr, nullptr)
     {}
 
@@ -265,6 +266,7 @@ class MethodLowerer
     const TypeDesc* cell_type_ = nullptr;
     const TypeDesc* int64_type_ = nullptr;
     const TypeDesc* float32_type_ = nullptr;
+    const TypeDesc* null_type_ = nullptr;
     BinaryReader reader_;
 
     Block* block_ = nullptr;
@@ -581,8 +583,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg val_reg = EmitNode(val);
             if (val->type->IsHeapItem())
-                emit(LL_ADDREF, val_reg);
-            emit(LL_RETN, val_reg);
+                emit(LL_RETN_A, val_reg);
+            else
+                emit(LL_RETN, val_reg);
 
             FreeReg(val_reg);
             break;
@@ -834,11 +837,20 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
         case OP_STOR_S: {
             int16_t offset = reader_.read<int16_t>();
-            VReg target = OffsetToVReg(offset);
+            const TypeDesc* type = method_->GetTypeOfLocal(offset);
             ExprNode* val = popStack();
 
             FlushEmitStack();
-            EmitNode(val, target);
+            if (type->IsHeapItem()) {
+                // We must evaluate the RHS into a temporary register first to prevent
+                // use-after-free bugs if the RHS expression references the target local itself.
+                VReg src = EmitNode(val);
+                emit(LL_STOR_S_A, OffsetToVReg(offset), src);
+                FreeReg(src);
+            } else {
+                VReg target = OffsetToVReg(offset);
+                EmitNode(val, target);
+            }
             break;
         }
 
@@ -905,6 +917,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_PUSH_C_F32: {
             float value = reader_.read<float>();
             pushStack(CreateConstNode(float32_type_, sp_ftoc(value)));
+            break;
+        }
+
+        case OP_LOAD_NULL: {
+            pushStack(CreateConstNode(null_type_, 0));
             break;
         }
 

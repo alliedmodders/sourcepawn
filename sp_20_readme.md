@@ -25,16 +25,16 @@ copy-by-value, pass-by-reference, and return-by-value. Example:
     float vec_1[3] = {1.0, 2.0, 3.0};
     float vec_2[3] = vec1; // Deep-cop of vec_1.
 
-All other array types are now heap-allocated. We refer to these as "dynamic"
-arrays. Within the space of dynamic arrays, there are still fixed arrays. The
-only difference is in type-checking and mutability of the array size.
+All other array types are now heap-allocated. We refer to these as "heap"
+arrays. Heap arrays can still be of fixed size. In this case, their size is
+immutable, and is part of their type.
 
-The following are examples of dynamic arrays:
+The following are examples of heap arrays:
 
     int[] n = new int[10];
     int bigarray[20][30];
 
-Dynamic arrays are purely reference types. They can be returned or assigned
+Heap arrays are purely reference types. They can be returned or assigned
 without any deep copying. For example, this is now legal:
 
     int[] MakeArray(int n) {
@@ -68,7 +68,7 @@ Arrays now have an intrinsic "length" property:
     }
 
 For compatibility reasons, there are some restrictions and idiosyncracies here.
-First, a flat array can be assigned to a dynamic array, but only of fixed size.
+First, a flat array can be assigned to a heap array, but only of fixed size.
 The following is an example that would perform a deep copy:
 
     int gArray[10][20]; // All 2D arrays are heap allocated for compatibility.
@@ -130,7 +130,7 @@ itself, any unexpected cost can cause frame skip.
 
 As such, we chose a solution whereby the cost associated with object and array
 allocation is _constant_. There is a small cost associated with allocating a
-dynamic array, or an object, but it is constant. A huge clump of objects tied
+heap array, or an object, but it is constant. A huge clump of objects tied
 to a single reference may be expensive to free, but the cost is constant. We
 never kick into a garbage collection cycle, but we also don't have zero-cost
 allocation.
@@ -157,7 +157,7 @@ side by side for the same function from tests/int64/byref.sp:
 
 ```
 +------------------------------------+------------------------------------+
-|               SMX V1               |               SMX V2               |
+|               SMX V2               |               SMX V1               |
 +------------------------------------+------------------------------------+
 | 0000: push.c.i64 1000              | 0000: proc                         |
 | 0009: stor.s 0                     | 0004: break                        |

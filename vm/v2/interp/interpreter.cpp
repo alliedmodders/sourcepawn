@@ -380,9 +380,14 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
                 if (!ptr)
                     return false;
+                auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]);
+                if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                    rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                    return false;
+                }
                 if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*ptr))
                     old_item->Release();
-                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]))
+                if (new_item)
                     new_item->AddRef();
                 *ptr = vregs_[val_reg];
                 break;
@@ -429,9 +434,14 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
                     return false;
                 }
+                auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]);
+                if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                    rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                    return false;
+                }
                 if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*ptr))
                     old_item->Release();
-                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]))
+                if (new_item)
                     new_item->AddRef();
                 *ptr = vregs_[val_reg];
                 break;
@@ -487,9 +497,14 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
                 } else if (op == LL_STOR_ELEM_A) {
                     cell_t* ptr = reinterpret_cast<cell_t*>(elt);
+                    auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]);
+                    if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                        rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                        return false;
+                    }
                     if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*ptr))
                         old_item->Release();
-                    if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]))
+                    if (new_item)
                         new_item->AddRef();
                     *ptr = vregs_[val_reg];
                 } else {
@@ -716,11 +731,22 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_RETN:
+            case LL_RETN_A:
             case LL_RETV: {
                 cell_t result = 0;
-                if (op == LL_RETN) {
+                if (op == LL_RETN || op == LL_RETN_A) {
                     uint16_t srcreg = reader_.read<uint16_t>();
                     result = vregs_[srcreg];
+                }
+
+                if (op == LL_RETN_A) {
+                    if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(result)) {
+                        if (item->td->kind() == TypeKind::ArraySlice) {
+                            rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                            return false;
+                        }
+                        item->AddRef();
+                    }
                 }
 
                 method_->interp()->gcobj_regs().for_each([&](uintptr_t reg) {
@@ -837,9 +863,14 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
                 cell_t* ptr = reinterpret_cast<cell_t*>(base_ptr + offset);
+                auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[valreg]);
+                if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                    rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                    return false;
+                }
                 if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*ptr))
                     old_item->Release();
-                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[valreg]))
+                if (new_item)
                     new_item->AddRef();
                 *ptr = vregs_[valreg];
                 break;
@@ -1091,6 +1122,10 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t destreg = reader_.read<uint16_t>();
                 SpArray* src = heap_.ToPhysAddr<SpArray*>(vregs_[srcreg]);
                 SpArray* dest = heap_.ToPhysAddr<SpArray*>(vregs_[destreg]);
+                if (!src) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 assert(dest->td->kind() == TypeKind::FixedArray);
 
                 if (src->length > dest->length) {
@@ -1231,6 +1266,16 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t reg = reader_.read<uint16_t>();
                 if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(vregs_[reg]))
                     item->AddRef();
+                break;
+            }
+            case LL_STOR_S_A: {
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                uint16_t src_reg = reader_.read<uint16_t>();
+                if (auto old_item = heap_.ToPhysAddr<HeapItem*>(vregs_[dest_reg]))
+                    old_item->Release();
+                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[src_reg]))
+                    new_item->AddRef();
+                vregs_[dest_reg] = vregs_[src_reg];
                 break;
             }
 

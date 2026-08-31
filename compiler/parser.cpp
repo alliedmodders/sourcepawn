@@ -1256,10 +1256,12 @@ Parser::parse_new_array(const token_pos_t& pos, const TypenameInfo& rt)
 {
     std::vector<Expr*> exprs;
     do {
-        Expr* child = hier14();
+        Expr* child = nullptr;
+        if (!lexer_->match(']')) {
+            child = hier14();
+            lexer_->need(']');
+        }
         exprs.emplace_back(child);
-
-        lexer_->need(']');
     } while (lexer_->match('['));
     return new NewArrayExpr(pos, rt, exprs);
 }

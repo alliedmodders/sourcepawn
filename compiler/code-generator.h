@@ -151,8 +151,6 @@ class CodeGenerator final
     void EmitExprForStmt(Expr* expr);
     void EmitLoopControl(int token);
 
-    void Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slots);
-
     // Emit any precursor instructions needed to load or store from an l-value.
     //
     // SymbolExpr:
@@ -209,8 +207,6 @@ class CodeGenerator final
         bool needs_restore;
     };
 
-
-
     void EnterMemoryScope(tr::vector<MemoryScope>& frame);
     int PopScope(tr::vector<MemoryScope>& scope_list);
 
@@ -261,7 +257,6 @@ class CodeGenerator final
     tr::unordered_set<SymbolScope*> static_scopes_;
     std::list<std::pair<uint32_t, Type*>> free_temp_slots_;
     std::list<std::pair<uint32_t, Type*>> used_temp_slots_;
-    Label ret_2d_array_;
 
     // Data queue cache.
     std::unordered_map<Expr*, uint32_t> fill_data_cache_;

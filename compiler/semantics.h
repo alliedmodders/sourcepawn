@@ -176,8 +176,8 @@ class Semantics final
     // Expressions.
     bool CheckExpr(Expr* expr);
     bool CheckNewArrayExpr(NewArrayExpr* expr);
-    bool CheckArrayExpr(ArrayExpr* expr);
-    bool CheckStringExpr(StringExpr* expr);
+    bool CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
+    bool CheckStringExpr(StringExpr* expr, Type* target = nullptr);
     bool CheckTaggedValueExpr(TaggedValueExpr* expr);
     bool CheckNumber64Expr(Number64Expr* expr);
     bool CheckNullExpr(NullExpr* expr);
@@ -189,7 +189,7 @@ class Semantics final
     bool CheckSizeofExpr(SizeofExpr* expr);
     bool CheckCastExpr(CastExpr* expr);
     bool CheckIncDecExpr(IncDecExpr* expr);
-    bool CheckTernaryExpr(TernaryExpr* expr);
+    bool CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
     bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
     bool CheckLogicalExpr(LogicalExpr* expr);
     bool CheckBinaryExpr(BinaryExpr* expr);
@@ -198,11 +198,12 @@ class Semantics final
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                         bool from_call);
-    bool CheckRvalue(Expr* expr);
+    bool CheckRvalue(Expr* expr, Type* target = nullptr);
     bool CheckRvalue(const token_pos_t& pos, const value& val);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
     Expr* BuildSimpleCast(Expr* from, BuiltinType type);
+    Expr* CoerceNull(Expr* expr, Type* formal);
 
     struct ParamState {
         std::vector<Expr*> argv;
