@@ -26,6 +26,7 @@
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include <utils/bitset.h>
@@ -71,7 +72,6 @@ class CodeGenerator final
     void EmitPstruct(VarDeclBase* decl);
     void EmitGlobalVar(VarDeclBase* decl);
     void EmitLocalVar(VarDeclBase* decl);
-    void EmitLocalSharedVar(VarDeclBase* decl);
     void EmitIfStmt(IfStmt* stmt);
     void EmitDeleteStmt(DeleteStmt* stmt);
     void EmitDoWhileStmt(DoWhileStmt* stmt);
@@ -141,6 +141,9 @@ class CodeGenerator final
     void EmitAddress(const ExprVal& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
     void EmitAddress(VarDeclBase* decl);
+
+    using Lvalue = std::variant<ExprVal, Expr*>;
+    void EmitInit(const Lvalue& lval, Expr* ctor);
 
     void EmitLoadField(LayoutFieldDecl* field);
     void EmitLoadFieldOffset(LayoutFieldDecl* field);

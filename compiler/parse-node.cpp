@@ -372,5 +372,9 @@ SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
     val_.set_type(to);
 }
 
+ExprVal::ExprVal(VarDeclBase* decl) {
+    set_variable(decl, decl->type());
+}
+
 } // namespace cc
 } // namespace sp

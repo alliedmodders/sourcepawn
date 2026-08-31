@@ -37,6 +37,7 @@ class VarDeclBase;
 
 struct ExprVal {
     ExprVal() : ident(iINVALID), type_(nullptr) {}
+    explicit ExprVal(VarDeclBase* decl);
 
     IdentifierKind ident : 6;
     QualType type_;
@@ -100,6 +101,10 @@ struct ExprVal {
     void set_constval(cell val) {
         ident = iCONSTEXPR;
         constval_ = val;
+    }
+    void set_constval(QualType type, cell val) {
+        set_type(type);
+        set_constval(val);
     }
     void set_slice(IdentifierKind ident, QualType type) {
         assert(ident == iARRAYELEM);

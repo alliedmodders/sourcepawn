@@ -3547,6 +3547,7 @@ bool FunctionDecl::GenerateSharedClass(SemaContext& sc) {
 
         auto call = new CallExpr(pos(), tNEW, target, {});
         call->set_ctor_type(shared_class_->type().unqualified());
+        call->val().set_expr(shared_class_->type().unqualified());
         shared_object_->set_init(call);
     }
 

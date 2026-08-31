@@ -335,10 +335,6 @@ uint16_t CodeGenerator::AcquireGlobalSlot(VarDeclBase* decl) {
     return index;
 }
 
-static bool CanUseEmitArrayCtor(ArrayType* array, Expr* init) {
-    return array->is_fixed() || !init || init->as<NewArrayExpr>();
-}
-
 void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
     for (const auto& var : stmt->vars()) {
         auto init = var->init_rhs();
@@ -349,35 +345,7 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
         if (init)
             AddDebugLine(init->pos());
 
-        if (auto array = var->type()->as<ArrayType>()) {
-            if (array->is_flat()) {
-                if (!init)
-                    continue;
-                __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
-                EmitArrayCtor(array, init, 0);
-            } else if (CanUseEmitArrayCtor(array, init)) {
-                EmitArrayCtor(array, init, 0);
-                __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-            } else {
-                // Dynamic array, reference copy.
-                EmitExpr(init);
-                __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-            }
-        } else if (var->type()->isEnumStruct()) {
-            if (!init)
-                continue;
-            __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
-            EmitEnumStructCopy(var->type(), init);
-        } else if (init && init->as<Number64Expr>()) {
-            auto n64 = init->as<Number64Expr>();
-            __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
-            __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-        } else if (init && init->val().ident == iCONSTEXPR) {
-            __ PUSH_C(init->val().constval());
-            __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-        } else if (init) {
-            assert(false);
-        }
+        EmitInit(Lvalue{ExprVal(var)}, init);
     }
 }
 
@@ -409,11 +377,9 @@ void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
     if (type->is_flat()) {
         auto temp_slot = AcquireTempSlot(expr, type);
         __ emit(OP_ADDR_S, VarSlot(temp_slot));
-        EmitArrayCtor(type, expr, flags);
-        __ emit(OP_ADDR_S, VarSlot(temp_slot));
-    } else {
-        EmitArrayCtor(type, expr, flags);
+        __ emit(OP_DUP);
     }
+    EmitArrayCtor(type, expr, flags);
 }
 
 void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags) {
@@ -644,114 +610,109 @@ uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, StringExpr* array) {
     return pos;
 }
 
-static bool CanEmitArrayCtor(Expr* ctor) {
-    if (!ctor)
-        return true;
-    return ctor->is(ExprKind::ArrayExpr) ||
-           ctor->is(ExprKind::StringExpr) ||
-           ctor->is(ExprKind::NewArrayExpr);
+static inline bool IsInlineArrayInitializer(Expr* ctor) {
+    switch (ctor->kind()) {
+        case ExprKind::ArrayExpr:
+        case ExprKind::StringExpr:
+        case ExprKind::NewArrayExpr:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
+    ExprVal val;
+    Expr* base = nullptr;
+    if (auto p = std::get_if<Expr*>(&lval)) {
+        base = *p;
+
+        assert(base->lvalue());
+        val = base->val();
+    } else {
+        val = std::get<ExprVal>(lval);
+    }
+
+    // We need a parse node for any errors.
+    ParseNode* pn = ctor;
+    if (!pn)
+        pn = base;
+    if (!pn)
+        pn = val.sym();
+
+    auto type = val.type();
+    if (auto array = type->as<ArrayType>()) {
+        if (!ctor || IsInlineArrayInitializer(ctor)) {
+            if (array->is_flat()) {
+                // No initialization needed for stack arrays.
+                if (!ctor)
+                    return;
+                EmitAddress(val);
+            }
+
+            EmitArrayCtor(array, ctor, 0);
+
+            // Non-flat arrays are heap allocated so we need to store the
+            // pointer back.
+            if (!array->is_flat())
+                EmitStore(pn, val);
+        } else if (array->is_flat()) {
+            EmitAddress(val);
+            EmitExpr(ctor);
+            __ emit(OP_COPYARRAY);
+        } else {
+            // Dynamic array with arbitrary RHS.
+            EmitExpr(ctor);
+            EmitStore(pn, val);
+        }
+    } else if (type->asEnumStruct()) {
+        // Enum structs are stack-allocated; no ctor is no allocation.
+        if (!ctor)
+            return;
+        EmitAddress(val);
+        EmitEnumStructCopy(type, ctor);
+    } else {
+        ExprVal rhs;
+        if (ctor)
+            rhs = ctor->val();
+        else
+            rhs.set_constval(val.type()->normalize(), 0);
+
+        // Optimize to a single instruction if we can.
+        auto lit_size = rhs.type()->maybe_lit_size();
+        if (rhs.ident == iCONSTEXPR && lit_size && lit_size <= sizeof(cell_t) &&
+            val.ident == iVARIABLE && val.sym()->vclass() == sLOCAL &&
+            !val.sym()->is_shared() && !val.type()->isHeapItem())
+        {
+            __ emit(OP_STOR_S_C, VarSlot(val.sym()), rhs.constval());
+            return;
+        }
+
+        if (!ctor && rhs.type()->isInt64()) {
+            // int64 has to be handled separately since we can't represent it
+            // in an ExprValue right now.
+            __ emit(OP_PUSH_C_I64, Int64Value(0));
+        } else if (rhs.ident == iCONSTEXPR) {
+            if (rhs.type()->isNull())
+                __ emit(OP_LOAD_NULL);
+            else
+                __ PUSH_C(rhs.constval());
+        } else {
+            EmitExpr(ctor);
+        }
+        EmitStore(pn, val);
+    }
 }
 
 void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
-    if (decl->is_shared()) {
-        EmitLocalSharedVar(decl);
-        return;
+    if (!decl->is_shared()) {
+        int32_t slot = rtti_->AddLocalSlot(&locals_, decl->type());
+        if (slot > INT16_MAX)
+            report(decl->pos(), 467);
+        decl->BindAddress(slot);
     }
 
-    BinaryExpr* init = decl->init();
-
-    bool is_struct = decl->type()->isEnumStruct();
-
-    int num_cells;
-    if (decl->type()->isBuiltin(BuiltinType::Int64))
-        num_cells = 2;
-    else
-        num_cells = 1;
-
-    int32_t slot = rtti_->AddLocalSlot(&locals_, decl->type());
-    if (slot > INT16_MAX)
-        report(decl->pos(), 467);
-    decl->BindAddress(slot);
-
-    auto init_rhs = decl->init_rhs();
-    if (auto array = decl->type()->as<ArrayType>()) {
-        if (array->is_flat()) {
-            if (!init_rhs)
-                return;
-            if (CanEmitArrayCtor(init_rhs)) {
-                __ emit(OP_ADDR_S, VarSlot(slot));
-                EmitArrayCtor(array, init_rhs, 0);
-            } else {
-                EmitExpr(init);
-            }
-        } else if (CanUseEmitArrayCtor(array, init_rhs)) {
-            EmitArrayCtor(array, init_rhs, 0);
-            __ emit(OP_STOR_S, VarSlot(slot));
-        } else {
-            // Dynamic array, reference copy.
-            EmitExpr(init_rhs);
-            __ emit(OP_STOR_S, VarSlot(slot));
-        }
-    } else if (is_struct) {
-        if (init_rhs) {
-            __ emit(OP_ADDR_S, VarSlot(slot));
-            EmitEnumStructCopy(decl->type(), init_rhs);
-        }
-    } else {
-        if (init) {
-            const auto& val = init->right()->val();
-            if (val.ident == iCONSTEXPR) {
-                if (val.type()->isNull()) {
-                    __ emit(OP_LOAD_NULL);
-                    __ emit(OP_STOR_S, VarSlot(slot));
-                } else {
-                    __ emit(OP_STOR_S_C, VarSlot(slot), val.constval());
-                }
-            } else if (auto n64 = init->right()->as<Number64Expr>()) {
-                __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
-                __ emit(OP_STOR_S, VarSlot(slot));
-            } else {
-                EmitExpr(init->right());
-                __ emit(OP_STOR_S, VarSlot(slot));
-                assert(num_cells == 1 || num_cells == 2);
-            }
-        } else if (num_cells == 1) {
-            __ emit(OP_STOR_S_C, VarSlot(slot), 0);
-        } else if (num_cells == 2) {
-            __ emit(OP_PUSH_C_I64, Int64Value(0));
-            __ emit(OP_STOR_S, VarSlot(slot));
-        }
-    }
-}
-
-void CodeGenerator::EmitLocalSharedVar(VarDeclBase* decl) {
-    // Shared variables live inside the shared object, not in their own slot.
-    if (!decl->init())
-        return;
-
-    // Store to the shared object.
-    auto field = fun_->GetSharedVarField(decl);
-    auto init_rhs = decl->init_rhs();
-
-    if (auto array = field->type()->as<ArrayType>()) {
-        if (array->is_flat() && init_rhs) {
-            __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
-            EmitAddrField(field);
-            EmitArrayCtor(array, init_rhs, 0);
-            return;
-        }
-    }
-    __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
-    if (auto array = decl->type()->as<ArrayType>()) {
-        if (CanUseEmitArrayCtor(array, init_rhs))
-            EmitArrayCtor(array, init_rhs, 0);
-        else
-            EmitExpr(init_rhs);
-    } else {
-        EmitExpr(init_rhs);
-    }
-    EmitStoreField(field);
-    return;
+    EmitInit(Lvalue{ExprVal(decl)}, decl->init_rhs());
 }
 
 void
@@ -1024,7 +985,7 @@ ExprVal CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
             EmitExpr(expr, EMIT_ALLOW_LVALUE);
             break;
         case iUPVAR: {
-            auto upvar = expr->val().upvar();
+            auto upvar = val.upvar();
             if (upvar->var()->is_shared()) {
                 __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
             }
@@ -1637,21 +1598,18 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         // Don't generate "slice ; array2native" sequences on local arrays,
         // since "slice" and "array2native" cancel each other out.
         bool is_elided_slice = IsElidableSlice(expr, fun, arg);
+
+        ExprVal val = expr->val();
         if (is_elided_slice) {
             EmitElidedSliceExpr(expr->to<SliceExpr>());
+        } else if (expr->lvalue()) {
+            val = BindLvalue(expr, true);
         } else {
-            bool lvalue = expr->lvalue();
-            if (lvalue)
-                BindLvalue(expr, true);
-            else
-                EmitExpr(expr);
+            EmitExpr(expr);
         }
 
         if (expr->as<DefaultArgExpr>())
             continue;
-
-        const auto& val = expr->val();
-
         bool needs_temp = false;
         if (!arg) {
             // Legacy variadic arguments.
@@ -1710,8 +1668,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             assert(!type->is_flat());
             auto slot = AcquireTempSlot(call, type);
             EmitArrayCtor(type, nullptr, 0);
+            __ emit(OP_DUP);
             __ emit(OP_STOR_S, VarSlot(slot));
-            __ emit(OP_LOAD_S, VarSlot(slot));
             hidden_slot = {slot};
         } else {
             assert(return_type->isInt64());
@@ -2685,6 +2643,10 @@ smx_rtti_debug_method CodeGenerator::AddFunctionEntry(FunctionDecl* fun, uint32_
     __ bind_to(&fun->cg()->method_id, debug_method.method_index);
     return {debug_method};
 }
+
+VarSlot::VarSlot(VarDeclBase* decl)
+  : VarSlot(decl->addr())
+{}
 
 } // namespace cc
 } // namespace sp

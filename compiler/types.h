@@ -340,6 +340,8 @@ class Type : public PoolObject
         return *maybe_lit_size();
     }
 
+    Type* normalize() { return isReference() ? inner() : this; }
+
     bool coercesToInt() const {
         return coercesFromInt() || isAny();
     }

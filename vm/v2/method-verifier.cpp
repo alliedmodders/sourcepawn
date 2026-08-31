@@ -912,7 +912,7 @@ MethodVerifier::verifyOp(OPCODE op) {
                 const TypeDesc* val;
                 if (!popStack(&val))
                     return false;
-                if (!ValidateStore(upvar_types[i], val))
+                if (!ValidateStore(upvar_types[i], val, StoreContext::CallSite))
                     return false;
             }
 
@@ -1401,6 +1401,9 @@ bool MethodVerifier::verifyLocalSlots() {
 }
 
 bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, StoreContext ctx) {
+    if (dest->IsCompositeValue() && ctx == StoreContext::Store)
+        return reportError(SP_ERROR_INVALID_INSTRUCTION);
+
     if (src->kind() == TypeKind::Null) {
         if (dest->IsHeapItem())
             return true;

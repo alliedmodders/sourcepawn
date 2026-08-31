@@ -30,8 +30,11 @@ namespace cc {
 
 using namespace sp::v2;
 
+class VarDeclBase;
+
 struct VarSlot {
     explicit VarSlot(int16_t offset) : offset(offset) {}
+    explicit VarSlot(VarDeclBase* decl);
     int16_t offset;
 };
 
