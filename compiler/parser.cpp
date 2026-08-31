@@ -1185,25 +1185,34 @@ Parser::constant()
         case tNUMBER:
             return new NumberExpr(pos, types_->type_int(), lexer_->current_token()->value());
         case tNUMBER64:
-            return new Number64Expr(pos, lexer_->current_token()->atom);
+        {
+            const auto& atom = lexer_->current_token()->atom;
+            char* endptr;
+            errno = 0;
+            int64_t value = std::strtoll(atom->chars(), &endptr, 10);
+            if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
+                report(135);
+            return new NumberExpr(pos, types_->type_int64(), value);
+        }
         case tRATIONAL:
-            return new FloatExpr(cc_, pos, lexer_->current_token()->value());
+            return new NumberExpr(pos, types_->type_float(), lexer_->current_token()->value());
         case tDOUBLE_LITERAL: {
             const auto& atom = lexer_->current_token()->atom;
             char* endptr;
             uint64_t bits = strtoull(atom->chars(), &endptr, 10);
-            return new DoubleExpr(pos, std::bit_cast<double>(bits));
+            return new NumberExpr(pos, types_->type_double(),
+                                  std::bit_cast<double>(bits));
         }
         case tSTRING: {
             const auto& atom = lexer_->current_token()->atom;
             return new StringExpr(pos, atom);
         }
         case tTRUE:
-            return new TaggedValueExpr(lexer_->pos(), types_->type_bool(), 1);
+            return new NumberExpr(lexer_->pos(), types_->type_bool(), 1);
         case tFALSE:
-            return new TaggedValueExpr(lexer_->pos(), types_->type_bool(), 0);
+            return new NumberExpr(lexer_->pos(), types_->type_bool(), 0);
         case tINVALID_FUNCTION:
-            return new TaggedValueExpr(lexer_->pos(), types_->type_null(), 0);
+            return new NumberExpr(lexer_->pos(), types_->type_null(), 0);
         case '{':
         {
             std::vector<Expr*> exprs;
@@ -1324,7 +1333,7 @@ Expr* Parser::struct_init() {
                 expr = new NumberExpr(pos, types_->type_int(), lexer_->current_token()->value());
                 break;
             case tRATIONAL:
-                expr = new FloatExpr(cc_, pos, lexer_->current_token()->value());
+                expr = new NumberExpr(pos, types_->type_float(), lexer_->current_token()->value());
                 break;
             case tSYMBOL:
                 expr = new SymbolExpr(pos, lexer_->current_token()->atom);

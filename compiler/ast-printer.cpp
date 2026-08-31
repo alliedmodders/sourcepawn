@@ -82,16 +82,9 @@ void AstPrinter::PrintExprInline(Expr* expr) {
         return;
 
     switch (expr->kind()) {
-        case ExprKind::Number64Expr: {
-            auto node = expr->to<Number64Expr>();
-            if (node->atom())
-                fprintf(out_, "%s", node->atom()->chars());
-            else
-                fprintf(out_, "%lld", (long long)node->ToInt64().value_or(0));
-            break;
-        }
-        case ExprKind::DoubleExpr: {
-            fprintf(out_, "%g", expr->to<DoubleExpr>()->value());
+        case ExprKind::NumberExpr: {
+            auto node = expr->to<NumberExpr>();
+            PrintConstValue(node->val());
             break;
         }
         case ExprKind::SymbolExpr:
@@ -215,16 +208,20 @@ void AstPrinter::PrintArgDecl(ArgDecl* node, bool is_last) {
 void AstPrinter::PrintConstDecl(ConstDecl* node, bool is_last) {
     fprintf(out_, "ConstDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
-    const ExprVal& cv = node->value();
     fprintf(out_, ") value: ");
+    PrintConstValue(node->value());
+    fputc('\n', out_);
+}
+
+void AstPrinter::PrintConstValue(const ExprVal& cv) {
     if (cv.type()->isFloat()) {
-        fprintf(out_, "%f\n", cv.const_float());
+        fprintf(out_, "%f", cv.const_float());
     } else if (cv.type()->isDouble()) {
-        fprintf(out_, "%f\n", cv.const_double());
+        fprintf(out_, "%f", cv.const_double());
     } else if (cv.type()->isInt64()) {
-        fprintf(out_, "%" PRId64 "\n", (int64_t)cv.const_int64());
+        fprintf(out_, "%" PRId64, (int64_t)cv.const_int64());
     } else {
-        fprintf(out_, "%d\n", (int)cv.const_cell());
+        fprintf(out_, "%d", (int)cv.const_cell());
     }
 }
 
@@ -616,19 +613,10 @@ void AstPrinter::PrintNullExpr(NullExpr* node, bool is_last) {
     fprintf(out_, "NullExpr\n");
 }
 
-void AstPrinter::PrintTaggedValueExpr(TaggedValueExpr* node, bool is_last) {
-    fprintf(out_, "TaggedValueExpr: %d\n", (int)node->value());
-}
-
-void AstPrinter::PrintNumber64Expr(Number64Expr* node, bool is_last) {
-    if (node->atom())
-        fprintf(out_, "Number64Expr: %s\n", node->atom()->chars());
-    else
-        fprintf(out_, "Number64Expr: %lld\n", (long long)node->ToInt64().value_or(0));
-}
-
-void AstPrinter::PrintDoubleExpr(DoubleExpr* node, bool is_last) {
-    fprintf(out_, "DoubleExpr: %g\n", node->value());
+void AstPrinter::PrintNumberExpr(NumberExpr* node, bool is_last) {
+    fprintf(out_, "NumberExpr: ");
+    PrintConstValue(node->val());
+    fputc('\n', out_);
 }
 
 void AstPrinter::PrintEscapedString(const char* s) {

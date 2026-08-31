@@ -253,13 +253,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
             if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
                 return true;
 
-            // Make a special exception for int64 / double lits (they can't
-            // be folded by FoldToConstant).
-            if (!((vclass == sGLOBAL || vclass == sSTATIC) &&
-                  (init_rhs->as<Number64Expr>() || init_rhs->as<DoubleExpr>())))
-            {
-                report(init_rhs->pos(), 8);
-            }
+            report(init_rhs->pos(), 8);
         }
     }
 
@@ -523,7 +517,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     Type* actual = nullptr;
     if (field->value->as<StringExpr>()) {
         actual = types_->defineArray(types_->type_char(), 0);
-    } else if (auto expr = field->value->as<TaggedValueExpr>()) {
+    } else if (auto expr = field->value->as<NumberExpr>()) {
         actual = expr->type();
     } else if (auto expr = field->value->as<SymbolExpr>()) {
         actual = *expr->decl()->type();
@@ -577,12 +571,8 @@ bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
             return CheckCallExpr(expr->to<CallExpr>());
         case ExprKind::NewArrayExpr:
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
-        case ExprKind::TaggedValueExpr:
-            return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
-        case ExprKind::Number64Expr:
-            return CheckNumber64Expr(expr->to<Number64Expr>());
-        case ExprKind::DoubleExpr:
-            return CheckDoubleExpr(expr->to<DoubleExpr>());
+        case ExprKind::NumberExpr:
+            return true;
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
@@ -723,9 +713,7 @@ bool Expr::HasSideEffects() {
         case ExprKind::SizeofExpr:
         case ExprKind::StringExpr:
         case ExprKind::SymbolExpr:
-        case ExprKind::TaggedValueExpr:
-        case ExprKind::Number64Expr:
-        case ExprKind::DoubleExpr:
+        case ExprKind::NumberExpr:
         case ExprKind::ThisExpr:
         case ExprKind::DefaultArgExpr:
         case ExprKind::SpreadArgsExpr:
@@ -848,29 +836,44 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
 
     switch (unary->token()) {
         case '~':
-            if (out_val.ident == iCONSTEXPR)
-                out_val.set_constval(~out_val.const_i32());
+            if (out_val.ident == iCONSTEXPR) {
+                if (out_val.type()->isInt64())
+                    out_val.set_const_int64(~out_val.const_int64());
+                else if (out_val.type()->coercesToInt())
+                    out_val.set_constval(~out_val.const_cell());
+                else
+                    out_val.ident = iEXPRESSION;
+            }
             break;
-        case '!':
+        case '!': {
+            auto ck = FindConversion(out_val.type(), types_->type_bool(), CvtContext::Explicit);
+            if (!HasImplicitConversion(ck)) {
+                ReportConversionDiagnostic(unary, types_->type_bool(), out_val.qualified());
+                return false;
+            }
+            expr = unary->set_expr(BuildConversion(unary->expr(), ck, types_->type_bool()));
+            out_val = unary->expr()->val();
+
             if (out_val.ident == iCONSTEXPR)
-                out_val.set_constval(!out_val.const_i32());
-            out_val.set_type(types_->type_bool());
+                out_val.set_constval(types_->type_bool(), out_val.const_i32() ? 0 : 1);
             break;
+        }
         case '-':
-            if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
-                float f = out_val.const_float();
-                out_val.set_const_float(-f);
-            } else if (out_val.ident == iCONSTEXPR) {
-                /* the negation of a fixed point number is just an integer negation */
-                out_val.set_constval(-out_val.const_i32());
-            } else {
-                // Special case for -INT_MIN, since we can't eat the '-' during lexing.
-                if (auto num64 = Number64Expr::ToInt64(expr); num64) {
-                    int64_t value = -*num64;
-                    if (value >= INT_MIN && value <= INT_MAX) {
-                        out_val.set_constval(value);
-                        out_val.set_type(types_->type_int());
-                    }
+            if (out_val.ident == iCONSTEXPR) {
+                if (out_val.type()->isFloat()) {
+                    out_val.set_const_float(-out_val.const_float());
+                } else if (out_val.type()->isInt64()) {
+                    // Negate the int64. If the result still fits in int, narrow
+                    // to int as a special case for -INT_MIN.
+                    int64_t value = -out_val.const_int64();
+                    if (value >= INT_MIN && value <= INT_MAX)
+                        out_val.set_constval(types_->type_int(), value);
+                    else
+                        out_val.set_const_int64(out_val.qualified(), value);
+                } else if (out_val.type()->isDouble()) {
+                    out_val.set_const_double(out_val.qualified(), -out_val.const_double());
+                } else {
+                    out_val.set_constval(-out_val.const_cell());
                 }
             }
             break;
@@ -1803,33 +1806,6 @@ bool Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.set_constval(0);
     val.set_type(types_->type_null());
-    return true;
-}
-
-bool Semantics::CheckTaggedValueExpr(TaggedValueExpr* expr) {
-    auto& val = expr->val();
-    val.set_type(expr->type());
-    val.set_constval(expr->value());
-    return true;
-}
-
-bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
-    auto num64 = expr->ToInt64();
-    if (!num64) {
-        report(expr, 135);
-        return false;
-    }
-
-    auto& val = expr->val();
-    val.ident = iEXPRESSION;
-    val.set_type(types_->type_int64());
-    return true;
-}
-
-bool Semantics::CheckDoubleExpr(DoubleExpr* expr) {
-    auto& val = expr->val();
-    val.ident = iEXPRESSION;
-    val.set_type(types_->type_double());
     return true;
 }
 
@@ -3642,12 +3618,13 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     if (from->val().ident == iCONSTEXPR && from->val().type()->isInt() &&
         type == BuiltinType::Int64)
     {
-        to = new Number64Expr(from->pos(), from->val().const_i32());
+        int64_t v = from->val().const_i32();
+        to = new NumberExpr(from->pos(), types_->GetBuiltin(type), v);
     } else {
         to = new SimpleCastExpr(from, types_->GetBuiltin(type));
+        to->val().set_expr(types_->GetBuiltin(type));
     }
 
-    to->val().set_expr(types_->GetBuiltin(type));
     return to;
 }
 

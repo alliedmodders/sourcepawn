@@ -696,7 +696,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
 
         const auto& v = expr->val();
-        if (v.ident != iCONSTEXPR && !expr->as<Number64Expr>() && !expr->as<DoubleExpr>()) {
+        if (v.ident != iCONSTEXPR) {
             report(expr, 8);
             continue;
         }

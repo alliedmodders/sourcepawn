@@ -17,6 +17,8 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
+#include <bit>
+
 #include "utils/byte-buffer.h"
 #include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
@@ -45,6 +47,7 @@ struct Int64Value {
 
 struct DoubleValue {
     explicit DoubleValue(int64_t value) : value(value) {}
+    explicit DoubleValue(double d) : value(std::bit_cast<int64_t>(d)) {}
     int64_t value;
 };
 

@@ -53,6 +53,7 @@ enum class ConversionKind : uint32_t {
 enum class CvtContext {
     Argument,
     Assignment,
+    Explicit,
     Operator,
     FuncArg,
     Return,

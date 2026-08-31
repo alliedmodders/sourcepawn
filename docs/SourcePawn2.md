@@ -269,6 +269,11 @@ There are a number of new primitive types:
     identical to `float`, with the exception that they have more precision and
     accuracy.
 
+In addition, type conversion has been unified and formally codified as muich as
+possible. This leads to some subtle and esoteric changes. For example, !NaN will
+now return true, since the "!" operator invokes convert-to-bool rules, and NaN
+is false-y.
+
 Implementation Changes
 ----------------------
 

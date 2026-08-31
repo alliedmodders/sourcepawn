@@ -416,6 +416,8 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         assert(!inner->is_flat());
 
         EmitArrayFillArrays(type, inner, ctor->as<ArrayExpr>());
+    } else if (type->inner()->isIntPtr() && ctor) {
+        EmitArrayFillIntptr(type, ctor->as<ArrayExpr>());
     } else if (ctor) {
         std::optional<uint32_t> fill_data_pos;
 
@@ -484,6 +486,21 @@ void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, Array
     }
 }
 
+void CodeGenerator::EmitArrayFillIntptr(ArrayType* type, ArrayExpr* array) {
+    for (size_t i = 0; i < array->exprs().size(); i++) {
+        const auto& val = array->exprs()[i]->val();
+        assert(val.ident == iCONSTEXPR);
+        __ emit(OP_DUP);
+        __ PUSH_C((cell_t)i);
+        if (val.type()->isIntPtr())
+            __ emit(OP_PUSH_C, val.const_intptr());
+        else
+            __ emit(OP_PUSH_C, val.const_cell());
+        __ emit(OP_CVT_INTPTR);
+        __ emit(OP_STOR_ELEM_INTPTR);
+    }
+}
+
 template <typename T>
 static inline void AddValue(std::string* out, T value) {
     union {
@@ -545,15 +562,19 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
     std::optional<cell_t> prev1, prev2;
     for (const auto& item : array->exprs()) {
         prev2 = prev1;
-        if (auto n64 = item->as<Number64Expr>()) {
-            AddValue<int64_t>(&data, *n64->ToInt64());
+        const auto& val = item->val();
+        if (val.type()->isDouble()) {
+            AddValue<double>(&data, val.const_double());
             prev1 = {};
-        } else if (auto dbl = item->as<DoubleExpr>()) {
-            AddValue<double>(&data, dbl->value());
+        } else if (val.type()->isInt64()) {
+            AddValue<int64_t>(&data, val.const_int64());
+            prev1 = {};
+        } else if (val.type()->isIntPtr()) {
+            AddValue<int32_t>(&data, val.const_intptr());
             prev1 = {};
         } else {
-            assert(item->val().ident == iCONSTEXPR);
-            cell_t cv = item->val().const_cell();
+            assert(val.ident == iCONSTEXPR);
+            cell_t cv = val.const_cell();
             if (type->inner()->lit_size() == 1)
                 AddValue<int8_t>(&data, cv);
             else if (type->inner()->lit_size() == 2)
@@ -707,14 +728,18 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
             // in an ExprValue right now.
             __ emit(OP_PUSH_C_I64, Int64Value(0));
         } else if (!ctor && rhs.type()->isDouble()) {
-            __ emit(OP_PUSH_C_F64, DoubleValue(0));
+            __ emit(OP_PUSH_C_F64, DoubleValue(0.0));
         } else if (rhs.ident == iCONSTEXPR) {
             if (rhs.type()->isNull() && val.type()->isHeapItem())
                 __ emit(OP_LOAD_NULL);
             else if (rhs.type()->isFloat())
                 __ emit(OP_PUSH_C_F32, rhs.const_cell());
+            else if (rhs.type()->isDouble())
+                __ emit(OP_PUSH_C_F64, DoubleValue(rhs.const_double()));
+            else if (rhs.type()->isInt64())
+                __ emit(OP_PUSH_C_I64, Int64Value(rhs.const_int64()));
             else
-                __ PUSH_C(rhs.const_i32());
+                __ PUSH_C(rhs.const_cell());
         } else {
             EmitExpr(ctor);
         }
@@ -751,8 +776,8 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         if (auto expr = field->value->as<StringExpr>()) {
             values[arg->offset()] = data_.dat_address();
             data_.Add(expr->text()->chars(), expr->text()->length());
-        } else if (auto expr = field->value->as<TaggedValueExpr>()) {
-            values[arg->offset()] = expr->value();
+        } else if (auto expr = field->value->as<NumberExpr>()) {
+            values[arg->offset()] = expr->val().const_cell();
         } else if (auto expr = field->value->as<SymbolExpr>()) {
             auto var = expr->decl()->as<VarDeclBase>();
             assert(var);
@@ -777,8 +802,12 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
                 __ emit(OP_LOAD_NULL);
             else if (expr->val().type()->isFloat())
                 __ emit(OP_PUSH_C_F32, expr->val().const_cell());
+            else if (expr->val().type()->isDouble())
+                __ emit(OP_PUSH_C_F64, DoubleValue(expr->val().const_double()));
+            else if (expr->val().type()->isInt64())
+                __ emit(OP_PUSH_C_I64, Int64Value(expr->val().const_int64()));
             else
-                __ PUSH_C(expr->val().const_i32());
+                __ PUSH_C(expr->val().const_cell());
         }
         return;
     }
@@ -852,12 +881,6 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         case ExprKind::NamedArgExpr:
             EmitExpr(expr->to<NamedArgExpr>()->expr);
             break;
-        case ExprKind::Number64Expr:
-            EmitNumber64Expr(expr->to<Number64Expr>());
-            break;
-        case ExprKind::DoubleExpr:
-            EmitDoubleExpr(expr->to<DoubleExpr>());
-            break;
         case ExprKind::SimpleCastExpr:
             EmitSimpleCastExpr(expr->to<SimpleCastExpr>());
             break;
@@ -873,6 +896,17 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         case ExprKind::FunctionExpr:
             EmitFunctionExpr(expr->to<FunctionExpr>());
             break;
+        case ExprKind::NumberExpr: {
+            if (expr->val().type()->isFloat())
+                __ emit(OP_PUSH_C_F32, expr->val().const_cell());
+            else if (expr->val().type()->isDouble())
+                __ emit(OP_PUSH_C_F64, DoubleValue(expr->val().const_double()));
+            else if (expr->val().type()->isInt64())
+                __ emit(OP_PUSH_C_I64, Int64Value(expr->val().const_int64()));
+            else
+                __ PUSH_C(expr->val().const_cell());
+            break;
+        }
 
         default:
             assert(false);
@@ -2584,14 +2618,6 @@ void CodeGenerator::EmitCall(const CallTarget& target, cell nargs, bool is_sprea
     }
 }
 
-void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
-    __ emit(OP_PUSH_C_I64, Int64Value(*expr->ToInt64()));
-}
-
-void CodeGenerator::EmitDoubleExpr(DoubleExpr* expr) {
-    __ emit(OP_PUSH_C_F64, DoubleValue(expr->as_bits()));
-}
-
 void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     EmitExpr(expr->from());
 
@@ -2625,7 +2651,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
         // similar to int16, this is sign-extended on the stack.
         assert(from_type->isInt() || from_type->isInt16());
     } else if (to_type->isBool()) {
-        if (from_type->isWideType())
+        if (from_type->isWideType() || from_type->isFloat())
             __ emit(OP_TEST);
         else
             assert(false);

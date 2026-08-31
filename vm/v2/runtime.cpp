@@ -1233,6 +1233,7 @@ Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* 
 
 void Runtime::FillArray(SpArray* array, uint32_t data_offset) {
     assert(array->td->kind() == TypeKind::FixedArray);
+    assert(!array->td->array_elt()->IsIntPtr());
 
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();
@@ -1250,6 +1251,7 @@ void Runtime::FillArray(SpArray* array, uint32_t data_offset) {
 void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset) {
     assert(td->IsFlatArray());
     assert(!td->array_elt()->IsHeapItem());
+    assert(!td->array_elt()->IsIntPtr());
 
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();

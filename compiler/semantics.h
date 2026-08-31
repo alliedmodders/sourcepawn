@@ -212,9 +212,6 @@ class Semantics final
     bool CheckNewArrayExpr(NewArrayExpr* expr);
     bool CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
     bool CheckStringExpr(StringExpr* expr, Type* target = nullptr);
-    bool CheckTaggedValueExpr(TaggedValueExpr* expr);
-    bool CheckNumber64Expr(Number64Expr* expr);
-    bool CheckDoubleExpr(DoubleExpr* expr);
     bool CheckNullExpr(NullExpr* expr);
     bool CheckThisExpr(ThisExpr* expr);
     bool CheckCommaExpr(CommaExpr* expr);

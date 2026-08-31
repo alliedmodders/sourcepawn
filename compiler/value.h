@@ -140,8 +140,11 @@ struct ExprVal {
         return const_int64_;
     }
     void set_const_int64(QualType type, int64_t val) {
-        assert(type->isInt64());
         set_type(type);
+        set_const_int64(val);
+    }
+    void set_const_int64(int64_t val) {
+        assert(type()->isInt64());
         const_int64_ = val;
         ident = iCONSTEXPR;
     }

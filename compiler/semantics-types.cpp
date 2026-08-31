@@ -248,6 +248,17 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
             return;
         }
     }
+    if (formal->isIntPtr() && actual->isInt64() && node->val().ident == iCONSTEXPR) {
+        // Encoding 64-bit integers into intptr is not allowed since the VM might be 32-bit.
+        int64_t v = node->val().const_int64();
+        if (v < std::numeric_limits<int32_t>::min() || v > std::numeric_limits<int32_t>::max()) {
+            report(node->pos(), 178) << v
+                                     << std::numeric_limits<int32_t>::min()
+                                     << std::numeric_limits<int32_t>::max()
+                                     << "intptr";
+            return;
+        }
+    }
     ReportConversionDiagnosticImpl(node, formal, actual);
 }
 

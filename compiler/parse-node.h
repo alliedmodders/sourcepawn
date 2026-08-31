@@ -1171,77 +1171,27 @@ class NullExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::NullExpr; }
 };
 
-class TaggedValueExpr : public Expr
-{
-  public:
-    TaggedValueExpr(const token_pos_t& pos, Type* type, cell value)
-      : Expr(ExprKind::TaggedValueExpr, pos),
-        type_(type),
-        value_(value)
-    {}
-
-    static bool is_a(Expr* node) { return node->kind() == ExprKind::TaggedValueExpr; }
-
-    Type* type() const { return type_; }
-    cell value() const { return value_; }
-
-  protected:
-    Type* type_;
-    cell value_;
-};
-
-class NumberExpr final : public TaggedValueExpr
+class NumberExpr : public Expr
 {
   public:
     NumberExpr(const token_pos_t& pos, Type* type, cell value)
-      : TaggedValueExpr(pos, type, value)
-    {}
-};
+      : Expr(ExprKind::NumberExpr, pos)
+    {
+        val_.set_constval(type, value);
+    }
+    NumberExpr(const token_pos_t& pos, Type* type, int64_t value)
+      : Expr(ExprKind::NumberExpr, pos)
+    {
+        val_.set_const_int64(type, value);
+    }
+    NumberExpr(const token_pos_t& pos, Type* type, double value)
+      : Expr(ExprKind::NumberExpr, pos)
+    {
+        val_.set_const_double(type, value);
+    }
 
-class FloatExpr final : public TaggedValueExpr
-{
-  public:
-    FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value);
-};
-
-class Number64Expr final : public Expr
-{
-  public:
-    Number64Expr(const token_pos_t& pos, sp::Atom* atom)
-      : Expr(ExprKind::Number64Expr, pos),
-        atom_(atom)
-    {}
-    Number64Expr(const token_pos_t& pos, int64_t value)
-      : Expr(ExprKind::Number64Expr, pos),
-        value_(value)
-    {}
-
-    static std::optional<int64_t> ToInt64(Expr* expr);
-    static bool is_a(Expr* node) { return node->kind() == ExprKind::Number64Expr; }
-
-    sp::Atom* atom() const { return atom_; }
-    std::optional<int64_t> ToInt64();
-
-  private:
-    sp::Atom* atom_;
-    std::optional<int64_t> value_;
-};
-
-class DoubleExpr final : public Expr
-{
-  public:
-    DoubleExpr(const token_pos_t& pos, double value)
-      : Expr(ExprKind::DoubleExpr, pos),
-        value_(value)
-    {}
-
-    static bool is_a(Expr* node) { return node->kind() == ExprKind::DoubleExpr; }
-
-    double value() const { return value_; }
-    int64_t as_bits() const { return std::bit_cast<int64_t>(value_); }
-
-  private:
-    double value_;
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::NumberExpr; }
+    Type* type() const { return val_.type(); }
 };
 
 class StringExpr final : public Expr

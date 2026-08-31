@@ -28,6 +28,7 @@ namespace cc {
 class ParseTree;
 class Stmt;
 class Expr;
+struct ExprVal;
 struct typeinfo_t;
 
 #define _(Name) class Name;
@@ -54,6 +55,7 @@ class AstPrinter
     void PrintType(const typeinfo_t& type);
     void PrintExprInline(Expr* expr);
     void PrintEscapedString(const char* s);
+    void PrintConstValue(const ExprVal& cv);
 
 #define _(Name) void Print##Name(Name* node, bool is_last);
     AST_STMT_TYPE_LIST(_)

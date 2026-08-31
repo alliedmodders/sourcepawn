@@ -115,11 +115,21 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
                 return ConversionKind::Trivial;
             if (to->isDouble())
                 return ConversionKind::Numeric;
+            if (to->isBool() && why == CvtContext::Explicit)
+                return ConversionKind::Numeric;
             break;
 
         case BuiltinType::Double:
             if (to->isDouble())
                 return ConversionKind::None;
+            if (to->isBool() && why == CvtContext::Explicit)
+                return ConversionKind::Numeric;
+            break;
+
+        case BuiltinType::Int64:
+            // int64 -> any/float/double are potentially truncating, so they're illegal.
+            if (to->isBool() && why == CvtContext::Explicit)
+                return ConversionKind::Numeric;
             break;
 
         case BuiltinType::IntPtr:

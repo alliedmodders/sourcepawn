@@ -242,11 +242,6 @@ FunctionType* CallExpr::callee_type() {
     return nullptr;
 }
 
-FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
-  : TaggedValueExpr(pos, cc.types()->type_float(), value)
-{
-}
-
 MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
     if (auto mm = decl->as<MethodmapDecl>())
         return mm;
@@ -378,28 +373,6 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
-}
-
-std::optional<int64_t> Number64Expr::ToInt64(Expr* expr) {
-    auto e = expr->as<Number64Expr>();
-    if (!e)
-        return {};
-    return e->ToInt64();
-}
-
-std::optional<int64_t> Number64Expr::ToInt64() {
-    if (value_)
-        return value_;
-
-    char* endptr;
-    int64_t value = strtoll(atom_->chars(), &endptr, 10);
-    if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
-        return {};
-
-    assert(!*endptr);
-
-    value_ = {value};
-    return value_;
 }
 
 SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)

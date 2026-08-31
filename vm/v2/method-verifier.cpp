@@ -846,6 +846,11 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!bytes || !reader.canRead(*bytes))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
+            // Supporting this would be complicated because each element has
+            // to be sign extended on 64-bit VMs.
+            if (td->array_elt()->IsIntPtr())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
             auto elt_size = td->array_elt()->element_size();
             if (*bytes % elt_size != 0 || *bytes / elt_size > td->array_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
