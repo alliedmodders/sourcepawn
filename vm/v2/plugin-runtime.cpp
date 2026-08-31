@@ -535,8 +535,7 @@ bool PluginRuntime::UsesDirectArrays() {
     return true;
 }
 
-bool
-PluginRuntime::UsesHeapScopes() {
+bool PluginRuntime::UsesHeapScopes() {
     auto features = image()->DescribeCode().features;
     return !!(features & SmxConsts::kCodeFeatureHeapScopes);
 }

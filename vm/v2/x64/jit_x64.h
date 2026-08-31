@@ -108,8 +108,6 @@ class Compiler : public CompilerBase
     bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) override;
     bool visitCONST(cell_t offset, cell_t value) override;
     bool visitCONST_S(cell_t offset, cell_t value) override;
-    bool visitTRACKER_PUSH_C(cell_t amount) override;
-    bool visitTRACKER_POP_SETHEAP() override;
     bool visitGENARRAY(uint32_t dims, bool autozero) override;
     bool visitSTRADJUST_PRI() override;
     bool visitFABS() override;

@@ -151,8 +151,6 @@ class Interpreter final : public PcodeVisitor
     bool visitFLOAT_NOT() override;
     bool visitBOUNDS(uint32_t limit) override;
     bool visitGENARRAY(uint32_t dims, bool autozero) override;
-    bool visitTRACKER_PUSH_C(cell_t amount) override;
-    bool visitTRACKER_POP_SETHEAP() override;
     bool visitSTRADJUST_PRI() override;
     bool visitBREAK() override;
     bool visitHALT(cell_t value) override;

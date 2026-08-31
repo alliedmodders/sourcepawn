@@ -165,8 +165,6 @@ namespace v2 {
     FOR_EACH(LOAD_S_BOTH, 155, "load.s.both", 3) \
     FOR_EACH(CONST, 156, "const", 3) \
     FOR_EACH(CONST_S, 157, "const.s", 3) \
-    FOR_EACH(TRACKER_PUSH_C, 160, "trk.push.c", 2) \
-    FOR_EACH(TRACKER_POP_SETHEAP, 161, "trk.pop", 1) \
     FOR_EACH(GENARRAY, 162, "genarray", 2) \
     FOR_EACH(GENARRAY_Z, 163, "genarray.z", 2) \
     FOR_EACH(STRADJUST_PRI, 164, "stradjust.pri", 1) \

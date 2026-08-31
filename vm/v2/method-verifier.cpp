@@ -203,50 +203,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SMOD_ALT_I32:
             return true;
 
-        case OP_TRACKER_POP_SETHEAP: {
-            if (code_features_ & SmxConsts::kCodeFeatureHeapScopes) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-
-            VerifyData* v = block_->data<VerifyData>();
-            if (v->tracker_balance.empty()) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-
-            // As a special case we allow pushing 0 for balance across ternary operations.
-            auto amount = ke::PopBack(&v->tracker_balance);
-            if (amount == 0)
-                return true;
-
-            if (amount == -1) {
-                // There must be an indeterminate heap allocation.
-                if (v->heap_balance.empty() || v->heap_balance.back() != -1) {
-                    reportError(SP_ERROR_INVALID_INSTRUCTION);
-                    return false;
-                }
-                v->heap_balance.pop_back();
-                return true;
-            }
-
-            while (!v->heap_balance.empty()) {
-                auto value = ke::PopBack(&v->heap_balance);
-                if (value == -1)
-                    break;
-                if (value > amount) {
-                    v->heap_balance.emplace_back(value - amount);
-                    return true;
-                }
-                amount -= value;
-                if (amount == 0)
-                    return true;
-            }
-
-            reportError(SP_ERROR_INVALID_INSTRUCTION);
-            return false;
-        }
-
         case OP_SWAP_PRI:
         case OP_SWAP_ALT:
             // Simulate the swap operation.
@@ -450,41 +406,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_BOUNDS:
         case OP_SWITCH: {
             cip_++;
-            return true;
-        }
-
-        case OP_TRACKER_PUSH_C: {
-            if (code_features_ & SmxConsts::kCodeFeatureHeapScopes) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-
-            cell_t val = readCell();
-            if (val < 0 || !ke::IsAligned(val, sizeof(cell_t))) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-
-            val /= sizeof(cell_t);
-            if (val > 0) {
-                // The amount being tracked must be a statically verifiable amount allocated
-                // on the heap.
-                cell_t total = 0;
-                auto& heap = block_->data<VerifyData>()->heap_balance;
-                for (auto iter = heap.rbegin(); iter != heap.rend(); iter++) {
-                    if (*iter == -1)
-                        break;
-                    total += *iter;
-                    if (total >= val)
-                        break;
-                }
-                if (val > total) {
-                    reportError(SP_ERROR_INVALID_INSTRUCTION);
-                    return false;
-                }
-            }
-
-            block_->data<VerifyData>()->tracker_balance.push_back(val);
             return true;
         }
 

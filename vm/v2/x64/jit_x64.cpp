@@ -862,24 +862,12 @@ bool Compiler::visitCONST_S(cell_t offset, cell_t value) {
     return false;
 }
 
-bool Compiler::visitTRACKER_PUSH_C(cell_t amount) {
-    assert(false);
-    return false;
-}
-
-bool Compiler::visitTRACKER_POP_SETHEAP() {
-    assert(false);
-    return false;
-}
-
 static int
 InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero) {
     return cx->generateFullArray(argc, argv, autozero);
 }
 
 bool Compiler::visitGENARRAY(uint32_t dims, bool autozero) {
-    assert(rt_->UsesHeapScopes());
-
     if (dims == 1) {
         // flat array; we can generate this without indirection tables.
         // Note that we can overwrite ALT because technically STACK should be destroying ALT

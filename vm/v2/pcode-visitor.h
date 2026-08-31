@@ -108,8 +108,6 @@ class PcodeVisitor
     virtual bool visitLOAD_S_BOTH(cell_t offsetForPri, cell_t offsetForAlt) = 0;
     virtual bool visitCONST(cell_t address, cell_t value) = 0;
     virtual bool visitCONST_S(cell_t offset, cell_t value) = 0;
-    virtual bool visitTRACKER_PUSH_C(cell_t amount) = 0;
-    virtual bool visitTRACKER_POP_SETHEAP() = 0;
     virtual bool visitGENARRAY(uint32_t dims, bool autozero) = 0;
     virtual bool visitSTRADJUST_PRI() = 0;
     virtual bool visitFABS() = 0;

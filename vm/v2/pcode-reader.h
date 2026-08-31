@@ -620,14 +620,6 @@ class PcodeReader
                 return visitor_->visitCONST_S(offset, value);
             }
 
-            case OP_TRACKER_PUSH_C: {
-                cell_t amount = readCell();
-                return visitor_->visitTRACKER_PUSH_C(amount);
-            }
-
-            case OP_TRACKER_POP_SETHEAP:
-                return visitor_->visitTRACKER_POP_SETHEAP();
-
             case OP_GENARRAY:
             case OP_GENARRAY_Z: {
                 cell_t val = readCell();

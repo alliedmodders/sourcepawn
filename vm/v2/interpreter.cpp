@@ -998,26 +998,6 @@ Interpreter::visitGENARRAY(uint32_t dims, bool autozero) {
 }
 
 bool
-Interpreter::visitTRACKER_PUSH_C(cell_t amount) {
-    int err = cx_->pushTracker(amount);
-    if (err != SP_ERROR_NONE) {
-        cx_->ReportErrorNumber(err);
-        return false;
-    }
-    return true;
-}
-
-bool
-Interpreter::visitTRACKER_POP_SETHEAP() {
-    int err = cx_->popTrackerAndSetHeap();
-    if (err != SP_ERROR_NONE) {
-        cx_->ReportErrorNumber(err);
-        return false;
-    }
-    return true;
-}
-
-bool
 Interpreter::visitSTRADJUST_PRI() {
     regs_.pri() = (regs_.pri() + 4) >> 2;
     return true;

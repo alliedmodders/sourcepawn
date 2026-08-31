@@ -77,18 +77,6 @@ Compiler::~Compiler() {
 
 // No exit frame - error code is returned directly.
 static int
-InvokePushTracker(PluginContext* cx, uint32_t amount) {
-    return cx->pushTracker(amount);
-}
-
-// No exit frame - error code is returned directly.
-static int
-InvokePopTrackerAndSetHeap(PluginContext* cx) {
-    return cx->popTrackerAndSetHeap();
-}
-
-// No exit frame - error code is returned directly.
-static int
 InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero) {
     return cx->generateFullArray(argc, argv, autozero);
 }
@@ -902,43 +890,6 @@ Compiler::visitJcmp(CompareOp op, cell_t offset) {
 }
 
 bool
-Compiler::visitTRACKER_PUSH_C(cell_t amount) {
-    __ push(pri);
-    __ push(alt);
-
-    __ push(amount);
-    __ push(intptr_t(rt_->GetBaseContext()));
-    __ callWithABI(ExternalAddress((void*)InvokePushTracker));
-    __ addl(esp, 8);
-    __ testl(eax, eax);
-    jumpOnError(not_zero);
-
-    __ pop(alt);
-    __ pop(pri);
-    return true;
-}
-
-bool
-Compiler::visitTRACKER_POP_SETHEAP() {
-    // Save registers.
-    __ subl(esp, 4);
-    __ push(pri);
-    __ push(alt);
-
-    // Get the context pointer and call the sanity checker.
-    __ push(intptr_t(rt_->GetBaseContext()));
-    __ callWithABI(ExternalAddress((void*)InvokePopTrackerAndSetHeap));
-    __ addl(esp, 4);
-    __ testl(eax, eax);
-    jumpOnError(not_zero);
-
-    __ pop(alt);
-    __ pop(pri);
-    __ addl(esp, 4);
-    return true;
-}
-
-bool
 Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
                          cell_t data_fill_size, cell_t fill_value) {
     if (!iv_size) {
@@ -1048,19 +999,6 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero) {
         __ addl(alt, dat);
         __ cmpl(alt, stk);
         jumpOnError(not_below, SP_ERROR_HEAPLOW);
-
-        if (!rt_->UsesHeapScopes()) {
-            __ shll(tmp, 2);
-            __ subl(esp, 8);
-            __ push(tmp);
-            __ push(intptr_t(rt_->GetBaseContext()));
-            __ callWithABI(ExternalAddress((void*)InvokePushTracker));
-            __ movl(tmp, Operand(esp, 4));
-            __ addl(esp, 16);
-            __ shrl(tmp, 2);
-            __ testl(eax, eax);
-            jumpOnError(not_zero);
-        }
 
         if (autozero) {
             // Note - tmp is ecx and still intact.
