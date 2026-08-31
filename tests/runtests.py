@@ -335,7 +335,7 @@ class Test(object):
     if self.original_source.endswith('.smx'):
       return
 
-    with open(self.original_source, 'rt', encoding='utf-8') as fp:
+    with open(self.original_source, 'rt', encoding='utf-8', errors='replace') as fp:
       for line in fp:
         if not self.process_manifest_line(line):
           break

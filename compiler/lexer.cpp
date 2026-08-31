@@ -832,7 +832,7 @@ bool Lexer::FindNextToken() {
                 continue;
 
             default:
-                if (is_line_start && c < ' ') {
+                if ((uint8_t)c >= 0x80 || (is_line_start && c < ' ')) {
                     // Preserve old behavior where garbage characters at the
                     // start of the line were ignored. Except warn about it
                     // now.
