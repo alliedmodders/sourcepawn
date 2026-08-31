@@ -246,6 +246,29 @@ do not understand garbage collection.
 Also unlike methodmaps, a class's constructor does not return the new object.
 The new object is allocated internally as "this".
 
+#### New Types
+
+There are a number of new primitive types:
+
+ - `intptr`: Equivalent to an `int` on 32-bit platforms, and an `int64` on
+    64-bit platforms. Because the compiler does not know which platform the
+    script will run on, `intptr` mostly behaves as an `int64`, with one
+    exceptions. `int64` does not coerce to `intptr` as this could result in
+    truncation. Similarly, `intptr` does not coerce to `int`.
+ - `int16`: A 16-bit signed integer. These result in 2-byte storage when used
+    in arrays. Internally, they are sign-extended to 32-bits when used in
+    expressions. Thus wrap-around is allowed, with the exception that constants
+    must fit in a 16-bit signed integer when directly assigned. When implicitly
+    sign-extended, the result is truncated when stored back.
+ - `int8`: An 8-bit signed integer. These result in 1-byte storage when used
+    in arrays. Similar to `int16` they are sign extended and truncated as
+    needed. `int8` is subtly different from `char` in two ways. First, it is
+    sign-extended instead of zero-extended. Second, it is truncated on non-
+    array assignment, whereas `char` is very inconsistently truncated.
+ - `double`: A 64-bit IEEE-754 floating point number. The semantics are almost
+    identical to `float`, with the exception that they have more precision and
+    accuracy.
+
 Implementation Changes
 ----------------------
 
