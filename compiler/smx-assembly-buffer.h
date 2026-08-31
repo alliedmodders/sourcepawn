@@ -35,6 +35,11 @@ struct StackSlot {
     int16_t offset;
 };
 
+struct Int64Value {
+    explicit Int64Value(int64_t value) : value(value) {}
+    int64_t value;
+};
+
 class SmxAssemblyBuffer : public ByteBuffer
 {
  public:
@@ -47,6 +52,10 @@ class SmxAssemblyBuffer : public ByteBuffer
   void emit(OPCODE op, cell_t param) {
     write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param);
+  }
+  void emit(OPCODE op, Int64Value param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int64_t>(param.value);
   }
   void emit(OPCODE op, StackSlot slot) {
     write<uint8_t>(static_cast<uint8_t>(op));

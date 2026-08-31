@@ -529,6 +529,8 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 
 static int Execute(const char* file)
 {
+  ExceptionHandler eh(sEnv->APIv2());
+
   char error[255];
   std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
@@ -579,7 +581,6 @@ static int Execute(const char* file)
 
   int result;
   {
-    ExceptionHandler eh(rt.get());
     if (!fun->Invoke(&result)) {
       fprintf(stderr, "Error executing main: %s\n", eh.Message());
       return 1;

@@ -62,6 +62,9 @@ bool CodeGenerator::Generate() {
 
     EmitStmtList(tree_->stmts());
 
+    for (const auto& ctor : tree_->global_ctors())
+        EmitFunctionDecl(ctor);
+
     // Finish any un-added debug symbols.
     while (!static_syms_.empty()) {
         auto pair = ke::PopBack(&static_syms_);
@@ -223,6 +226,9 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         case StmtKind::StmtList:
             EmitStmtList(stmt->to<StmtList>());
             break;
+        case StmtKind::GlobalInitStmt:
+            EmitGlobalInitStmt(stmt->to<GlobalInitStmt>());
+            break;
 
         default:
             assert(false);
@@ -289,8 +295,6 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
 }
 
 void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
-    BinaryExpr* init = decl->init();
-
     __ bind_to(decl->label(), data_.dat_address());
 
     if (decl->type()->isArray() || decl->type()->isEnumStruct()) {
@@ -301,23 +305,29 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
         data_.Add(std::move(array.data));
         data_.AddZeroes(array.zeroes);
     } else {
-        if (init) {
-            if (auto n64 = init->right()->as<Number64Expr>()) {
-                Int64CellUnion u(*n64->ToInt64());
-                data_.Add(u.cells[0]);
-                data_.Add(u.cells[1]);
-            } else {
-                assert(init->right()->val().ident == iCONSTEXPR);
-                data_.Add(init->right()->val().constval());
-            }
-        } else {
-            cell_t cells = 1;
-            if (auto es = decl->type()->asEnumStruct())
-                cells = es->array_size();
-            else if (decl->type()->isInt64())
-                cells = 2;
+        cell_t cells = 1;
+        if (auto es = decl->type()->asEnumStruct())
+            cells = es->array_size();
+        else if (decl->type()->isInt64())
+            cells = 2;
 
-            data_.AddZeroes(cells);
+        data_.AddZeroes(cells);
+    }
+}
+
+void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
+    for (const auto& var : stmt->vars()) {
+        auto init = var->init();
+
+        AddDebugLine(init->pos());
+
+        if (auto n64 = init->right()->as<Number64Expr>()) {
+            __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
+            __ emit(OP_STOR_GLB_I64, var->label());
+        } else {
+            assert(init->right()->val().ident == iCONSTEXPR);
+            __ PUSH_C(init->right()->val().constval());
+            __ emit(OP_STOR_GLB, var->label());
         }
     }
 }

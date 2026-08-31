@@ -10,6 +10,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
+#include <inttypes.h>
 #include <sp_vm_api.h>
 #include <amtl/experimental/am-argparser.h>
 #include "vm/environment.h"
@@ -662,6 +663,10 @@ class DumpTool final {
 
             case OP_PUSH_C_I8:
                 fprintf(stdout, " %d", (int)reader.read<int8_t>());
+                break;
+
+            case OP_PUSH_C_I64:
+                fprintf(stdout, " %" PRId64, reader.read<int64_t>());
                 break;
 
             case OP_ADDR_S:

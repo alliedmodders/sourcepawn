@@ -149,6 +149,7 @@ namespace v2 {
     FOR_EACH(RETV, 111, "retv", 1) \
     FOR_EACH(PUSH_C_I8, 112, "push.c.i8", 2) \
     FOR_EACH(CALLN, 113, "calln", 6) \
+    FOR_EACH(PUSH_C_I64, 114, "push.c.i64", 9) \
 
 
 enum OPCODE {

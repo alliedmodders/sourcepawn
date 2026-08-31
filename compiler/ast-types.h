@@ -50,7 +50,8 @@
     FOR_EACH(MethodmapDecl) \
     FOR_EACH(ChangeScopeNode) \
     FOR_EACH(MethodmapPropertyDecl) \
-    FOR_EACH(MethodmapMethodDecl)
+    FOR_EACH(MethodmapMethodDecl) \
+    FOR_EACH(GlobalInitStmt)
 
 #define AST_EXPR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(UnaryExpr) \

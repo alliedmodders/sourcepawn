@@ -337,6 +337,11 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(OperandType::Cell);
         }
 
+        case OP_PUSH_C_I64: {
+            read<int64_t>();
+            return pushStack(OperandType::Int64);
+        }
+
         case OP_CALL:
         case OP_CALLN: {
             uint32_t method_index = (uint32_t)readCell();

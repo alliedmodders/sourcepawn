@@ -155,6 +155,11 @@ class PcodeReader
             case OP_STRB_I:
                 return visitor_->visitSTRB_I();
 
+            case OP_LOAD_FN: {
+                uint32_t method_index = (uint32_t)readCell();
+                return visitor_->visitLOAD_FN(method_index);
+            }
+
             case OP_IDXADDR: {
                 uint8_t rank_size = read<uint8_t>();
                 int32_t bounds = read<int32_t>();
@@ -177,6 +182,18 @@ class PcodeReader
             {
                 cell_t value = readCell();
                 return visitor_->visitPUSH_C(value);
+            }
+
+            case OP_PUSH_C_I8:
+            {
+                int8_t value = read<int8_t>();
+                return visitor_->visitPUSH_C_I8(value);
+            }
+
+            case OP_PUSH_C_I64:
+            {
+                int64_t value = read<int64_t>();
+                return visitor_->visitPUSH_C_I64(value);
             }
 
             case OP_HEAP: {
@@ -258,6 +275,9 @@ class PcodeReader
 
             case OP_RETN:
                 return visitor_->visitRETN();
+
+            case OP_RETV:
+                return visitor_->visitRETV();
 
             case OP_CALL: {
                 uint32_t method_index = (uint32_t)readCell();

@@ -290,6 +290,11 @@ bool Interpreter::run() {
                 pushCell(val);
                 break;
             }
+            case OP_PUSH_C_I64: {
+                int64_t val = reader_.read<int64_t>();
+                pushInt64(val);
+                break;
+            }
             case OP_HEAP: {
                 cell_t amount = reader_.readCell();
                 cell_t address;

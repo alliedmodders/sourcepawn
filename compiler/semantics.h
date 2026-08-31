@@ -145,6 +145,9 @@ class Semantics final
         STMT_OWNS_HEAP = 0x1
     };
 
+    void GenerateInitFunctions(ParseTree* tree);
+    FunctionDecl* GenerateInitFunction(const std::vector<VarDeclBase*>& vars, uint32_t suffix);
+
     bool CheckStmt(Stmt* stmt, StmtFlags = STMT_DEFAULT);
     bool CheckStmtList(StmtList* list);
     bool CheckBlockStmt(BlockStmt* stmt);
@@ -239,6 +242,7 @@ class Semantics final
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;
+    std::vector<VarDeclBase*> globals_to_init_;
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;

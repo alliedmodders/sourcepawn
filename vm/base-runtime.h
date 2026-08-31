@@ -62,6 +62,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) = 0;
     virtual uint32_t GetPublicsNum() = 0;
     virtual bool PerformFullValidation() = 0;
+    virtual bool CallGlobalCtor() { return true; }
 
     /**
      * @brief Returns the local parameter stack, starting from the

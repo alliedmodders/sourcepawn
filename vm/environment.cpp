@@ -1,6 +1,6 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// Copyright (C) 2006-2026 AlliedModders LLC
 //
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
@@ -433,6 +433,12 @@ LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t
 
     if (*pRuntime->Name() == '\0')
         pRuntime->SetNames(file, file);
+
+    if (!pRuntime->CallGlobalCtor()) {
+        delete pRuntime;
+        UTIL_Format(error, maxlength, "failed to initialize globals");
+        return nullptr;
+    }
 
     return pRuntime;
 }

@@ -83,6 +83,7 @@ class SmxImage final : public FileReader
     size_t NumFunctions() const;
     const char* GetFunctionName(size_t index, const char** filename) const;
     bool HasRtti() const;
+    std::optional<uint32_t> FindRttiMethod(const char* name) const;
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
     std::optional<uint32_t> GetDebugMethodRow(uint32_t pcode_offset) const;
     std::optional<uint32_t> GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const;

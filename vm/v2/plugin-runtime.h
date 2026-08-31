@@ -49,7 +49,7 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     ~PluginRuntime();
 
     bool Initialize() override;
-
+    bool CallGlobalCtor() override;
   public:
     bool IsDebugging() override;
     int FindNativeByName(const char* name, uint32_t* index) override;

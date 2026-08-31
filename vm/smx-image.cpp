@@ -978,9 +978,20 @@ SmxImage::LookupFunction(uint32_t code_offset) const {
     return nullptr;
 }
 
-bool
-SmxImage::HasRtti() const {
+bool SmxImage::HasRtti() const {
     return rtti_data_ != nullptr;
+}
+
+std::optional<uint32_t> SmxImage::FindRttiMethod(const char* name) const {
+    if (!rtti_methods_)
+        return {};
+
+    for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+        const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+        if (strcmp(names_ + method->name, name) == 0)
+            return i;
+    }
+    return {};
 }
 
 const smx_rtti_method*

@@ -25,10 +25,11 @@
  * this exception to all derivative works.  AlliedModders LLC defines further
  * exceptions), found in LICENSE.txt _(as of this writing), version JULY-31-2007)),
  * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
  */
 #include "v2/opcodes.h"
+
+#include <inttypes.h>
+
 #include "binary-reader.h"
 
 using namespace sp::v2;
@@ -81,6 +82,10 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
 
         case OP_PUSH_C_I8:
             fprintf(fp, "%d", (int)reader.read<int8_t>());
+            break;
+
+        case OP_PUSH_C_I64:
+            fprintf(fp, "%" PRId64, reader.read<int64_t>());
             break;
 
         case OP_ADDR_S:

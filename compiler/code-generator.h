@@ -79,6 +79,7 @@ class CodeGenerator final
     void EmitMethodmapDecl(MethodmapDecl* info);
     void EmitReturnStmt(ReturnStmt* stmt);
     void EmitReturnArrayStmt(ReturnStmt* stmt);
+    void EmitGlobalInitStmt(GlobalInitStmt* stmt);
 
     // Expressions.
     enum EmitFlags {

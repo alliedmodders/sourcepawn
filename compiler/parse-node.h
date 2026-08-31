@@ -19,7 +19,6 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include <amtl/am-deque.h>
 #include <amtl/am-maybe.h>
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
@@ -37,30 +36,15 @@
 namespace sp {
 namespace cc {
 
-class FunctionDecl;
-
-struct UserOperation
-{
-    UserOperation() {}
-
-    FunctionDecl* sym = nullptr;
-    int oper = 0;
-    int paramspassed;
-    bool savepri;
-    bool savealt;
-    bool swapparams;
-};
-
-typedef void (*OpFunc)();
-
 class Expr;
+class FunctionDecl;
 class LayoutFieldDecl;
 class MethodmapDecl;
 class MethodmapMethodDecl;
 class SemaContext;
 class SymbolScope;
+class VarDeclBase;
 struct StructInitField;
-struct structarg_t;
 
 class ParseNode : public PoolObject
 {
@@ -207,8 +191,11 @@ class ParseTree : public PoolObject
 
     StmtList* stmts() { return stmts_; }
 
+    PoolArray<FunctionDecl*>& global_ctors() { return global_ctors_; }
+
   private:
     StmtList* stmts_;
+    PoolArray<FunctionDecl*> global_ctors_;
 };
 
 class BlockStmt : public StmtList
@@ -230,6 +217,24 @@ class BlockStmt : public StmtList
 
   private:
     SymbolScope* scope_;
+};
+
+class GlobalInitStmt final : public Stmt
+{
+  public:
+    explicit GlobalInitStmt(const token_pos_t& pos, const std::vector<VarDeclBase*>& vars)
+      : Stmt(StmtKind::GlobalInitStmt, pos),
+        vars_(vars)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::GlobalInitStmt; }
+
+    bool Bind(SemaContext& sc) override { return true; }
+
+    PoolArray<VarDeclBase*>& vars() { return vars_; }
+
+  private:
+    PoolArray<VarDeclBase*> vars_;
 };
 
 class BreakStmt : public Stmt
@@ -909,6 +914,13 @@ class CallExpr final : public Expr
         token_(token),
         target_(target),
         args_(args)
+    {}
+    CallExpr(const token_pos_t& pos, int token, FunctionDecl* target, const std::vector<Expr*>& args)
+      : Expr(ExprKind::CallExpr, pos),
+        token_(token),
+        target_(nullptr),
+        args_(args),
+        fun_(target)
     {}
 
     bool Bind(SemaContext& sc) override;

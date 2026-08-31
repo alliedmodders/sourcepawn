@@ -176,6 +176,16 @@ void AstPrinter::PrintStaticAssertStmt(StaticAssertStmt* node, bool is_last) {
     stack_.pop_back();
 }
 
+void AstPrinter::PrintGlobalInitStmt(GlobalInitStmt* node, bool is_last) {
+    fprintf(out_, "GlobalInitStmt\n");
+    stack_.push_back(is_last);
+    for (size_t i = 0; i < node->vars().size(); i++) {
+        PrintIndent(i == node->vars().size() - 1);
+        fprintf(out_, "%s\n", node->vars()[i]->name()->chars());
+    }
+    stack_.pop_back();
+}
+
 void AstPrinter::PrintVarDecl(VarDecl* node, bool is_last) {
     fprintf(out_, "VarDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());

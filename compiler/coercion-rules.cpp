@@ -19,6 +19,7 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include "coercion-rules.h"
 
+#include "parse-node.h"
 #include "semantics-inl.h"
 
 namespace sp {

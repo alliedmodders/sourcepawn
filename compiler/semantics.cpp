@@ -48,7 +48,7 @@ Semantics::Semantics(CompileContext& cc)
 
 bool Semantics::Analyze(ParseTree* tree) {
     SemaContext sc(this);
-    ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
+    ke::SaveRestore<SemaContext*> push_sc(sc_, &sc);
 
     AutoCountErrors errors;
     if (!CheckStmtList(tree->stmts()) || !errors.ok())
@@ -56,6 +56,9 @@ bool Semantics::Analyze(ParseTree* tree) {
 
     DeduceLiveness();
     DeduceMaybeUsed();
+
+    if (!globals_to_init_.empty())
+        GenerateInitFunctions(tree);
 
     // This inserts missing return statements at the global scope, so it cannot
     // be omitted.
@@ -72,6 +75,64 @@ bool Semantics::Analyze(ParseTree* tree) {
     // All heap allocations must be owned by a ParseNode.
     assert(!pending_heap_allocation_);
     return true;
+}
+
+void Semantics::GenerateInitFunctions(ParseTree* tree) {
+    std::vector<FunctionDecl*> file_ctors;
+
+    unsigned int count = 0;
+    std::vector<VarDeclBase*> vars;
+    std::optional<uint32_t> prev_file_index;
+    for (const auto& var : globals_to_init_) {
+        uint32_t file_index = cc_.sources()->GetSourceFileIndex(var->pos());
+        if (!prev_file_index || *prev_file_index != file_index) {
+            if (!vars.empty()) {
+                file_ctors.emplace_back(GenerateInitFunction(vars, ++count));
+                vars.clear();
+            }
+            prev_file_index = {file_index};
+        }
+        vars.emplace_back(var);
+    }
+
+    if (!vars.empty())
+        file_ctors.emplace_back(GenerateInitFunction(vars, ++count));
+
+    assert(!file_ctors.empty());
+
+    declinfo_t decl{};
+    decl.name = cc_.atom(".ctor");
+    decl.type.type = types_->type_void();
+
+    auto fun = new FunctionDecl(token_pos_t{}, decl);
+
+    std::vector<Stmt*> stmts;
+    for (const auto& file_ctor : file_ctors) {
+        auto call = new CallExpr(fun->pos(), '(', file_ctor, {});
+        stmts.emplace_back(new ExprStmt(fun->pos(), call));
+    }
+    fun->set_body(new BlockStmt(fun->pos(), stmts));
+    fun->set_is_live();
+
+    file_ctors.insert(file_ctors.begin(), fun);
+
+    tree->global_ctors() = PoolArray<FunctionDecl*>(file_ctors);
+}
+
+FunctionDecl* Semantics::GenerateInitFunction(const std::vector<VarDeclBase*>& vars,
+                                              uint32_t suffix)
+{
+    auto name = cc_.atom(".ctor." + std::to_string(suffix));
+
+    declinfo_t decl{};
+    decl.name = name;
+    decl.type.type = types_->type_void();
+
+    auto fun = new FunctionDecl(vars[0]->pos(), decl);
+    auto init = new GlobalInitStmt(fun->pos(), vars);
+    fun->set_body(init);
+    fun->set_is_live();
+    return fun;
 }
 
 bool Semantics::CheckStmtList(StmtList* list) {
@@ -137,6 +198,8 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             return CheckStmtList(stmt->to<StmtList>());
         case StmtKind::StaticAssertStmt:
             return CheckStaticAssertStmt(stmt->to<StaticAssertStmt>());
+        case StmtKind::GlobalInitStmt:
+            return true;
         case StmtKind::BreakStmt:
             return CheckBreakStmt(stmt->to<BreakStmt>());
         case StmtKind::ContinueStmt:
@@ -183,6 +246,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     }
 
     auto init = decl->init();
+    auto vclass = decl->vclass();
 
     // Since we always create an assignment expression, all type checks will
     // be performed by the Analyze(sc) call here.
@@ -191,7 +255,11 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (init && !CheckRvalue(init))
         return false;
 
-    auto vclass = decl->vclass();
+    if (vclass == sGLOBAL || vclass == sSTATIC) {
+        if (init && LazyInitGlobal(decl))
+            globals_to_init_.emplace_back(decl);
+    }
+
     auto init_rhs = decl->init_rhs();
     if (init && vclass != sLOCAL) {
         if (!init_rhs->EvalConst(nullptr, nullptr)) {

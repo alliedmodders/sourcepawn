@@ -259,6 +259,7 @@ PluginRuntime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callba
     return SP_ERROR_NONE;
 }
 
+
 const sp_native_t*
 PluginRuntime::GetNative(uint32_t index) {
     if (index >= (uint32_t)natives_.size())
@@ -349,117 +350,20 @@ PluginRuntime::GetPubVarsNum() {
     return image_->NumPubvars();
 }
 
-IPluginFunction* PluginRuntime::GetFunctionById(funcid_t func_id) {
-    return GetScriptedInvoker(func_id);
-}
-
-ScriptedInvoker* PluginRuntime::GetScriptedInvoker(funcid_t func_id) {
-    if (!(func_id & 1))
-        return nullptr;
-
-    uint32_t method_index = func_id >> 1;
-    return GetFunctionByMethodIndex(method_index);
-}
-
-ScriptedInvoker* PluginRuntime::GetFunctionByMethodIndex(uint32_t method_index) {
-    if (method_index >= image_->rtti_methods()->row_count)
-        return nullptr;
-    if (method_index >= entrypoints_.size())
-        entrypoints_.resize(method_index + 1);
-    if (!entrypoints_[method_index])
-        entrypoints_[method_index] = std::make_unique<ScriptedInvoker>(this, method_index);
-    return entrypoints_[method_index].get();
-}
-
-IPluginFunction*
-PluginRuntime::GetFunctionByName(const char* public_name) {
-    uint32_t index;
-
-    if (FindPublicByName(public_name, &index) != SP_ERROR_NONE)
-        return nullptr;
-
-    assert(index < publics_.size());
-    return GetScriptedInvoker(publics_[index].funcid);
-}
-
-bool
-PluginRuntime::IsDebugging() {
-    return true;
-}
-
-size_t
-PluginRuntime::GetMemUsage() {
-    return sizeof(*this) + image_->ImageSize() +
-           (aligned_code_ ? code_.length : 0) + HeapSize();
-}
-
-bool
-PluginRuntime::PerformFullValidation() {
-    Environment* env = Environment::get();
-    for (uint32_t i = 0; i < image_->rtti_methods()->row_count; i++) {
-        const smx_rtti_method* method = image_->GetMethod(i);
-        if (method->flags & kRttiMethod_Native)
-            continue;
-
-        const char* name = image_->names() + method->name;
-        MethodVerifier verifier(this, i);
-        if (!verifier.verify()) {
-            env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %s\n", name,
-                                env->GetErrorString(verifier.error()));
-            return false;
-        }
-    }
-    return true;
-}
-
-bool PluginRuntime::GetNativeIndex(uint32_t method_index, uint32_t* index) const {
-    auto iter = native_map_.find(method_index);
-    if (iter == native_map_.end())
-        return false;
-    *index = iter->second;
-    return true;
-}
-
-bool PluginRuntime::UsesDirectArrays() {
-    return true;
-}
-
-bool PluginRuntime::UsesHeapScopes() {
-    auto features = image()->DescribeCode().features;
-    return !!(features & SmxConsts::kCodeFeatureHeapScopes);
-}
-
 int
 PluginRuntime::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
-    cell_t* addr;
-    ucell_t realmem;
+    if (cells > CELLBOUNDMAX)
+        return SP_ERROR_ARRAY_TOO_BIG;
 
-    assert(cells < CELLBOUNDMAX);
-
-    realmem = cells * sizeof(cell_t);
-
-    /**
-   * Check if the space between the heap and stack is sufficient.
-   */
-    if ((cell_t)(sp_ - hp_ - realmem) < STACK_MARGIN_VALUE)
+    cell_t realmem = cells * sizeof(cell_t);
+    cell_t addr;
+    if (heapAllocEx(realmem, &addr) == nullptr)
         return SP_ERROR_HEAPLOW;
 
-    addr = (cell_t*)(memory_ + hp_);
-    /* store size of allocation in cells */
-    *addr = (cell_t)cells;
-    addr++;
-    hp_ += sizeof(cell_t);
-
-    *local_addr = hp_;
-
-#ifdef DEBUG
-    memset(addr, 0xcd, realmem);
-#endif
-
+    if (local_addr)
+        *local_addr = addr;
     if (phys_addr)
-        *phys_addr = addr;
-
-    hp_ += realmem;
+        *phys_addr = (cell_t*)(memory_ + addr);
 
     return SP_ERROR_NONE;
 }
@@ -567,7 +471,7 @@ PluginRuntime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char*
     }
 
     memmove(dest, source, len);
-    if ((dest[len - 1] & 1 << 7) && needtocheck)
+    if (len > 0 && (dest[len - 1] & 1 << 7) && needtocheck)
         len -= __CheckValidChar(dest + len - 1);
     dest[len] = '\0';
 
@@ -678,6 +582,95 @@ PluginRuntime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
     return ok;
 }
 
+IPluginFunction* PluginRuntime::GetFunctionById(funcid_t func_id) {
+    return GetScriptedInvoker(func_id);
+}
+
+ScriptedInvoker* PluginRuntime::GetScriptedInvoker(funcid_t func_id) {
+    if (!(func_id & 1))
+        return nullptr;
+
+    uint32_t method_index = func_id >> 1;
+    return GetFunctionByMethodIndex(method_index);
+}
+
+ScriptedInvoker* PluginRuntime::GetFunctionByMethodIndex(uint32_t method_index) {
+    if (method_index >= image_->rtti_methods()->row_count)
+        return nullptr;
+    if (method_index >= entrypoints_.size())
+        entrypoints_.resize(method_index + 1);
+    if (!entrypoints_[method_index])
+        entrypoints_[method_index] = std::make_unique<ScriptedInvoker>(this, method_index);
+    return entrypoints_[method_index].get();
+}
+
+IPluginFunction*
+PluginRuntime::GetFunctionByName(const char* public_name) {
+    size_t index;
+
+    if (image_->FindPublic(public_name, &index) != SP_ERROR_NONE)
+        return nullptr;
+
+    assert(index < publics_.size());
+    return GetScriptedInvoker(publics_[index].funcid);
+}
+
+bool
+PluginRuntime::IsDebugging() {
+    return true;
+}
+
+size_t
+PluginRuntime::GetMemUsage() {
+    return sizeof(*this) + image_->ImageSize() +
+           (aligned_code_ ? code_.length : 0) + HeapSize();
+}
+
+bool
+PluginRuntime::PerformFullValidation() {
+    Environment* env = Environment::get();
+    for (uint32_t i = 0; i < image_->rtti_methods()->row_count; i++) {
+        const smx_rtti_method* method = image_->GetMethod(i);
+        if (method->flags & kRttiMethod_Native)
+            continue;
+
+        const char* name = image_->names() + method->name;
+        MethodVerifier verifier(this, i);
+        if (!verifier.verify()) {
+            env->ReportErrorFmt(SP_ERROR_USER, "Method %s failed verification: %s\n", name,
+                                env->GetErrorString(verifier.error()));
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PluginRuntime::GetNativeIndex(uint32_t method_index, uint32_t* index) const {
+    auto iter = native_map_.find(method_index);
+    if (iter == native_map_.end())
+        return false;
+    *index = iter->second;
+    return true;
+}
+
+bool PluginRuntime::UsesDirectArrays() {
+    return true;
+}
+
+bool PluginRuntime::UsesHeapScopes() {
+    return (image_->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes) != 0;
+}
+
+bool PluginRuntime::CallGlobalCtor() {
+    cell_t ignore_result;
+
+    auto ctor_index = image_->FindRttiMethod(".ctor");
+    if (!ctor_index)
+        return true;
+
+    return Invoke((*ctor_index << 1) | 1, nullptr, 0, &ignore_result);
+}
+
 cell_t*
 PluginRuntime::GetLocalParams() {
     return (cell_t*)(memory_ + frm_ + (2 * sizeof(cell_t)));
@@ -742,6 +735,16 @@ PluginRuntime::leaveHeapScope() {
     if (hp_scope_ != -1 && !throwIfBadAddress(hp_scope_))
         return false;
     return true;
+}
+
+void
+PluginRuntime::EnterHeapScope() {
+    enterHeapScope();
+}
+
+void
+PluginRuntime::LeaveHeapScope() {
+    leaveHeapScope();
 }
 
 struct array_creation_t {
@@ -1255,15 +1258,6 @@ PluginRuntime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t
     return true;
 }
 
-void
-PluginRuntime::EnterHeapScope() {
-    enterHeapScope();
-}
-
-void
-PluginRuntime::LeaveHeapScope() {
-    leaveHeapScope();
-}
 
 cell_t
 PluginRuntime::GetNullFunctionValue() {
