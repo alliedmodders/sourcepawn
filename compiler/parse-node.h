@@ -579,8 +579,7 @@ class Expr : public ParseNode
       : ParseNode(pos),
         kind_(kind),
         lvalue_(false),
-        can_alloc_heap_(false),
-        discard_(false)
+        can_alloc_heap_(false)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -608,8 +607,6 @@ class Expr : public ParseNode
     void set_lvalue(bool lvalue) { lvalue_ = lvalue; }
     bool can_alloc_heap() const { return can_alloc_heap_; }
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
-    bool discard() const { return discard_; }
-    void set_discard() { discard_ = true; }
 
     ExprKind kind() const { return kind_; }
     bool is(ExprKind k) const { return kind() == k; }
@@ -629,7 +626,6 @@ class Expr : public ParseNode
     ExprKind kind_ : 8;
     bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
-    bool discard_ : 1;
 };
 
 class UnaryExpr final : public Expr

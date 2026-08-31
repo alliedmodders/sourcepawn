@@ -81,10 +81,15 @@ class CodeGenerator final
     void EmitReturnArrayStmt(ReturnStmt* stmt);
 
     // Expressions.
-    void EmitExpr(Expr* expr);
+    enum EmitFlags {
+        EMIT_DEFAULT = 0,
+        EMIT_DISCARD_RESULT = (1 << 0),
+    };
+
+    void EmitExpr(Expr* expr, unsigned int flags = EMIT_DEFAULT);
     void EmitTest(Expr* expr, bool jump_on_true, sp::Label* target);
     void EmitUnary(UnaryExpr* expr);
-    void EmitIncDec(IncDecExpr* expr);
+    void EmitIncDec(IncDecExpr* expr, unsigned int flags);
     void EmitBinary(BinaryExpr* expr);
     void EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right);
     void EmitLogicalExpr(LogicalExpr* expr);

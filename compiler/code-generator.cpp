@@ -160,7 +160,7 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::ExprStmt:
             // Emit even if no side effects.
-            EmitExpr(stmt->to<ExprStmt>()->expr());
+            EmitExpr(stmt->to<ExprStmt>()->expr(), EMIT_DISCARD_RESULT);
             break;
         case StmtKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
@@ -454,9 +454,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
         data_.Add(value);
 }
 
-void
-CodeGenerator::EmitExpr(Expr* expr)
-{
+void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
     AutoErrorPos aep(expr->pos());
 
     if (expr->val().ident == iCONSTEXPR) {
@@ -469,7 +467,7 @@ CodeGenerator::EmitExpr(Expr* expr)
             EmitUnary(expr->to<UnaryExpr>());
             break;
         case ExprKind::IncDecExpr:
-            EmitIncDec(expr->to<IncDecExpr>());
+            EmitIncDec(expr->to<IncDecExpr>(), flags);
             break;
         case ExprKind::BinaryExpr:
             EmitBinary(expr->to<BinaryExpr>());
@@ -637,9 +635,7 @@ CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* targ
     return false;
 }
 
-void
-CodeGenerator::EmitIncDec(IncDecExpr* expr)
-{
+void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     EmitExpr(expr->expr());
 
     const auto& val = expr->expr()->val();
@@ -661,7 +657,8 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
 
     EmitRvalue(val);
 
-    bool want_pre_value = !(expr->prefix() || expr->discard());
+    bool discard = !!(flags & EMIT_DISCARD_RESULT);
+    bool want_pre_value = !(expr->prefix() || discard);
     if (want_pre_value) {
         if (type->isInt64()) {
             cell_t pre_slot = AcquireTempSlot(expr, BuiltinType::Int64);
@@ -702,7 +699,7 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
         EmitStore(val, false /* save_pri */);
         __ emit(OP_POP_PRI);
     } else {
-        EmitStore(val, !expr->discard() /* save_pri */);
+        EmitStore(val, !discard /* save_pri */);
     }
 }
 
@@ -1836,7 +1833,7 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
             if (advance->tree_has_heap_allocs())
                 EnterHeapScope(Flow_None);
 
-            EmitExpr(advance);
+            EmitExpr(advance, EMIT_DISCARD_RESULT);
 
             if (advance->tree_has_heap_allocs())
                 LeaveHeapScope();
