@@ -700,12 +700,6 @@ BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* righ
 {
 }
 
-static inline bool SupportsOperators(Type* type) {
-    if (type->isVoid() || type->isArray() || type->isEnumStruct()) {
-        return false;
-    }
-    return true;
-}
 
 static inline bool CanPromoteToInt64(Type* type) {
     return type->isInt() || type->isAny();
@@ -935,29 +929,43 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     val.ident = iEXPRESSION;
     val.set_type(types_->type_bool());
 
+    bool is_first = true;
     for (auto& op : chain->ops()) {
         Expr* right = op.expr;
-        const auto& left_val = left->val();
-        const auto& right_val = right->val();
+        auto left_type = left->val().type();
+        auto right_type = right->val().type();
 
-        if (!SupportsOperators(left_val.type())) {
-            report(left, 33) << left_val.type();
-            return false;
-        }
-        if (!SupportsOperators(right_val.type())) {
-            report(right, 33) << right_val.type();
+        auto binop = FindBinaryOperator(op.token, left_type, right_type);
+        if (!binop) {
+            report(op.pos, 461) << get_token_string(op.token) << left_type << right_type;
             return false;
         }
 
-        // For the purposes of tag matching, we consider the order to be irrelevant.
-        PerformCoercion(left, left_val.type(), right_val.type(),
-                        Generic, Commutative);
+        // For subsequent comparisons, the left operand has already been evaluated
+        // (it was the right operand of the previous comparison). We cannot apply
+        // coercions to it.
+        if (!is_first && !binop->left.IsNop()) {
+            report(op.pos, 461) << get_token_string(op.token) << left_type << right_type;
+            return false;
+        }
 
-        if (right_val.ident != iCONSTEXPR)
+        if (binop->left.ck == ConversionKind::TagMismatch)
+            report(left, 213) << binop->left.type << left_type;
+        if (binop->right.ck == ConversionKind::TagMismatch)
+            report(right, 213) << binop->right.type << right_type;
+
+        if (!binop->right.IsNop())
+            op.expr = BuildConversion(op.expr, binop->right);
+        if (is_first && !binop->left.IsNop())
+            first = chain->set_first(BuildConversion(first, binop->left));
+
+        if (right->val().ident != iCONSTEXPR)
             all_const = false;
 
         // Fold constants as we go.
         if (all_const) {
+            const auto& left_val = left->val();
+            const auto& right_val = right->val();
             switch (op.token) {
                 case tlLE:
                     constval &= left_val.constval() <= right_val.constval();
@@ -977,7 +985,8 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
             }
         }
 
-        left = right;
+        left = op.expr;
+        is_first = false;
     }
 
     if (all_const)
@@ -1044,10 +1053,49 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     const auto& left = second->val();
     const auto& right = third->val();
 
-    if (!PerformTypeCheck(second, left.type(), right.type(), Semantics::Generic,
-                          Semantics::Ternary | Semantics::Commutative))
     {
-        return false;
+        auto left_to_right = FindConversion(left.type(), right.type(), CvtContext::Operator);
+        auto right_to_left = FindConversion(right.type(), left.type(), CvtContext::Operator);
+
+        // Ternary allows char arrays of different sizes, as long as one
+        // fits in the other.
+        if (!HasImplicitConversion(left_to_right) && !HasImplicitConversion(right_to_left) &&
+            left.type()->isCharArray() && right.type()->isCharArray())
+        {
+            auto left_array = left.type()->to<ArrayType>();
+            auto right_array = right.type()->to<ArrayType>();
+            if (!left_array->size() || !right_array->size() ||
+                left_array->size() >= right_array->size())
+            {
+                left_to_right = ConversionKind::None;
+            }
+            if (!left_array->size() || !right_array->size() ||
+                right_array->size() >= left_array->size())
+            {
+                right_to_left = ConversionKind::None;
+            }
+        }
+
+        bool use_left_to_right = false;
+
+        if (HasImplicitConversion(left_to_right) && HasImplicitConversion(right_to_left)) {
+            use_left_to_right = static_cast<uint32_t>(left_to_right) >=
+                                static_cast<uint32_t>(right_to_left);
+        } else if (HasImplicitConversion(left_to_right)) {
+            use_left_to_right = true;
+        } else if (!HasImplicitConversion(right_to_left)) {
+            ReportConversionDiagnostic(second, left.type(), right.type());
+            return false;
+        }
+
+        if (use_left_to_right)
+            second = expr->set_second(BuildConversion(second, left_to_right, right.type()));
+        else
+            third = expr->set_third(BuildConversion(third, right_to_left, left.type()));
+
+        auto ck = use_left_to_right ? left_to_right : right_to_left;
+        if (ck == ConversionKind::TagMismatch)
+            report(second->pos(), 213) << left.type() << right.type();
     }
 
     second = expr->set_second(CoerceNull(second, right.type()));

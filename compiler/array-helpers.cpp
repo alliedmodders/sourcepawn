@@ -525,7 +525,7 @@ bool ArrayValidator::ValidateInitializer() {
             iter = iter->inner()->as<ArrayType>();
         } while (iter);
 
-        if (!sema_->PerformTypeCheck(ctor, at_, ctor->type(), Semantics::Assignment))
+        if (!sema_->CheckCoercion(ctor, at_, ctor->type(), CvtContext::Assignment))
             return false;
 
         if (!sema_->CheckNewArrayExprForArrayInitializer(ctor))
@@ -562,7 +562,7 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
 
     assert(var->vclass() == sGLOBAL || var->vclass() == sSTATIC);
 
-    if (!sema_->PerformTypeCheck(expr, type_, var->type(), Semantics::Argument))
+    if (!sema_->CheckCoercion(expr, type_, var->type(), CvtContext::Argument))
         return false;
 
     // Since default arguments are not analyzed by standard expression checkers

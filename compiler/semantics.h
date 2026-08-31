@@ -132,35 +132,11 @@ class Semantics final
     friend class Parser;
 
   public:
-    enum TypeContext {
-        Assignment,
-        Argument,
-        Return,
-        Generic,
-    };
-
-    enum TypeFlags {
-        None = 0,
-        Commutative = 0x1,
-        FuncArg = 0x2,
-        EnumAssign = 0x4,
-        AllowCoerce = 0x8,
-        Ternary = 0x10,
-    };
-
     explicit Semantics(CompileContext& cc);
 
     bool Analyze(ParseTree* tree);
 
     CompileContext& cc() { return cc_; }
-    bool PerformTypeCheck(const token_pos_t& pos, QualType formal, QualType actual,
-                          TypeContext why, int flags = None);
-    bool PerformTypeCheck(ParseNode* node, QualType formal, QualType actual,
-                          TypeContext why, int flags = None);
-    bool PerformCoercion(const token_pos_t& pos, QualType formal, QualType actual,
-                         TypeContext why, int flags = None);
-    bool PerformCoercion(ParseNode* node, QualType formal, QualType actual,
-                         TypeContext why, int flags = None);
     bool CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
                        CvtContext why);
     bool CheckCoercion(ParseNode* node, QualType formal, QualType actual,
@@ -268,33 +244,6 @@ class Semantics final
 
     bool IsIncluded(Decl* expr);
     bool IsIncludedStock(VarDeclBase* expr);
-
-    struct TypeCheckerState {
-        const token_pos_t& pos;
-        QualType formal;
-        QualType actual;
-        Semantics::TypeContext why;
-        int flags;
-        AutoDeferReports defer;
-
-        TypeCheckerState(const token_pos_t& pos, QualType formal, QualType actual,
-                         Semantics::TypeContext why, int flags)
-          : pos(pos),
-            formal(formal),
-            actual(actual),
-            why(why),
-            flags(flags),
-            defer(CompileContext::get())
-        {}
-    };
-    bool CheckType(TypeCheckerState& state);
-    bool CheckTypeImpl(TypeCheckerState& state);
-    bool CheckValueType(TypeCheckerState& state, Type* formal, Type* actual);
-    bool CheckArrays(TypeCheckerState& state, ArrayType* formal, ArrayType* actual);
-    bool CheckFunction(TypeCheckerState& state);
-    bool CheckFunctionSignature(TypeCheckerState& state, FunctionType* formal, FunctionType* actual);
-    bool DiagnoseFailure(TypeCheckerState& state);
-    bool DiagnoseFunctionFailure(TypeCheckerState& state);
 
     struct BinaryExprState {
         BinaryExpr* expr;
