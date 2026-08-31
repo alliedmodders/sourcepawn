@@ -414,7 +414,7 @@ SmxImage::validateRtti() {
 
     const char* optional_tables[] = {
         "rtti.classdefs", "rtti.enums",    "rtti.enumstructs", "rtti.enumstruct_fields",
-        "rtti.fields",    "rtti.typedefs", "rtti.typesets",
+        "rtti.fields",    "rtti.typedefs", "rtti.typesets", "rtti.globals",
     };
     for (size_t i = 0; i < sizeof(optional_tables) / sizeof(optional_tables[0]); i++) {
         const char* table_name = optional_tables[i];
@@ -444,6 +444,9 @@ SmxImage::validateRtti() {
     if (rtti_typesets_ && !validateRttiTypesets())
         return false;
 
+    rtti_globals_ = findRttiSection("rtti.globals");
+    if (rtti_globals_ && !validateRttiGlobals())
+        return false;
     return true;
 }
 
@@ -599,8 +602,25 @@ SmxImage::validateRttiMethods() {
     return true;
 }
 
-bool
-SmxImage::validateRttiTypesets() {
+bool SmxImage::validateRttiGlobals() {
+    for (uint32_t i = 0; i < rtti_globals_->row_count; i++) {
+        const smx_rtti_global* global = getRttiRow<smx_rtti_global>(rtti_globals_, i);
+        if (!validateName(global->name))
+            return error("invalid global name");
+        if (!rtti_data_->validateType(global->type_id))
+            return error("invalid type id");
+        uint32_t supported_flags = kRttiGlobal_VisibilityMask;
+        uint32_t unknown_flags = global->flags & ~supported_flags;
+        if (unknown_flags)
+            return error("invalid global flags");
+        uint8_t visibility = global ->flags & kRttiGlobal_VisibilityMask;
+        if (visibility != kRttiGlobal_Private && visibility != kRttiGlobal_Public)
+            return error("invalid global visibility");
+    }
+    return true;
+}
+
+bool SmxImage::validateRttiTypesets() {
     for (uint32_t i = 0; i < rtti_typesets_->row_count; i++) {
         const smx_rtti_typeset* typesetType = getRttiRow<smx_rtti_typeset>(rtti_typesets_, i);
         if (!validateName(typesetType->name))
@@ -1262,6 +1282,14 @@ SmxImage::getFunctionAddress(const SymbolType* syms, const char* function, ucell
 
 FastRtti SmxImage::GetTypeParser(uint32_t offset) {
     return FastRtti(rtti_data_->blob(), rtti_data_->size(), offset);
+}
+
+FastRtti SmxImage::GetTypeIdParser(uint32_t type_id) {
+    uint8_t kind = type_id & kMaxTypeIdKind;
+    uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+    if (kind == kTypeId_Inline)
+        return FastRtti(type_id);
+    return FastRtti(rtti_data_->blob(), rtti_data_->size(), payload);
 }
 
 bool SmxImage::IsVoidMethod(const smx_rtti_method* method) const {

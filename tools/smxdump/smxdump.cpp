@@ -62,6 +62,7 @@ class DumpTool final {
         DumpData();
         DumpCode();
         DumpRttiMethods();
+        DumpRttiGlobals();
 
         if (!smx_->rtti_methods())
             DumpLegacyCode();
@@ -410,6 +411,27 @@ class DumpTool final {
         fprintf(stdout, "}\n");
     }
 
+    void DumpRttiGlobals() {
+        auto globals = smx_->rtti_globals();
+        if (!globals)
+            return;
+
+        fprintf(stdout, ".rtti_globals\n");
+        fprintf(stdout, "{\n");
+        for (uint32_t i = 0; i < globals->row_count; i++) {
+            auto global = smx_->getRttiRow<smx_rtti_global>(globals, i);
+            fprintf(stdout, "    %u: %s ", i, smx_->names() + global->name);
+
+            if (global->flags & kRttiGlobal_Public)
+                fprintf(stdout, "[public] ");
+
+            auto rtti = smx_->GetTypeIdParser(global->type_id);
+            fprintf(stdout, "%s", DumpType(rtti).c_str());
+            fprintf(stdout, "\n");
+        }
+        fprintf(stdout, "}\n");
+    }
+
     void DumpLegacyCode() {
         auto code = smx_->DescribeCode();
         if (smx_->hdr()->version < SmxConsts::SP_VERSION_2)
@@ -653,13 +675,26 @@ class DumpTool final {
             case OP_GENARRAY:
             case OP_GENARRAY_Z:
             case OP_MOVS:
+            case OP_FILL:
+                fprintf(stdout, " %d", reader.read<cell_t>());
+                break;
+
             case OP_LOAD_GLB:
             case OP_LOAD_GLB_I64:
             case OP_STOR_GLB:
             case OP_STOR_GLB_I64:
-            case OP_FILL:
-                fprintf(stdout, " %d", reader.read<cell_t>());
+            case OP_ADDR_GLB:
+            {
+                uint16_t index = reader.read<uint16_t>();
+                auto globals = smx_->rtti_globals();
+                if (globals && index < globals->row_count) {
+                    auto global = smx_->getRttiRow<smx_rtti_global>(globals, index);
+                    fprintf(stdout, " %s", smx_->names() + global->name);
+                } else {
+                    fprintf(stdout, " unknown_global_%u", index);
+                }
                 break;
+            }
 
             case OP_PUSH_C_I8:
                 fprintf(stdout, " %d", (int)reader.read<int8_t>());

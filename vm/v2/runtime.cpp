@@ -38,36 +38,11 @@ using namespace SourcePawn;
 
 static const size_t kMinHeapSize = 16384;
 #define CELLBOUNDMAX (INT_MAX / sizeof(cell_t))
-#define STACKMARGIN ((cell_t)(16 * sizeof(cell_t)))
 
 Runtime::Runtime(SmxImage* image)
  : BaseRuntime(image),
-   paused_(false),
-   computed_code_hash_(false),
-   computed_data_hash_(false),
-   memory_(nullptr),
-   data_size_(data().length),
-   mem_size_(image->HeapSize()),
-   m_pNullVec(nullptr),
-   m_pNullString(nullptr)
+   data_size_(data().length)
 {
-    memset(code_hash_, 0, sizeof(code_hash_));
-    memset(data_hash_, 0, sizeof(data_hash_));
-
-    // Compute and align a minimum memory amount.
-    if (mem_size_ < data_size_)
-        mem_size_ = data_size_;
-    mem_size_ = ke::Align(mem_size_, sizeof(cell_t));
-
-    // Add a minimum heap size if needed.
-    if (mem_size_ < data_size_ + kMinHeapSize)
-        mem_size_ = data_size_ + kMinHeapSize;
-    assert(ke::IsAligned(mem_size_, sizeof(cell_t)));
-
-    hp_ = data_size_;
-    sp_ = mem_size_ - sizeof(cell_t);
-    stp_ = sp_;
-    hp_scope_ = -1;
 
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
     Environment::get()->RegisterRuntime(this);
@@ -86,16 +61,6 @@ Runtime::~Runtime() {
 }
 
 bool Runtime::Initialize() {
-    if (!ke::IsAligned(code_.bytes, sizeof(cell_t))) {
-        // Align the code section.
-        aligned_code_ = std::make_unique<uint8_t[]>(code_.length);
-        if (!aligned_code_)
-            return false;
-
-        memcpy(aligned_code_.get(), code_.bytes, code_.length);
-        code_.bytes = aligned_code_.get();
-    }
-
     for (size_t i = 0; i < image_->rtti_methods()->row_count; i++) {
         auto method = image_->getRttiRow<smx_rtti_method>(image_->rtti_methods(), i);
 
@@ -139,19 +104,37 @@ bool Runtime::Initialize() {
 
     if (!InitializeContext())
         return false;
-
-    if (!function_map_.init(32))
+    if (!InitializeGlobals())
         return false;
 
     return true;
 }
 
 bool Runtime::InitializeContext() {
-    memory_ = new uint8_t[mem_size_];
-    if (!memory_)
+    if (!heap_.Initialize())
         return false;
-    memset(memory_ + data_size_, 0, mem_size_ - data_size_);
-    memcpy(memory_, data().bytes, data_size_);
+
+    auto sp_base = heap_.Allocate(kDefaultStackSize);
+    if (!sp_base)
+        return false;
+
+    sp_base_ = heap_.ToLocalAddr(sp_base);
+    sp_top_ = sp_base_ + kDefaultStackSize;
+    sp_ = sp_top_;
+    return true;
+}
+
+bool Runtime::InitializeGlobals() {
+    global_addrs_ = ke::FixedArray<uint32_t>(image_->rtti_globals()->row_count);
+    for (uint32_t i = 0; i < image_->rtti_globals()->row_count; i++) {
+        auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), i);
+        assert(global);
+
+        uint8_t* p = heap_.Allocate(sizeof(cell_t));
+        if (!p)
+            return false;
+        global_addrs_[i] = heap_.ToLocalAddr(p);
+    }
 
     /* Initialize the null references */
     uint32_t index;
@@ -159,16 +142,12 @@ bool Runtime::InitializeContext() {
         sp_pubvar_t* pubvar;
         GetPubvarByIndex(index, &pubvar);
         m_pNullVec = pubvar->offs;
-    } else {
-        m_pNullVec = NULL;
     }
 
     if (FindPubvarByName("NULL_STRING", &index) == SP_ERROR_NONE) {
         sp_pubvar_t* pubvar;
         GetPubvarByIndex(index, &pubvar);
         m_pNullString = pubvar->offs;
-    } else {
-        m_pNullString = NULL;
     }
 
     return true;
@@ -399,8 +378,7 @@ bool Runtime::IsDebugging() {
 
 
 size_t Runtime::GetMemUsage() {
-    return sizeof(*this) + image_->ImageSize() +
-           (aligned_code_ ? code_.length : 0) + HeapSize();
+    return sizeof(*this) + image_->ImageSize();
 }
 
 
@@ -456,50 +434,65 @@ bool Runtime::CallGlobalCtor() {
     return InvokeMethod(*ctor_index, &ignore_result, 0, &ignore_result);
 }
 
+int Runtime::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
+    if (!IsUint32MultiplySafe(cells, sizeof(cell_t)))
+        return SP_ERROR_HEAPLOW;
+
+    uint32_t alloc_size = cells * sizeof(cell_t);
+    if (!IsUint32AddSafe(cells, sizeof(HeapImpl::Position)))
+        return SP_ERROR_HEAPLOW;
+    alloc_size += sizeof(HeapImpl::Position);
+
+    auto save_pos = heap_.GetPosition();
+    uint8_t* p = heap_.Allocate(alloc_size);
+    if (!p)
+        return SP_ERROR_HEAPLOW;
+
+    *reinterpret_cast<HeapImpl::Position*>(p) = save_pos;
+    p += sizeof(HeapImpl::Position);
+
+    *local_addr = heap_.ToLocalAddr(p);
+    *phys_addr = reinterpret_cast<cell_t*>(p);
+    return SP_ERROR_NONE;
+}
+
+int Runtime::HeapPop(cell_t local_addr) {
+    uint8_t* p = heap_.ToPhysAddr<uint8_t*>(local_addr);
+    p -= sizeof(HeapImpl::Position);
+    auto pos = *reinterpret_cast<HeapImpl::Position*>(p);
+
+    heap_.RestorePosition(pos);
+    return SP_ERROR_NONE;
+}
+
+int Runtime::HeapRelease(cell_t local_addr) {
+    return SP_ERROR_PARAM;
+}
 
 int Runtime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
-    if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
-        ((ucell_t)local_addr >= mem_size_)) {
-        return SP_ERROR_INVALID_ADDRESS;
-    }
-
     if (phys_addr)
-        *phys_addr = (cell_t*)(memory_ + local_addr);
-
+        *phys_addr = heap_.ToPhysAddr<cell_t*>(local_addr);
     return SP_ERROR_NONE;
 }
 
 int Runtime::LocalToString(cell_t local_addr, char** addr) {
-    if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
-        ((ucell_t)local_addr >= mem_size_)) {
-        return SP_ERROR_INVALID_ADDRESS;
-    }
-    *addr = (char*)(memory_ + local_addr);
-
+    if (addr)
+        *addr = heap_.ToPhysAddr<char*>(local_addr);
     return SP_ERROR_NONE;
 }
 
 int Runtime::StringToLocal(cell_t local_addr, size_t bytes, const char* source) {
-    char* dest;
-    size_t len;
-
-    if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
-        ((ucell_t)local_addr >= mem_size_)) {
-        return SP_ERROR_INVALID_ADDRESS;
-    }
-
     if (bytes == 0)
         return SP_ERROR_NONE;
 
-    len = strlen(source);
-    dest = (char*)(memory_ + local_addr);
+    size_t len = strlen(source);
+    char* dest = heap_.ToPhysAddr<char*>(local_addr);
 
     if (len >= bytes)
         len = bytes - 1;
 
     memmove(dest, source, len);
     dest[len] = '\0';
-
     return SP_ERROR_NONE;
 }
 
@@ -534,22 +527,14 @@ __CheckValidChar(char* c) {
 }
 
 int Runtime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source,
-                                 size_t* wrtnbytes) {
-    char* dest;
-    size_t len;
-    bool needtocheck = false;
-
-    if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
-        ((ucell_t)local_addr >= mem_size_)) {
-        return SP_ERROR_INVALID_ADDRESS;
-    }
-
+                               size_t* wrtnbytes) {
     if (maxbytes == 0)
         return SP_ERROR_NONE;
 
-    len = strlen(source);
-    dest = (char*)(memory_ + local_addr);
+    size_t len = strlen(source);
+    auto dest = heap_.ToPhysAddr<char*>(local_addr);
 
+    bool needtocheck = false;
     if ((size_t)len >= maxbytes) {
         len = maxbytes - 1;
         needtocheck = true;
@@ -593,7 +578,7 @@ bool Runtime::IsInExec() {
 }
 
 bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
-                                 unsigned int num_params, cell_t* result)
+                           unsigned int num_params, cell_t* result)
 {
     EnterProfileScope profileScope("SourcePawn", "EnterJIT");
 
@@ -610,11 +595,6 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
 
     if (IsPaused()) {
         ReportErrorNumber(SP_ERROR_NOT_RUNNABLE);
-        return false;
-    }
-
-    if ((cell_t)(hp_ + 16 * sizeof(cell_t)) > (cell_t)(sp_ - (sizeof(cell_t) * (num_params + 1)))) {
-        ReportErrorNumber(SP_ERROR_STACKLOW);
         return false;
     }
 
@@ -638,24 +618,30 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
     }
 
     /* Save our previous state. */
-    cell_t save_sp = sp_;
-    cell_t save_hp = hp_;
-    cell_t save_hp_scope = hp_scope_;
+    uint32_t save_sp = sp_;
+#ifndef NDEBUG
+    uint32_t save_hp_scope = hp_scope_;
+    auto heap_pos = heap_.GetPosition();
+#endif
 
     /* Push parameters */
-    sp_ -= sizeof(cell_t) * (num_params + 1);
-    cell_t* sp = (cell_t*)(memory_ + sp_);
+    if (!addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
+        return false;
+    cell_t* sp = heap_.ToPhysAddr<cell_t*>(sp_);
 
     sp[0] = num_params;
     for (unsigned int i = 0; i < num_params; i++)
         sp[i + 1] = params[i];
 
-    // Enter the execution engine.
+    // Enter the execution engine. Callee is responsible for saving and
+    // restoring hp_scope_.
     bool ok = env_->Invoke(this, method, result);
 
+#ifndef NDEBUG
+    assert(hp_scope_ == save_hp_scope);
+    assert(heap_pos == heap_.GetPosition());
+#endif
     sp_ = save_sp;
-    hp_ = save_hp;
-    hp_scope_ = save_hp_scope;
     return ok;
 }
 
@@ -665,31 +651,25 @@ cell_t* Runtime::GetLocalParams() {
 }
 
 bool Runtime::enterHeapScope() {
-    auto old_hp_scope = hp_scope_;
+    auto pos = heap_.GetPosition();
 
-    if (!heapAlloc(sizeof(cell_t), &hp_scope_))
+    auto node = heap_.AllocTyped<HeapScope>();
+    if (!node)
         return false;
 
-    cell_t* scope = throwIfBadAddress(hp_scope_);
-    if (!scope)
-        return false;
+    node->pos = pos;
+    node->prev_hp_scope = hp_scope_;
 
-    *scope = old_hp_scope;
+    hp_scope_ = heap_.ToLocalAddr(node);
     return true;
 }
 
-bool Runtime::leaveHeapScope() {
-    cell_t* scope = throwIfBadAddress(hp_scope_);
-    if (!scope)
-        return false;
+void Runtime::leaveHeapScope() {
+    assert(hp_scope_ != 0);
 
-    auto prev_hp_scope = *scope;
-    hp_ = hp_scope_;
-    hp_scope_ = prev_hp_scope;
-
-    if (hp_scope_ != -1 && !throwIfBadAddress(hp_scope_))
-        return false;
-    return true;
+    auto node = *heap_.ToPhysAddr<HeapScope*>(hp_scope_);
+    heap_.RestorePosition(node.pos);
+    hp_scope_ = node.prev_hp_scope;
 }
 
 // We divide multi-dimensional arrays into two regions: the IV (indirection
@@ -831,32 +811,10 @@ int Runtime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
     return SP_ERROR_NONE;
 }
 
-bool Runtime::pushStack(cell_t value) {
-    if (sp_ <= cell_t(hp_ + sizeof(cell_t))) {
-        ReportErrorNumber(SP_ERROR_STACKLOW);
-        return false;
-    }
-    sp_ -= sizeof(cell_t);
-
-    *reinterpret_cast<cell_t*>(memory_ + sp_) = value;
-    return true;
-}
-
-bool Runtime::popStack(cell_t* out) {
-    if (sp_ >= stp_) {
-        ReportErrorNumber(SP_ERROR_STACKMIN);
-        return false;
-    }
-    *out = *reinterpret_cast<cell_t*>(memory_ + sp_);
-
-    sp_ += sizeof(cell_t);
-    return true;
-}
-
 bool Runtime::getCellValue(cell_t address, cell_t* out) {
     assert((uintptr_t)(const void*)out % sizeof(cell_t) == 0);
 
-    cell_t* ptr = throwIfBadAddress(address);
+    cell_t* ptr = heap_.ToPhysAddr<cell_t*>(address);
     if (!ptr)
         return false;
 
@@ -872,7 +830,7 @@ bool Runtime::getCellValue(cell_t address, cell_t* out) {
 }
 
 bool Runtime::setCellValue(cell_t address, cell_t value) {
-    cell_t* ptr = throwIfBadAddress(address);
+    cell_t* ptr = heap_.ToPhysAddr<cell_t*>(address);
     if (!ptr)
         return false;
 
@@ -906,39 +864,19 @@ cell_t* Runtime::heapAllocEx(cell_t amount, cell_t* out) {
 }
 
 cell_t* Runtime::acquireAddrRange(cell_t address, uint32_t bounds) {
-    cell_t* addr = throwIfBadAddress(address);
-    if (!addr)
-        return nullptr;
-    if (bounds && !throwIfBadAddress(address + bounds - 1))
-        return nullptr;
-    return addr;
-}
-
-cell_t* Runtime::throwIfBadAddress(cell_t addr) {
-    if (addr < 0 || (addr >= hp_ && addr < sp_) || addr >= stp_) {
-        ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
-        return nullptr;
-    }
-    return reinterpret_cast<cell_t*>(memory_ + addr);
+    return heap_.ToPhysAddr<cell_t*>(address);
 }
 
 bool Runtime::addStack(cell_t amount) {
-    cell_t new_sp = sp_ + amount;
+    assert(ke::IsAligned(amount, sizeof(cell_t)));
 
-    if (amount < 0) {
-        // Note: signed compare, in case new_sp is negative.
-        if (new_sp < hp_ + STACKMARGIN) {
-            ReportErrorNumber(SP_ERROR_STACKLOW);
-            return false;
-        }
-    } else {
-        if (new_sp > stp_) {
-            ReportErrorNumber(SP_ERROR_STACKMIN);
-            return false;
-        }
+    uint32_t new_sp = sp_ + amount;
+    if (new_sp >= sp_top_) {
+        ReportErrorNumber(amount < 0 ? SP_ERROR_STACKLOW : SP_ERROR_STACKMIN);
+        return false;
     }
 
-    sp_ = new_sp;
+    sp_ += new_sp;
     return true;
 }
 
@@ -1122,11 +1060,6 @@ Runtime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
         return false;
     }
 
-    if ((cell_t)(hp_ + 16 * sizeof(cell_t)) > (cell_t)(sp_ - (sizeof(cell_t) * (num_params + 1)))) {
-        ReportErrorNumber(SP_ERROR_STACKLOW);
-        return false;
-    }
-
     env_->clearPendingException();
 
     cell_t ignore_result;
@@ -1141,13 +1074,15 @@ Runtime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
         return false;
     }
 
-    cell_t save_sp = sp_;
-    cell_t save_hp = hp_;
-    cell_t save_frm = frm_;
-    cell_t save_hp_scope = hp_scope_;
+    uint32_t save_sp = sp_;
+#ifndef NDEBUG
+    uint32_t save_hp_scope = hp_scope_;
+    auto heap_pos = heap_.GetPosition();
+#endif
 
-    sp_ -= sizeof(cell_t) * (num_params + 1);
-    cell_t* sp = (cell_t*)(memory_ + sp_);
+    if (!addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
+        return false;
+    cell_t* sp = heap_.ToPhysAddr<cell_t*>(sp_);
 
     sp[0] = num_params;
     for (unsigned int i = 0; i < num_params; i++)
@@ -1155,10 +1090,11 @@ Runtime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
 
     bool ok = env_->Invoke(this, method, result);
 
+#ifndef NDEBUG
+    assert(hp_scope_ == save_hp_scope);
+    assert(heap_pos == heap_.GetPosition());
+#endif
     sp_ = save_sp;
-    hp_ = save_hp;
-    frm_ = save_frm;
-    hp_scope_ = save_hp_scope;
     return ok;
 }
 
@@ -1178,6 +1114,14 @@ Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size)
     if (size)
         *size = 0;
     return reinterpret_cast<void*>(handle);
+}
+
+size_t Runtime::HeapSize() const {
+    return heap_.committed();
+}
+
+size_t Runtime::DataSize() const {
+    return data_size_;
 }
 
 } // namespace v2

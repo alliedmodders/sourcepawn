@@ -30,8 +30,8 @@ namespace cc {
 
 using namespace sp::v2;
 
-struct StackSlot {
-    explicit StackSlot(int16_t offset) : offset(offset) {}
+struct VarSlot {
+    explicit VarSlot(int16_t offset) : offset(offset) {}
     int16_t offset;
 };
 
@@ -57,7 +57,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<uint8_t>(static_cast<uint8_t>(op));
     write<int64_t>(param.value);
   }
-  void emit(OPCODE op, StackSlot slot) {
+  void emit(OPCODE op, VarSlot slot) {
     write<uint8_t>(static_cast<uint8_t>(op));
     write<int16_t>(slot.offset);
   }
@@ -66,12 +66,12 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<cell_t>(param1);
     write<cell_t>(param2);
   }
-  void emit(OPCODE op, StackSlot slot, cell_t param) {
+  void emit(OPCODE op, VarSlot slot, cell_t param) {
     write<uint8_t>(static_cast<uint8_t>(op));
     write<int16_t>(slot.offset);
     write<cell_t>(param);
   }
-  void emit(OPCODE op, StackSlot slot, cell_t param1, cell_t param2) {
+  void emit(OPCODE op, VarSlot slot, cell_t param1, cell_t param2) {
     write<uint8_t>(static_cast<uint8_t>(op));
     write<int16_t>(slot.offset);
     write<cell_t>(param1);
@@ -130,44 +130,7 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
   void load_hidden_arg(FunctionDecl* decl) {
     assert(decl->needs_hidden_arg());
-    emit(OP_LOAD_S, StackSlot(-1));
-  }
-
-  void address(Decl* sym) {
-    address(sym->as<VarDeclBase>());
-  }
-
-  void address(VarDeclBase* sym) {
-    bool is_ref = sym->type()->isArray() ||
-                  sym->type()->isReference() ||
-                  sym->type()->isEnumStruct();
-    if (is_ref && IsLocal(sym->vclass())) {
-      emit(OP_LOAD_S, StackSlot(sym->addr()));
-    } else {
-      if (sym->type()->isArray())
-        assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
-
-      if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-        if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
-          emit(OP_LOAD_S, StackSlot(sym->addr()));
-        else
-          emit(OP_ADDR_S, StackSlot(sym->addr()));
-      } else {
-        emit(OP_PUSH_C, sym->label());
-      }
-    }
-  }
-
-  void copyarray(VarDeclBase* sym, cell size) {
-    if (sym->type()->isArray()) {
-      assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
-      emit(OP_LOAD_S, StackSlot(sym->addr()));
-    } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-      emit(OP_ADDR_S, StackSlot(sym->addr()));
-    } else {
-      emit(OP_PUSH_C, sym->label());
-    }
-    emit(OP_MOVS, size);
+    emit(OP_LOAD_S, VarSlot(-1));
   }
 
   void casetbl(cell_t ncases, Label* def) {

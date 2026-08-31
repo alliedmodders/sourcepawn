@@ -55,7 +55,7 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
    has_returned_(false),
    return_value_(0),
    frm_(cx->sp()),
-   phys_frm_(reinterpret_cast<cell_t*>(cx_->memory() + frm_))
+   phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_))
 {}
 
 bool Interpreter::run() {
@@ -63,8 +63,13 @@ bool Interpreter::run() {
 
     InterpInvokeFrame ivk(cx_, method_, &insn_begin);
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
-    ke::SaveAndSet<cell_t> saveSp(cx_->addressOfSp(), cx_->sp());
-    ke::SaveAndSet<cell_t> saveHpScope(cx_->addressOfHpScope(), cx_->hp_scope());
+    ke::SaveRestore<uint32_t> saveSp(cx_->sp());
+    ke::SaveRestore<uint32_t> saveHpScope(cx_->hp_scope());
+
+    auto pos = cx_->heap().GetPosition();
+    auto restorePos = ke::ScopeGuard([&, this]() -> void {
+        cx_->heap().RestorePosition(pos);
+    });
 
     cell_t stack_needed = method_->StackSizeForLocalSlots();
     if (stack_needed && !cx_->addStack(stack_needed))
@@ -79,7 +84,8 @@ bool Interpreter::run() {
         eval_depth = ke::Align(eval_depth, sizeof(cell_t));
         if (!cx_->addStack(-(cell_t)(stack_bytes + eval_depth)))
             return false;
-        uint8_t* base = cx_->memory() + cx_->sp();
+
+        uint8_t* base = cx_->heap().ToPhysAddr<uint8_t*>(cx_->sp());
 
         // We reserve two chunks of data off the stack.
         //    "eval_stack", which holds the operand stack.
@@ -237,10 +243,10 @@ bool Interpreter::run() {
             case OP_STRB_I: {
                 cell_t val = popCell();
                 cell_t addr_val = popCell();
-                cell_t* addr = cx_->throwIfBadAddress(addr_val);
+                uint8_t* addr = cx_->heap().ToPhysAddr<uint8_t*>(addr_val);
                 if (!addr)
                     return false;
-                *reinterpret_cast<uint8_t*>(addr) = uint8_t(val);
+                *addr = uint8_t(val);
                 break;
             }
             case OP_IDXADDR: {

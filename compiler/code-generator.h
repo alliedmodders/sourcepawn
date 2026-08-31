@@ -121,6 +121,7 @@ class CodeGenerator final
     void EmitRvalue(const value& lval);
     void EmitStore(ParseNode* node, const value& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
+    void EmitAddress(VarDeclBase* decl);
 
     // Builtins.
     void EmitFloatBuiltin(CallExpr* expr);
@@ -207,6 +208,8 @@ class CodeGenerator final
     void EnterTempSlotScope();
     void LeaveTempSlotScope();
     cell_t AcquireTempSlot(ParseNode* node, BuiltinType type);
+
+    uint16_t AcquireGlobalSlot(VarDeclBase* decl);
 
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;

@@ -12,6 +12,7 @@
 //
 #pragma once
 
+#include <amtl/am-fixedarray.h>
 #include <amtl/am-hashmap.h>
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
@@ -19,6 +20,7 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
 #include "base-runtime.h"
+#include "heap-defaults.h"
 #include "smx-image.h"
 #include "v2/scripted-invoker.h"
 
@@ -46,7 +48,6 @@ class Runtime final : public BaseRuntime,
     ~Runtime();
 
     bool Initialize() override;
-    bool InitializeContext();
 
     bool CallGlobalCtor() override;
 
@@ -114,43 +115,30 @@ class Runtime final : public BaseRuntime,
     Runtime* context() const { return const_cast<Runtime*>(this); }
     Runtime* runtime() const { return const_cast<Runtime*>(this); }
 
-    size_t HeapSize() const { return mem_size_; }
-    uint8_t* memory() const { return memory_; }
-    size_t DataSize() const { return data_size_; }
+    size_t HeapSize() const;
+    size_t DataSize() const;
 
     static inline size_t offsetOfSp() { return offsetof(Runtime, sp_); }
-    static inline size_t offsetOfHp() { return offsetof(Runtime, hp_); }
     static inline size_t offsetOfRuntime() { return 0; /* Deprecated, Runtime is self */ }
-    static inline size_t offsetOfFrm() { return offsetof(Runtime, frm_); }
     static inline size_t offsetOfMemory() { return offsetof(Runtime, memory_); }
     static inline size_t offsetOfHpScope() { return offsetof(Runtime, hp_scope_); }
 
-    int32_t* addressOfSp() { return &sp_; }
-    cell_t* addressOfFrm() { return &frm_; }
-    cell_t* addressOfHp() { return &hp_; }
-    cell_t* addressOfHpScope() { return &hp_scope_; }
+    uint32_t& sp() { return sp_; }
+    uint32_t& hp_scope() { return hp_scope_; }
 
-    cell_t sp() const { return sp_; }
-    cell_t frm() const { return frm_; }
-    cell_t hp() const { return hp_; }
-    cell_t hp_scope() const { return hp_scope_; }
+    HeapImpl& heap() { return heap_; }
+
+    struct HeapScope {
+        HeapImpl::Position pos;
+        uint32_t prev_hp_scope;
+    };
 
     bool enterHeapScope();
-    bool leaveHeapScope();
-    bool UsesHeapScopes();
-    int popTrackerAndSetHeap();
-    int pushTracker(uint32_t amount);
-
-    bool pushAmxFrame();
-    bool popAmxFrame();
-    bool getFrameValue(cell_t offset, cell_t* out);
-    bool setFrameValue(cell_t offset, cell_t value);
+    void leaveHeapScope();
 
     int generateArray(cell_t dims, cell_t* stk, bool autozero);
     int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
 
-    bool pushStack(cell_t value);
-    bool popStack(cell_t* out);
     bool pushHeap(cell_t value);
     bool popHeap(cell_t* out);
     bool addStack(cell_t amount);
@@ -162,8 +150,6 @@ class Runtime final : public BaseRuntime,
     bool initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
                    cell_t data_fill_size, cell_t fill_value);
 
-    cell_t* throwIfBadAddress(cell_t addr);
-
     int64_t* acquireInt64Addr(cell_t address) {
         cell_t* addr = acquireAddrRange(address, sizeof(int64_t));
         if (!addr)
@@ -172,43 +158,33 @@ class Runtime final : public BaseRuntime,
     }
 
   private:
-    std::unique_ptr<uint8_t[]> aligned_code_;
+    bool InitializeContext();
+    bool InitializeGlobals();
+
+  private:
     std::vector<NativeEntry> natives_;
     std::unordered_map<uint32_t, uint32_t> native_map_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;
-
     std::vector<sp_public_t> publics_;
     std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;
-
-    struct FunctionMapPolicy {
-        static inline uint32_t hash(ucell_t value) {
-            return ke::HashInteger<4>(value);
-        }
-        static inline bool matches(ucell_t a, ucell_t b) {
-            return a == b;
-        }
-    };
-    typedef ke::HashMap<ucell_t, RefPtr<MethodInfo>, FunctionMapPolicy> FunctionMap;
-
-    FunctionMap function_map_;
     std::vector<RefPtr<MethodInfo>> methods_;
+    ke::FixedArray<uint32_t> global_addrs_;
 
-    bool paused_;
-    bool computed_code_hash_;
-    bool computed_data_hash_;
+    bool paused_ = false;
+    bool computed_code_hash_ = false;
+    bool computed_data_hash_ = false;
     unsigned char code_hash_[16];
     unsigned char data_hash_[16];
 
-    uint8_t* memory_;
+    HeapImpl heap_;
+    uint8_t* memory_ = nullptr;
     uint32_t data_size_;
-    uint32_t mem_size_;
-    cell_t* m_pNullVec;
-    cell_t* m_pNullString;
-    cell_t stp_;
-    cell_t sp_;
-    cell_t frm_;
-    cell_t hp_;
-    cell_t hp_scope_;
+    cell_t* m_pNullVec = nullptr;
+    cell_t* m_pNullString = nullptr;
+    uint32_t sp_base_ = 0;
+    uint32_t sp_top_ = 0;
+    uint32_t sp_ = 0;
+    uint32_t hp_scope_ = 0;
 };
 
 } // namespace v2

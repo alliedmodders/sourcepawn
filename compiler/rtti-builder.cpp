@@ -38,6 +38,7 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
     enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
     es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
+    globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
     dbg_lines_ = new SmxRttiTable<smx_rtti_debug_line>(".dbg.method_lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -66,6 +67,7 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.addIfNotEmpty(fields_);
     builder.addIfNotEmpty(enumstructs_);
     builder.addIfNotEmpty(es_fields_);
+    builder.addIfNotEmpty(globals_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -281,6 +283,24 @@ RttiBuilder::add_struct(Type* type)
         fields_->at(classdef.first_field + i) = field;
     }
     return struct_index;
+}
+
+uint32_t RttiBuilder::AddGlobal(VarDeclBase* decl, Atom* name) {
+    uint32_t index = globals_->count();
+    smx_rtti_global& global = globals_->add();
+    global.name = name ? names_->add(*cc_.atoms(), name) : 0;
+    global.type_id = to_typeid(decl->type());
+    global.flags = 0;
+
+    if (decl->is_public())
+        global.flags = kRttiGlobal_Public;
+
+    return index;
+}
+
+void RttiBuilder::UpdateGlobalName(uint32_t index, Atom* name) {
+    auto& global = globals_->at(index);
+    global.name = names_->add(*cc_.atoms(), name);
 }
 
 uint32_t RttiBuilder::to_typeid(QualType type) {

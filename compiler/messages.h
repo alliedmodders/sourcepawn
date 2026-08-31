@@ -351,4 +351,5 @@ static const char* errmsg_ex[] = {
     /*465*/ "type '%s' cannot be used in a typedef\n",
     /*466*/ "void result cannot be used in an expression\n",
     /*467*/ "too many local slots used\n",
+    /*468*/ "too many global slots used\n",
 };

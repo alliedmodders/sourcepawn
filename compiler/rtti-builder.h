@@ -54,6 +54,7 @@ class RttiBuilder
                        LocalSlotSignature&& locals, uint32_t pcode_end);
 
     int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
+    uint32_t AddGlobal(VarDeclBase* decl, Atom* name);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(uint16_t addr, uint16_t line);
@@ -62,6 +63,7 @@ class RttiBuilder
     const smx_rtti_method& GetMethod(uint32_t method_index) const {
         return methods_->at(method_index);
     }
+    void UpdateGlobalName(uint32_t index, Atom* name);
 
   private:
     uint32_t add_enum(Type* type);
@@ -100,6 +102,7 @@ class RttiBuilder
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
     RefPtr<SmxRttiTable<smx_rtti_enumstruct>> enumstructs_;
     RefPtr<SmxRttiTable<smx_rtti_es_field>> es_fields_;
+    RefPtr<SmxRttiTable<smx_rtti_global>> globals_;
     RefPtr<SmxDebugInfoSection> dbg_info_;
     RefPtr<SmxRttiTable<smx_rtti_debug_line>> dbg_lines_;
     RefPtr<SmxDebugFileSection> dbg_files_;

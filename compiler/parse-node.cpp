@@ -39,7 +39,8 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
    autozero_(true),
    is_read_(false),
    is_written_(false),
-   already_bound_(false)
+   already_bound_(false),
+   is_emitted_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)

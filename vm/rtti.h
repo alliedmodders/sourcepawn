@@ -52,6 +52,15 @@ class FastRtti final {
         size_(size),
         offset_(offset)
     {}
+    explicit FastRtti(uint32_t type_id) {
+        bytes_[0] = (type_id >> 4) & 0xff;
+        bytes_[1] = (type_id >> 12) & 0xff;
+        bytes_[2] = (type_id >> 20) & 0xff;
+        bytes_[3] = (type_id >> 28) & 0xff;
+        data_ = bytes_;
+        size_ = 4;
+        offset_ = 0;
+    }
 
     bool ReadFunctionSignatureArgCount(uint32_t* out);
     bool ReadLocalSlotCount(uint16_t* out);
@@ -67,6 +76,7 @@ class FastRtti final {
     const uint8_t* data_;
     size_t size_;
     uint32_t offset_;
+    uint8_t bytes_[4];
 };
 
 // Do not use in performance critical code.

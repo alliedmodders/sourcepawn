@@ -26,6 +26,11 @@ class Heap64 {
 
     bool Initialize();
 
+    template <typename T>
+    T* AllocTyped() {
+        return reinterpret_cast<T*>(Allocate(sizeof(T)));
+    }
+
     uint8_t* Allocate(uint32_t requested_size) {
         size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
 
@@ -44,11 +49,17 @@ class Heap64 {
     }
 
     union Position {
+        Position() { pos = nullptr; }
+
         struct {
             uint32_t value1;
             uint32_t value2;
         } components;
         uint8_t* pos;
+
+        bool operator ==(const Position& other) const {
+            return pos == other.pos;
+        }
     };
 
 
@@ -64,6 +75,21 @@ class Heap64 {
         assert(hp.pos <= pos_);
         pos_ = hp.pos;
     }
+
+    uint32_t ToLocalAddr(void* p) {
+        assert((uint8_t*)p >= map_base_ && (uint8_t*)p <= high_watermark_);
+        return static_cast<uint32_t>((uint8_t*)p - map_base_);
+    }
+
+    template <typename T>
+    T ToPhysAddr(uint32_t addr) {
+        if (!addr)
+            return nullptr;
+        assert(addr <= uint32_t(high_watermark_ - map_base_));
+        return reinterpret_cast<T>(map_base_ + addr);
+    }
+
+    size_t committed() const { return high_watermark_ - map_base_; }
 
   private:
     uint8_t* SlowAllocate(uint32_t size);

@@ -46,8 +46,10 @@ bool Heap64::Initialize() {
     return false;
 #endif
 
-    pos_ = map_base_;
-    high_watermark_ = map_base_;
+    // Note: we skip one page, so that access of the 0th page crash.
+    assert(map_len_ >= page_size_);
+    pos_ = map_base_ + page_size_;
+    high_watermark_ = pos_;
     map_end_ = map_base_ + map_len_;
     return true;
 }

@@ -52,6 +52,8 @@ Heap32::Chunk* Heap32::NewChunk(size_t size) {
     chunk->size = size;
     chunk->end = chunk->base + chunk->size;
     chunk->pos = chunk->base;
+
+    committed_ += size;
     return chunk.release();
 }
 

@@ -15,9 +15,11 @@ class HeapTest : public testing::Test {
 TEST_F(HeapTest, Basic) {
     uint8_t* p1 = heap.Allocate(100);
     ASSERT_NE(p1, nullptr);
+    ASSERT_NE(heap.ToLocalAddr(p1), 0);
 
     uint8_t* p2 = heap.Allocate(200);
     ASSERT_NE(p2, nullptr);
+    ASSERT_NE(heap.ToLocalAddr(p2), 0);
 
     // Validate that the pointers do not overlap within the same chunk.
     ASSERT_GT(p2, p1);
@@ -27,6 +29,7 @@ TEST_F(HeapTest, Basic) {
 TEST_F(HeapTest, LargeAllocation) {
     uint8_t* p1 = heap.Allocate(kDefaultHeapChunkSize * 10);
     ASSERT_NE(p1, nullptr);
+    ASSERT_NE(heap.ToLocalAddr(p1), 0);
 }
 
 TEST_F(HeapTest, PositionRestore) {

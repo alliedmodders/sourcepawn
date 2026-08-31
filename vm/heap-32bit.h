@@ -48,6 +48,11 @@ class Heap32 {
         bool Owns(uint8_t* p) { return p >= base && p <= end; }
     };
 
+    template <typename T>
+    T* AllocTyped() {
+        return reinterpret_cast<T*>(Allocate(sizeof(T)));
+    }
+
     uint8_t* Allocate(uint32_t requested_size) {
         size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
         if (!current_->CanAllocate(aligned_size))
@@ -56,6 +61,11 @@ class Heap32 {
     }
 
     union Position {
+        Position() {
+            chunk_info.chunk = nullptr;
+            chunk_info.pos = nullptr;
+        }
+
         struct {
             uint32_t value1;
             uint32_t value2;
@@ -64,6 +74,11 @@ class Heap32 {
             void* chunk;
             uint8_t* pos;
         } chunk_info;
+
+        bool operator ==(const Position& other) const {
+            return chunk_info.chunk == other.chunk_info.chunk &&
+                   chunk_info.pos == other.chunk_info.pos;
+        }
     };
 
     Position GetPosition() {
@@ -81,6 +96,17 @@ class Heap32 {
         current_->pos = hp.chunk_info.pos;
     }
 
+    uint32_t ToLocalAddr(void* p) {
+        static_assert(sizeof(uint32_t) == sizeof(uintptr_t));
+        return reinterpret_cast<uint32_t>(p);
+    }
+    template <typename T>
+    T ToPhysAddr(uint32_t addr) {
+        return reinterpret_cast<T>(addr);
+    }
+
+    size_t committed() const { return committed_; }
+
   private:
     uint8_t* SlowAllocate(uint32_t size);
 
@@ -90,6 +116,7 @@ class Heap32 {
   private:
     Chunk* first_ = nullptr;
     Chunk* current_ = nullptr;
+    size_t committed_ = 0;
 };
 
 } // namespace sp

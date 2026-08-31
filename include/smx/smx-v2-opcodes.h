@@ -34,7 +34,7 @@ namespace v2 {
 
 #define OPCODE_LIST_V2(FOR_EACH) \
     FOR_EACH(NOP, 0, "nop", 1) \
-    FOR_EACH(LOAD_GLB, 1, "load.glb", 5) \
+    FOR_EACH(LOAD_GLB, 1, "load.glb", 3) \
     FOR_EACH(LOAD_S, 2, "load.s", 3) \
     /* Stack transition: A B -> B A B */ \
     FOR_EACH(DUP_ROTATE, 3, "dup.rotate", 1) \
@@ -42,7 +42,7 @@ namespace v2 {
     FOR_EACH(LOAD_I, 5, "load.i", 1) \
     FOR_EACH(LODB_I, 6, "lodb.i", 1) \
     FOR_EACH(POP, 7, "pop", 1) \
-    FOR_EACH(STOR_GLB, 8, "stor.glb", 5) \
+    FOR_EACH(STOR_GLB, 8, "stor.glb", 3) \
     FOR_EACH(STOR_S, 9, "stor.s", 3) \
     FOR_EACH(DUP, 10, "dup", 1) \
     FOR_EACH(STOR_S_C, 11, "stor.s.c", 7) \
@@ -142,14 +142,15 @@ namespace v2 {
     FOR_EACH(SWAP, 104, "swap", 1) \
     FOR_EACH(LOAD_FN, 105, "load.fn", 5) \
     FOR_EACH(LOAD_S_I64, 106, "load.s.i64", 3) \
-    FOR_EACH(STOR_GLB_I64, 107, "stor.glb.i64", 5) \
-    FOR_EACH(LOAD_GLB_I64, 108, "load.glb.i64", 5) \
+    FOR_EACH(STOR_GLB_I64, 107, "stor.glb.i64", 3) \
+    FOR_EACH(LOAD_GLB_I64, 108, "load.glb.i64", 3) \
     FOR_EACH(LOAD_I_I64, 109, "load.i.i64", 1) \
     FOR_EACH(STOR_I_I64, 110, "stor.i.i64", 1) \
     FOR_EACH(RETV, 111, "retv", 1) \
     FOR_EACH(PUSH_C_I8, 112, "push.c.i8", 2) \
     FOR_EACH(CALLN, 113, "calln", 6) \
     FOR_EACH(PUSH_C_I64, 114, "push.c.i64", 9) \
+    FOR_EACH(ADDR_GLB, 115, "addr.glb", 3) \
 
 
 enum OPCODE {

@@ -92,6 +92,7 @@ class SmxImage final : public FileReader
     bool IsVoidMethod(const smx_rtti_method* method) const;
 
     FastRtti GetTypeParser(uint32_t offset);
+    FastRtti GetTypeIdParser(uint32_t type_id);
 
   private:
     SmxImage();
@@ -205,6 +206,7 @@ class SmxImage final : public FileReader
     }
     const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
+    const smx_rtti_table_header* rtti_globals() const { return rtti_globals_; }
 
   protected:
     bool error(const char* msg);
@@ -228,6 +230,7 @@ class SmxImage final : public FileReader
     bool validateRttiNatives();
     bool validateRttiTypedefs();
     bool validateRttiTypesets();
+    bool validateRttiGlobals();
     bool validateDebugInfo();
     bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
     bool validateDebugMethods();
@@ -300,6 +303,7 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_methods_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
+    const smx_rtti_table_header* rtti_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_method_lines_ = nullptr;

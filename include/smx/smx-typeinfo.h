@@ -1,7 +1,7 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 // =============================================================================
 // SourcePawn
-// Copyright (C) 2004-2018 AlliedModders LLC.  All rights RESERVED.
+// Copyright (C) 2004-2026 AlliedModders LLC.  All rights RESERVED.
 // =============================================================================
 //
 // This program is free software; you can redistribute it and/or modify it under
@@ -108,6 +108,8 @@ struct smx_rtti_method {
     uint32_t flags;
 };
 
+// DEPRECATED. No longer generated for v2 binaries.
+//
 // The rtti.natives table has the following row structure. The rows must be
 // identical to the native table mapping.
 struct smx_rtti_native {
@@ -116,6 +118,22 @@ struct smx_rtti_native {
 
     // Method signature; see smx_rtti_method::signature.
     uint32_t signature;
+};
+
+static constexpr uint32_t kRttiGlobal_VisibilityMask = 0x3;
+static constexpr uint32_t kRttiGlobal_Private = 0x0;
+static constexpr uint32_t kRttiGlobal_Public = 0x1;
+
+// The rtti.globals table has the following row structure.
+struct smx_rtti_global {
+    // Index into the name table.
+    uint32_t name;
+
+    // Type signature.
+    uint32_t type_id;
+
+    // See kRttiGlobal constants.
+    uint32_t flags;
 };
 
 // The rtti.typesets table has the following row structure:

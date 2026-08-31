@@ -353,6 +353,9 @@ class VarDeclBase : public Decl
 
     bool is_used() const { return is_read_ || is_written_; }
 
+    bool is_emitted() const { return is_emitted_; }
+    void set_is_emitted() { is_emitted_ = true; }
+
   protected:
     typeinfo_t type_;
     BinaryExpr* init_ = nullptr;
@@ -365,6 +368,7 @@ class VarDeclBase : public Decl
     bool is_written_ : 1;
     bool implicit_dynamic_array_ : 1;
     bool already_bound_ : 1;
+    bool is_emitted_ : 1;
     Label addr_;
 };
 
