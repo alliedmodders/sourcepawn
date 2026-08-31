@@ -35,7 +35,6 @@
 #include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"
-#include "type-checker.h"
 
 namespace sp {
 namespace cc {
@@ -347,8 +346,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         return false;
     }
 
-    TypeChecker tc(field, arg->type(), QualType(actual), TypeChecker::Argument);
-    if (!tc.Coerce())
+    if (!PerformCoercion(field, arg->type(), QualType(actual), Semantics::Argument))
         return false;
     return true;
 }
@@ -828,8 +826,7 @@ bool BinaryExprChecker::Check() {
 
     if (is_null_compare) {
         if (left_val->type()->isArray() && right_val->type()->isArray()) {
-            TypeChecker tc(right_, left_val->type(), right_val->type(), TypeChecker::Assignment);
-            if (!tc.Check())
+            if (!sema_.PerformTypeCheck(right_, left_val->type(), right_val->type(), Semantics::Assignment))
                 return false;
         }
     }
@@ -949,8 +946,7 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     }
 
     if (left_val.type()->as<ArrayType>()) {
-        TypeChecker tc(expr_, left_val.type(), right_val.type(), TypeChecker::Assignment);
-        if (!tc.Coerce())
+        if (!sema_.PerformCoercion(expr_, left_val.type(), right_val.type(), Semantics::Assignment))
             return false;
 
         auto left_array = left_val.type()->to<ArrayType>();
@@ -1292,10 +1288,11 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     const auto& left = second->val();
     const auto& right = third->val();
 
-    TypeChecker tc(second, left.type(), right.type(), TypeChecker::Generic,
-                   TypeChecker::Ternary | TypeChecker::Commutative);
-    if (!tc.Check())
+    if (!PerformTypeCheck(second, left.type(), right.type(), Semantics::Generic,
+                          Semantics::Ternary | Semantics::Commutative))
+    {
         return false;
+    }
 
     second = expr->set_second(CoerceNull(second, right.type()));
     third = expr->set_third(CoerceNull(third, left.type()));
@@ -1376,8 +1373,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         // Warn: unsupported cast.
         report(expr, 237);
     } else if (from_type->isFunction() && to_type->isFunction()) {
-        TypeChecker tc(expr, to_type, out_val.type(), TypeChecker::Assignment);
-        tc.Coerce();
+        PerformCoercion(expr, to_type, out_val.type(), Semantics::Assignment);
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (to_type->isEnumStruct() || from_type->isEnumStruct()) {
@@ -1573,8 +1569,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
                 return false;
             }
 
-            TypeChecker tc(entry, formal_elt, val.type(), TypeChecker::Assignment);
-            if (!tc.Coerce())
+            if (!PerformCoercion(entry, formal_elt, val.type(), Semantics::Assignment))
                 return false;
         }
     }
@@ -2322,8 +2317,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         val = &param->val();
 
         auto type = val->type();
-        TypeChecker tc(param, arg->type(), QualType(type), TypeChecker::Argument);
-        if (!tc.Coerce())
+        if (!PerformCoercion(param, arg->type(), QualType(type), Semantics::Argument))
             return nullptr;
 
         if (auto array = param->as<ArrayExpr>()) {
@@ -2348,8 +2342,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             val = &param->val();
         }
 
-        TypeChecker tc(param, arg->type(), QualType(val->type()), TypeChecker::Argument);
-        if (!tc.Coerce())
+        if (!PerformCoercion(param, arg->type(), QualType(val->type()), Semantics::Argument))
             return nullptr;
     }
     if (param)
@@ -2615,8 +2608,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     const auto& v = expr->val();
 
     // Check that the return statement matches the declared return type.
-    TypeChecker tc(stmt, fun->return_type(), v.type(), TypeChecker::Return);
-    if (!tc.Coerce())
+    if (!PerformCoercion(stmt, fun->return_type(), v.type(), Semantics::Return))
         return false;
 
     expr = stmt->set_expr(CoerceNull(expr, fun->return_type()));
@@ -2898,8 +2890,7 @@ void Semantics::CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual) {
         if (formal != actual)
             report(expr, 213) << formal << actual;
     } else {
-        TypeChecker tc(expr, formal, actual, TypeChecker::Assignment);
-        tc.Coerce();
+        PerformCoercion(expr, formal, actual, Semantics::Assignment);
     }
 }
 

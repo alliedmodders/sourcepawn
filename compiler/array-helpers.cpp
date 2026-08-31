@@ -29,7 +29,6 @@
 #include "lexer-inl.h"
 #include "semantics.h"
 #include "symbols.h"
-#include "type-checker.h"
 
 namespace sp {
 namespace cc {
@@ -526,8 +525,7 @@ bool ArrayValidator::ValidateInitializer() {
             iter = iter->inner()->as<ArrayType>();
         } while (iter);
 
-        TypeChecker tc(ctor, at_, ctor->type(), TypeChecker::Assignment);
-        if (!tc.Check())
+        if (!sema_->PerformTypeCheck(ctor, at_, ctor->type(), Semantics::Assignment))
             return false;
 
         if (!sema_->CheckNewArrayExprForArrayInitializer(ctor))
@@ -546,8 +544,7 @@ bool ArrayValidator::ValidateInitializer() {
             return false;
         if (init_->lvalue())
             decl_->init()->set_right(new RvalueExpr(init_));
-        TypeChecker tc(init_, at_, init_->val().type(), TypeChecker::Assignment);
-        return tc.Coerce();
+        return sema_->PerformCoercion(init_, at_, init_->val().type(), Semantics::Assignment);
     }
 
     // Not a dynamic array, check for a fixed initializer.
@@ -565,8 +562,7 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
 
     assert(var->vclass() == sGLOBAL || var->vclass() == sSTATIC);
 
-    TypeChecker tc(expr, type_, var->type(), TypeChecker::Argument);
-    if (!tc.Check())
+    if (!sema_->PerformTypeCheck(expr, type_, var->type(), Semantics::Argument))
         return false;
 
     // Since default arguments are not analyzed by standard expression checkers
@@ -703,8 +699,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             if (!v.type()->isInt() && !v.type()->isInt64())
                 report(expr, 450) << v.type() << rank->inner();
         } else {
-            TypeChecker tc(expr, rank->inner(), v.type(), TypeChecker::Assignment);
-            tc.Coerce();
+            sema_->PerformCoercion(expr, rank->inner(), v.type(), Semantics::Assignment);
         }
 
         prev2 = prev1;
@@ -779,8 +774,7 @@ bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
                 continue;
             }
 
-            TypeChecker tc(expr, type.type, v.type(), TypeChecker::Assignment);
-            tc.Coerce();
+            sema_->PerformCoercion(expr, type.type, v.type(), Semantics::Assignment);
         }
     }
 

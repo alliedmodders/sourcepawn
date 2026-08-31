@@ -17,46 +17,56 @@
 //  2.  Altered source versions must be plainly marked as such, and must not be
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
-#include "type-checker.h"
+
+#include "semantics.h"
 
 #include <amtl/am-raii.h>
 #include "errors.h"
 #include "sctracker.h"
-#include "semantics.h"
 
 namespace sp {
 namespace cc {
 
-TypeChecker::TypeChecker(const token_pos_t& pos, QualType formal, QualType actual, Context why,
-                         int flags)
-  : pos_(pos),
-    formal_(formal),
-    actual_(actual),
-    why_(why),
-    flags_(flags),
-    defer_(CompileContext::get())
-{}
-
-bool TypeChecker::Coerce() {
-    flags_ = AllowCoerce;
-    return Check();
+bool Semantics::PerformTypeCheck(const token_pos_t& pos, QualType formal, QualType actual,
+                                 TypeContext why, int flags)
+{
+    TypeCheckerState state(pos, formal, actual, why, flags);
+    return CheckType(state);
 }
 
-bool TypeChecker::Check() {
-    auto report = ke::MakeScopeGuard([this]() -> void {
-        defer_.Report();
+bool Semantics::PerformTypeCheck(ParseNode* node, QualType formal, QualType actual,
+                                 TypeContext why, int flags)
+{
+    return PerformTypeCheck(node->pos(), formal, actual, why, flags);
+}
+
+bool Semantics::PerformCoercion(const token_pos_t& pos, QualType formal, QualType actual,
+                                TypeContext why, int flags)
+{
+    return PerformTypeCheck(pos, formal, actual, why, flags | AllowCoerce);
+}
+
+bool Semantics::PerformCoercion(ParseNode* node, QualType formal, QualType actual,
+                                TypeContext why, int flags)
+{
+    return PerformCoercion(node->pos(), formal, actual, why, flags);
+}
+
+bool Semantics::CheckType(TypeCheckerState& state) {
+    auto report = ke::MakeScopeGuard([&state]() -> void {
+        state.defer.Report();
     });
 
-    if (CheckImpl())
+    if (CheckTypeImpl(state))
         return true;
 
-    if (!(flags_ & Commutative))
+    if (!(state.flags & Commutative))
         return false;
 
     AutoDeferReports defer_again(CompileContext::get());
 
-    std::swap(formal_, actual_);
-    if (!CheckImpl())
+    std::swap(state.formal, state.actual);
+    if (!CheckTypeImpl(state))
         return false;
 
     report.cancel();
@@ -64,43 +74,43 @@ bool TypeChecker::Check() {
     return true;
 }
 
-bool TypeChecker::DiagnoseFailure() {
-    if (!defer_.HasErrors())
-        report(pos_, 450) << actual_ << formal_;
+bool Semantics::DiagnoseFailure(TypeCheckerState& state) {
+    if (!state.defer.HasErrors())
+        report(state.pos, 450) << state.actual << state.formal;
     return false;
 }
 
-bool TypeChecker::DiagnoseFunctionFailure() {
-    if (!defer_.HasErrors())
-        report(pos_, 100);
-    return DiagnoseFailure();
+bool Semantics::DiagnoseFunctionFailure(TypeCheckerState& state) {
+    if (!state.defer.HasErrors())
+        report(state.pos, 100);
+    return DiagnoseFailure(state);
 }
 
-bool TypeChecker::CheckImpl() {
-    if (auto formal_array = formal_->as<ArrayType>()) {
-        if (actual_->isNull()) {
+bool Semantics::CheckTypeImpl(TypeCheckerState& state) {
+    if (auto formal_array = state.formal->as<ArrayType>()) {
+        if (state.actual->isNull()) {
             if (!formal_array->is_fixed())
                 return true;
         }
-        return CheckArrays(formal_array, actual_->as<ArrayType>());
+        return CheckArrays(state, formal_array, state.actual->as<ArrayType>());
     }
 
-    Type* formal = *formal_;
-    Type* actual = *actual_;
-    if (flags_ & AllowCoerce) {
+    Type* formal = *state.formal;
+    Type* actual = *state.actual;
+    if (state.flags & AllowCoerce) {
         if (formal->isReference())
             formal = formal->inner();
         if (actual->isReference())
             actual = actual->inner();
     }
 
-    return CheckValueType(formal, actual);
+    return CheckValueType(state, formal, actual);
 }
 
-bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
+bool Semantics::CheckValueType(TypeCheckerState& state, Type* formal, Type* actual) {
     if (formal->isEnumStruct()) {
         if (formal != actual)
-            return DiagnoseFailure();
+            return DiagnoseFailure(state);
         return true;
     }
 
@@ -109,7 +119,7 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
 
     if (formal->isObject()) {
         // No object types yet.
-        return DiagnoseFailure();
+        return DiagnoseFailure(state);
     }
 
     if (actual->isNull()) {
@@ -122,16 +132,16 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
         if (formal->isFunction())
             return true;
 
-        report(pos_, 148) << formal_;
-        return DiagnoseFailure();
+        report(state.pos, 148) << state.formal;
+        return DiagnoseFailure(state);
     }
 
     if ((formal->isInt64() || actual->isInt64()) && (formal != actual)) {
-        report(pos_, 450) << actual << formal;
-        return DiagnoseFailure();
+        report(state.pos, 450) << actual << formal;
+        return DiagnoseFailure(state);
     }
 
-    if (flags_ & AllowCoerce) {
+    if (state.flags & AllowCoerce) {
         if ((formal->isInt() || formal->isAny()) && actual->coercesFromInt())
             return true;
         if (formal->isBool() && (actual->isInt() || actual->isChar()))
@@ -144,21 +154,21 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
     // even though it violates standard contravariance rules.
     if (formal->isAny()) {
         if (actual->isVoid())
-            return DiagnoseFailure();
+            return DiagnoseFailure(state);
         return true;
     }
 
     if (formal->isFunction())
-        return CheckFunction();
+        return CheckFunction(state);
 
-    if (flags_ & (AllowCoerce | FuncArg)) {
+    if (state.flags & (AllowCoerce | FuncArg)) {
         // See if the type has a methodmap associated with it. If so, see if the given
         // type is anywhere on the inheritance chain.
         if (HasTagOnInheritanceChain(actual, formal))
             return true;
     }
 
-    if (flags_ & FuncArg) {
+    if (state.flags & FuncArg) {
         // As a special exception to the "any" rule above, we allow the inverse
         // to succeed for signature matching. This is a convenience and allows
         // something like:
@@ -175,31 +185,33 @@ bool TypeChecker::CheckValueType(Type* formal, Type* actual) {
     }
 
     if ((formal->isEnum() || formal->isMethodmap()) && actual->isInt()) {
-        if (flags_ & EnumAssign)
+        if (state.flags & EnumAssign)
             return true;
 
-        report(pos_, 253) << actual << formal;
+        report(state.pos, 253) << actual << formal;
         return true;
     }
 
-    if (flags_ & AllowCoerce) {
+    if (state.flags & AllowCoerce) {
         if (formal->isChar() && actual->isInt())
             return true;
 
         // Get rid of this long-term.
         if (formal->isFloat() && actual->isInt()) {
-            report(pos_, 253) << actual_ << formal_;
+            report(state.pos, 253) << state.actual << state.formal;
             return true;
         }
     }
 
-    return DiagnoseFailure();
+    return DiagnoseFailure(state);
 }
 
-bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
-    if (why_ != Argument && why_ != Return && !formal->is_fixed() && actual->is_flat()) {
-        if (!defer_.HasErrors())
-            report(pos_, 473) << actual_ << formal_;
+bool Semantics::CheckArrays(TypeCheckerState& state, ArrayType* formal, ArrayType* actual) {
+    if (state.why != Argument && state.why != Return &&
+        !formal->is_fixed() && actual->is_flat())
+    {
+        if (!state.defer.HasErrors())
+            report(state.pos, 473) << state.actual << state.formal;
         return false;
     }
 
@@ -208,26 +220,28 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
     if (!actual) {
         // Arguments allow implicit array slices and coercion from enum structs
         // to any[].
-        if (why_ != Argument || !(flags_ & AllowCoerce))
-            return DiagnoseFailure();
+        if (state.why != Argument || !(state.flags & AllowCoerce))
+            return DiagnoseFailure(state);
         if (formal->inner()->isArray())
-            return DiagnoseFailure();
-        if (actual_->asEnumStruct()) {
+            return DiagnoseFailure(state);
+        if (state.actual->asEnumStruct()) {
             if (!formal->inner()->isAny())
-                return DiagnoseFailure();
+                return DiagnoseFailure(state);
             return true;
         }
-        return DiagnoseFailure();
+        return DiagnoseFailure(state);
     }
 
     for (;;) {
         if (formal->size()) {
-            if ((flags_ & (AllowCoerce | Ternary)) && actual->isCharArray()) {
-                if (!(flags_ & Ternary) && formal->size() < actual->size())
-                    return DiagnoseFailure();
+            if ((state.flags & (AllowCoerce | Ternary)) &&
+                actual->isCharArray())
+            {
+                if (!(state.flags & Ternary) && formal->size() < actual->size())
+                    return DiagnoseFailure(state);
             } else {
                 if (formal->size() != actual->size())
-                    return DiagnoseFailure();
+                    return DiagnoseFailure(state);
             }
         }
         auto next_formal = formal->inner()->as<ArrayType>();
@@ -235,7 +249,7 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
             break;
         auto next_actual = actual->inner()->as<ArrayType>();
         if (!next_actual)
-            return DiagnoseFailure();
+            return DiagnoseFailure(state);
         formal = next_formal;
         actual = next_actual;
     }
@@ -245,16 +259,16 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
     if (formal_elt == actual_elt)
         return true;
 
-    if ((flags_ & FuncArg) &&
+    if ((state.flags & FuncArg) &&
         ((formal_elt->isAny() && actual_elt->hasCellSize()) ||
          (actual_elt->isAny() && formal_elt->hasCellSize())))
     {
         return true;
     }
 
-    if (why_ == Argument && (flags_ & AllowCoerce)) {
+    if (state.why == Argument && (state.flags & AllowCoerce)) {
         if ((actual_elt->isEnum() || actual_elt->isMethodmap()) && formal_elt->isInt()) {
-            report(pos_, 253) << actual_ << formal_;
+            report(state.pos, 253) << state.actual << state.formal;
             return true;
         }
         if (formal_elt->isAny() && actual_elt->hasCellSize())
@@ -263,71 +277,67 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
             return true;
     }
 
-    return DiagnoseFailure();
+    return DiagnoseFailure(state);
 }
 
-bool TypeChecker::CheckFunction() {
-    if (formal_->isCanonicalFunction() && actual_->isFunction())
+bool Semantics::CheckFunction(TypeCheckerState& state) {
+    if (state.formal->isCanonicalFunction() && state.actual->isFunction())
         return true;
 
-    if (actual_->isNull())
+    if (state.actual->isNull())
         return true;
 
-    if (!actual_->isFunction())
-        return DiagnoseFailure();
+    if (!state.actual->isFunction())
+        return DiagnoseFailure(state);
 
-    auto actual_fe = actual_->asFunction();
+    auto actual_fe = state.actual->asFunction();
     if (!actual_fe || actual_fe->entries.empty())
-        return DiagnoseFailure();
+        return DiagnoseFailure(state);
 
     FunctionType* actualfn = actual_fe->entries.back();
     if (!actualfn)
-        return DiagnoseFailure();
+        return DiagnoseFailure(state);
 
-    funcenum_t* e = formal_->toFunction();
+    funcenum_t* e = state.formal->toFunction();
     if (!e)
-        return DiagnoseFailure();
+        return DiagnoseFailure(state);
 
     for (const auto& formalfn : e->entries) {
         AutoDeferReports defer(CompileContext::get());
-        if (CheckFunctionSignature(formalfn, actualfn))
+        if (CheckFunctionSignature(state, formalfn, actualfn))
             return true;
     }
-    return DiagnoseFunctionFailure();
+    return DiagnoseFunctionFailure(state);
 }
 
-bool TypeChecker::CheckFunctionSignature(FunctionType* formal, FunctionType* actual) {
+bool Semantics::CheckFunctionSignature(TypeCheckerState& state, FunctionType* formal, FunctionType* actual) {
     if (formal->return_type() != actual->return_type()) {
         if (formal->return_type()->isVoid() && actual->return_type()->isInt())
             return true;
-        return DiagnoseFunctionFailure();
+        return DiagnoseFunctionFailure(state);
     }
 
     if (formal->variadic() != actual->variadic())
-        return DiagnoseFunctionFailure();
+        return DiagnoseFunctionFailure(state);
 
     // Make sure there are no trailing arguments.
     if (actual->nargs() > formal->nargs())
-        return DiagnoseFunctionFailure();
+        return DiagnoseFunctionFailure(state);
 
     // Check arguments.
     for (size_t i = 0; i < formal->nargs(); i++) {
         if (i >= actual->nargs())
-            return DiagnoseFunctionFailure();
+            return DiagnoseFunctionFailure(state);
 
         auto formal_type = formal->arg_type(i);
         auto actual_type = actual->arg_type(i);
-        TypeChecker tc(pos_, formal_type, actual_type, TypeChecker::Generic,
-                       TypeChecker::FuncArg);
-        if (!tc.Check())
-            return DiagnoseFunctionFailure();
+        if (!PerformTypeCheck(state.pos, formal_type, actual_type, Generic,
+                              FuncArg))
+        {
+            return DiagnoseFunctionFailure(state);
+        }
     }
     return true;
-}
-
-bool TypeChecker::DoCoerce(Type* formal, Expr* actual) {
-    TypeChecker tc(actual, formal, actual->val().type(), Generic);
-    return tc.Coerce();
 }
 
 } // namespace cc

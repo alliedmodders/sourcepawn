@@ -92,7 +92,7 @@ class QualType {
   public:
     QualType() : impl_(nullptr)
     {}
-    explicit QualType(Type* type) {
+    QualType(Type* type) {
         impl_ = type;
     }
     explicit QualType(Type* type, bool is_const) {
