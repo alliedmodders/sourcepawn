@@ -1986,6 +1986,7 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
 
     if (is_void) {
         EmitCall(method, return_td, fn_reg, VReg(), std::span<VReg>(argv), spread_reg);
+        FreeReg(fn_reg);
         for (VReg reg : args_to_free)
             FreeReg(reg);
         return;
@@ -2088,6 +2089,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             EmitCall(method, node->type, node->call.fn_reg, call_dest, node->call.argv,
                      node->call.spread_reg);
 
+            FreeReg(node->call.fn_reg);
             for (VReg reg : node->call.args_to_free)
                 FreeReg(reg);
 
