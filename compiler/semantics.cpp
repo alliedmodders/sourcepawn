@@ -1356,8 +1356,10 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         from_type = iter->inner();
     }
 
-    if (from_type->isObject() || to_type->isObject()) {
-        matchtag(to_type, out_val.type(), MATCHTAG_COERCE);
+    if (from_type->isObject()) {
+        report(expr, 477) << from_type;
+    } else if (to_type->isObject()) {
+        report(expr, 477) << to_type;
     } else if (from_type->isFunction() != to_type->isFunction()) {
         // Warn: unsupported cast.
         report(expr, 237);

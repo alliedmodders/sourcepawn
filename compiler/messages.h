@@ -361,4 +361,5 @@ static const char* errmsg_ex[] = {
     /*474*/ "cannot use ... operator to forward arguments to non-variadic functions\n",
     /*475*/ "no variadic arguments available to forward\n",
     /*476*/ "variadic arguments cannot precede other arguments\n",
+    /*477*/ "type '%s' cannot be used withview_as\n",
 };
