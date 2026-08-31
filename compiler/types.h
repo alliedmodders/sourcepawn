@@ -270,6 +270,7 @@ class Type : public PoolObject
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
+    bool isHeapItem() const { return isArray(); }
     bool isTypedef() const { return kind_ == TypeKind::Typedef; }
     bool isCharArray() const;
     bool isFlatArray() const;

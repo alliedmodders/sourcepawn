@@ -11,6 +11,8 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 
+#pragma once
+
 #include <stddef.h>
 
 #include <functional>
@@ -36,7 +38,7 @@ class BitSet
      max_bits_(std::move(other.max_bits_))
   {}
 
-  bool test(uintptr_t bit) {
+  bool test(uintptr_t bit) const {
     size_t word = word_for_bit(bit);
     if (word >= words_.size())
       return false;
@@ -58,6 +60,13 @@ class BitSet
       words_[word] &= ~(uintptr_t(1) << pos_in_word(bit));
   }
 
+  void shrink_to_fit() {
+    while (!words_.empty() && words_.back() == 0) {
+      words_.pop_back();
+    }
+    words_.shrink_to_fit();
+  }
+
   std::optional<uintptr_t> take_any() {
     while (!words_.empty()) {
       if (words_.back() != 0) {
@@ -71,7 +80,7 @@ class BitSet
     return {};
   }
 
-  void for_each(const std::function<void(uintptr_t)>& callback) {
+  void for_each(const std::function<void(uintptr_t)>& callback) const {
     for (size_t i = 0; i < words_.size(); i++) {
       uintptr_t word = words_[i];
 

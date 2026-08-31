@@ -162,7 +162,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_ELEM_I32:
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
-        case OP_STOR_ELEM_U8: {
+        case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_A: {
             const TypeDesc* val;
             if (!popStack(&val))
                 return false;
@@ -173,11 +174,14 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return false;
             if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if ((op == OP_STOR_ELEM_A) != base->array_elt()->IsHeapItem())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return ValidateStore(base->array_elt(), val);
         }
 
         case OP_STOR_I_I32:
-        case OP_STOR_I_F32: {
+        case OP_STOR_I_F32:
+        case OP_STOR_I_A: {
             const TypeDesc* val;
             if (!popStack(&val))
                 return false;
@@ -185,6 +189,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&addr))
                 return false;
             if (!addr->IsReference())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if ((op == OP_STOR_I_A) != addr->ref_type()->IsHeapItem())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return ValidateStore(addr->ref_type(), val);
         }
@@ -351,6 +357,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_ADDR_S:
         {
             cell_t offset = readInt16();
+            markArgSlotWritten(offset);
             const TypeDesc* td = verifyStackOffset(offset);
             if (!td)
                 return false;
@@ -371,6 +378,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_S:
         {
             cell_t offset = readInt16();
+            markArgSlotWritten(offset);
             auto local = verifyStackOffset(offset);
             if (!local)
                 return false;
@@ -382,6 +390,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_STOR_S_C: {
             cell_t offset = readInt16();
+            markArgSlotWritten(offset);
             readCell();
             auto local = verifyStackOffset(offset);
             if (!local)
@@ -635,16 +644,6 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return false;
             return pushStack(rt_->GetStringLitType(offset));
         }
-
-        case OP_ARRAY_TO_NATIVE: {
-            const TypeDesc* td;
-            if (!popStack(&td))
-                return false;
-            if (!verifyArrayType(td))
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return pushStack(td);
-        }
-
         case OP_LOAD_FLD: {
             uint32_t ref_index = read<uint32_t>();
             auto ref = smx_->getFieldRef(ref_index);

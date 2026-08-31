@@ -186,6 +186,8 @@ static const char* sErrorMsgTable[] = {
     "Custom error",
     "Fatal error",
     "Invalid array size",
+    "Null object reference",
+    "Malformed type information",
 };
 
 const char*

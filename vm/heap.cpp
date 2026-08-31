@@ -24,11 +24,7 @@ Heap::Heap(VirtMem& virt_mem) : virt_mem_(virt_mem) {
 }
 
 Heap::~Heap() {
-    while (first_) {
-        Chunk* next = first_->next;
-        delete first_;
-        first_ = next;
-    }
+
     if (mi_heap_)
         mi_heap_destroy(mi_heap_);
 }
@@ -38,62 +34,25 @@ bool Heap::Initialize() {
     return mi_heap_ != nullptr;
 }
 
-Heap::Chunk::~Chunk() {
-    if (base)
-        mi_free(base);
-}
-
-Heap::Chunk* Heap::NewChunk(size_t size) {
-    auto chunk = std::make_unique<Chunk>();
-    
-    // Allocate the large chunk using mimalloc
-    chunk->base = (uint8_t*)mi_heap_malloc(mi_heap_, size);
-    if (!chunk->base) {
-        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
-        return nullptr;
+static bool mi_cdecl VisitBlocksForEmpty(const mi_heap_t*, const mi_heap_area_t* area, void* block, size_t block_size, void* arg) {
+    if (block) {
+        *reinterpret_cast<bool*>(arg) = false;
+#ifndef NDEBUG
+        fprintf(stderr, "LEAKED BLOCK: %p, size %zu\n", block, block_size);
+#endif
     }
-    chunk->size = size;
-    chunk->end = chunk->base + size;
-    chunk->pos = chunk->base;
-
-    return chunk.release();
+    return true;
 }
 
-uint8_t* Heap::SlowAllocate(uint32_t size) {
-    if (!current_) {
-        size_t sized_up = std::max((size_t)size, (size_t)kDefaultHeapChunkSize);
-        first_ = NewChunk(sized_up);
-        if (!first_)
-            return nullptr;
-        current_ = first_;
-        return current_->Allocate(size);
-    }
-
-    if (current_->next && current_->next->size >= size) {
-        current_ = current_->next;
-        current_->pos = current_->base;
-        return current_->Allocate(size);
-    }
-
-    size_t sized_up = std::max((size_t)size, (size_t)kDefaultHeapChunkSize);
-
-    Chunk* new_chunk = NewChunk(sized_up);
-    if (!new_chunk)
-        return nullptr;
-
-    if (current_->next)
-        new_chunk->next = current_->next;
-    current_->next = new_chunk;
-    current_ = new_chunk;
-    return current_->Allocate(size);
+bool Heap::IsEmpty() const {
+    if (!mi_heap_)
+        return true;
+    bool is_empty = true;
+    mi_heap_visit_blocks(mi_heap_, false, VisitBlocksForEmpty, &is_empty);
+    return is_empty;
 }
 
-uint8_t* Heap::Allocate(uint32_t requested_size) {
-    size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
-    if (!current_ || !current_->CanAllocate(aligned_size))
-        return SlowAllocate(aligned_size);
-    return current_->Allocate(aligned_size);
-}
+
 
 void* Heap::AllocRaw(size_t bytes) {
     void* p = mi_heap_malloc(mi_heap_, bytes);

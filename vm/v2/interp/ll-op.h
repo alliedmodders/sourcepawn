@@ -183,7 +183,16 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_CONST_I64, 121, "load.const.i64", {LL_FMT_I64, LL_FMT_REG}) \
     FOR_EACH(MOVE_I64, 122, "move.i64", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_GLB_X64, 123, "load.glb.x64", {LL_FMT_GLB_ID, LL_FMT_REG}) \
-    FOR_EACH(STOR_GLB_X64, 124, "stor.glb.x64", {LL_FMT_GLB_ID, LL_FMT_REG})
+    FOR_EACH(STOR_GLB_X64, 124, "stor.glb.x64", {LL_FMT_GLB_ID, LL_FMT_REG}) \
+    FOR_EACH(RELEASE, 125, "release", {LL_FMT_REG}) \
+    FOR_EACH(ADDREF, 126, "addref", {LL_FMT_REG}) \
+    FOR_EACH(STOR_I_A, 127, "stor.i.a", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_ELEM_A, 128, "stor.elem.a", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_GLB_A, 129, "load.glb.a", {LL_FMT_GLB_ID, LL_FMT_REG}) \
+    FOR_EACH(LOAD_FLD_A, 130, "load.fld.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_GLB_A, 131, "stor.glb.a", {LL_FMT_GLB_ID, LL_FMT_REG}) \
+    FOR_EACH(STOR_FLD_A, 132, "stor.fld.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(COPYARRAY_FLAT_A, 133, "copyarray.flat.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

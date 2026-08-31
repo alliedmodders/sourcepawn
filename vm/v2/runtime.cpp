@@ -53,8 +53,8 @@ Runtime::~Runtime() {
     for (size_t i = 0; i < global_vars_.size(); i++) {
         if (!global_vars_[i].td->IsHeapItem())
             continue;
-        auto obj = heap_.ToPhysAddr<HeapItem*>(global_vars_[i].addr);
-        if (obj)
+        cell_t* slot = heap_.ToPhysAddr<cell_t*>(global_vars_[i].addr);
+        if (auto obj = heap_.ToPhysAddr<HeapItem*>(*slot))
             obj->Release();
     }
     for (size_t i = 0; i < string_addrs_.size(); i++) {
@@ -70,6 +70,8 @@ Runtime::~Runtime() {
     std::lock_guard<ke::Mutex> lock(env_->lock());
 
     env_->DeregisterRuntime(this);
+
+    assert(heap_.IsEmpty());
 }
 
 bool Runtime::Initialize() {
@@ -705,12 +707,14 @@ cell_t* Runtime::GetLocalParams() {
     return nullptr;
 }
 
-
-
-
 bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
                                 const cell_t* init) {
-    assert(false);
+    assert(!heap_scopes_.empty());
+    if (heap_scopes_.empty()) {
+        ReportError("HeapAlloc2dArray called outside of a heap scope");
+        return false;
+    }
+
     if (length > INT_MAX || stride > INT_MAX) {
         ReportErrorNumber(SP_ERROR_ARRAY_TOO_BIG);
         return false;
@@ -723,13 +727,16 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
     if (!array)
         return false;
 
-    *local_addr = heap_.ToLocalAddr(array.release());
+    heap_scopes_.back().push_back(array);
+    *local_addr = heap_.ToLocalAddr(array.get());
 
     cell_t* array_phys = heap_.ToPhysAddr<cell_t*>(array->data);
     for (unsigned int i = 0; i < length; i++) {
         Handle<SpArray> elt = NewArray(elt_td, stride);
         if (!elt)
             return false;
+
+        heap_scopes_.back().push_back(elt);
 
         if (init) {
             cell_t* elt_phys = heap_.ToPhysAddr<cell_t*>(elt->data);
@@ -742,9 +749,12 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
 }
 
 void Runtime::EnterHeapScope() {
+    heap_scopes_.emplace_back();
 }
 
 void Runtime::LeaveHeapScope() {
+    assert(!heap_scopes_.empty());
+    heap_scopes_.pop_back();
 }
 
 cell_t Runtime::GetNullFunctionValue() {
@@ -1001,6 +1011,17 @@ Handle<SpArray> Runtime::NewArray(const TypeDesc* td, uint32_t size) {
 
         auto data_ptr = heap_.ToPhysAddr<void*>(base->data);
         memset(data_ptr, 0, data_size);
+
+        auto array_elt = td->array_elt();
+        if (array_elt->kind() == TypeKind::FixedArray) {
+            uint32_t* slots = reinterpret_cast<uint32_t*>(data_ptr);
+            for (uint32_t i = 0; i < size; i++) {
+                auto p = NewArray(array_elt, array_elt->array_size());
+                if (!p)
+                    return nullptr;
+                slots[i] = heap_.ToLocalAddr(p.release());
+            }
+        }
     } else {
         base->data = 0;
     }

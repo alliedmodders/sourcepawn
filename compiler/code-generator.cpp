@@ -425,7 +425,7 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
 
             // Otherwise, the allocation is now on the stack.
             if (!inner->is_flat())
-                __ emit(OP_STOR_I_I32);
+                __ emit(OP_STOR_I_A);
         }
 
         // No longer need the parent address.
@@ -1544,9 +1544,6 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
-
-        if (val.type()->isArray() && !val.type()->isFlatArray() && call->fun()->is_native() && !is_elided_slice)
-            __ emit(OP_ARRAY_TO_NATIVE);
     }
 
     std::optional<uint32_t> hidden_slot;
@@ -1856,9 +1853,11 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 __ emit(OP_STOR_ELEM_I64);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_ELEM_F32);
+            else if (lval.type()->isHeapItem())
+                __ emit(OP_STOR_ELEM_A);
             else
                 __ emit(OP_STOR_ELEM_I32);
-            assert(!lval.type()->isComposite());
+            assert(!lval.type()->isEnumStruct());
             break;
         case iADDRESS:
             if (lval.type()->isChar())
@@ -1867,9 +1866,11 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 __ emit(OP_STOR_I_I64);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_I_F32);
+            else if (lval.type()->isHeapItem())
+                __ emit(OP_STOR_I_A);
             else
                 __ emit(OP_STOR_I_I32);
-            assert(!lval.type()->isComposite());
+            assert(!lval.type()->isEnumStruct());
             break;
         case iFIELD: {
             auto field = lval.field();
@@ -1898,6 +1899,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 __ emit(OP_SWAP);
                 if (lval.type()->inner()->isInt64())
                     __ emit(OP_STOR_I_I64);
+                else if (lval.type()->inner()->isHeapItem())
+                    __ emit(OP_STOR_I_A);
                 else
                     __ emit(OP_STOR_I_I32);
                 break;

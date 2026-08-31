@@ -26,6 +26,7 @@
 
 #include <amtl/am-vector.h>
 #include "binary-reader.h"
+#include "type-desc.h"
 #include "v2/control-flow.h"
 #include "v2/interp/llcode.h"
 #include "v2/interp/ll-op.h"
@@ -111,6 +112,7 @@ struct ExprNode {
         struct {
             const smx_rtti_method* method;
             std::span<VReg> argv;
+            std::span<VReg> args_to_free;
         } call;
     };
 };
@@ -161,6 +163,12 @@ class MethodLowerer
         masm_.emit<uint16_t>(val.index);
     }
 
+    template <typename... Args>
+    void emit(LLOp op, Args... args) {
+        emitOp(op);
+        (emitVal(args), ...);
+    }
+
     ExprNode* popStack() {
         return ke::PopBack(&stack_);
     }
@@ -170,7 +178,7 @@ class MethodLowerer
     }
 
     VReg AllocateTemp(const TypeDesc* type);
-    VReg AllocateTempCells(uint16_t cells);
+    VReg AllocateTempCells(uint16_t cells, bool is_gcobj = false);
     void FreeReg(VReg reg);
 
     ExprNode* CreateLocalNode(const TypeDesc* type, VReg reg) {
@@ -215,14 +223,11 @@ class MethodLowerer
         return pool_.make<ExprNode>(ExprNode::kReg, type, reg, owns_reg);
     }
 
-    ExprNode* CreateCallNode(const TypeDesc* type, const smx_rtti_method* method, std::vector<VReg> argv) {
-        auto node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kCall;
-        node->type = type;
+    ExprNode* CreateCallNode(const TypeDesc* type, const smx_rtti_method* method, std::span<VReg>&& argv, std::span<VReg>&& args_to_free) {
+        ExprNode* node = pool_.make<ExprNode>(ExprNode::kCall, type, VReg(), false);
         node->call.method = method;
-        node->call.argv = pool_.make_n<VReg>(argv.size());
-        for (size_t i = 0; i < argv.size(); i++)
-            node->call.argv[i] = std::move(argv[i]);
+        node->call.argv = std::move(argv);
+        node->call.args_to_free = std::move(args_to_free);
         return node;
     }
 
@@ -270,6 +275,7 @@ class MethodLowerer
     PoolAllocator pool_;
     std::unordered_map<int32_t, VReg> offset_to_vreg_;
     BitSet temp_regs_used_;
+    BitSet gcobj_regs_;
 };
 
 std::unique_ptr<InterpCode> MethodLowerer::Lower() {
@@ -306,16 +312,22 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
     auto bytes = std::make_unique<uint8_t[]>(masm_.code_size());
     memcpy(bytes.get(), masm_.bytes(), masm_.code_size());
     return std::make_unique<InterpCode>(std::move(bytes), masm_.code_size(), num_temp_regs_,
-                                        std::move(mappings_));
+                                        std::move(mappings_), std::move(gcobj_regs_));
 }
 
 void MethodLowerer::InitializeRegisters() {
     uint32_t current_reg = 0;
 
     const auto& arg_types = method_->arg_types();
+    const BitSet& mutated_args = method_->mutated_args();
+    std::vector<int32_t> shadow_args;
+
     for (size_t i = 0; i < arg_types.size(); i++) {
         int32_t offset = -(int32_t)(i + 1);
         offset_to_vreg_[offset] = VReg(current_reg, 1, false);
+
+        if (mutated_args.test(i) && arg_types[i]->IsHeapItem())
+            shadow_args.push_back(offset);
 
         // Arguments are always passed in a single cell, for backward
         // compatibility with OP_SYSREQ_N natives.
@@ -325,8 +337,26 @@ void MethodLowerer::InitializeRegisters() {
     const auto& local_types = method_->local_types();
     for (size_t i = 0; i < local_types.size(); i++) {
         uint16_t cells = GetCellCount(local_types[i]);
+        if (local_types[i]->IsHeapItem())
+            gcobj_regs_.set(current_reg);
         offset_to_vreg_[i] = VReg(current_reg, cells, false);
         current_reg += cells;
+    }
+
+    // If a HeapItem argument is mutated, we cannot reuse its register because the
+    // frame cleanup would Release() the caller's borrowed reference. Instead, we
+    // allocate a shadow register and take ownership of a new reference.
+    for (int32_t offset : shadow_args) {
+        VReg orig_reg = offset_to_vreg_[offset];
+
+        VReg shadow_reg(current_reg, 1, false);
+        gcobj_regs_.set(current_reg);
+        current_reg += 1;
+
+        emit(LL_MOVE, orig_reg, shadow_reg);
+        emit(LL_ADDREF, shadow_reg);
+
+        offset_to_vreg_[offset] = shadow_reg;
     }
 
     base_temp_reg_ = current_reg;
@@ -378,7 +408,7 @@ void MethodLowerer::LowerBlock(Block* next_block) {
 void MethodLowerer::LowerInstruction(OPCODE op) {
     switch (op) {
         case OP_NOP:
-            emitOp(LL_NOP);
+            emit(LL_NOP);
             break;
 
         case OP_LOAD_I_I32:
@@ -438,13 +468,15 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_I_I32:
         case OP_STOR_I_F32:
         case OP_STOR_I_I64:
-        case OP_STOR_I_U8: {
+        case OP_STOR_I_U8:
+        case OP_STOR_I_A: {
             LLOp llop = LL_NOP;
             switch (op) {
                 case OP_STOR_I_I32: llop = LL_STOR_I_I32; break;
                 case OP_STOR_I_F32: llop = LL_STOR_I_F32; break;
                 case OP_STOR_I_I64: llop = LL_STOR_I_I64; break;
                 case OP_STOR_I_U8:  llop = LL_STOR_I_U8; break;
+                case OP_STOR_I_A:   llop = LL_STOR_I_A; break;
                 default: assert(false); break;
             }
             ExprNode* val = popStack();
@@ -455,9 +487,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg val_reg = EmitNode(val);
             VReg addr_reg = EmitNode(addr);
 
-            emitOp(llop);
-            emitVal(addr_reg);
-            emitVal(val_reg);
+            emit(llop, addr_reg, val_reg);
 
             FreeReg(val_reg);
             FreeReg(addr_reg);
@@ -467,7 +497,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_ELEM_I32:
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
-        case OP_STOR_ELEM_U8: {
+        case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_A: {
             ExprNode* val = popStack();
             ExprNode* index = popStack();
             ExprNode* base_node = popStack();
@@ -488,12 +519,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
                     default: assert(false); break;
                 }
-                emitOp(llop);
-                emitVal<uint32_t>(base->array_size());
-                emitVal<uint16_t>(base->array_elt()->element_size());
-                emitVal(base_reg);
-                emitVal(index_reg);
-                emitVal(val_reg);
+                emit(llop, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, val_reg);
             } else {
                 LLOp llop = LL_NOP;
                 switch (op) {
@@ -501,12 +527,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_F32; break;
                     case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_I64; break;
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
+                    case OP_STOR_ELEM_A:   llop = LL_STOR_ELEM_A; break;
                     default: assert(false); break;
                 }
-                emitOp(llop);
-                emitVal(base_reg);
-                emitVal(index_reg);
-                emitVal(val_reg);
+                emit(llop, base_reg, index_reg, val_reg);
             }
 
             FreeReg(val_reg);
@@ -556,8 +580,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             FlushEmitStack();
 
             VReg val_reg = EmitNode(val);
-            emitOp(LL_RETN);
-            emitVal(val_reg);
+            if (val->type->IsHeapItem())
+                emit(LL_ADDREF, val_reg);
+            emit(LL_RETN, val_reg);
 
             FreeReg(val_reg);
             break;
@@ -565,7 +590,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
         case OP_RETV: {
             FlushEmitStack();
-            emitOp(LL_RETV);
+            emit(LL_RETV);
             break;
         }
 
@@ -636,10 +661,6 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             LowerUnary(LL_CVT_F32, float32_type_);
             break;
 
-        case OP_ARRAY_TO_NATIVE:
-            LowerUnary(LL_ARRAY_TO_NATIVE, cell_type_);
-            break;
-
         case OP_COPYARRAY: {
             ExprNode* src_node = popStack();
             ExprNode* dest_node = popStack();
@@ -656,27 +677,23 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 VReg flat_dest_reg = dest_reg;
 
                 if (!src->IsFlatArray()) {
-                    flat_src_reg = AllocateTemp(src);
-                    emitOp(LL_ARRAY_TO_FLAT);
-                    emitVal(src_reg);
-                    emitVal(flat_src_reg);
+                    flat_src_reg = AllocateTemp(cell_type_);
+                    emit(LL_ARRAY_TO_FLAT, src_reg, flat_src_reg);
                 } else if (!dest->IsFlatArray()) {
-                    flat_dest_reg = AllocateTemp(dest);
-                    emitOp(LL_ARRAY_TO_FLAT);
-                    emitVal(dest_reg);
-                    emitVal(flat_dest_reg);
+                    flat_dest_reg = AllocateTemp(cell_type_);
+                    emit(LL_ARRAY_TO_FLAT, dest_reg, flat_dest_reg);
                 }
 
                 uint32_t elements = dest->array_size();
                 if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray) {
                     elements = src->array_size();
                 }
-                uint32_t bytes = elements * dest->array_elt()->element_size();
-
-                emitOp(LL_COPYARRAY_FLAT);
-                emitVal<uint32_t>(bytes);
-                emitVal(flat_src_reg);
-                emitVal(flat_dest_reg);
+                if (dest->array_elt()->IsHeapItem()) {
+                    emit(LL_COPYARRAY_FLAT_A, elements, flat_src_reg, flat_dest_reg);
+                } else {
+                    uint32_t bytes = elements * dest->array_elt()->element_size();
+                    emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
+                }
 
                 if (!src->IsFlatArray()) {
                     FreeReg(flat_src_reg);
@@ -685,9 +702,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     FreeReg(flat_dest_reg);
                 }
             } else {
-                emitOp(LL_COPYARRAY);
-                emitVal(src_reg);
-                emitVal(dest_reg);
+                emit(LL_COPYARRAY, src_reg, dest_reg);
             }
             FreeReg(src_reg);
             FreeReg(dest_reg);
@@ -698,16 +713,20 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_SLICE_AS: {
             const TypeDesc* result_type;
             ExprNode* index_node;
+            ExprNode* base_node;
+
             if (op == OP_SLICE_AS) {
                 uint32_t type_id = reader_.read<uint32_t>();
                 result_type = rt_->LoadTypeFromId(type_id);
                 index_node = CreateConstNode(cell_type_, 0);
+                base_node = popStack();
             } else {
-                result_type = graph_->rt()->GetPrimitiveType(TypeKind::Any);
                 index_node = popStack();
+                base_node = popStack();
+                assert(base_node->type->IsArrayish());
+                result_type = graph_->rt()->GetSliceType(base_node->type->array_elt());
             }
 
-            ExprNode* base_node = popStack();
             const TypeDesc* base = base_node->type;
             FlushEmitStack();
             VReg index_reg = EmitNode(index_node);
@@ -716,14 +735,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg dest = AllocateTemp(result_type);
 
             if (base->IsFlatArray()) {
-                emitOp(LL_SLICE_FLAT);
-                emitVal<const TypeDesc*>(base);
+                emit(LL_SLICE_FLAT, base, base_reg, index_reg, dest);
             } else {
-                emitOp(LL_SLICE);
+                emit(LL_SLICE, base_reg, index_reg, dest);
             }
-            emitVal(base_reg);
-            emitVal(index_reg);
-            emitVal(dest);
 
             FreeReg(index_reg);
             FreeReg(base_reg);
@@ -742,30 +757,34 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_EQ:
-        case OP_NEQ:
-        case OP_SLESS:
-        case OP_SLEQ:
-        case OP_SGRTR:
-        case OP_SGEQ: {
-            switch (op) {
-                case OP_EQ:    LowerBinary(LL_EQ_I32,    LL_EQ_F32,   LL_EQ_I64,    cell_type_); break;
-                case OP_NEQ:   LowerBinary(LL_NEQ_I32,   LL_NEQ_F32,  LL_NEQ_I64,   cell_type_); break;
-                case OP_SLESS: LowerBinary(LL_SLESS_I32, LL_LESS_F32, LL_SLESS_I64, cell_type_); break;
-                case OP_SLEQ:  LowerBinary(LL_SLEQ_I32,  LL_LEQ_F32,  LL_SLEQ_I64,  cell_type_); break;
-                case OP_SGRTR: LowerBinary(LL_SGRTR_I32, LL_GRTR_F32, LL_SGRTR_I64, cell_type_); break;
-                case OP_SGEQ:  LowerBinary(LL_SGEQ_I32,  LL_GEQ_F32,  LL_SGEQ_I64,  cell_type_); break;
-                default: assert(false); break;
-            }
+            LowerBinary(LL_EQ_I32, LL_EQ_F32, LL_EQ_I64, cell_type_);
             break;
-        }
+        case OP_NEQ:
+            LowerBinary(LL_NEQ_I32, LL_NEQ_F32, LL_NEQ_I64, cell_type_);
+            break;
+        case OP_SLESS:
+            LowerBinary(LL_SLESS_I32, LL_LESS_F32, LL_SLESS_I64, cell_type_);
+            break;
+        case OP_SLEQ:
+            LowerBinary(LL_SLEQ_I32, LL_LEQ_F32, LL_SLEQ_I64, cell_type_);
+            break;
+        case OP_SGRTR:
+            LowerBinary(LL_SGRTR_I32, LL_GRTR_F32, LL_SGRTR_I64, cell_type_);
+            break;
+        case OP_SGEQ:
+            LowerBinary(LL_SGEQ_I32, LL_GEQ_F32, LL_SGEQ_I64, cell_type_);
+            break;
 
         case OP_LOAD_GLB: {
             uint16_t index = reader_.read<uint16_t>();
             const TypeDesc* type = graph_->rt()->GetTypeOfGlobal(index);
             VReg dest = AllocateTemp(type);
-            emitOp(type->IsInt64() ? LL_LOAD_GLB_X64 : LL_LOAD_GLB_X32);
-            emitVal<uint16_t>(index);
-            emitVal(dest);
+            LLOp llop = LL_LOAD_GLB_X32;
+            if (type->IsHeapItem())
+                llop = LL_LOAD_GLB_A;
+            else if (type->IsInt64())
+                llop = LL_LOAD_GLB_X64;
+            emit(llop, index, dest);
             pushStack(CreateTempNode(type, dest));
             break;
         }
@@ -775,9 +794,14 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             ExprNode* val = popStack();
             FlushEmitStack();
             VReg val_reg = EmitNode(val);
-            emitOp(val->type->IsInt64() ? LL_STOR_GLB_X64 : LL_STOR_GLB_X32);
-            emitVal<uint16_t>(index);
-            emitVal(val_reg);
+
+            LLOp llop = LL_STOR_GLB_X32;
+            if (val->type->IsHeapItem())
+                llop = LL_STOR_GLB_A;
+            else if (val->type->IsInt64())
+                llop = LL_STOR_GLB_X64;
+
+            emit(llop, index, val_reg);
             FreeReg(val_reg);
             break;
         }
@@ -787,9 +811,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             const TypeDesc* td = graph_->rt()->GetTypeOfGlobal(index);
             const TypeDesc* ptr_type = td->IsCompositeValue() ? td : graph_->rt()->GetReferenceType(td);
             VReg dest = AllocateTemp(ptr_type);
-            emitOp(LL_ADDR_GLB);
-            emitVal<uint16_t>(index);
-            emitVal(dest);
+            emit(LL_ADDR_GLB, index, dest);
             pushStack(CreateTempNode(ptr_type, dest));
             break;
         }
@@ -798,9 +820,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             uint16_t index = reader_.read<uint16_t>();
             const TypeDesc* type = graph_->rt()->GetStringLitType(index);
             VReg dest = AllocateTemp(type);
-            emitOp(LL_LOAD_STR);
-            emitVal<uint16_t>(index);
-            emitVal(dest);
+            emit(LL_LOAD_STR, index, dest);
             pushStack(CreateTempNode(type, dest));
             break;
         }
@@ -827,9 +847,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             const TypeDesc* td = method_->GetTypeOfLocal(offset);
             const TypeDesc* ptr_type = td->IsCompositeValue() ? td : graph_->rt()->GetReferenceType(td);
             VReg dest = AllocateTemp(ptr_type);
-            emitOp(LL_ADDR_S);
-            emitVal(OffsetToVReg(offset));
-            emitVal(dest);
+            emit(LL_ADDR_S, OffsetToVReg(offset), dest);
             pushStack(CreateTempNode(ptr_type, dest));
             break;
         }
@@ -839,9 +857,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             cell_t value = reader_.read<cell_t>();
             FlushEmitStack();
             VReg dest = OffsetToVReg(offset);
-            emitOp(LL_LOAD_CONST);
-            emitVal<cell_t>(value);
-            emitVal(dest);
+            emit(LL_LOAD_CONST, value, dest);
             break;
         }
 
@@ -857,15 +873,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg dest = AllocateTemp(result_type);
 
             if (base->IsFlatArray()) {
-                emitOp(LL_IDXADDR_FLAT);
-                emitVal<uint32_t>(base->array_size());
-                emitVal<uint16_t>(base->array_elt()->element_size());
+                emit(LL_IDXADDR_FLAT, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, dest);
             } else {
-                emitOp(LL_IDXADDR);
+                emit(LL_IDXADDR, base_reg, index_reg, dest);
             }
-            emitVal(base_reg);
-            emitVal(index_reg);
-            emitVal(dest);
 
             FreeReg(index_reg);
             FreeReg(base_reg);
@@ -900,9 +911,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_LOAD_FN: {
             uint32_t fn_id = reader_.read<uint32_t>();
             VReg dest = AllocateTemp(cell_type_);
-            emitOp(LL_LOAD_FN);
-            emitVal<uint32_t>(fn_id);
-            emitVal(dest);
+            emit(LL_LOAD_FN, fn_id, dest);
             pushStack(CreateTempNode(cell_type_, dest));
             break;
         }
@@ -924,11 +933,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg dest = AllocateTemp(field_td);
 
-            LLOp llop = field_td->IsInt64() ? LL_LOAD_FLD_X64 : LL_LOAD_FLD_X32;
-            emitOp(llop);
-            emitVal<uint32_t>(offset);
-            emitVal(base_reg);
-            emitVal(dest);
+            LLOp llop = LL_LOAD_FLD_X32;
+            if (field_td->IsHeapItem())
+                llop = LL_LOAD_FLD_A;
+            else if (field_td->IsInt64())
+                llop = LL_LOAD_FLD_X64;
+            emit(llop, offset, base_reg, dest);
 
             FreeReg(base_reg);
             pushStack(CreateTempNode(field_td, dest));
@@ -953,10 +963,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg dest = AllocateTemp(pushed_td);
 
-            emitOp(LL_ADDR_FLD);
-            emitVal<uint32_t>(offset);
-            emitVal(base_reg);
-            emitVal(dest);
+            emit(LL_ADDR_FLD, offset, base_reg, dest);
 
             FreeReg(base_reg);
             pushStack(CreateTempNode(pushed_td, dest));
@@ -976,15 +983,19 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             ExprNode* val_node = popStack();
             ExprNode* base_node = popStack();
+
             FlushEmitStack();
+
             VReg val_reg = EmitNode(val_node);
             VReg base_reg = EmitNode(base_node);
 
-            LLOp llop = field_td->IsInt64() ? LL_STOR_FLD_X64 : LL_STOR_FLD_X32;
-            emitOp(llop);
-            emitVal<uint32_t>(offset);
-            emitVal(base_reg);
-            emitVal(val_reg);
+            LLOp llop = LL_STOR_FLD_X32;
+            if (field_td->IsHeapItem())
+                llop = LL_STOR_FLD_A;
+            else if (field_td->IsInt64())
+                llop = LL_STOR_FLD_X64;
+
+            emit(llop, offset, base_reg, val_reg);
 
             FreeReg(val_reg);
             FreeReg(base_reg);
@@ -1020,14 +1031,13 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             ExprNode* src_node = popStack();
             ExprNode* dest_node = popStack();
+
             FlushEmitStack();
+
             VReg src_reg = EmitNode(src_node);
             VReg dest_reg = EmitNode(dest_node);
 
-            emitOp(LL_COPYOBJ);
-            emitVal<uint32_t>(td->slot_size());
-            emitVal(src_reg);
-            emitVal(dest_reg);
+            emit(LL_COPYOBJ, (uint32_t)td->slot_size(), src_reg, dest_reg);
 
             FreeReg(src_reg);
             FreeReg(dest_reg);
@@ -1040,18 +1050,16 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             uint32_t cell_size = td->slot_size() / sizeof(cell_t);
 
             ExprNode* base_node = popStack();
+
             FlushEmitStack();
-            VReg base_reg = EmitNode(base_node);
 
             const TypeDesc* any_type = graph_->rt()->GetPrimitiveType(TypeKind::Any);
             const TypeDesc* slice_type = graph_->rt()->GetSliceType(any_type);
 
+            VReg base_reg = EmitNode(base_node);
             VReg dest = AllocateTemp(slice_type);
 
-            emitOp(LL_SLICE_ES);
-            emitVal<uint32_t>(cell_size);
-            emitVal(base_reg);
-            emitVal(dest);
+            emit(LL_SLICE_ES, cell_size, base_reg, dest);
 
             FreeReg(base_reg);
             pushStack(CreateTempNode(slice_type, dest));
@@ -1085,16 +1093,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             }
 
             VReg dest = AllocateTemp(td);
-            if (td->kind() == TypeKind::Array) {
-                emitOp(LL_NEWARRAY);
-                emitVal<const TypeDesc*>(td);
-                emitVal(size_reg);
-                emitVal(dest);
-            } else {
-                emitOp(LL_NEWFIXEDARRAY);
-                emitVal<const TypeDesc*>(td);
-                emitVal(dest);
-            }
+            if (td->kind() == TypeKind::Array)
+                emit(LL_NEWARRAY, td, size_reg, dest);
+            else
+                emit(LL_NEWFIXEDARRAY, td, dest);
 
             if (size_node)
                 FreeReg(size_reg);
@@ -1117,11 +1119,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             }
 
             VReg dest = AllocateTemp(td);
-            emitOp(LL_NEWBULKARRAY);
-            emitVal<uint8_t>(ndims);
-            emitVal<const TypeDesc*>(td);
-            emitVal(base_dim_reg);
-            emitVal(dest);
+            emit(LL_NEWBULKARRAY, ndims, td, base_dim_reg, dest);
 
             FreeReg(base_dim_reg);
 
@@ -1137,16 +1135,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg base_reg = EmitNode(base_node);
 
-            if (base_node->type->IsFlatArray()) {
-                emitOp(LL_FILLARRAY_FLAT);
-                emitVal<uint32_t>(data_offs);
-                emitVal<const TypeDesc*>(base_node->type);
-                emitVal(base_reg);
-            } else {
-                emitOp(LL_FILLARRAY);
-                emitVal<uint32_t>(data_offs);
-                emitVal(base_reg);
-            }
+            if (base_node->type->IsFlatArray())
+                emit(LL_FILLARRAY_FLAT, data_offs, base_node->type, base_reg);
+            else
+                emit(LL_FILLARRAY, data_offs, base_reg);
             FreeReg(base_reg);
             break;
         }
@@ -1160,7 +1152,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             Block* target = block_->successors()[0];
             ReconcileStack(target);
             if (target != next_block_) {
-                emitOp(LL_JUMP);
+                emit(LL_JUMP);
                 EmitJumpTarget(target);
             }
             break;
@@ -1176,8 +1168,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             reader_.read<cell_t>();
 
             VReg val_reg = EmitNode(val);
-            emitOp(op == OP_JZER ? LL_JZER : LL_JNZ);
-            emitVal(val_reg);
+            emit(op == OP_JZER ? LL_JZER : LL_JNZ, val_reg);
 
             Block* target_block = block_->successors()[1];
             EmitJumpTarget(target_block);
@@ -1185,7 +1176,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             Block* fallthrough_block = block_->successors()[0];
             ReconcileStack(fallthrough_block);
             if (fallthrough_block != next_block_) {
-                emitOp(LL_JUMP);
+                emit(LL_JUMP);
                 EmitJumpTarget(fallthrough_block);
             }
 
@@ -1220,15 +1211,13 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg left_reg = EmitNode(left);
             VReg right_reg = EmitNode(right);
 
-            emitOp(llop);
-            emitVal(left_reg);
-            emitVal(right_reg);
+            emit(llop, left_reg, right_reg);
             EmitJumpTarget(block_->successors()[1]);
 
             Block* fallthrough_block = block_->successors()[0];
             ReconcileStack(fallthrough_block);
             if (fallthrough_block != next_block_) {
-                emitOp(LL_JUMP);
+                emit(LL_JUMP);
                 EmitJumpTarget(fallthrough_block);
             }
 
@@ -1244,8 +1233,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg val_reg = EmitNode(val);
 
-            emitOp(LL_SWITCH);
-            emitVal(val_reg);
+            emit(LL_SWITCH, val_reg);
 
             cell_t ncases = reader_.read<cell_t>();
             // Skip default value.
@@ -1298,12 +1286,21 @@ void MethodLowerer::EmitMove(VReg src, VReg dest, const TypeDesc* type) {
     assert(src.cells == dest.cells);
     assert(src.cells == 1 || src.cells == 2);
 
-    if (type->kind() == TypeKind::Int64)
-        emitOp(LL_MOVE_I64);
-    else
-        emitOp(LL_MOVE);
-    emitVal(src);
-    emitVal(dest);
+    if (src == dest)
+        return;
+
+    if (type->IsHeapItem()) {
+        if (gcobj_regs_.test(dest.index)) {
+            emit(LL_RELEASE, dest);
+            emit(LL_ADDREF, src);
+        }
+        emit(LL_MOVE, src, dest);
+    } else {
+        if (type->kind() == TypeKind::Int64)
+            emit(LL_MOVE_I64, src, dest);
+        else
+            emit(LL_MOVE, src, dest);
+    }
 }
 
 void MethodLowerer::ReconcileStack(Block* target) {
@@ -1452,10 +1449,20 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         FlushEmit(stack_[i]);
 
     std::vector<VReg> argv(arg_count);
+    std::vector<VReg> args_to_free;
 
     for (uint32_t i = 0; i < arg_count; i++) {
         ExprNode* node = popStack();
-        argv[i] = EmitNode(node);
+        VReg arg_reg = EmitNode(node);
+
+        if (node->type->IsNonFlatArray() && (method->flags & kRttiMethod_Native)) {
+            VReg dest = AllocateTempCells(GetCellCount(cell_type_), false);
+            emit(LL_ARRAY_TO_NATIVE, arg_reg, dest);
+            args_to_free.push_back(arg_reg);
+            argv[i] = dest;
+        } else {
+            argv[i] = arg_reg;
+        }
     }
 
     bool is_void = graph_->rt()->image()->IsVoidMethod(method);
@@ -1463,6 +1470,8 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
 
     if (is_void) {
         EmitCall(method, VReg(), std::span<VReg>(argv));
+        for (VReg reg : args_to_free)
+            FreeReg(reg);
         return;
     }
 
@@ -1480,19 +1489,36 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         assert(return_td != nullptr);
     }
 
-    if (return_td)
-        pushStack(CreateCallNode(return_td, method, std::move(argv)));
+    if (return_td) {
+        std::span<VReg> call_argv;
+        std::span<VReg> call_args_to_free;
+
+        if (argv.size() > 0) {
+            std::span<VReg> arr = pool_.make_n<VReg>(argv.size());
+            for (size_t i = 0; i < argv.size(); i++)
+                arr[i] = argv[i];
+            call_argv = arr;
+        }
+
+        if (args_to_free.size() > 0) {
+            std::span<VReg> arr = pool_.make_n<VReg>(args_to_free.size());
+            for (size_t i = 0; i < args_to_free.size(); i++)
+                arr[i] = args_to_free[i];
+            call_args_to_free = arr;
+        }
+
+        pushStack(CreateCallNode(return_td, method, std::move(call_argv), std::move(call_args_to_free)));
+    }
 }
 
 void MethodLowerer::EmitCall(const smx_rtti_method* method, VReg dest_reg,
                              const std::span<VReg>& argv)
 {
-    emitOp(LL_CALL);
-    emitVal(method);
-    emitVal<uint8_t>(argv.size());
-    emitVal<uint16_t>(dest_reg.index); // May be invalid, if no destination.
+    emit(LL_CALL, method, (uint8_t)argv.size(), (uint16_t)dest_reg.index);
     for (uint32_t i = 0; i < argv.size(); i++) {
         emitVal(argv[i]);
+    }
+    for (uint32_t i = 0; i < argv.size(); i++) {
         FreeReg(argv[i]);
     }
 }
@@ -1501,32 +1527,39 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
     switch (node->kind) {
         case ExprNode::kReg:
             if (target_reg.valid() && target_reg != node->reg) {
-                if (node->type->kind() == TypeKind::Int64)
-                    emitOp(LL_MOVE_I64);
-                else
-                    emitOp(LL_MOVE);
-                emitVal(node->reg);
-                emitVal(target_reg);
+                EmitMove(node->reg, target_reg, node->type);
                 return target_reg;
             }
             return node->reg;
 
         case ExprNode::kCall: {
+            if (target_reg.valid() && node->type->IsHeapItem()) {
+                // We cannot emit an LL_RELEASE(target_reg) before EmitCall because
+                // doing so would destroy the old array before returning the new one,
+                // causing a crash if they share the same physical array instance
+                // (e.g. self-assignment like x = get_array(x)).
+                VReg temp = AllocateTemp(node->type);
+                EmitCall(node->call.method, temp, node->call.argv);
+                for (VReg reg : node->call.args_to_free)
+                    FreeReg(reg);
+                emit(LL_RELEASE, target_reg);
+                EmitMove(temp, target_reg, node->type);
+                FreeReg(temp);
+                return target_reg;
+            }
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
             EmitCall(node->call.method, dest, node->call.argv);
+            for (VReg reg : node->call.args_to_free)
+                FreeReg(reg);
             return dest;
         }
 
         case ExprNode::kConstant: {
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            if (node->type->kind() != TypeKind::Int64) {
-                emitOp(LL_LOAD_CONST);
-                emitVal<cell_t>(node->constval.value);
-            } else {
-                emitOp(LL_LOAD_CONST_I64);
-                emitVal<int64_t>(node->constval.value64);
-            }
-            emitVal(dest);
+            if (node->type->kind() != TypeKind::Int64)
+                emit(LL_LOAD_CONST, node->constval.value, dest);
+            else
+                emit(LL_LOAD_CONST_I64, node->constval.value64, dest);
             return dest;
         }
 
@@ -1557,28 +1590,20 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             VReg index_reg = EmitNode(node->load_elem.index);
             VReg base_reg = EmitNode(node->load_elem.base);
 
+            if (target_reg.valid() && node->type->IsHeapItem())
+                emit(LL_RELEASE, target_reg);
+
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
             const TypeDesc* base = node->load_elem.base->type;
             LLOp op = node->load_elem.opcode;
 
             if (base->IsFlatArray()) {
                 VReg addr_dest = AllocateTemp(cell_type_);
-                emitOp(LL_IDXADDR_FLAT);
-                emitVal<uint32_t>(base->array_size());
-                emitVal<uint16_t>(base->array_elt()->element_size());
-                emitVal(base_reg);
-                emitVal(index_reg);
-                emitVal(addr_dest);
-
-                emitOp(op);
-                emitVal(addr_dest);
-                emitVal(dest);
+                emit(LL_IDXADDR_FLAT, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, addr_dest);
+                emit(op, addr_dest, dest);
                 FreeReg(addr_dest);
             } else {
-                emitOp(op);
-                emitVal(base_reg);
-                emitVal(index_reg);
-                emitVal(dest);
+                emit(op, base_reg, index_reg, dest);
             }
 
             FreeReg(index_reg);
@@ -1594,16 +1619,19 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
 
 
 VReg MethodLowerer::AllocateTemp(const TypeDesc* type) {
-    return AllocateTempCells(GetCellCount(type));
+    return AllocateTempCells(GetCellCount(type), type->IsHeapItem());
 }
 
-VReg MethodLowerer::AllocateTempCells(uint16_t cells) {
+VReg MethodLowerer::AllocateTempCells(uint16_t cells, bool is_gcobj) {
     uint32_t search_start = base_temp_reg_;
     if (num_temp_regs_ >= search_start + cells) {
         for (uint32_t i = search_start; i <= num_temp_regs_ - cells; i++) {
+            if (gcobj_regs_.test(i) != is_gcobj)
+                continue;
+
             bool fits = true;
             for (uint32_t j = 0; j < cells; j++) {
-                if (temp_regs_used_.test(i + j)) {
+                if (temp_regs_used_.test(i + j) || gcobj_regs_.test(i + j) != is_gcobj) {
                     fits = false;
                     break;
                 }
@@ -1617,8 +1645,11 @@ VReg MethodLowerer::AllocateTempCells(uint16_t cells) {
     }
 
     uint32_t reg = num_temp_regs_;
-    for (uint32_t j = 0; j < cells; j++)
+    for (uint32_t j = 0; j < cells; j++) {
         temp_regs_used_.set(reg + j);
+        if (is_gcobj)
+            gcobj_regs_.set(reg + j);
+    }
 
     num_temp_regs_ += cells;
     return VReg(reg, cells, true);
@@ -1627,6 +1658,9 @@ VReg MethodLowerer::AllocateTempCells(uint16_t cells) {
 void MethodLowerer::FreeReg(VReg reg) {
     if (!reg.valid() || !reg.owned)
         return;
+
+    if (gcobj_regs_.test(reg.index))
+        emit(LL_RELEASE, reg);
 
     assert(reg.index >= base_temp_reg_);
     for (uint32_t i = 0; i < reg.cells; i++) {

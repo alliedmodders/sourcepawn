@@ -19,6 +19,7 @@
 #include <amtl/am-fixedarray.h>
 #include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
+#include <utils/bitset.h>
 #include "control-flow.h"
 #include "type-desc.h"
 
@@ -42,6 +43,7 @@ class MethodVerifier final
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     ke::FixedArray<const TypeDesc*>&& local_types() { return std::move(local_types_); }
     ke::FixedArray<const TypeDesc*>&& arg_types() { return std::move(arg_types_); }
+    BitSet&& mutated_args() { return std::move(mutated_args_); }
 
     const TypeDesc* cell_type() const;
     const TypeDesc* any_type() const;
@@ -51,6 +53,11 @@ class MethodVerifier final
   private:
     bool more() const {
         return cip_ < stop_at_;
+    }
+
+    void markArgSlotWritten(cell_t offset) {
+        if (offset < 0)
+            mutated_args_.set(-offset - 1);
     }
 
   private:
@@ -134,6 +141,7 @@ class MethodVerifier final
     const smx_rtti_method* method_ = nullptr;
     ke::FixedArray<const TypeDesc*> local_types_;
     ke::FixedArray<const TypeDesc*> arg_types_;
+    BitSet mutated_args_;
     std::vector<Block*> verify_joins_;
     const TypeDesc* return_type_ = nullptr;
     uint32_t arg_count_ = 0;

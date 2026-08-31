@@ -142,6 +142,10 @@ const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classde
         auto field_td = rt->LoadTypeFromId(field->type_id);
         if (!field_td)
             return nullptr;
+        if (field_td->IsHeapItem()) {
+            rt->ReportErrorNumber(SP_ERROR_RTTI);
+            return nullptr;
+        }
         assert(!field_td->IsArrayish() || field_td->IsFlatArray());
         current_offset += field_td->field_size();
         current_offset = ke::Align(current_offset, sizeof(cell_t));

@@ -19,6 +19,7 @@
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <sp_vm_types.h>
+#include <utils/bitset.h>
 #include "base-method-info.h"
 #include "control-flow.h"
 
@@ -60,6 +61,9 @@ class MethodInfo final : public BaseMethodInfo
     const ke::FixedArray<const TypeDesc*>& arg_types() const { return arg_types_; }
     ke::FixedArray<int32_t>& local_offsets() { return local_offsets_; }
 
+    void SetMutatedArgs(BitSet&& mutated_args) { mutated_args_ = std::move(mutated_args); }
+    const BitSet& mutated_args() const { return mutated_args_; }
+
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
         return code_kind_ == CodeKind::Jit ? code_.jit : nullptr;
@@ -96,6 +100,7 @@ class MethodInfo final : public BaseMethodInfo
     ke::FixedArray<const TypeDesc*> local_types_;
     ke::FixedArray<const TypeDesc*> arg_types_;
     ke::FixedArray<int32_t> local_offsets_;
+    BitSet mutated_args_;
 };
 
 } // namespace sp

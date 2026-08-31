@@ -215,10 +215,19 @@ class TypeDesc final {
     typedef void (*Finalizer)(HeapItem* item);
     Finalizer finalizer() const { return finalizer_; }
 
+#ifndef NDEBUG
+  public:
+    static constexpr uint32_t kMagic = 0x54595045;
+    uint32_t magic() const { return magic_; }
+#endif
+
   private:
     void set_finalizer(Finalizer finalizer) { finalizer_ = finalizer; }
 
   private:
+#ifndef NDEBUG
+    uint32_t magic_ = kMagic;
+#endif
     TypeKind kind_;
     bool can_global_cache_ = false;
     Finalizer finalizer_ = nullptr;

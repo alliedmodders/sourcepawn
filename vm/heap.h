@@ -57,36 +57,14 @@ class Heap {
 
     bool Initialize();
 
-    struct Chunk {
-        ~Chunk();
 
-        uint8_t* base = nullptr;
-        uint8_t* end = nullptr;
-        size_t size = 0;
-        uint8_t* pos = nullptr;
-        Chunk* next = nullptr;
-
-        bool CanAllocate(size_t bytes) { return static_cast<size_t>(end - pos) >= bytes; }
-
-        uint8_t* Allocate(size_t size) {
-            assert(CanAllocate(size));
-
-            uint8_t* p = pos;
-            pos += size;
-            return p;
-        }
-    };
-
-    template <typename T>
-    T* AllocTyped() {
-        return reinterpret_cast<T*>(Allocate(sizeof(T)));
-    }
 
     uint32_t ToLocalAddr(void* p) { return virt_mem_.ToLocalAddr(p); }
     template <typename T>
     T ToPhysAddr(uint32_t addr) { return virt_mem_.ToPhysAddr<T>(addr); }
 
     void* AllocRaw(size_t bytes);
+    bool IsEmpty() const;
     void FreeRaw(void* ptr);
 
     template <typename T, typename... Args>
@@ -110,16 +88,11 @@ class Heap {
     }
 
   private:
-    uint8_t* Allocate(uint32_t requested_size);
-    uint8_t* SlowAllocate(uint32_t size);
 
-    Chunk* NewChunk(size_t size);
 
   private:
     VirtMem& virt_mem_;
     mi_heap_t* mi_heap_ = nullptr;
-    Chunk* first_ = nullptr;
-    Chunk* current_ = nullptr;
 };
 
 template <typename T>

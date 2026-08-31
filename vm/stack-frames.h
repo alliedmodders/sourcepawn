@@ -34,7 +34,8 @@ using namespace SourcePawn;
 
 class BaseMethodInfo;
 class BaseRuntime;
-class MethodInfo;
+namespace legacy { class MethodInfo; }
+namespace v2 { class MethodInfo; }
 struct FrameLayout;
 
 namespace v1 {
@@ -123,10 +124,16 @@ class InterpInvokeFrame final : public InvokeFrame
     }
 
     BaseMethodInfo* method() const { return method_; }
+    legacy::MethodInfo* legacy_method() const { return legacy_method_; }
+    v2::MethodInfo* v2_method() const { return v2_method_; }
     void setCip(const uint8_t* const* cip) { cip_ = cip; }
 
   private:
-    BaseMethodInfo* method_;
+    union {
+        BaseMethodInfo* method_;
+        legacy::MethodInfo* legacy_method_;
+        v2::MethodInfo* v2_method_;
+    };
     const uint8_t* const* cip_;
     int native_index_;
 };

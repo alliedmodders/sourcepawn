@@ -140,12 +140,11 @@ namespace v2 {
      *   everything else: int32_t
      */ \
     FOR_EACH(FILLARRAY, 66, "fillarray", 5) \
-    FOR_EACH(ARRAY_TO_NATIVE, 67, "array2native", 1) \
     /* Given a flat or non-flat array, and an index, create a view into this
      * array at the given index. The returned array is always of a non-fixed
      * size.
      */ \
-    FOR_EACH(SLICE, 68, "slice", 1) \
+    FOR_EACH(SLICE, 67, "slice", 1) \
     /* Pops a value from the stack, which must be an address to an object-
      * like structure. Loads a value from the specified field, which is
      * encoded as an index into the smx_rtti_field_refs table. The value
@@ -154,32 +153,34 @@ namespace v2 {
      *
      * The object type in the field ref must match the type of the object.
      */ \
-    FOR_EACH(LOAD_FLD, 69, "load.fld", 5) \
-    FOR_EACH(ADDR_FLD, 70, "addr.fld", 5) \
-    FOR_EACH(LOAD_ELEM_I32, 71, "load.elem.i32", 1) \
-    FOR_EACH(LOAD_ELEM_F32, 72, "load.elem.f32", 1) \
-    FOR_EACH(LOAD_ELEM_I64, 73, "load.elem.i64", 1) \
-    FOR_EACH(LOAD_ELEM_U8, 74, "load.elem.i8", 1) \
-    FOR_EACH(STOR_ELEM_I32, 75, "stor.elem.i32", 1) \
-    FOR_EACH(STOR_ELEM_F32, 76, "stor.elem.f32", 1) \
-    FOR_EACH(STOR_ELEM_I64, 77, "stor.elem.i64", 1) \
-    FOR_EACH(STOR_ELEM_U8, 78, "stor.elem.i8", 1) \
-    FOR_EACH(LOAD_I_F32, 79, "load.i.f32", 1) \
-    FOR_EACH(STOR_I_F32, 80, "stor.i.f32", 1) \
-    FOR_EACH(LOAD_ELEM_A, 81, "load.elem.a", 1) \
-    FOR_EACH(PUSH_C_F32, 82, "push.c.f32", 5) \
-    FOR_EACH(STOR_FLD, 83, "stor.fld", 5) \
-    FOR_EACH(LOAD_FLD_OFFSET, 84, "load.fld.offset", 5) \
-    FOR_EACH(LOAD_ES_SIZE, 85, "load.es.size", 5) \
-    FOR_EACH(COPYOBJ, 86, "copyobj", 5) \
+    FOR_EACH(LOAD_FLD, 68, "load.fld", 5) \
+    FOR_EACH(ADDR_FLD, 69, "addr.fld", 5) \
+    FOR_EACH(LOAD_ELEM_I32, 70, "load.elem.i32", 1) \
+    FOR_EACH(LOAD_ELEM_F32, 71, "load.elem.f32", 1) \
+    FOR_EACH(LOAD_ELEM_I64, 72, "load.elem.i64", 1) \
+    FOR_EACH(LOAD_ELEM_U8, 73, "load.elem.i8", 1) \
+    FOR_EACH(STOR_ELEM_I32, 74, "stor.elem.i32", 1) \
+    FOR_EACH(STOR_ELEM_F32, 75, "stor.elem.f32", 1) \
+    FOR_EACH(STOR_ELEM_I64, 76, "stor.elem.i64", 1) \
+    FOR_EACH(STOR_ELEM_U8, 77, "stor.elem.i8", 1) \
+    FOR_EACH(LOAD_I_F32, 78, "load.i.f32", 1) \
+    FOR_EACH(STOR_I_F32, 79, "stor.i.f32", 1) \
+    FOR_EACH(LOAD_ELEM_A, 80, "load.elem.a", 1) \
+    FOR_EACH(PUSH_C_F32, 81, "push.c.f32", 5) \
+    FOR_EACH(STOR_FLD, 82, "stor.fld", 5) \
+    FOR_EACH(LOAD_FLD_OFFSET, 83, "load.fld.offset", 5) \
+    FOR_EACH(LOAD_ES_SIZE, 84, "load.es.size", 5) \
+    FOR_EACH(COPYOBJ, 85, "copyobj", 5) \
     /* Slice an enumstruct of the given type, into an any[] array. The
      * size of the array is the size of the enum struct in cells.
      */ \
-    FOR_EACH(SLICE_ES, 87, "slice.es", 5) \
+    FOR_EACH(SLICE_ES, 86, "slice.es", 5) \
     /* Create a view of a flat or non-flat array as a flat or non-flat array.
      * Takes a type ID representing the output type.
      */ \
-    FOR_EACH(SLICE_AS, 88, "slice.as", 5)
+    FOR_EACH(SLICE_AS, 87, "slice.as", 5) \
+    FOR_EACH(STOR_I_A, 88, "stor.i.a", 1) \
+    FOR_EACH(STOR_ELEM_A, 89, "stor.elem.a", 1)
 
 
 enum OPCODE {

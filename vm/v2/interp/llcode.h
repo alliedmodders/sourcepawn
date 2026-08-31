@@ -23,6 +23,8 @@
 #include <memory>
 #include <vector>
 
+#include <utils/bitset.h>
+
 namespace sp::v2 {
 
 class InterpCode
@@ -34,16 +36,21 @@ class InterpCode
     };
 
     InterpCode(std::unique_ptr<uint8_t[]> bytes, size_t size, uint32_t num_regs,
-               std::vector<OffsetMapping>&& mappings)
+               std::vector<OffsetMapping>&& mappings, BitSet&& gcobj_regs = BitSet())
      : bytes_(std::move(bytes)),
        size_(size),
        num_regs_(num_regs),
-       mappings_(std::move(mappings))
-    {}
+       mappings_(std::move(mappings)),
+       gcobj_regs_(std::move(gcobj_regs))
+    {
+        mappings_.shrink_to_fit();
+        gcobj_regs_.shrink_to_fit();
+    }
 
     const uint8_t* bytes() const { return bytes_.get(); }
     size_t size() const { return size_; }
     uint32_t num_regs() const { return num_regs_; }
+    const BitSet& gcobj_regs() const { return gcobj_regs_; }
 
     uint32_t LookupHighOffset(uint32_t low_offset) const {
         if (mappings_.empty())
@@ -64,6 +71,7 @@ class InterpCode
     size_t size_;
     uint32_t num_regs_;
     std::vector<OffsetMapping> mappings_;
+    BitSet gcobj_regs_;
 };
 
 } // namespace sp::v2

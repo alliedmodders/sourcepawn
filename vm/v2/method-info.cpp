@@ -80,6 +80,7 @@ MethodInfo::InternalValidate() {
     max_eval_stack_bytes_ = verifier.max_eval_stack_bytes();
     local_types_ = std::move(verifier.local_types());
     arg_types_ = std::move(verifier.arg_types());
+    mutated_args_ = std::move(verifier.mutated_args());
 }
 
 const TypeDesc* MethodInfo::GetTypeOfLocal(cell_t offset) const {

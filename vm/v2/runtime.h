@@ -187,8 +187,10 @@ class Runtime final : public BaseRuntime,
     };
     RawHeapPtr<uint8_t[]> global_buffer_;
     ke::FixedArray<GlobalDesc> global_vars_;
-
     ke::FixedArray<uint32_t> string_addrs_;
+
+    // Keep objects alive while being allocated for legacy native calls.
+    std::vector<std::vector<Handle<SpArray>>> heap_scopes_;
 
     bool paused_ = false;
     bool data_only_ = false;

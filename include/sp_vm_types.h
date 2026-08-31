@@ -102,7 +102,9 @@ static constexpr uint32_t kApiMinVersion = 2;
 #define SP_ERROR_USER 31                /**< Custom message */
 #define SP_ERROR_FATAL 32               /**< Custom fatal message */
 #define SP_ERROR_INVALID_ARRAY_SIZE 33  /**< Invalid arrary size */
-#define SP_MAX_ERROR_CODES 34
+#define SP_ERROR_NULL_DEREF 34          /**< Null object reference */
+#define SP_ERROR_RTTI 35                /**< Malformed type information */
+#define SP_MAX_ERROR_CODES 35
 //Hey you! Update the string table if you add to the end of me! */
 
 /**********************************************

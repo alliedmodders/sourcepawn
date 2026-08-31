@@ -23,13 +23,25 @@ struct HeapItem {
     HeapItem(const TypeDesc* td)
       : td(td),
         rc(1)
-    {}
+    {
+#ifndef NDEBUG
+        assert(td && td->magic() == TypeDesc::kMagic);
+#endif
+    }
 
     const TypeDesc* td;
     uintptr_t rc;
 
-    void AddRef() { rc++; }
+    void AddRef() {
+#ifndef NDEBUG
+        assert(td && td->magic() == TypeDesc::kMagic);
+#endif
+        rc++;
+    }
     void Release() {
+#ifndef NDEBUG
+        assert(td && td->magic() == TypeDesc::kMagic);
+#endif
         assert(rc >= 1);
         if (--rc == 0)
             Destroy(this);
