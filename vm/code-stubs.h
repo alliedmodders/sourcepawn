@@ -23,10 +23,33 @@ namespace sp {
 
 namespace v1 {
 class PluginRuntime;
-}
+} // namespace v1
+
 namespace v2 {
 class Runtime;
-}
+
+struct ReturnStubs
+{
+    // Reads error code from register, reports it, then jumps to
+    // return_reported_error.
+    void* report_error = nullptr;
+
+    // Reports a timeout, notifies watchdog, then returns.
+    void* throw_timeout = nullptr;
+
+    // Hardcoded entry paths that load a specific error code and jump to report_error.
+    void* throw_error_code[SP_MAX_ERROR_CODES] = {};
+
+    // Unwinds the stack after an error and returns from invoke.
+    void* return_reported_error = nullptr;
+
+    // Reports a detailed out-of-bounds error.
+    void* bounds_error = nullptr;
+
+    // Dispatches a deferred error with a proper exit frame.
+    void* deferred_error = nullptr;
+};
+} // namespace v2
 
 class Environment;
 
@@ -50,11 +73,18 @@ class CodeStubs
     void* ReturnStub() const {
         return return_stub_;
     }
+    const v2::ReturnStubs& return_stubs_v2() const {
+        return return_stubs_v2_;
+    }
+    void* DeallocStub() const { return dealloc_stub_.entry; }
 
   private:
-#if defined(SP_HAS_JIT)
+#if defined(SP_JIT_V1)
     bool CompileInvokeStubV1();
+#endif
+#if defined(SP_JIT_V2)
     bool CompileInvokeStubV2();
+    bool CompileDeallocStub();
 #endif
 
   private:
@@ -62,6 +92,8 @@ class CodeStubs
     LinkedCode invoke_stub_v1_;
     LinkedCode invoke_stub_v2_;
     void* return_stub_; // Owned by invoke_stub_v1_.
+    v2::ReturnStubs return_stubs_v2_;
+    LinkedCode dealloc_stub_;
 };
 
 } // namespace sp

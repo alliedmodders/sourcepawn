@@ -68,18 +68,19 @@ Arrays now have an intrinsic "length" property:
     }
 
 For compatibility reasons, there are some restrictions and idiosyncracies here.
-First, a flat array can be assigned to a heap array, but only of fixed size.
-The following is an example that would perform a deep copy:
+Regardless of whether an array is stack or heap allocated, if it's assigned to
+an array of fixed-size, it will result in a deep copy. For example:
 
     int gArray[10][20]; // All 2D arrays are heap allocated for compatibility.
 
     void Init() {
         int local[20];
-        gArray[0] = local; // deep copy.
+        gArray[0] = local;      // deep copy.
+        gArray[2] = gArray[3];  // also a deep copy
     }
 
-Second, it is not allowed for slices to escape. Slices are implicitly created
-when converting from one array view to another. For example:
+Furthermore, it is not allowed for slices to escape. Slices are implicitly
+created when converting from one array view to another. For example:
 
     void print(const char[] x) {}
 
@@ -94,8 +95,8 @@ when converting from one array view to another. For example:
 
 In both calls to `print`, a "slice array" is created that acts as a view into
 the original array. Slices are restricted array objects that cannot appear on
-the right-hand side of an escaping assignment. They can be passed or returned in
-functions, but not assigned to globals, elements, or fields.
+the right-hand side of an escaping assignment. They can be passed to functions
+but not assigned to globals, elements, or fields.
 
     char[] global;
 
@@ -123,10 +124,10 @@ LIFO. Objects and arrays lifetimes are tracked using reference counting, and
 are allocated using Microsoft's mimalloc library. This may seem an odd choice,
 but the choice is very deliberate.
 
-SourcePawn is designed for server-side low-level programming, and users have
-come to expect performance guarantees for their code. Some hooks are fired
-hundreds of times per frame, and with a ~15ms frame budget shared with the game
-itself, any unexpected cost can cause frame skip.
+SourcePawn is designed for low-level game programming, and users have come to
+expect performance guarantees for their code. Some hooks are fired hundreds of
+times per frame, and with a ~15ms frame budget shared with the game itself, any
+unexpected cost can cause frame skip.
 
 As such, we chose a solution whereby the cost associated with object and array
 allocation is _constant_. There is a small cost associated with allocating a
@@ -225,3 +226,8 @@ to the V1 interpreter, on average:
 | scripted-call |               2619 |               8970 |
 +---------------+--------------------+--------------------+
 ```
+
+There are some other internal details that might be of interest. The stack now
+grows up instead of down. Variadic arguments are now boxed into a temporary
+array, meaning that outside of natives (for compatibility), there are no more
+truly variadic functions.

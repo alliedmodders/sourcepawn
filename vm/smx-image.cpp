@@ -954,8 +954,7 @@ SmxImage::ImageSize() const {
     return length_;
 }
 
-const char*
-SmxImage::LookupFile(uint32_t addr) const {
+const char* SmxImage::LookupFile(uint32_t addr) const {
     int high = debug_files_.length();
     int low = -1;
 
@@ -1045,7 +1044,7 @@ SmxImage::GetMethodRttiByOffset(uint32_t pcode_offset) const {
         return nullptr;
 
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
-        const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+        auto method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
         if (method->pcode_start <= pcode_offset && method->pcode_end > pcode_offset)
             return method;
     }

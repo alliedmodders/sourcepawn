@@ -87,4 +87,12 @@ uint32_t MethodInfo::TranslateInterpCip(const uint8_t* cip) const {
     return (uint32_t)(cip - code.bytes);
 }
 
+const char* MethodInfo::GetName() const {
+    return rt_->image()->LookupFunction(pcode_offset_);
+}
+
+const char* MethodInfo::GetFilePath() const {
+    return rt_->image()->LookupFile(pcode_offset_);
+}
+
 } // namespace sp::v1

@@ -10,22 +10,27 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "procmap.h"
-
-#include <stdio.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <unistd.h>
 
 #include <memory>
 
 #include <amtl/am-raii.h>
+#include "procmap.h"
 
 namespace sp {
 
-using FilePtr = std::unique_ptr<FILE, decltype(&::fclose)>;
+struct FileCloser {
+    void operator()(FILE* fp) const {
+        fclose(fp);
+    }
+};
+
+using FilePtr = std::unique_ptr<FILE, FileCloser>;
 
 std::optional<uintptr_t> FindNextMmapCandidate(uintptr_t start, size_t size, uintptr_t end) {
-    FilePtr fp(fopen("/proc/self/maps", "rb"), ::fclose);
+    FilePtr fp(fopen("/proc/self/maps", "rb"));
     if (!fp)
         return {};
 

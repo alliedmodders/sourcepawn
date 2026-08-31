@@ -21,13 +21,20 @@
 
 #include <algorithm>
 #include <memory>
+#include <span>
 #include <vector>
 
+#include <amtl/am-fixedarray.h>
 #include <utils/bitset.h>
 
 namespace sp::v2 {
 
-class InterpCode
+struct LLBlock {
+    std::span<const uint8_t> bytes;
+    ke::FixedArray<uint32_t> successors;
+};
+
+class LLCode
 {
   public:
     struct OffsetMapping {
@@ -35,13 +42,17 @@ class InterpCode
         uint32_t high;
     };
 
-    InterpCode(std::unique_ptr<uint8_t[]> bytes, size_t size, uint32_t num_regs,
-               std::vector<OffsetMapping>&& mappings, BitSet&& gcobj_regs = BitSet())
+    LLCode(std::unique_ptr<uint8_t[]> bytes, size_t size, uint32_t num_regs,
+           uint32_t max_callee_args,
+           std::vector<OffsetMapping>&& mappings, BitSet&& gcobj_regs,
+           ke::FixedArray<LLBlock>&& blocks)
      : bytes_(std::move(bytes)),
        size_(size),
        num_regs_(num_regs),
+       max_callee_args_(max_callee_args),
        mappings_(std::move(mappings)),
-       gcobj_regs_(std::move(gcobj_regs))
+       gcobj_regs_(std::move(gcobj_regs)),
+       blocks_(std::move(blocks))
     {
         mappings_.shrink_to_fit();
         gcobj_regs_.shrink_to_fit();
@@ -50,7 +61,9 @@ class InterpCode
     const uint8_t* bytes() const { return bytes_.get(); }
     size_t size() const { return size_; }
     uint32_t num_regs() const { return num_regs_; }
+    uint32_t max_callee_args() const { return max_callee_args_; }
     const BitSet& gcobj_regs() const { return gcobj_regs_; }
+    const ke::FixedArray<LLBlock>& blocks() const { return blocks_; }
 
     uint32_t LookupHighOffset(uint32_t low_offset) const {
         if (mappings_.empty())
@@ -70,8 +83,10 @@ class InterpCode
     std::unique_ptr<uint8_t[]> bytes_;
     size_t size_;
     uint32_t num_regs_;
+    uint32_t max_callee_args_;
     std::vector<OffsetMapping> mappings_;
     BitSet gcobj_regs_;
+    ke::FixedArray<LLBlock> blocks_;
 };
 
 } // namespace sp::v2

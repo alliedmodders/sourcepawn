@@ -25,9 +25,13 @@ class BaseMethodInfo : public ke::Refcounted<BaseMethodInfo>
   public:
     virtual ~BaseMethodInfo() {}
 
-    virtual uint32_t pcode_offset() const = 0;
+    virtual uint32_t frame_id() const = 0;
     virtual CompiledFunction* jit() const = 0;
     virtual uint32_t TranslateInterpCip(const uint8_t* cip) const = 0;
+    virtual uint32_t TranslateJitCip(uint32_t cip) const = 0;
+
+    virtual const char* GetName() const = 0;
+    virtual const char* GetFilePath() const = 0;
 };
 
 } // namespace sp

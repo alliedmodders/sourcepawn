@@ -48,7 +48,7 @@ static const ucell_t kInvalidCip = 0xffffffff;
 class CompiledFunction
 {
   public:
-    CompiledFunction(const LinkedCode& code, cell_t pcode_offs, FixedArray<LoopEdge>* edges,
+    CompiledFunction(const LinkedCode& code, FixedArray<LoopEdge>* edges,
                      FixedArray<CipMapEntry>* cip_map);
     ~CompiledFunction();
 
@@ -56,8 +56,8 @@ class CompiledFunction
     void* GetEntryAddress() const {
         return code_.entry;
     }
-    cell_t GetCodeOffset() const {
-        return code_offset_;
+    size_t GetCodeSize() const {
+        return code_.code_size();
     }
     uint32_t NumLoopEdges() const {
         return edges_->size();
@@ -70,7 +70,6 @@ class CompiledFunction
 
   private:
     LinkedCode code_;
-    cell_t code_offset_;
     std::unique_ptr<FixedArray<LoopEdge>> edges_;
     std::unique_ptr<FixedArray<CipMapEntry>> cip_map_;
     bool cip_map_sorted_;

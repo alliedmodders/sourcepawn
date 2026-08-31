@@ -1,6 +1,6 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// Copyright (C) 2006-2026 AlliedModders LLC
 //
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
@@ -21,18 +21,16 @@ CodeStubs::CodeStubs(Environment* env)
 {
 }
 
-bool
-CodeStubs::Initialize() {
-#if defined(SP_HAS_JIT)
+bool CodeStubs::Initialize() {
+#if defined(SP_JIT_V1)
     if (!CompileInvokeStubV1())
+        return false;
+#endif
+#if defined(SP_JIT_V2)
+    if (!CompileInvokeStubV2())
+        return false;
+    if (!CompileDeallocStub())
         return false;
 #endif
     return true;
 }
-
-#if defined(SP_HAS_JIT)
-bool
-CodeStubs::CompileInvokeStubV2() {
-    return true;
-}
-#endif

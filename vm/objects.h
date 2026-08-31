@@ -20,6 +20,8 @@
 namespace sp {
 
 struct HeapItem {
+    friend class CodeStubs;
+
     HeapItem(const TypeDesc* td)
       : td(td),
         rc(1)

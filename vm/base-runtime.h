@@ -24,6 +24,9 @@
 namespace sp {
 
 class Environment;
+namespace v2 {
+class Runtime;
+}
 
 class BaseRuntime : public SourcePawn::IPluginRuntime
 {
@@ -40,6 +43,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     const Data& data() const { return data_; }
 
     virtual ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const = 0;
+    virtual v2::Runtime* AsV2() { return nullptr; }
     virtual bool Initialize() = 0;
 
     const char* Name() const { return name_.c_str(); }

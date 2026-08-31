@@ -34,18 +34,18 @@ using namespace SourcePawn;
 
 void DumpTool::DumpLoweredCode(uint32_t method_index) {
     ke::RefPtr<MethodInfo> method = runtime_->AcquireMethod(method_index);
-    if (!method->interp()) {
+    if (!method->llcode()) {
         ke::RefPtr<ControlFlowGraph> graph = method->BuildGraph();
         if (!graph) {
             fprintf(stdout, "    <failed to build graph for lowered code>\n");
             return;
         }
-        std::unique_ptr<InterpCode> code = LowerMethod(graph, method.get());
-        method->setInterpCode(std::move(code));
+        std::unique_ptr<LLCode> code = LowerMethod(graph, method.get());
+        method->set_llcode(std::move(code));
     }
 
-    const uint8_t* ll_code = method->interp()->bytes();
-    size_t ll_size = method->interp()->size();
+    const uint8_t* ll_code = method->llcode()->bytes();
+    size_t ll_size = method->llcode()->size();
     const uint8_t* cip = ll_code;
     const uint8_t* code_end = ll_code + ll_size;
 
@@ -66,7 +66,7 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
 
     while (cip < code_end) {
         uint32_t ll_offset = (uint32_t)(cip - ll_code);
-        uint32_t high_offset = method->interp()->LookupHighOffset(ll_offset);
+        uint32_t high_offset = method->llcode()->LookupHighOffset(ll_offset);
 
         uint32_t line;
         if (smx()->IsLineBoundary(high_offset) && smx()->LookupLine(high_offset, &line)) {
@@ -162,9 +162,6 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
                             op_args.push_back(smx()->names() + global->name);
                             break;
                         }
-                        case LL_FMT_STACK_ID:
-                            op_args.push_back(FormatRegister(reader.read<uint16_t>()));
-                            break;
                         case LL_FMT_I32:
                             op_args.push_back(std::to_string(reader.read<int32_t>()));
                             break;

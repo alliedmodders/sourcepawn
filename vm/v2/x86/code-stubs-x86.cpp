@@ -10,12 +10,14 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include <sp_vm_api.h>
 #include "code-stubs.h"
+
+#include <sp_vm_api.h>
 #include "debug-metadata.h"
 #include "environment.h"
-#include "v2/x86/jit_x86.h"
 #include "linking.h"
+#include "v2/runtime-helpers.h"
+#include "v2/x86/jit_x86.h"
 
 namespace sp {
 
@@ -42,14 +44,10 @@ bool CodeStubs::CompileInvokeStubV2() {
     // ecx = code
     __ movl(ecx, Operand(ebp, kCodeOffset));
 
-    // eax = cx->memory
-    __ movl(eax, Operand(ebx, Runtime::offsetOfMemory()));
-
     // Set up run-time registers.
-    __ movl(edi, Operand(ebx, Runtime::offsetOfSp()));
-    __ addl(edi, eax);
-    __ movl(esi, eax);
-    __ movl(ebx, edi);
+    __ movl(edx, intptr_t(Environment::get()));
+    __ movl(stk, Operand(edx, Environment::offsetOfSp()));
+    __ movl(frm, stk);
 
     // Align the stack.
     __ andl(esp, 0xfffffff0);
@@ -59,15 +57,10 @@ bool CodeStubs::CompileInvokeStubV2() {
 
     // Store the rval.
     __ movl(ecx, Operand(ebp, kRvalOffset));
-    __ movl(Operand(ecx, 0), pri);
+    __ movl(Operand(ecx, 0), eax);
 
-    // Store latest stk. If we have an error code, we'll jump directly to here,
-    // so eax will already be set.
     Label ret;
     __ bind(&ret);
-    __ subl(stk, dat);
-    __ movl(ecx, Operand(ebp, kContextOffset));
-    __ movl(Operand(ecx, Runtime::offsetOfSp()), stk);
 
     // Restore stack.
     __ lea(esp, Operand(ebp, kFpOffsetToPreAlignedSp));
@@ -84,12 +77,106 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ bind(&error);
     __ jmp(&ret);
 
+    Label report_error;
+    Label throw_timeout;
+    Label return_reported_error;
+    Label return_to_invoke;
+    Label bounds_error;
+    Label throw_error_code[SP_MAX_ERROR_CODES];
+
+    __ bind(&report_error);
+    {
+        __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+        __ enterExitFrame(ExitFrameType::Helper, 0);
+        __ subl(esp, 12);
+        __ push(eax);
+        __ callWithABI(ExternalAddress((void*)CompilerBase::InvokeReportError));
+        __ leaveExitFrame();
+        __ jmp(&return_to_invoke);
+    }
+
+    __ bind(&throw_timeout);
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+    __ callWithABI(ExternalAddress((void*)CompilerBase::InvokeReportTimeout));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
+
+    __ bind(&bounds_error);
+    __ movl(eax, Operand(esp, 8)); // bounds
+    __ movl(ecx, Operand(esp, 4)); // index
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+    __ subl(esp, 16);
+    __ movl(Operand(esp, 4), eax);
+    __ movl(Operand(esp, 0), ecx);
+    __ callWithABI(ExternalAddress((void*)ReportOutOfBoundsError));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
+
+    Label deferred_error;
+    __ bind(&deferred_error);
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+    __ callWithABI(ExternalAddress((void*)CompilerBase::DispatchDeferredReport));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
+
+    __ bind(&return_reported_error);
+    __ jmp(&return_to_invoke);
+
+    __ bind(&return_to_invoke);
+    {
+        __ enterExitFrame(ExitFrameType::Helper, 0);
+        __ callWithABI(ExternalAddress((void*)CompilerBase::FindEntryFp));
+        __ leaveExitFrame();
+        __ movl(ebp, eax);
+        __ jmp(&error);
+    }
+
+    for (int i = 1; i < SP_MAX_ERROR_CODES; i++) {
+        __ bind(&throw_error_code[i]);
+        __ movl(eax, i);
+        __ jmp(&report_error);
+    }
+
     invoke_stub_v2_ = LinkCode(env_, masm, "<jit invoke stub>", {});
     if (!invoke_stub_v2_.entry)
         return false;
 
-    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry) + error.offset();
+    uint8_t* entry = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry);
+    return_stubs_v2_.report_error = entry + report_error.offset();
+    return_stubs_v2_.throw_timeout = entry + throw_timeout.offset();
+    return_stubs_v2_.return_reported_error = entry + return_reported_error.offset();
+    return_stubs_v2_.bounds_error = entry + bounds_error.offset();
+    return_stubs_v2_.deferred_error = entry + deferred_error.offset();
+    for (int i = 1; i < SP_MAX_ERROR_CODES; i++)
+        return_stubs_v2_.throw_error_code[i] = entry + throw_error_code[i].offset();
+
     return true;
+}
+
+bool CodeStubs::CompileDeallocStub() {
+    MacroAssembler masm;
+
+    // Grab the dead object into ecx.
+    __ movl(ecx, Operand(esp, 4));
+
+    // Push our exit frame. This re-aligns the stack.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+
+    __ subl(esp, 16);
+    __ movl(Operand(esp, 0), ecx);
+    __ callWithABI(ExternalAddress((void*)HeapItem::Destroy));
+    __ addl(esp, 16);
+
+    __ leaveExitFrame();
+    __ ret();
+
+    dealloc_stub_ = LinkCode(env_, masm, "<dealloc stub>", {});
+    return !!dealloc_stub_.entry;
 }
 
 } // namespace sp

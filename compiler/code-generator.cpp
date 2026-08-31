@@ -388,11 +388,13 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
 
     if (!type->is_flat()) {
         // The array has not been allocated yet.
-        uint32_t type_id = rtti_->to_typeid(type);
-        if (!type->is_fixed()) {
+        Type* emit_type = type;
+        if (!type->is_fixed() && ctor) {
             uint32_t size = DeduceArraySize(type, ctor);
-            __ PUSH_C(size);
+            emit_type = cc_.types()->defineArray(type->inner(), size);
         }
+
+        uint32_t type_id = rtti_->to_typeid(emit_type);
         __ emit(OP_NEWARRAY, type_id);
     } else {
         // Otherwise, the address has been pushed onto the stack by the caller.
@@ -523,7 +525,9 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
         } else {
             assert(item->val().ident == iCONSTEXPR);
             cell_t cv = item->val().constval();
-            if (type->inner()->isInt64())
+            if (type->inner()->lit_size() == 1)
+                AddValue<int8_t>(&data, cv);
+            else if (type->inner()->lit_size() == 8)
                 AddValue<int64_t>(&data, cv);
             else
                 AddValue<int32_t>(&data, cv);
@@ -542,7 +546,9 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
 
         cell_t next_value = *prev1 + step;
         while (num_items < (uint32_t)type->size()) {
-            if (type->inner()->isInt64())
+            if (type->inner()->lit_size() == 1)
+                AddValue<int8_t>(&data, next_value);
+            else if (type->inner()->lit_size() == 8)
                 AddValue<int64_t>(&data, next_value);
             else
                 AddValue<int32_t>(&data, next_value);
@@ -844,6 +850,15 @@ void
 CodeGenerator::EmitUnary(UnaryExpr* expr)
 {
     auto inner = expr->expr();
+    if (expr->token() == '!' && inner->is(ExprKind::UnaryExpr) &&
+        inner->to<UnaryExpr>()->token() == '!')
+    {
+        // Reduce "!!" to a TEST instruction to avoid NOT; NOT.
+        EmitExpr(inner->to<UnaryExpr>()->expr());
+        __ emit(OP_TEST);
+        return;
+    }
+
     EmitExpr(inner);
 
     switch (expr->token()) {

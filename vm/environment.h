@@ -125,6 +125,7 @@ class Environment : public ISourcePawnEnvironment
     CodeStubs* stubs() {
         return code_stubs_.get();
     }
+    CodeStubs* EnsureStubs();
     v1::BuiltinNatives* builtins() {
         return builtins_.get();
     }
@@ -147,11 +148,15 @@ class Environment : public ISourcePawnEnvironment
     uint32_t sp_base() const { return sp_base_; }
     uint32_t sp_top() const { return sp_top_; }
     uint32_t* addressOfSp() { return &sp_; }
-    bool addStack(cell_t amount);
+    uint32_t* addressOfSpBase() { return &sp_base_; }
+    uint32_t* addressOfSpTop() { return &sp_top_; }
+    bool addStack(uint32_t amount);
+    bool dropStack(uint32_t amount);
     static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
+    static inline size_t offsetOfSpBase() { return offsetof(Environment, sp_base_); }
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
-    bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
+    bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, uint32_t frm, cell_t* result);
 
     // Loading.
     BaseRuntime* LoadBinaryFromFile(const char* file, bool data_only = false);
@@ -171,10 +176,9 @@ class Environment : public ISourcePawnEnvironment
     void EnableProfiling();
     void DisableProfiling();
 
-    bool IsJitEnabled() const {
-        return jit_enabled_;
+    bool IsJitAllowed() const {
+        return jit_allowed_;
     }
-    bool IsJitAvailable();
     void SetDebugger(IDebugListener* debugger) {
         debugger_ = debugger;
     }
@@ -249,6 +253,7 @@ class Environment : public ISourcePawnEnvironment
     void* addressOfExceptionCode() {
         return &exception_code_;
     }
+    void DispatchDeferredReport();
 
   private:
     bool Initialize();
@@ -281,7 +286,7 @@ class Environment : public ISourcePawnEnvironment
 #endif
 
     IProfilingTool* profiler_;
-    bool jit_enabled_;
+    bool jit_allowed_;
     bool profiling_enabled_;
     bool spew_interp_ops_ = false;
 

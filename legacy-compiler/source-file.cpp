@@ -52,7 +52,12 @@ SourceFile::Open(const std::string& file_name)
     if ((s.st_mode & S_IFDIR) == S_IFDIR)
         return false;
 
-    std::unique_ptr<FILE, decltype(&::fclose)> fp(fopen(file_name.c_str(), "rb"), &::fclose);
+    struct FileCloser {
+        void operator()(FILE* fp) const {
+            fclose(fp);
+        }
+    };
+    std::unique_ptr<FILE, FileCloser> fp(fopen(file_name.c_str(), "rb"));
     if (!fp)
         return false;
 

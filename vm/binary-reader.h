@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <span>
+
 #include <sp_vm_types.h>
 #include <utils/compact-encoding.h>
 
@@ -67,6 +69,12 @@ class BinaryReader final {
         const uint8_t* result = cursor_;
         cursor_ += n;
         return result;
+    }
+
+    template <typename T>
+    std::span<const T> getSpan(uint32_t nitems) {
+        auto bytes = getBytes(nitems * sizeof(T));
+        return std::span<const T>(reinterpret_cast<const T*>(bytes), nitems);
     }
 
     BinaryReader& operator =(BinaryReader&& other) = default;

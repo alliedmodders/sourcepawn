@@ -29,15 +29,15 @@ class SmxImage;
 }
 namespace sp::v2 {
 
-class InterpCode;
+class LLCode;
 
 class Runtime;
 
 class MethodInfo final : public BaseMethodInfo
 {
   public:
-    MethodInfo(Runtime* rt, uint32_t method_index);
-    ~MethodInfo();
+    MethodInfo(v2::Runtime* rt, uint32_t method_index, const TypeDesc* signature);
+    ~MethodInfo() override;
 
     ke::RefPtr<ControlFlowGraph> BuildGraph() {
         InternalValidate();
@@ -50,11 +50,20 @@ class MethodInfo final : public BaseMethodInfo
         return *checked_;
     }
 
-    uint32_t pcode_offset() const override;
+    uint32_t pcode_offset() const;
+    uint32_t frame_id() const override { return method_index_; }
     uint32_t TranslateInterpCip(const uint8_t* cip) const override;
+    uint32_t TranslateJitCip(uint32_t cip) const override;
     int32_t max_stack() const { return max_stack_; }
     uint32_t method_index() const { return method_index_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
+    const TypeDesc* signature() const { return signature_; }
+    bool IsLegacyVariadic() const {
+        return signature_->args().size() > 0 && signature_->args().back()->IsLegacyVarArgs();
+    }
+    uint32_t FormalArgc() const {
+        return signature_->args().size() - (IsLegacyVariadic() ? 1 : 0);
+    }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     const TypeDesc* GetTypeOfLocal(cell_t offset) const;
     const ke::FixedArray<const TypeDesc*>& local_types() const { return local_types_; }
@@ -66,13 +75,16 @@ class MethodInfo final : public BaseMethodInfo
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
-        return code_kind_ == CodeKind::Jit ? code_.jit : nullptr;
+        return jit_.get();
     }
 
-    void setInterpCode(std::unique_ptr<InterpCode> code);
-    InterpCode* interp() const {
-        return code_kind_ == CodeKind::Interp ? code_.interp : nullptr;
+    void set_llcode(std::unique_ptr<LLCode> code);
+    LLCode* llcode() const {
+        return llcode_.get();
     }
+
+    const char* GetName() const override;
+    const char* GetFilePath() const override;
 
     void ClearCompilerCache() {
         local_types_ = {};
@@ -82,15 +94,10 @@ class MethodInfo final : public BaseMethodInfo
     void InternalValidate();
 
   private:
-    enum class CodeKind { None, Jit, Interp };
-
     Runtime* rt_;
     uint32_t method_index_;
-    union {
-        CompiledFunction* jit;
-        InterpCode* interp;
-    } code_;
-    CodeKind code_kind_;
+    std::unique_ptr<CompiledFunction> jit_;
+    std::unique_ptr<LLCode> llcode_;
     ke::RefPtr<ControlFlowGraph> graph_;
 
     std::optional<bool> checked_;
@@ -101,6 +108,7 @@ class MethodInfo final : public BaseMethodInfo
     ke::FixedArray<const TypeDesc*> arg_types_;
     ke::FixedArray<int32_t> local_offsets_;
     BitSet mutated_args_;
+    const TypeDesc* signature_;
 };
 
 } // namespace sp

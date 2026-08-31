@@ -16,10 +16,9 @@
 
 using namespace sp;
 
-CompiledFunction::CompiledFunction(const LinkedCode& code, cell_t pcode_offs,
+CompiledFunction::CompiledFunction(const LinkedCode& code,
                                    FixedArray<LoopEdge>* edges, FixedArray<CipMapEntry>* cipmap)
  : code_(code)
- , code_offset_(pcode_offs)
  , edges_(edges)
  , cip_map_(cipmap)
  , cip_map_sorted_(false) {
@@ -50,8 +49,7 @@ cip_map_entry_cmp(const void* a1, const void* aEntry) {
     return pcoffs > entry->pcoffs;
 }
 
-ucell_t
-CompiledFunction::FindCipByPc(void* pc) {
+ucell_t CompiledFunction::FindCipByPc(void* pc) {
     if (uintptr_t(pc) < uintptr_t(code_.entry))
         return kInvalidCip;
 
@@ -67,11 +65,8 @@ CompiledFunction::FindCipByPc(void* pc) {
     void* ptr = bsearch((void*)(uintptr_t)pcoffs, cip_map_->buffer(), cip_map_->size(),
                         sizeof(CipMapEntry), cip_map_entry_cmp);
     assert(ptr);
-
-    if (!ptr) {
-        // Shouldn't happen, but fail gracefully.
+    if (!ptr)
         return kInvalidCip;
-    }
 
-    return code_offset_ + reinterpret_cast<CipMapEntry*>(ptr)->cipoffs;
+    return reinterpret_cast<CipMapEntry*>(ptr)->cipoffs;
 }

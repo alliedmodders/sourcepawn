@@ -11,23 +11,29 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "environment.h"
+
+#include <stdarg.h>
+
+#include <amtl/am-raii.h>
 #include "api.h"
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "debug-metadata.h"
+#include "debugging.h"
+#include "legacy/builtins.h"
+#include "legacy/interpreter.h"
+#if defined(SP_JIT_V1)
+#    include "legacy/jit.h"
+#endif
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
+#include "v2/interpreter.h"
+#if defined(SP_JIT_V2)
+#    include "v2/jit.h"
+#endif
 #include "v2/method-info.h"
 #include "v2/runtime.h"
 #include "watchdog_timer.h"
-#if defined(SP_HAS_JIT)
-#    include "legacy/jit.h"
-#endif
-#include <stdarg.h>
-#include "legacy/builtins.h"
-#include "debugging.h"
-#include "legacy/interpreter.h"
-#include "v2/interpreter.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -47,7 +53,7 @@ Environment::Environment()
    top_(nullptr),
    heap_(virt_mem_)
 {
-    jit_enabled_ = IsJitAvailable();
+    jit_allowed_ = true;
 }
 
 Environment::~Environment() {
@@ -92,7 +98,7 @@ Environment::Initialize() {
 
     sp_base_ = heap_.ToLocalAddr(stack_.get());
     sp_top_ = sp_base_ + kDefaultStackSize;
-    sp_ = sp_top_;
+    sp_ = sp_base_;
 
     if (!builtins_->Initialize())
         return false;
@@ -116,8 +122,8 @@ Environment::Shutdown() {
 }
 
 bool Environment::SetJitEnabled(bool enabled) {
-    jit_enabled_ = enabled && IsJitAvailable();
-    return jit_enabled_ == enabled;
+    jit_allowed_ = enabled;
+    return jit_allowed_ == enabled;
 }
 
 bool
@@ -329,19 +335,8 @@ Environment::UnpatchAllJumpsFromTimeout() {
 }
 
 bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result) {
-#if defined(SP_HAS_JIT)
-    if (jit_enabled_) {
-        if (!code_stubs_) {
-            code_stubs_ = std::make_unique<CodeStubs>(this);
-
-            // We delay initializing this to here to avoid executing any generated code if the embedder
-            // doesn't want the JIT enabled. The debug metadata flags must be set before this point.
-            if (!code_stubs_->Initialize()) {
-                code_stubs_ = nullptr;
-                return false;
-            }
-        }
-
+#if defined(SP_JIT_V1)
+    if (jit_allowed_) {
         if (v1::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
             int err = SP_ERROR_NONE;
             if (!v1::CompilerBase::Compile(cx, method, &err)) {
@@ -351,7 +346,7 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
         }
 
         if (CompiledFunction* fn = method->jit()) {
-            JitInvokeFrame ivkframe(cx, fn->GetCodeOffset());
+            JitInvokeFrame ivkframe(cx);
 
             assert(top_ && top_->cx() == cx);
 
@@ -372,14 +367,36 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
     return v1::Interpreter::Run(cx, method, result);
 }
 
-bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result) {
+bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, uint32_t frm, cell_t* result) {
+#if defined(SP_JIT_V2)
+    if (jit_allowed_ && v2::CompilerBase::IsSupported()) {
+        if (v2::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
+            if (!v2::CompilerBase::Compile(cx, method))
+                return false;
+        }
+
+        if (CompiledFunction* fn = method->jit()) {
+            JitInvokeFrame ivkframe(cx);
+
+            assert(top_ && top_->cx() == cx);
+
+            ke::SaveRestore<uint32_t> save_sp(sp_, std::move(frm));
+
+            InvokeStubV2Fn invoke = code_stubs_->InvokeStubV2();
+            invoke(cx, fn->GetEntryAddress(), result);
+
+            return exception_code_ == SP_ERROR_NONE;
+        }
+    }
+#endif
+
     // The JIT performs its own validation. Handle the interpreter here.
     {
         if (!method->Validate())
             return false;
     }
 
-    return v2::Interpreter::Run(cx, method, result);
+    return v2::Interpreter::Run(cx, method, frm, result);
 }
 
 static BaseRuntime* LoadImage(std::shared_ptr<SmxImage> image, const char* file,
@@ -552,10 +569,20 @@ Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction* pf, const char* fmt
 
 void
 Environment::DispatchReport(const ErrorReport& report) {
-    FrameIterator iter;
-
     // If this fires, someone forgot to propagate an error.
     assert(!hasPendingException());
+
+    // If we're inside a JIT invoke but have no valid exit frame, we can't walk
+    // the stack. This happens when a runtime helper (e.g. NewSlice, NewArray)
+    // reports an error. Save the exception state and let the JIT's
+    // deferred_error stub dispatch later with a proper exit frame.
+    if (!exit_fp_ && top_ && top_->AsJitInvokeFrame()) {
+        exception_code_ = report.Code();
+        UTIL_Format(exception_message_, sizeof(exception_message_), "%s", report.Message());
+        return;
+    }
+
+    FrameIterator iter;
 
     // Save the exception state.
     if (eh_top_) {
@@ -568,6 +595,19 @@ Environment::DispatchReport(const ErrorReport& report) {
         debugger_->ReportError(report, iter);
 
     // See if the plugin is being debugged
+    if (top_)
+        InvokeDebugger(top_->cx(), &report);
+}
+
+void Environment::DispatchDeferredReport() {
+    assert(hasPendingException());
+
+    FrameIterator iter;
+    ErrorReport report(exception_code_, exception_message_,
+                       top_ ? top_->cx() : nullptr, nullptr);
+
+    if (debugger_)
+        debugger_->ReportError(report, iter);
     if (top_)
         InvokeDebugger(top_->cx(), &report);
 }
@@ -644,14 +684,6 @@ void Environment::leaveInvoke() {
     top_ = top_->prev();
 }
 
-bool Environment::IsJitAvailable() {
-#if defined(SP_HAS_JIT)
-    return v1::CompilerBase::IsSupported();
-#else
-    return false;
-#endif
-}
-
 void* Environment::AllocatePageMemory(size_t size) {
     CodeChunk chunk = AllocateCode(size + sizeof(CodeChunk));
     CodeChunk* hidden = (CodeChunk*)chunk.address();
@@ -692,22 +724,20 @@ int Environment::SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
 #endif
 
 const char* Environment::GetEngineName() {
-    const char* info = "";
-#if !defined(SP_HAS_JIT)
-    info = ", interp-x86";
-#else
-    if (!IsJitEnabled()) {
-        info = ", interp-x86";
-    } else {
-#    if defined(KE_ARCH_X86)
-        info = ", jit-x86";
-#    else
-        info = ", unknown";
-#    endif
-    }
+    const char* v2_mode = "v2-interp-" SP_ARCH_STR;
+#if defined(SP_JIT_V2)
+    if (jit_allowed_ && v2::CompilerBase::IsSupported())
+        v2_mode = "v2-jit-" SP_ARCH_STR;
 #endif
 
-    ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s%s", SOURCEPAWN_VERSION, info);
+    const char* v1_mode = "v1-interp-" SP_ARCH_STR;
+#if defined(SP_JIT_V1)
+    if (jit_allowed_ && v1::CompilerBase::IsSupported())
+        v1_mode = "v1-jit-" SP_ARCH_STR;
+#endif
+
+    ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s (%s, %s)",
+                    SOURCEPAWN_VERSION, v2_mode, v1_mode);
     return engine_name_;
 }
 
@@ -719,15 +749,39 @@ void Environment::SetProfilingTool(IProfilingTool* tool) {
     SetProfiler(tool);
 }
 
-bool Environment::addStack(cell_t amount) {
+bool Environment::addStack(uint32_t amount) {
     assert(ke::IsAligned(amount, sizeof(cell_t)));
 
-    uint32_t new_sp = sp_ + amount;
-    if (new_sp >= sp_top_) {
-        ReportError(amount < 0 ? SP_ERROR_STACKLOW : SP_ERROR_STACKMIN);
+    if (amount > sp_top_ - sp_) {
+        ReportError(SP_ERROR_STACKLOW);
         return false;
     }
 
-    sp_ = new_sp;
+    sp_ += amount;
     return true;
+}
+
+bool Environment::dropStack(uint32_t amount) {
+    assert(ke::IsAligned(amount, sizeof(cell_t)));
+
+    if (amount > sp_ - sp_base_) {
+        ReportError(SP_ERROR_STACKMIN);
+        return false;
+    }
+
+    sp_ -= amount;
+    return true;
+}
+
+CodeStubs* Environment::EnsureStubs() {
+    if (!jit_allowed_)
+        return nullptr;
+    if (!code_stubs_) {
+        code_stubs_ = std::make_unique<CodeStubs>(this);
+        if (!code_stubs_->Initialize()) {
+            code_stubs_ = nullptr;
+            jit_allowed_ = false;
+        }
+    }
+    return code_stubs_.get();
 }

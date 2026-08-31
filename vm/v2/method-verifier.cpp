@@ -225,6 +225,9 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             if (op == OP_SLICE) {
+                if (base->array_elt()->IsArrayish())
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+
                 if (base->IsFlatArray())
                     return pushStack(rt_->GetSliceType(base->array_elt()));
                 return pushStack(base);
@@ -562,10 +565,12 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray) {
-                if (src->array_size() > dest->array_size())
-                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
+            if (dest->array_elt()->IsHeapItem())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (src->kind() != TypeKind::FixedArray && src->kind() != TypeKind::FlatArray)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (src->array_size() > dest->array_size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (src->array_elt()->element_size() != dest->array_elt()->element_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return true;
@@ -615,6 +620,9 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!verifyArrayType(td))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
+            if (td->kind() != TypeKind::FixedArray && td->kind() != TypeKind::FlatArray)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
             uint32_t data_offs = read<uint32_t>();
             if (!smx_->IsValidDataOffset(data_offs))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -622,6 +630,11 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto bytes = reader.readCompactUint32();
             if (!bytes || !reader.canRead(*bytes))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            auto elt_size = td->array_elt()->element_size();
+            if (*bytes % elt_size != 0 || *bytes / elt_size > td->array_size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
             return true;
         }
 
@@ -1063,12 +1076,6 @@ bool MethodVerifier::verifyDatString(uint16_t index) {
     if (!table || index >= table->row_count)
         return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-    // If loaded in data only mode, we skipped verifying the string table.
-    if (rt_->data_only()) {
-        const smx_rtti_string* row = smx_->getRttiRow<smx_rtti_string>(table, index);
-        if (!smx_->ReadDataBlob(row->offset))
-            return false;
-    }
     return true;
 }
 
@@ -1114,6 +1121,14 @@ bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t
     uint8_t variadic;
     if (!parser.GetByte(&variadic))
         return reportError(SP_ERROR_INVALID_INSTRUCTION);
+    if (!(method->flags & kRttiMethod_Native)) {
+        if (variadic == cb::kLegacyVariadic) {
+            if (arg_count < expected_argc - 1)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        } else if (arg_count != expected_argc) {
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
+    }
     if (variadic == cb::kLegacyVariadic)
         parser.NextByte();
     uint8_t type_byte;

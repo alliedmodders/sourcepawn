@@ -40,33 +40,24 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <locale>
-#include <codecvt>
-
 #include <amtl/am-bits.h>
-
 #include "errors.h"
 #include "sc.h"
 
-#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
-
-#if defined(__clang__)
-# pragma clang diagnostic push
-# pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-
 void UnicodeCodepointToUtf8(ucell codepoint, std::string* out) {
-#if defined(_MSC_VER) && _MSC_VER >= 1900 && _MSC_VER < 2000
-    std::wstring_convert<std::codecvt_utf8<__int32>, __int32> convert;
-    __int32 cp = codepoint;
-#else
-    std::wstring_convert<std::codecvt_utf8<char32_t>, char32_t> convert;
-    char32_t cp = codepoint;
-#endif
-
-    *out += convert.to_bytes(&cp, &cp + 1);
+    if (codepoint <= 0x7F) {
+        *out += static_cast<char>(codepoint);
+    } else if (codepoint <= 0x7FF) {
+        *out += static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F));
+        *out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    } else if (codepoint <= 0xFFFF) {
+        *out += static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F));
+        *out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        *out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    } else if (codepoint <= 0x10FFFF) {
+        *out += static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07));
+        *out += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+        *out += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        *out += static_cast<char>(0x80 | (codepoint & 0x3F));
+    }
 }
-
-#if defined(__clang__)
-# pragma clang diagnostic pop
-#endif

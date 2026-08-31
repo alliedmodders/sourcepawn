@@ -337,6 +337,7 @@ class SourcePawn(object):
         self.oldspcomp = []
         self.zlib = None
         self.mimalloc = None
+        self.capstone = None
         self.gtest = {}
         self.libamtl = None
         self.static_libsp = {}
@@ -349,6 +350,7 @@ class SourcePawn(object):
         self.EnsureAmtl()
         self.EnsureGTest()
         self.EnsureMimalloc()
+        self.EnsureCapstone()
 
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
@@ -371,6 +373,7 @@ class SourcePawn(object):
             os.path.join(builder.sourcePath, 'vm'),
             os.path.join(builder.sourcePath, 'third_party'),
             os.path.join(builder.sourcePath, 'third_party', 'mimalloc', 'include'),
+            os.path.join(builder.sourcePath, 'third_party', 'capstone', 'include'),
             self.amtl,
         ]
 
@@ -455,6 +458,7 @@ class SourcePawn(object):
         binary = self.root.Program(builder, 'spshell')
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         binary.sources = [
             'vm/shell/shell.cpp',
@@ -469,6 +473,7 @@ class SourcePawn(object):
         binary = self.root.Program(builder, 'verifier')
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         binary.sources = [
             'tools/verifier/verifier.cpp',
@@ -487,6 +492,7 @@ class SourcePawn(object):
             pass
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         vars = self.vars.copy()
         vars['binary'] = binary
@@ -500,14 +506,13 @@ class SourcePawn(object):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
 
-        self.AddVmFlags(binary)
-
         target = binary.compiler.target
         binary.compiler.linkflags += [
             self.static_libsp[target],
             self.zlib[target],
             self.libamtl[target],
             self.mimalloc[target],
+            self.capstone[target],
         ]
 
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
@@ -586,6 +591,13 @@ class SourcePawn(object):
         for cxx in self.root.targets:
             self.mimalloc[cxx.target] = self.BuildForArch("third_party/AMBuild.mimalloc", cxx)
 
+    def EnsureCapstone(self):
+        if self.capstone is not None:
+            return
+        self.capstone = {}
+        for cxx in self.root.targets:
+            self.capstone[cxx.target] = self.BuildForArch("third_party/AMBuild.capstone", cxx)
+
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)
         self.SetupBinForArch(binary, builder)
@@ -606,12 +618,19 @@ class SourcePawn(object):
         return rvalue
 
     def AddVmFlags(self, module):
-        is_emscripten = module.compiler.family == 'emscripten'
-        has_jit = module.compiler.target.arch in ['x86', 'x86_64'] and not is_emscripten
+        arch = module.compiler.target.arch
+        if arch == 'x86_64':
+            arch = 'x64'
+        module.compiler.defines += ['SP_ARCH_STR="{}"'.format(arch)]
+
+        enable_jit = module.compiler.family != 'emscripten'
         if getattr(builder.options, 'disable_jit', False):
-            has_jit = False
-        if has_jit:
-            module.compiler.defines += ['SP_HAS_JIT']
+            enable_jit = False
+        if enable_jit:
+            if module.compiler.target.arch in ['x86', 'x86_64']:
+                module.compiler.defines += ['SP_JIT_V1']
+            if module.compiler.target.arch in ['x86']:
+                module.compiler.defines += ['SP_JIT_V2']
 
 if builder.parent is None:
     root = Config()

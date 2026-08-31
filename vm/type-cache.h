@@ -16,17 +16,22 @@
 
 #include <memory>
 #include <unordered_set>
+#include <vector>
 
 #include <amtl/am-hashmap.h>
+
+#include <amtl/am-hashset.h>
 
 #include "utils/pool-allocator.h"
 #include "type-desc.h"
 
 namespace sp {
+
 class SmxImage;
+
 namespace v2 {
 class Runtime;
-}
+} // namespace v2
 
 struct TypeCacheKey {
     explicit TypeCacheKey(TypeKind kind)
@@ -54,10 +59,8 @@ struct TypeCacheKey {
             return classdef == other.classdef;
         if (kind == TypeKind::Array || kind == TypeKind::ArraySlice || kind == TypeKind::Reference)
             return elt_kind == other.elt_kind;
-        if (kind == TypeKind::FixedArray || kind == TypeKind::FlatArray) {
-            return elt_kind == other.elt_kind &&
-                   size == other.size;
-        }
+        if (kind == TypeKind::FixedArray || kind == TypeKind::FlatArray)
+            return elt_kind == other.elt_kind && size == other.size;
         return true;
     }
 
@@ -65,6 +68,16 @@ struct TypeCacheKey {
     const TypeDesc* elt_kind = nullptr;
     uint32_t size = 0;
     const smx_rtti_classdef* classdef = nullptr;
+};
+
+struct FunctionLookupKey {
+    FunctionLookupKey(const TypeDesc* return_type, std::span<const TypeDesc* const> args, bool is_native)
+      : return_type(return_type), args(args), is_native(is_native)
+    {}
+
+    const TypeDesc* return_type;
+    std::span<const TypeDesc* const> args;
+    bool is_native;
 };
 
 class TypeCache final {
@@ -78,26 +91,77 @@ class TypeCache final {
     const TypeDesc* GetSlice(const TypeDesc* elt);
     const TypeDesc* GetReference(const TypeDesc* elt);
     const TypeDesc* GetEnumStruct(v2::Runtime* rt, const smx_rtti_classdef* classdef);
+    const TypeDesc* CreateFunction(const TypeDesc* return_type, const std::vector<const TypeDesc*>& args, bool is_native);
 
   private:
     PoolAllocator pool_;
 
     struct CachePolicy {
-        static bool matches(const TypeCacheKey& key, const TypeCacheKey& other) {
-            return key == other;
+        static bool matches(const TypeCacheKey& key, const TypeDesc* td) {
+            if (td->kind() != key.kind)
+                return false;
+            switch (key.kind) {
+                case TypeKind::EnumStruct:
+                    return td->cls() == key.classdef;
+                case TypeKind::Array:
+                case TypeKind::ArraySlice:
+                    return td->array_elt() == key.elt_kind;
+                case TypeKind::FixedArray:
+                case TypeKind::FlatArray:
+                    return td->array_elt() == key.elt_kind && td->array_size() == key.size;
+                case TypeKind::Reference:
+                    return td->ref_type() == key.elt_kind;
+                default:
+                    return true;
+            }
+        }
+        static bool matches(const FunctionLookupKey& key, const TypeDesc* td) {
+            if (!td->IsFunction())
+                return false;
+            if (td->return_type() != key.return_type || td->is_native() != key.is_native)
+                return false;
+            if (td->args().size() != key.args.size())
+                return false;
+            for (size_t i = 0; i < key.args.size(); i++) {
+                if (td->args()[i] != key.args[i])
+                    return false;
+            }
+            return true;
         }
         static uintptr_t hash(const TypeCacheKey& key) {
-            uintptr_t h = ke::HashInt32((uint8_t)key.kind);
+            uintptr_t h = ke::HashIntPtr((uint8_t)key.kind);
             if (key.kind == TypeKind::EnumStruct) {
                 h = ke::HashCombine(h, ke::HashPointer(key.classdef));
             } else {
                 h = ke::HashCombine(h, ke::HashPointer(key.elt_kind));
-                h = ke::HashCombine(h, ke::HashInt64(key.size));
+                h = ke::HashCombine(h, ke::HashIntPtr(key.size));
+            }
+            return h;
+        }
+        static uintptr_t hash(const FunctionLookupKey& key) {
+            uintptr_t h = ke::HashPointer(key.return_type);
+            h = ke::HashCombine(h, ke::HashIntPtr(key.is_native ? 1 : 0));
+            h = ke::HashCombine(h, ke::HashIntPtr(key.args.size()));
+            for (const auto& arg : key.args)
+                h = ke::HashCombine(h, ke::HashPointer(arg));
+            return h;
+        }
+        static uintptr_t hash(const TypeDesc* td) {
+            if (td->IsFunction())
+                return hash(FunctionLookupKey(td->return_type(), td->args(), td->is_native()));
+            uintptr_t h = ke::HashIntPtr((uint8_t)td->kind());
+            if (td->kind() == TypeKind::EnumStruct) {
+                h = ke::HashCombine(h, ke::HashPointer(td->cls()));
+            } else {
+                const TypeDesc* elt_kind = td->IsReference() ? td->ref_type() : td->array_elt();
+                uintptr_t size = (td->kind() == TypeKind::FixedArray || td->kind() == TypeKind::FlatArray) ? td->array_size() : 0;
+                h = ke::HashCombine(h, ke::HashPointer(elt_kind));
+                h = ke::HashCombine(h, ke::HashIntPtr(size));
             }
             return h;
         }
     };
-    ke::HashMap<TypeCacheKey, TypeDesc*, CachePolicy> cache_;
+    ke::HashSet<TypeDesc*, CachePolicy> cache_;
     std::vector<TypeDesc*> primitives_;
     std::unordered_set<std::shared_ptr<SmxImage>> images_;
 };

@@ -119,34 +119,34 @@
 
 namespace sp::v2 {
 
-bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
-    if (!method->interp()) {
+bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm, cell_t* rval) {
+    if (!method->llcode()) {
         ke::RefPtr<ControlFlowGraph> graph = method->BuildGraph();
         if (!graph)
             return false;
-        std::unique_ptr<InterpCode> code = LowerMethod(graph, method.get());
-        method->setInterpCode(std::move(code));
+        std::unique_ptr<LLCode> code = LowerMethod(graph, method.get());
+        method->set_llcode(std::move(code));
     }
 
-    Interpreter interpreter(cx, method);
-    if (!interpreter.run_internal({}))
+    Interpreter interpreter(cx, method, frm);
+    if (!interpreter.run_internal())
         return false;
 
     *rval = interpreter.return_value();
     return true;
 }
 
-Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
+Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm)
  : env_(Environment::get()),
    rt_(cx),
    smx_(rt_->image()),
    heap_(rt_->heap()),
    method_(std::move(method)),
    code_(rt_->code().bytes),
-   reader_(method_->interp()->bytes(), method_->interp()->bytes() + method_->interp()->size()),
+   reader_(method_->llcode()->bytes(), method_->llcode()->bytes() + method_->llcode()->size()),
    has_returned_(false),
    return_value_(0),
-   frm_(env_->sp()),
+   frm_(frm),
    phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_))
 {}
 
@@ -158,9 +158,9 @@ bool Interpreter::CheckTimeout() {
     return true;
 }
 
-bool Interpreter::run_internal(std::span<cell_t> args) {
+bool Interpreter::run_internal() {
     const uint8_t* insn_begin = reader_.cursor();
-    const uint8_t* ll_code = method_->interp()->bytes();
+    const uint8_t* ll_code = method_->llcode()->bytes();
 
     InterpInvokeFrame ivk(rt_, method_, &insn_begin);
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
@@ -173,10 +173,10 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
             if (auto* interp_ivk = top->AsInterpInvokeFrame()) {
                 InterpFrame* frame = reinterpret_cast<InterpFrame*>(reinterpret_cast<uint8_t*>(interp_ivk) - offsetof(InterpFrame, ivk));
                 auto method = interp_ivk->v2_method();
-                uint32_t num_callee_regs = method->interp()->num_regs();
-                cell_t* unwound_vregs = reinterpret_cast<cell_t*>(frame) - num_callee_regs;
+                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
+                cell_t* unwound_vregs = reinterpret_cast<cell_t*>(reinterpret_cast<uint8_t*>(frame) + frame_size);
 
-                method->interp()->gcobj_regs().for_each([&](uintptr_t reg) {
+                method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
                     cell_t val = unwound_vregs[reg];
                     if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
                         item->Release();
@@ -185,7 +185,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
             top->AsInterpInvokeFrame()->~InterpInvokeFrame();
         }
         if (!has_returned_ && !root_vregs.empty()) {
-            root_method->interp()->gcobj_regs().for_each([&](uintptr_t reg) {
+            root_method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
                 cell_t val = root_vregs[reg];
                 if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
                     item->Release();
@@ -195,37 +195,27 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
 
     ke::SaveRestore<uint32_t> saveSp(env_->sp());
 
-    uint32_t num_regs = method_->interp()->num_regs();
-    if (num_regs > 0) {
-        uint32_t bytes = num_regs * sizeof(cell_t);
-        if (!env_->addStack(-(cell_t)bytes))
+    uint32_t num_params = method_->arg_types().size();
+    uint32_t num_regs = method_->llcode()->num_regs();
+    uint32_t callee_regs = num_regs - num_params;
+
+    if (callee_regs > 0) {
+        if (!env_->addStack(callee_regs * sizeof(cell_t)))
             return false;
-        vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(env_->sp()), num_regs);
+    }
+    if (num_regs > 0) {
+        vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(frm_), num_regs);
         root_vregs = vregs_;
+        if (callee_regs > 0)
+            memset(&vregs_[num_params], 0, callee_regs * sizeof(cell_t));
     }
-
-    uint32_t current_reg = 0;
-
-    if (args.data() != nullptr) {
-        for (size_t i = 0; i < method_->arg_types().size(); i++) {
-            vregs_[current_reg++] = args[i];
-        }
-    } else {
-        for (size_t i = 0; i < method_->arg_types().size(); i++) {
-            vregs_[current_reg++] = phys_frm_[1 + i];
-        }
-    }
-
-    // Registers must be zeroed to make LL_RELEASE safe.
-    if (num_regs > current_reg)
-        memset(&vregs_[current_reg], 0, (num_regs - current_reg) * sizeof(cell_t));
 
     while (!has_returned_ && reader_.more()) {
         insn_begin = reader_.cursor();
 
         if (env_->IsDebugBreakEnabled()) {
             uint32_t ll_offset = (uint32_t)(insn_begin - ll_code);
-            uint32_t high_offset = method_->interp()->LookupHighOffset(ll_offset);
+            uint32_t high_offset = method_->llcode()->LookupHighOffset(ll_offset);
             if (smx_->IsLineBoundary(high_offset)) {
                 InvokeDebugger(rt_, nullptr);
                 if (env_->hasPendingException())
@@ -250,8 +240,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t dest = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
-                if (!ptr)
-                    return false;
                 vregs_[dest] = *ptr;
                 break;
             }
@@ -260,8 +248,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t dest = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 int64_t* ptr = heap_.ToPhysAddr<int64_t*>(addr);
-                if (!ptr)
-                    return false;
                 *reinterpret_cast<int64_t*>(&vregs_[dest]) = *ptr;
                 break;
             }
@@ -270,8 +256,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t dest = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
-                if (!ptr)
-                    return false;
                 vregs_[dest] = *ptr;
                 if (vregs_[dest])
                     heap_.ToPhysAddr<HeapItem*>(vregs_[dest])->AddRef();
@@ -357,8 +341,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t val = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
-                if (!ptr)
-                    return false;
                 *ptr = vregs_[val];
                 break;
             }
@@ -367,8 +349,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t val = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 int64_t* ptr = heap_.ToPhysAddr<int64_t*>(addr);
-                if (!ptr)
-                    return false;
                 *ptr = *reinterpret_cast<int64_t*>(&vregs_[val]);
                 break;
             }
@@ -377,8 +357,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint16_t val_reg = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index_reg);
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
-                if (!ptr)
-                    return false;
                 auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]);
                 if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
                     rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
@@ -512,12 +490,10 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_IDXADDR: {
-                uint16_t base_reg = reader_.read<uint16_t>();
-                uint16_t index_reg = reader_.read<uint16_t>();
-                uint16_t dest_reg = reader_.read<uint16_t>();
+                auto args = reader_.read<IdxAddrArgs>();
 
-                uint32_t base = vregs_[base_reg];
-                uint32_t index = vregs_[index_reg];
+                uint32_t base = vregs_[args.base_reg];
+                uint32_t index = vregs_[args.index_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
                 if (!array) {
                     rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
@@ -527,8 +503,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     ReportOutOfBoundsError(index, array->length);
                     return false;
                 }
-                void* elt_addr = rt_->GetArrayElem(array, index);
-                vregs_[dest_reg] = rt_->heap().ToLocalAddr(elt_addr);
+                vregs_[args.dest_reg] = array->data + args.elt_size * index;
                 break;
             }
             case LL_SLICE: {
@@ -543,10 +518,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
                     return false;
                 }
-                if (index >= array->length) {
-                    ReportOutOfBoundsError(index, array->length);
-                    return false;
-                }
                 auto slice = rt_->NewSlice(array, index);
                 if (!slice)
                     return false;
@@ -554,19 +525,15 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_IDXADDR_FLAT: {
-                uint32_t size = reader_.read<uint32_t>();
-                uint32_t elt_size = reader_.read<uint16_t>();
-                uint16_t base_reg = reader_.read<uint16_t>();
-                uint16_t index_reg = reader_.read<uint16_t>();
-                uint16_t dest_reg = reader_.read<uint16_t>();
+                auto args = reader_.read<IdxAddrFlatArgs>();
 
-                cell_t base = vregs_[base_reg];
-                cell_t index = vregs_[index_reg];
-                if (index < 0 || (uint32_t)index >= size) {
-                    ReportOutOfBoundsError(index, size);
+                cell_t base = vregs_[args.base_reg];
+                cell_t index = vregs_[args.index_reg];
+                if (index < 0 || (uint32_t)index >= args.size) {
+                    ReportOutOfBoundsError(index, args.size);
                     return false;
                 }
-                vregs_[dest_reg] = base + index * elt_size;
+                vregs_[args.dest_reg] = base + index * args.elt_size;
                 break;
             }
             case LL_ARRAY_TO_FLAT: {
@@ -588,27 +555,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 memcpy(dest, src, bytes);
                 break;
             }
-            case LL_COPYARRAY_FLAT_A: {
-                uint32_t elements = reader_.read<uint32_t>();
-                uint16_t src_reg = reader_.read<uint16_t>();
-                uint16_t dest_reg = reader_.read<uint16_t>();
-                cell_t src_addr = vregs_[src_reg];
-                cell_t dest_addr = vregs_[dest_reg];
 
-                cell_t* dest = rt_->heap().ToPhysAddr<cell_t*>(dest_addr);
-                cell_t* src = rt_->heap().ToPhysAddr<cell_t*>(src_addr);
-                if (src == dest)
-                    break;
-
-                for (uint32_t i = 0; i < elements; i++) {
-                    if (auto old_item = heap_.ToPhysAddr<HeapItem*>(dest[i]))
-                        old_item->Release();
-                    if (auto new_item = heap_.ToPhysAddr<HeapItem*>(src[i]))
-                        new_item->AddRef();
-                    dest[i] = src[i];
-                }
-                break;
-            }
             case LL_FILLARRAY_FLAT: {
                 uint32_t data_offs = reader_.read<uint32_t>();
                 const TypeDesc* td = reader_.read<const TypeDesc*>();
@@ -618,43 +565,71 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_SLICE_FLAT: {
-                const TypeDesc* td = reader_.read<const TypeDesc*>();
-                uint16_t base_reg = reader_.read<uint16_t>();
-                uint16_t index_reg = reader_.read<uint16_t>();
-                uint16_t dest_reg = reader_.read<uint16_t>();
-                cell_t base = vregs_[base_reg];
-                uint32_t index = vregs_[index_reg];
-                auto slice = rt_->NewFlatSlice(base, td, index);
+                auto args = reader_.read<SliceFlatArgs>();
+                cell_t base = vregs_[args.base_reg];
+                uint32_t index = vregs_[args.index_reg];
+                auto slice = rt_->NewFlatSlice(base, args.td, index);
                 if (!slice)
                     return false;
-                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice.release());
+                vregs_[args.dest_reg] = rt_->heap().ToLocalAddr(slice.release());
                 break;
             }
-            case LL_STOR_ELEM_FLAT_I32:
-            case LL_STOR_ELEM_FLAT_F32:
-            case LL_STOR_ELEM_FLAT_I64:
-            case LL_STOR_ELEM_FLAT_U8: {
-                uint32_t array_size = reader_.read<uint32_t>();
-                uint32_t element_size = reader_.read<uint16_t>();
-                uint16_t base_reg = reader_.read<uint16_t>();
-                uint16_t index_reg = reader_.read<uint16_t>();
-                uint16_t val_reg = reader_.read<uint16_t>();
 
-                uint32_t base = vregs_[base_reg];
-                uint32_t index = vregs_[index_reg];
-                if (index >= array_size) {
-                    ReportOutOfBoundsError(index, array_size);
-                    return false;
-                }
-                uint8_t* elt = rt_->heap().ToPhysAddr<uint8_t*>(base + (index * element_size));
-                if (op == LL_STOR_ELEM_FLAT_I64)
-                    *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
-                else if (op == LL_STOR_ELEM_FLAT_U8)
-                    *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
-                else
-                    *reinterpret_cast<cell_t*>(elt) = vregs_[val_reg];
+#define LOAD_ELEM_FLAT(c_type) \
+                auto args = reader_.read<LoadElemFlatArgs>(); \
+                uint32_t base = vregs_[args.base_reg]; \
+                uint32_t index = vregs_[args.index_reg]; \
+                if (index >= args.array_size) { \
+                    ReportOutOfBoundsError(index, args.array_size); \
+                    return false; \
+                } \
+                auto elt = rt_->heap().ToPhysAddr<c_type*>(base) + index
+
+            case LL_LOAD_ELEM_FLAT_U8: {
+                LOAD_ELEM_FLAT(uint8_t);
+                vregs_[args.dest_reg] = *elt;
                 break;
             }
+            case LL_LOAD_ELEM_FLAT_I32:
+            case LL_LOAD_ELEM_FLAT_F32: {
+                LOAD_ELEM_FLAT(cell_t);
+                vregs_[args.dest_reg] = *elt;
+                break;
+            }
+            case LL_LOAD_ELEM_FLAT_I64: {
+                LOAD_ELEM_FLAT(int64_t);
+                *reinterpret_cast<int64_t*>(&vregs_[args.dest_reg]) = *elt;
+                break;
+            }
+#undef LOAD_ELEM_FLAT
+
+#define STOR_ELEM_FLAT(c_type) \
+                auto args = reader_.read<StorElemFlatArgs>(); \
+                uint32_t base = vregs_[args.base_reg]; \
+                uint32_t index = vregs_[args.index_reg]; \
+                if (index >= args.array_size) { \
+                    ReportOutOfBoundsError(index, args.array_size); \
+                    return false; \
+                } \
+                auto elt = rt_->heap().ToPhysAddr<c_type*>(base) + index
+
+            case LL_STOR_ELEM_FLAT_I32:
+            case LL_STOR_ELEM_FLAT_F32: {
+                STOR_ELEM_FLAT(cell_t);
+                *elt = vregs_[args.val_reg];
+                break;
+            }
+            case LL_STOR_ELEM_FLAT_U8: {
+                STOR_ELEM_FLAT(uint8_t);
+                *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
+                break;
+            }
+            case LL_STOR_ELEM_FLAT_I64: {
+                STOR_ELEM_FLAT(int64_t);
+                *elt = *reinterpret_cast<int64_t*>(&vregs_[args.val_reg]);
+                break;
+            }
+#undef STOR_ELEM_FLAT
 
             BINARY_OP_I64(LL_SMUL_I64, *)
             BINARY_OP_I64(LL_ADD_I64, +)
@@ -748,7 +723,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     }
                 }
 
-                method_->interp()->gcobj_regs().for_each([&](uintptr_t reg) {
+                method_->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
                     cell_t val = vregs_[reg];
                     if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
                         item->Release();
@@ -760,7 +735,8 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     break;
                 }
 
-                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_);
+                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
+                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_ - frame_size);
                 ivk_->~InterpInvokeFrame();
 
                 ivk_ = env_->top()->AsInterpInvokeFrame();
@@ -768,20 +744,19 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
 
                 method_ = frame->caller_method;
 
-                const uint8_t* caller_code = method_->interp()->bytes();
-                reader_ = BinaryReader(caller_code, caller_code + method_->interp()->size());
+                const uint8_t* caller_code = method_->llcode()->bytes();
+                reader_ = BinaryReader(caller_code, caller_code + method_->llcode()->size());
                 reader_.set_cursor(frame->saved_cip);
                 ll_code = caller_code;
 
-                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                cell_t stack_amount = (cell_t)(frm_ + frame_size - env_->sp());
-                if (!env_->addStack(stack_amount))
+                uint32_t stack_amount = env_->sp() - (frm_ - frame_size);
+                if (!env_->dropStack(stack_amount))
                     return false;
+
                 frm_ = frame->prev_frame;
 
-
-                uint32_t num_caller_regs = method_->interp()->num_regs();
-                vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(env_->sp()), num_caller_regs);
+                uint32_t num_caller_regs = method_->llcode()->num_regs();
+                vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(frm_), num_caller_regs);
 
                 if (frame->dest_reg != 0xFFFF)
                     vregs_[frame->dest_reg] = result;
@@ -910,49 +885,50 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     if (!target->Validate())
                         return false;
 
-                    if (!target->interp()) {
+                    if (!target->llcode()) {
                         ke::RefPtr<ControlFlowGraph> graph = target->BuildGraph();
                         if (!graph)
                             return false;
-                        std::unique_ptr<InterpCode> code = LowerMethod(graph, target.get());
-                        target->setInterpCode(std::move(code));
+                        std::unique_ptr<LLCode> code = LowerMethod(graph, target.get());
+                        target->set_llcode(std::move(code));
                     }
 
                     size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                    uint32_t num_callee_regs = target->interp()->num_regs();
-                    cell_t stack_amount = -(cell_t)(frame_size + num_callee_regs * sizeof(cell_t));
+                    uint32_t target_nargs = target->arg_types().size();
+                    uint32_t callee_regs = target->llcode()->num_regs() - target_nargs;
+                    uint32_t stack_amount = frame_size + target_nargs * sizeof(cell_t) + callee_regs * sizeof(cell_t);
+
+                    uint32_t frame_base = env_->sp();
                     if (!env_->addStack(stack_amount))
                         return false;
 
-                    uint32_t frame_addr = env_->sp() + num_callee_regs * sizeof(cell_t);
-
-                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(env_->sp());
+                    uint32_t new_frm = frame_base + frame_size;
+                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(new_frm);
                     for (uint8_t i = 0; i < nargs; i++) {
                         uint16_t arg_reg = reader_.read<uint16_t>();
                         new_vregs[i] = vregs_[arg_reg];
                     }
 
-                    // Registers must be zeroed for LL_RELEASE to be safe.
-                    if (num_callee_regs > nargs)
-                        memset(&new_vregs[nargs], 0, (num_callee_regs - nargs) * sizeof(cell_t));
-
-                    InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_addr);
+                    InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_base);
                     frame->caller_method = method_.get();
                     frame->saved_cip = reader_.cursor();
                     frame->dest_reg = dest;
                     frame->prev_frame = frm_;
 
+                    if (callee_regs > 0)
+                        memset(&new_vregs[nargs], 0, callee_regs * sizeof(cell_t));
+
                     ivk_->setCip(&frame->saved_cip);
 
                     new (&frame->ivk) InterpInvokeFrame(rt_, target.get(), &insn_begin);
 
-                    frm_ = frame_addr;
+                    frm_ = new_frm;
                     ivk_ = &frame->ivk;
-                    vregs_ = std::span<cell_t>(new_vregs, num_callee_regs);
+                    vregs_ = std::span<cell_t>(new_vregs, target->llcode()->num_regs());
                     method_ = target;
 
-                    const uint8_t* callee_code = method_->interp()->bytes();
-                    reader_ = BinaryReader(callee_code, callee_code + method_->interp()->size());
+                    const uint8_t* callee_code = method_->llcode()->bytes();
+                    reader_ = BinaryReader(callee_code, callee_code + method_->llcode()->size());
                     ll_code = callee_code;
                     continue;
                 }
@@ -993,9 +969,9 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 reader_.set_cursor(ll_code + jump_offset);
                 break;
             }
-            BINARY_OP_I32(LL_SHL, <<)
-            BINARY_OP_I32(LL_SSHR, >>)
-            case LL_SHR: {
+            BINARY_OP_I32(LL_SHL_I32, <<)
+            BINARY_OP_I32(LL_SSHR_I32, >>)
+            case LL_SHR_I32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t b = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
@@ -1035,28 +1011,28 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
             }
             BINARY_OP_I32(LL_ADD_I32, +)
             BINARY_OP_I32(LL_SUB_I32, -)
-            BINARY_OP_I32(LL_AND, &)
-            BINARY_OP_I32(LL_OR, |)
-            BINARY_OP_I32(LL_XOR, ^)
+            BINARY_OP_I32(LL_AND_I32, &)
+            BINARY_OP_I32(LL_OR_I32, |)
+            BINARY_OP_I32(LL_XOR_I32, ^)
             BINARY_OP_I32(LL_EQ_I32, ==)
             BINARY_OP_I32(LL_NEQ_I32, !=)
             BINARY_OP_I32(LL_SLESS_I32, <)
             BINARY_OP_I32(LL_SLEQ_I32, <=)
             BINARY_OP_I32(LL_SGRTR_I32, >)
             BINARY_OP_I32(LL_SGEQ_I32, >=)
-            case LL_NOT: {
+            case LL_NOT_I32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = vregs_[a] ? 0 : 1;
                 break;
             }
-            case LL_NEG: {
+            case LL_NEG_I32: {
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = -vregs_[src];
                 break;
             }
-            case LL_INVERT: {
+            case LL_INVERT_I32: {
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = ~vregs_[src];
@@ -1117,6 +1093,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_COPYARRAY: {
+                uint32_t bytes = reader_.read<uint32_t>();
                 uint16_t srcreg = reader_.read<uint16_t>();
                 uint16_t destreg = reader_.read<uint16_t>();
                 SpArray* src = heap_.ToPhysAddr<SpArray*>(vregs_[srcreg]);
@@ -1127,38 +1104,13 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 }
                 assert(dest->td->kind() == TypeKind::FixedArray);
 
-                if (src->length > dest->length) {
-                    rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
-                    return false;
-                }
-
-                auto src_elt = src->td->array_elt();
-                [[maybe_unused]] auto dest_elt = dest->td->array_elt();
-                assert(src_elt->element_size() == dest_elt->element_size());
-
                 auto src_data = heap_.ToPhysAddr<uint8_t*>(src->data);
                 auto dest_data = heap_.ToPhysAddr<uint8_t*>(dest->data);
 
                 if (src_data == dest_data)
                     break;
 
-                if (src_elt->IsHeapItem()) {
-                    cell_t* src_cells = reinterpret_cast<cell_t*>(src_data);
-                    cell_t* dest_cells = reinterpret_cast<cell_t*>(dest_data);
-                    for (uint32_t i = 0; i < src->length; i++) {
-                        auto old_item = heap_.ToPhysAddr<HeapItem*>(dest_cells[i]);
-                        if (old_item)
-                            old_item->Release();
-
-                        auto new_item = heap_.ToPhysAddr<HeapItem*>(src_cells[i]);
-                        if (new_item)
-                            new_item->AddRef();
-
-                        dest_cells[i] = src_cells[i];
-                    }
-                } else {
-                    memcpy(dest_data, src_data, src->length * src_elt->element_size());
-                }
+                memcpy(dest_data, src_data, bytes);
                 break;
             }
             case LL_COPYOBJ: {
@@ -1176,24 +1128,17 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 auto td = reader_.read<const TypeDesc*>();
                 uint16_t size_reg = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                uint32_t size;
-                if (td->kind() == TypeKind::Array) {
-                    cell_t val = vregs_[size_reg];
-                    if (val < 0) {
-                        rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
-                        return false;
-                    }
-                    size = val;
-                } else {
-                    size = td->array_size();
+                cell_t val = vregs_[size_reg];
+                if (val < 0) {
+                    rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+                    return false;
                 }
-                auto array = rt_->NewArray(td, size);
+                auto array = rt_->NewArray(td, val);
                 if (!array)
                     return false;
                 vregs_[dest] = rt_->heap().ToLocalAddr(array.release());
                 break;
             }
-
             case LL_NEWFIXEDARRAY: {
                 auto td = reader_.read<const TypeDesc*>();
                 uint16_t dest = reader_.read<uint16_t>();
@@ -1219,10 +1164,9 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
             }
             case LL_FILLARRAY: {
                 uint32_t data_offset = reader_.read<uint32_t>();
-                uint16_t src = reader_.read<uint16_t>(); // array addr
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(vregs_[src]);
-                if (!rt_->FillArray(array, data_offset))
-                    return false;
+                uint16_t reg = reader_.read<uint16_t>();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(vregs_[reg]);
+                rt_->FillArray(array, data_offset);
                 break;
             }
             case LL_ARRAY_TO_NATIVE: {
@@ -1237,13 +1181,10 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 uint32_t cell_count = reader_.read<uint32_t>();
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                cell_t base = vregs_[src];
-                auto slice_td = rt_->GetSliceType(rt_->GetPrimitiveType(TypeKind::Any));
-                auto slice = rt_->heap().New<SpArray>(slice_td);
+
+                auto slice = rt_->NewSliceEs(vregs_[src], cell_count);
                 if (!slice)
                     return false;
-                slice->length = cell_count;
-                slice->data = base;
                 vregs_[dest] = rt_->heap().ToLocalAddr(slice.release());
                 break;
             }
@@ -1268,12 +1209,12 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 break;
             }
             case LL_STOR_S_A: {
-                uint16_t dest_reg = reader_.read<uint16_t>();
                 uint16_t src_reg = reader_.read<uint16_t>();
-                if (auto old_item = heap_.ToPhysAddr<HeapItem*>(vregs_[dest_reg]))
-                    old_item->Release();
+                uint16_t dest_reg = reader_.read<uint16_t>();
                 if (auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[src_reg]))
                     new_item->AddRef();
+                if (auto old_item = heap_.ToPhysAddr<HeapItem*>(vregs_[dest_reg]))
+                    old_item->Release();
                 vregs_[dest_reg] = vregs_[src_reg];
                 break;
             }

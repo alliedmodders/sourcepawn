@@ -69,8 +69,12 @@ CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err) {
     return fun;
 }
 
-CompiledFunction*
-CompilerBase::emit() {
+CompiledFunction* CompilerBase::emit() {
+    if (!env_->EnsureStubs()) {
+        reportError(SP_ERROR_OUT_OF_MEMORY);
+        return nullptr;
+    }
+
     graph_ = method_info_->BuildGraph();
     if (!graph_) {
         reportError(method_info_->validationError());
@@ -217,7 +221,7 @@ CompilerBase::emit() {
     memcpy(cipmap->buffer(), cip_map_.data(), cip_map_.size() * sizeof(CipMapEntry));
 
     assert(error_ == SP_ERROR_NONE);
-    return new CompiledFunction(code, pcode_start_, edges.release(), cipmap.release());
+    return new CompiledFunction(code, edges.release(), cipmap.release());
 }
 
 void CompilerBase::emitErrorThunk(ErrorThunk* thunk) {

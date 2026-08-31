@@ -51,12 +51,12 @@ struct InterpFrame {
 class Interpreter final
 {
   public:
-    static bool Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval);
+    static bool Run(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm, cell_t* rval);
 
   private:
-    Interpreter(Runtime* cx, RefPtr<MethodInfo> method);
+    Interpreter(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm);
 
-    bool run_internal(std::span<cell_t> args);
+    bool run_internal();
     bool CheckTimeout();
     cell_t return_value() const { return return_value_; }
 

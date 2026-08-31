@@ -2,6 +2,7 @@
 import argparse
 import ast
 import datetime
+import difflib
 import os
 import platform
 import re
@@ -33,6 +34,8 @@ def main():
                       help='Save compiled binaries for tests with output. String must be a suffix.')
   parser.add_argument('--filter', default=None, type=str,
                       help='Filter for tests with a particular name.')
+  parser.add_argument('--no-jit', default=False, action='store_true',
+                      help='Disable JIT testing.')
   args = parser.parse_args()
 
   plan = TestPlan(args)
@@ -101,7 +104,7 @@ class TestPlan(object):
         env['LLVM_PROFILE_FILE'] = '{0}/spshell-%9m'.format(self.args.coverage)
 
       rc, stdout, stderr = testutil.exec_argv([path, '--version'])
-      if rc == 0 and 'JIT' in stdout:
+      if rc == 0 and '-jit' in stdout and not self.args.no_jit:
         self.shells.append({
           'path': path,
           'args': [],
@@ -562,32 +565,21 @@ class TestRunner(object):
       if not len(actual_lines[-1]):
         actual_lines.pop()
 
-    line_number = 0
-    while True:
-      if line_number >= len(actual_lines) and line_number < len(expected_lines):
-        self.out("FAIL: Output from {0} contains unexpected data.".format(pipe_name))
-        break
-      if line_number < len(actual_lines) and line_number >= len(expected_lines):
-        self.out("FAIL: Output from {0} is missing expected lines.".format(pipe_name))
-        break
-      if line_number >= len(actual_lines) and line_number >= len(expected_lines):
-        break
-
-      if expected_lines[line_number] != actual_lines[line_number]:
-        self.out("FAIL: Line {0} from {1} does not match the expected output.".format(
-          line_number + 1, pipe_name))
-        break
-      line_number += 1
-
-    if line_number >= len(actual_lines) and line_number >= len(expected_lines):
+    if expected_lines == actual_lines:
       return True
 
-    self.out("Expected {0}:".format(pipe_name))
-    for index, line in enumerate(expected_lines):
-      self.out(" Line {0:2}: {1}".format(index + 1, line.rstrip()))
-    self.out("Actual {0}:".format(pipe_name))
-    for index, line in enumerate(actual_lines):
-      self.out(" Line {0:2}: {1}".format(index + 1, line.rstrip()))
+    self.out("FAIL: Output from {0} did not match the expected output.".format(pipe_name))
+
+    width = 40
+    self.out("{0:<{width}}   {1}".format("Expected " + pipe_name, "Actual " + pipe_name, width=width))
+    self.out("-" * (width * 2 + 3))
+
+    for i in range(max(len(expected_lines), len(actual_lines))):
+      exp = expected_lines[i].rstrip() if i < len(expected_lines) else ""
+      act = actual_lines[i].rstrip() if i < len(actual_lines) else ""
+      marker = " " if exp == act else "!"
+      self.out("{0:<{width}} {1} {2}".format(exp[:width], marker, act[:width], width=width))
+
     return False
 
   def compare_spcomp_output(self, test, actual_stdout):

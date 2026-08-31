@@ -243,7 +243,7 @@ def main():
     shell_path = spshells[arch]
     rc, stdout, stderr = testutil.exec_argv([shell_path, '--version'])
     output_str = stdout + stderr
-    if 'JIT' in output_str:
+    if '-jit' in output_str:
       spshell_configs[arch] = ['interp', 'jit']
     else:
       spshell_configs[arch] = ['interp']

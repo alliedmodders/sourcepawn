@@ -16,16 +16,11 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
-#include <memory>
-
-#include <amtl/am-refcounting.h>
+#include "macro-assembler.h"
 
 namespace sp::v2 {
 
-class ControlFlowGraph;
-class LLCode;
-class MethodInfo;
-
-std::unique_ptr<LLCode> LowerMethod(ControlFlowGraph* graph, MethodInfo* method);
+const Register frm = ebx;
+const Register stk = edi;
 
 } // namespace sp::v2

@@ -14,6 +14,7 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
+//
 #include "jit_x64.h"
 
 #include <math.h>
@@ -40,7 +41,7 @@ Compiler::~Compiler()
 {}
 
 void Compiler::emitPrologue() {
-    size_t frame_items = __ enterFrame(JitFrameType::Scripted, pcode_start_) + 1;
+    size_t frame_items = __ enterFrame(JitFrameType::Scripted, method_info_->frame_id()) + 1;
     (void)frame_items;
 
     assert(frame_items == 3);
@@ -77,66 +78,6 @@ void Compiler::emitPrologue() {
         __ addq(stk, stack_needed);
 }
 
-void Compiler::emitThrowPath(int err) {
-    __ movl(rax, err);
-    __ jmp(&report_error_);
-}
-
-void Compiler::emitErrorHandlers() {
-    Label return_to_invoke;
-
-    if (report_error_.used()) {
-        __ bind(&report_error_);
-
-        // Create the exit frame. We always get here through a call from the opcode
-        // (and always via an out-of-line thunk).
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-
-        // Align the stack and call.
-        __ movl(ArgReg0, rax);
-        __ callWithABI(frame_items, ExternalAddress((void*)InvokeReportError));
-        __ leaveExitFrame();
-
-        // Return address is still on the stack, so jmp instead of call.
-        __ jmp(&return_to_invoke);
-    }
-
-    // The timeout uses a special stub.
-    if (throw_timeout_.used()) {
-        __ bind(&throw_timeout_);
-
-        // Create the exit frame.
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-
-        // Since the return stub wipes out the stack, we don't need to addl after
-        // the call.
-        __ callWithABI(frame_items, ExternalAddress((void*)InvokeReportTimeout));
-        __ leaveExitFrame();
-        __ jmp(&return_to_invoke);
-    }
-
-    // We get here if we know an exception is already pending.
-    if (return_reported_error_.used()) {
-        __ bind(&return_reported_error_);
-        __ call(&return_to_invoke);
-    }
-
-    if (return_to_invoke.used()) {
-        __ bind(&return_to_invoke);
-
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-
-        // We cannot jump to the return stub just yet. We could be multiple frames
-        // deep, and our |ebp| does not match the initial frame. Find and restore
-        // it now.
-        __ callWithABI(frame_items, ExternalAddress((void*)find_entry_fp));
-        __ leaveExitFrame();
-
-        __ movq(rbp, rax);
-        __ jmp(AddressValue(env_->stubs()->ReturnStub()));
-    }
-}
-
 void Compiler::emitOutOfBoundsError(OutOfBoundsError* path) {
     RipCodeLabel return_address;
     size_t frame_items = __ pushInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
@@ -146,7 +87,7 @@ void Compiler::emitOutOfBoundsError(OutOfBoundsError* path) {
     __ bind(&return_address);
     emitCipMapping(path->cip);
     __ popInlineExitFrame(alignment);
-    __ jmp(&return_reported_error_);
+    __ jmp(AddressValue(stubs_.return_reported_error));
 }
 
 bool Compiler::beforeVisitOp(OPCODE op) {
@@ -711,7 +652,7 @@ void Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) 
     ExternalAddress exn_code(Environment::get());
     __ movq(rcx, exn_code);
     __ cmpl(Operand(rcx, Environment::offsetOfExceptionCode()), 0);
-    __ j(not_zero, &return_reported_error_);
+    __ j(not_zero, AddressValue(stubs_.return_reported_error));
 }
 
 static int

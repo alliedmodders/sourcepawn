@@ -105,7 +105,7 @@ static constexpr uint32_t kApiMinVersion = 2;
 #define SP_ERROR_NULL_DEREF 34          /**< Null object reference */
 #define SP_ERROR_RTTI 35                /**< Malformed type information */
 #define SP_ERROR_SLICE_ESCAPE 36        /**< Slices cannot be returned or assigned outside of functions */
-#define SP_MAX_ERROR_CODES 36
+#define SP_MAX_ERROR_CODES 37
 //Hey you! Update the string table if you add to the end of me! */
 
 /**********************************************

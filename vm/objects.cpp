@@ -19,6 +19,8 @@
 namespace sp {
 
 void HeapItem::Destroy(HeapItem* item) {
+    assert(item->rc == 0);
+
     if (auto finalizer = item->td->finalizer())
         finalizer(item);
     mi_free(item);

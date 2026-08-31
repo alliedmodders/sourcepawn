@@ -7,3 +7,6 @@
 [submodule "third_party/mimalloc"]
 	path = third_party/mimalloc
 	url = https://github.com/alliedmodders/mimalloc
+[submodule "third_party/capstone"]
+	path = third_party/capstone
+	url = https://github.com/capstone-engine/capstone

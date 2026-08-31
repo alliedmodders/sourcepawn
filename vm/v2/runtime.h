@@ -55,6 +55,7 @@ class Runtime final : public BaseRuntime,
     ~Runtime();
 
     bool Initialize() override;
+    Runtime* AsV2() override { return this; }
 
     bool CallGlobalCtor() override;
 
@@ -109,6 +110,7 @@ class Runtime final : public BaseRuntime,
     ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
     ke::RefPtr<BaseMethodInfo> GetMethodByIndex(uint32_t method_index) const;
     RefPtr<MethodInfo> AcquireMethod(uint32_t method_index);
+    const TypeDesc* LoadMethodSignature(uint32_t method_index);
     const std::vector<RefPtr<MethodInfo>>& AllMethods() const;
 
     ScriptedInvoker* GetScriptedInvoker(funcid_t func_id);
@@ -134,10 +136,11 @@ class Runtime final : public BaseRuntime,
 
     Handle<SpArray> NewArray(const TypeDesc* td, uint32_t size);
     Handle<SpArray> NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
-    bool FillArray(SpArray* array, uint32_t data_offset);
+    void FillArray(SpArray* array, uint32_t data_offset);
     void FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset);
     void* GetArrayElem(SpArray* array, uint32_t index);
     Handle<SpArray> NewSlice(SpArray* array, uint32_t index);
+    Handle<SpArray> NewSliceEs(uint32_t data, uint32_t size);
     Handle<SpArray> NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }

@@ -361,11 +361,17 @@ class Assembler : public AssemblerBase
     void paddq(FloatRegister dest, const Operand& src) {
         emit3(0x66, 0x0f, 0xd4, dest.code, src);
     }
+    void pxor(FloatRegister dest, FloatRegister src) {
+        emit3(0x66, 0x0f, 0xef, dest.code, Operand(src));
+    }
     void psubq(FloatRegister dest, FloatRegister src) {
         emit3(0x66, 0x0f, 0xfb, dest.code, Operand(src));
     }
     void psubq(FloatRegister dest, const Operand& src) {
         emit3(0x66, 0x0f, 0xfb, dest.code, src);
+    }
+    void pcmpeqd(FloatRegister dest, FloatRegister src) {
+        emit3(0x66, 0x0f, 0x76, dest.code, Operand(src));
     }
 
     void lea(Register dest, const Operand& src) {
@@ -474,6 +480,14 @@ class Assembler : public AssemblerBase
     void orl(Register dest, const Operand& src) {
         emit1(0x0b, dest.code, src);
     }
+    void orl(Register dest, int32_t imm32) {
+        if (dest == eax) {
+            emit1(0x0d);
+            writeInt32(imm32);
+        } else {
+            alu_imm(1, imm32, Operand(dest));
+        }
+    }
     void xorl(Register dest, Register src) {
         emit1(0x31, src.code, dest.code);
     }
@@ -519,6 +533,13 @@ class Assembler : public AssemblerBase
     }
     void adcl(const Operand& dest, int32_t imm) {
         alu_imm(2, imm, dest);
+    }
+
+    void incl(const Operand& dest) {
+        emit1(0xff, 0, dest);
+    }
+    void decl(const Operand& dest) {
+        emit1(0xff, 1, dest);
     }
 
     void imull(Register dest, const Operand& src) {
@@ -746,6 +767,12 @@ class Assembler : public AssemblerBase
             emitJumpTarget(dest);
         }
     }
+    void j(ConditionCode cc, ExternalAddress address) {
+        assert(sizeof(address) == sizeof(int32_t));
+        emit2(0x0f, 0x80 + uint8_t(cc));
+        writeInt32(address.value());
+        external_refs_.push_back(pc());
+    }
     void call(Label* dest) {
         emit1(0xe8);
         emitJumpTarget(dest);
@@ -920,6 +947,10 @@ class Assembler : public AssemblerBase
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x7e, dest.code, src.code);
     }
+    void movd(const Operand& dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0x66, 0x0f, 0x7e, src.code, dest);
+    }
     void movd(Register dest, const Operand& src) {
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x7e, dest.code, src);
@@ -927,6 +958,10 @@ class Assembler : public AssemblerBase
     void movd(FloatRegister dest, Register src) {
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x6e, dest.code, src.code);
+    }
+    void movd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0x66, 0x0f, 0x6e, dest.code, src);
     }
 
     static void PatchRel32Absolute(uint8_t* ip, void* ptr) {

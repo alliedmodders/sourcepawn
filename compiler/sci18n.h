@@ -23,7 +23,7 @@
 
 #include "source-file.h"
 
-void UnicodeCodepointToUtf8(ucell codepoint, std::string* out);
+void UnicodeCodepointToUtf8(uint32_t codepoint, std::string* out);
 
 static inline bool IsSpace(char c) {
     // msvcrt doesn't like negative values.

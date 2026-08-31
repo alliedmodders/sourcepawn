@@ -16,24 +16,29 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <optional>
+#include <variant>
+#include <vector>
+
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
 #include <sp_vm_types.h>
+#include "code-stubs.h"
 #include "compiled-function.h"
-#include "v2/control-flow.h"
 #include "macro-assembler.h"
+#include "v2/control-flow.h"
+#include "v2/lowering/ll-op.h"
 #include "v2/opcodes.h"
-#include "v2/pcode-visitor.h"
 
 namespace sp {
 class CompiledFunction;
 class SmxImage;
-}
+} // namespace sp
+
 namespace sp::v2 {
 
-using namespace SourcePawn;
-
 class Runtime;
+struct LLBlock;
 
 struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).
@@ -46,12 +51,12 @@ struct BackwardJump {
     BackwardJump() {
     }
     BackwardJump(uint32_t pc, const uint8_t* cip)
-     : pc(pc)
-     , cip(cip) {
-    }
+     : pc(pc),
+       cip(cip)
+    {}
 };
 
-class CompilerBase : public PcodeVisitor
+class CompilerBase
 {
     friend class ErrorPath;
 
@@ -59,78 +64,146 @@ class CompilerBase : public PcodeVisitor
     CompilerBase(Runtime* rt, MethodInfo* method);
     virtual ~CompilerBase();
 
-    static CompiledFunction* Compile(Runtime* cx, RefPtr<MethodInfo> method, int* err);
-
-    int error() const {
-        return error_;
-    }
+    static bool Compile(Runtime* cx, RefPtr<MethodInfo> method);
 
     static bool IsSupported();
     static bool SupportsPlugin(Runtime* cx);
 
-    bool visitJUMP(cell_t offset) override;
+  protected:
+    CompiledFunction* Emit();
+
+    void EmitPrologue();
+    void EmitDebugBreakHandler();
+    bool CompileBlock(const LLBlock& block);
+
+    virtual void EmitLoadConst(uint16_t reg, cell_t val) = 0;
+    virtual void EmitLoadConst64(uint16_t reg, int64_t val) = 0;
+    virtual void EmitAddr(uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitRetn(LLOp op, std::optional<uint16_t> reg) = 0;
+    virtual void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) = 0;
+    virtual void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) = 0;
+    virtual void EmitJump(size_t target_idx) = 0;
+    virtual void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) = 0;
+    virtual void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) = 0;
+    virtual void EmitCmpI32(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) = 0;
+    virtual void EmitBasicAlu(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitNewArray(const TypeDesc* td, uint16_t size_reg, uint16_t dest_reg) = 0;
+    virtual void EmitNewFixedArray(const TypeDesc* td, uint16_t dest_reg, uint32_t size) = 0;
+    virtual void EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_reg,
+                                  uint16_t dest_reg) = 0;
+    virtual void EmitAddRef(uint16_t reg) = 0;
+    virtual void EmitRelease(uint16_t reg) = 0;
+    virtual void EmitCmpI64(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) = 0;
+    virtual void EmitBinaryI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) = 0;
+    virtual void EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) = 0;
+    virtual void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) = 0;
+    virtual void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) = 0;
+    virtual void EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) = 0;
+    virtual void EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t val_reg) = 0;
+    virtual void EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) = 0;
+    virtual void EmitStorGlb(LLOp op, uint32_t addr, uint16_t val_reg) = 0;
+    virtual void EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size) = 0;
+    virtual void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) = 0;
+    virtual void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) = 0;
+    virtual void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) = 0;
+    virtual void EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) = 0;
+    virtual void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;
+    virtual void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) = 0;
+    virtual void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;
+    virtual void EmitSliceEs(uint16_t src_reg, uint16_t dest_reg, uint32_t cells) = 0;
+    virtual void EmitSliceFlat(const SliceFlatArgs& op) = 0;
+    virtual void EmitIdxAddr(const IdxAddrArgs& args) = 0;
+    virtual void EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) = 0;
+    virtual void EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) = 0;
+    virtual void EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) = 0;
+    virtual void EmitSwitchChain(uint16_t val_reg, uint32_t def_block,
+                                 const std::span<const SwitchCaseEntry>& cases) = 0;
+    virtual void EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
+                                 const std::span<const SwitchCaseEntry>& cases) = 0;
+
+    // Errors.
+    struct DeallocThunk;
+    virtual void EmitDeallocThunk(DeallocThunk* thunk) = 0;
+
+    struct BoundsErrorThunk;
+    virtual void EmitBoundsErrorThunk(BoundsErrorThunk* thunk) = 0;
+
+    struct DeferredErrorThunk;
+    virtual void EmitDeferredErrorThunk(DeferredErrorThunk* thunk) = 0;
 
   protected:
-    CompiledFunction* emit();
-
-    virtual void emitPrologue() = 0;
-    virtual void emitThrowPath(int err) = 0;
-    virtual void emitErrorHandlers() = 0;
-    virtual void emitDebugBreakHandler() = 0;
-
     struct CallThunk;
-    virtual void emitCallThunk(CallThunk* thunk) = 0;
+    void EmitCallThunk(CallThunk* thunk);
 
-    struct OutOfBoundsError;
-    virtual void emitOutOfBoundsError(OutOfBoundsError* path) = 0;
+    void JumpOnError(ConditionCode cc, int err);
+    void JumpAndReportOnError(ConditionCode cc);
 
+    BoundsErrorThunk& AddBoundsErrorThunk();
+    DeferredErrorThunk& AddDeferredErrorThunk();
+
+    bool IsBlockEmitted(size_t block_idx) const {
+        return block_labels_[block_idx].bound();
+    }
+
+    bool TryEmitSwitchTable(uint16_t val_reg, uint32_t def_block,
+                            const std::span<const SwitchCaseEntry>& cases);
+
+  public:
     // Helpers.
-    static int CompileFromThunk(Runtime* cx, uint32_t method_index, void** addrp, uint8_t* pc);
-    static void* find_entry_fp();
+    static void* FindEntryFp();
     static void InvokeReportError(int err);
     static void InvokeReportTimeout();
+    static void DispatchDeferredReport();
+
+  protected:
+    // Helpers.
+    static void* LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t* pc);
     static void PatchCallThunk(uint8_t* pc, void* target);
 
   protected:
-    cell_t readCell();
 
     // Map a return address (i.e. an exit point from a function) to its source
     // cip. This lets us avoid tracking the cip during runtime. These are
     // sorted by definition since we assemble and emit in forward order.
-    void emitCipMapping(const uint8_t* cip) {
+    void EmitCipMapping(const uint8_t* cip) {
         CipMapEntry entry;
         entry.cipoffs = (uint32_t)(cip - code_start_);
         entry.pcoffs = masm.pc();
         cip_map_.push_back(entry);
     }
 
-    bool isNextBlock(Block* target) {
-        return target->id() == (block_->id() + 1);
-    }
-    bool isBackedge(Block* target) {
-        return target->id() <= block_->id();
+    bool IsNextBlock(uint32_t block_index) {
+        return false;
     }
 
   protected:
     struct ErrorThunk;
-    void emitErrorThunk(ErrorThunk* path);
-    void emitThrowPathIfNeeded(int err);
+    void EmitErrorThunk(ErrorThunk* path);
 
-    void reportError(int err);
-    cell_t StackOffset(cell_t offset);
+    void ReportError(int err);
 
   protected:
     Environment* env_;
+    const v2::ReturnStubs& stubs_;
     Runtime* rt_;
     Runtime* context_;
     SmxImage* image_;
     ke::RefPtr<MethodInfo> method_info_;
     ke::RefPtr<ControlFlowGraph> graph_;
-    ke::RefPtr<Block> block_;
-    int error_;
     uint32_t pcode_start_;
     const uint8_t* code_start_;
     const uint8_t* op_cip_;
+    const LLBlock* block_ = nullptr;
 
     MacroAssembler masm;
 
@@ -156,20 +229,41 @@ class CompilerBase : public PcodeVisitor
     };
     std::vector<ErrorThunk> error_thunks_;
 
-    struct OutOfBoundsError {
-        OutOfBoundsError(const uint8_t* cip, cell_t bounds)
-          : cip(cip), bounds(bounds)
+    struct BoundsErrorThunk {
+        explicit BoundsErrorThunk(const uint8_t* cip)
+          : cip(cip)
+        {}
+
+        Label label;
+        const uint8_t* cip;
+        std::variant<Register, uint32_t> index;
+        std::variant<Register, uint32_t> limit;
+    };
+    std::vector<BoundsErrorThunk> bounds_errors_;
+
+    struct DeferredErrorThunk {
+        explicit DeferredErrorThunk(const uint8_t* cip)
+          : cip(cip)
         {}
         Label label;
         const uint8_t* cip;
-        cell_t bounds;
     };
-    std::vector<OutOfBoundsError> bounds_errors_;
+    std::vector<DeferredErrorThunk> deferred_errors_;
 
-    Label throw_timeout_;
-    Label report_error_;
-    Label throw_error_code_[SP_MAX_ERROR_CODES];
-    Label return_reported_error_;
+    struct DeallocThunk {
+        DeallocThunk(Register obj_reg, std::optional<Register> save_reg, const uint8_t* cip)
+          : obj_reg(obj_reg),
+            save_reg(save_reg),
+            cip(cip)
+        {}
+
+        Label label;
+        Label return_label;
+        Register obj_reg;
+        std::optional<Register> save_reg;
+        const uint8_t* cip;
+    };
+    std::vector<DeallocThunk> dealloc_thunks_;
 
     // Debugging.
     Label debug_break_;
@@ -177,6 +271,7 @@ class CompilerBase : public PcodeVisitor
 
     std::vector<BackwardJump> backward_jumps_;
     std::vector<CipMapEntry> cip_map_;
+    std::unique_ptr<Label[]> block_labels_;
 };
 
 } // namespace sp::v2

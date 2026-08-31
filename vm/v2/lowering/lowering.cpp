@@ -109,7 +109,7 @@ struct ExprNode {
             ExprNode* index;
         } load_elem;
         struct {
-            const smx_rtti_method* method;
+            uint32_t method_index;
             std::span<VReg> argv;
             std::span<VReg> args_to_free;
         } call;
@@ -141,10 +141,10 @@ class MethodLowerer
        reader_(nullptr, nullptr)
     {}
 
-    std::unique_ptr<InterpCode> Lower();
+    std::unique_ptr<LLCode> Lower();
 
   private:
-    void LowerBlock(Block* next_block);
+    void LowerBlock();
     void LowerInstruction(OPCODE op);
     void EmitJumpTarget(Block* target_block);
     void PatchJumps();
@@ -223,9 +223,9 @@ class MethodLowerer
         return pool_.make<ExprNode>(ExprNode::kReg, type, reg, owns_reg);
     }
 
-    ExprNode* CreateCallNode(const TypeDesc* type, const smx_rtti_method* method, std::span<VReg>&& argv, std::span<VReg>&& args_to_free) {
+    ExprNode* CreateCallNode(const TypeDesc* type, uint32_t method_index, std::span<VReg>&& argv, std::span<VReg>&& args_to_free) {
         ExprNode* node = pool_.make<ExprNode>(ExprNode::kCall, type, VReg(), false);
-        node->call.method = method;
+        node->call.method_index = method_index;
         node->call.argv = std::move(argv);
         node->call.args_to_free = std::move(args_to_free);
         return node;
@@ -261,7 +261,7 @@ class MethodLowerer
     LoweringAssembler masm_;
     std::vector<Block*> blocks_by_id_;
     std::vector<size_t> jumps_to_patch_;
-    std::vector<InterpCode::OffsetMapping> mappings_;
+    std::vector<LLCode::OffsetMapping> mappings_;
     const TypeDesc* cell_type_ = nullptr;
     const TypeDesc* int64_type_ = nullptr;
     const TypeDesc* float32_type_ = nullptr;
@@ -269,17 +269,17 @@ class MethodLowerer
     BinaryReader reader_;
 
     Block* block_ = nullptr;
-    Block* next_block_ = nullptr;
     std::vector<ExprNode*> stack_;
     uint32_t base_temp_reg_ = 0;
     uint32_t num_temp_regs_ = 0;
+    uint32_t max_callee_args_ = 0;
     PoolAllocator pool_;
     std::unordered_map<int32_t, VReg> offset_to_vreg_;
     BitSet temp_regs_used_;
     BitSet gcobj_regs_;
 };
 
-std::unique_ptr<InterpCode> MethodLowerer::Lower() {
+std::unique_ptr<LLCode> MethodLowerer::Lower() {
     InitializeRegisters();
     AutoClearBlockData<LoweringData> clear_block_data(graph_);
 
@@ -294,12 +294,25 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++)
         blocks_by_id_[(*iter)->id()] = *iter;
 
+    std::vector<std::pair<size_t, size_t>> block_pcs;
+    std::vector<std::vector<uint32_t>> block_successors;
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
         block_ = *iter;
-        auto next_iter = iter;
-        next_iter++;
-        Block* next_block = (next_iter != graph_->rpoEnd()) ? *next_iter : nullptr;
-        LowerBlock(next_block);
+
+        size_t start_pc = masm_.pc();
+        {
+            LowerBlock();
+        }
+        size_t end_pc = masm_.pc();
+
+        block_pcs.push_back({start_pc, end_pc});
+
+        std::vector<uint32_t> succs;
+        for (Block* succ : (*iter)->successors()) {
+            assert(succ->id() >= 1);
+            succs.push_back(succ->id() - 1);
+        }
+        block_successors.push_back(std::move(succs));
     }
     block_ = nullptr;
 
@@ -312,8 +325,21 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
 
     auto bytes = std::make_unique<uint8_t[]>(masm_.code_size());
     memcpy(bytes.get(), masm_.bytes(), masm_.code_size());
-    return std::make_unique<InterpCode>(std::move(bytes), masm_.code_size(), num_temp_regs_,
-                                        std::move(mappings_), std::move(gcobj_regs_));
+
+    ke::FixedArray<LLBlock> blocks(block_pcs.size());
+    for (size_t i = 0; i < block_pcs.size(); i++) {
+        size_t start = block_pcs[i].first;
+        size_t end = block_pcs[i].second;
+        assert(start <= end);
+        assert(end <= masm_.code_size());
+        blocks[i] = LLBlock{std::span<const uint8_t>(bytes.get() + start, end - start),
+                            ke::FixedArray<uint32_t>(std::move(block_successors[i]))};
+    }
+
+    return std::make_unique<LLCode>(std::move(bytes), masm_.code_size(), num_temp_regs_,
+                                    max_callee_args_,
+                                    std::move(mappings_), std::move(gcobj_regs_),
+                                    std::move(blocks));
 }
 
 void MethodLowerer::InitializeRegisters() {
@@ -364,8 +390,7 @@ void MethodLowerer::InitializeRegisters() {
     num_temp_regs_ = current_reg;
 }
 
-void MethodLowerer::LowerBlock(Block* next_block) {
-    next_block_ = next_block;
+void MethodLowerer::LowerBlock() {
     block_->label()->bind(masm_.pc());
 
     const uint8_t* stop_at = block_->end();
@@ -390,7 +415,7 @@ void MethodLowerer::LowerBlock(Block* next_block) {
     if (block_->endType() == BlockEnd::Jump) {
         Block* target = block_->successors()[0];
         ReconcileStack(target);
-        if (target != next_block) {
+        if (target->id() != block_->id() + 1) {
             emitOp(LL_JUMP);
             EmitJumpTarget(target);
         }
@@ -445,10 +470,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (base->IsFlatArray()) {
                 assert(op != OP_LOAD_ELEM_A);
                 switch (op) {
-                    case OP_LOAD_ELEM_I32: llop = LL_LOAD_I_I32; break;
-                    case OP_LOAD_ELEM_F32: llop = LL_LOAD_I_F32; break;
-                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_I_I64; break;
-                    case OP_LOAD_ELEM_U8:  llop = LL_LOAD_I_U8; break;
+                    case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_FLAT_I32; break;
+                    case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_FLAT_F32; break;
+                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_FLAT_I64; break;
+                    case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_FLAT_U8; break;
                     default: assert(false); break;
                 }
             } else {
@@ -520,7 +545,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
                     default: assert(false); break;
                 }
-                emit(llop, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, val_reg);
+                emit(llop, StorElemFlatArgs{
+                    .array_size = (uint32_t)base->array_size(),
+                    .base_reg = base_reg.index,
+                    .index_reg = index_reg.index,
+                    .val_reg = val_reg.index
+                });
             } else {
                 LLOp llop = LL_NOP;
                 switch (op) {
@@ -597,22 +627,22 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_SHL:
-            LowerBinary(LL_SHL,  LL_NOP, LL_SHL_I64);
+            LowerBinary(LL_SHL_I32,  LL_NOP, LL_SHL_I64);
             break;
         case OP_SHR:
-            LowerBinary(LL_SHR,  LL_NOP, LL_SHR_I64);
+            LowerBinary(LL_SHR_I32,  LL_NOP, LL_SHR_I64);
             break;
         case OP_SSHR:
-            LowerBinary(LL_SSHR, LL_NOP, LL_SSHR_I64);
+            LowerBinary(LL_SSHR_I32, LL_NOP, LL_SSHR_I64);
             break;
         case OP_AND:
-            LowerBinary(LL_AND,  LL_NOP, LL_AND_I64);
+            LowerBinary(LL_AND_I32,  LL_NOP, LL_AND_I64);
             break;
         case OP_OR:
-            LowerBinary(LL_OR,   LL_NOP, LL_OR_I64);
+            LowerBinary(LL_OR_I32,   LL_NOP, LL_OR_I64);
             break;
         case OP_XOR:
-            LowerBinary(LL_XOR,  LL_NOP, LL_XOR_I64);
+            LowerBinary(LL_XOR_I32,  LL_NOP, LL_XOR_I64);
             break;
         case OP_SUB:
             LowerBinary(LL_SUB_I32, LL_SUB_F32, LL_SUB_I64);
@@ -630,7 +660,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             LowerBinary(LL_ADD_I32, LL_ADD_F32, LL_ADD_I64);
             break;
         case OP_NOT:
-            LowerUnary(LL_NOT, cell_type_);
+            LowerUnary(LL_NOT_I32, cell_type_);
             break;
 
         case OP_INC:
@@ -651,10 +681,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_NEG:
-            LowerUnary(LL_NEG, LL_NEG_F32, LL_NEG_I64);
+            LowerUnary(LL_NEG_I32, LL_NEG_F32, LL_NEG_I64);
             break;
         case OP_INVERT:
-            LowerUnary(LL_INVERT, LL_NOP, LL_INVERT_I64);
+            LowerUnary(LL_INVERT_I32, LL_NOP, LL_INVERT_I64);
             break;
         case OP_TEST:
             LowerUnary(LL_TEST_I32, LL_TEST_F32, LL_TEST_I64, cell_type_);
@@ -674,6 +704,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             const TypeDesc* src = src_node->type;
             const TypeDesc* dest = dest_node->type;
+            uint32_t bytes = src->array_size() * dest->array_elt()->element_size();
+
             if (dest->IsFlatArray() || src->IsFlatArray()) {
                 VReg flat_src_reg = src_reg;
                 VReg flat_dest_reg = dest_reg;
@@ -686,16 +718,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     emit(LL_ARRAY_TO_FLAT, dest_reg, flat_dest_reg);
                 }
 
-                uint32_t elements = dest->array_size();
-                if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray) {
-                    elements = src->array_size();
-                }
-                if (dest->array_elt()->IsHeapItem()) {
-                    emit(LL_COPYARRAY_FLAT_A, elements, flat_src_reg, flat_dest_reg);
-                } else {
-                    uint32_t bytes = elements * dest->array_elt()->element_size();
-                    emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
-                }
+                emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
 
                 if (!src->IsFlatArray()) {
                     FreeReg(flat_src_reg);
@@ -704,7 +727,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     FreeReg(flat_dest_reg);
                 }
             } else {
-                emit(LL_COPYARRAY, src_reg, dest_reg);
+                emit(LL_COPYARRAY, bytes, src_reg, dest_reg);
             }
             FreeReg(src_reg);
             FreeReg(dest_reg);
@@ -737,7 +760,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg dest = AllocateTemp(result_type);
 
             if (base->IsFlatArray()) {
-                emit(LL_SLICE_FLAT, base, base_reg, index_reg, dest);
+                emit(LL_SLICE_FLAT, SliceFlatArgs{
+                    .td = base,
+                    .base_reg = base_reg.index,
+                    .index_reg = index_reg.index,
+                    .dest_reg = dest.index
+                });
             } else {
                 emit(LL_SLICE, base_reg, index_reg, dest);
             }
@@ -844,7 +872,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 // We must evaluate the RHS into a temporary register first to prevent
                 // use-after-free bugs if the RHS expression references the target local itself.
                 VReg src = EmitNode(val);
-                emit(LL_STOR_S_A, OffsetToVReg(offset), src);
+                emit(LL_STOR_S_A, src, OffsetToVReg(offset));
                 FreeReg(src);
             } else {
                 VReg target = OffsetToVReg(offset);
@@ -884,9 +912,20 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             VReg dest = AllocateTemp(result_type);
 
             if (base->IsFlatArray()) {
-                emit(LL_IDXADDR_FLAT, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, dest);
+                emit(LL_IDXADDR_FLAT, IdxAddrFlatArgs{
+                    .size = (uint32_t)base->array_size(),
+                    .elt_size = (uint16_t)base->array_elt()->element_size(),
+                    .base_reg = base_reg.index,
+                    .index_reg = index_reg.index,
+                    .dest_reg = dest.index
+                });
             } else {
-                emit(LL_IDXADDR, base_reg, index_reg, dest);
+                emit(LL_IDXADDR, IdxAddrArgs{
+                    .base_reg = base_reg.index,
+                    .index_reg = index_reg.index,
+                    .elt_size = (uint16_t)base->array_elt()->element_size(),
+                    .dest_reg = dest.index,
+                });
             }
 
             FreeReg(index_reg);
@@ -1167,7 +1206,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             Block* target = block_->successors()[0];
             ReconcileStack(target);
-            if (target != next_block_) {
+
+            // Don't emit JUMP if it's the next block.
+            if (target->id() != block_->id() + 1) {
                 emit(LL_JUMP);
                 EmitJumpTarget(target);
             }
@@ -1191,7 +1232,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             Block* fallthrough_block = block_->successors()[0];
             ReconcileStack(fallthrough_block);
-            if (fallthrough_block != next_block_) {
+            if (fallthrough_block->id() != block_->id() + 1) {
                 emit(LL_JUMP);
                 EmitJumpTarget(fallthrough_block);
             }
@@ -1232,7 +1273,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             Block* fallthrough_block = block_->successors()[0];
             ReconcileStack(fallthrough_block);
-            if (fallthrough_block != next_block_) {
+            if (fallthrough_block->id() != block_->id() + 1) {
                 emit(LL_JUMP);
                 EmitJumpTarget(fallthrough_block);
             }
@@ -1450,15 +1491,18 @@ void MethodLowerer::LowerUnary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
 }
 
 void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc) {
-    const smx_rtti_method* method = graph_->rt()->image()->GetMethod(method_index);
+    const smx_rtti_method* method = rt_->image()->GetMethod(method_index);
+    RefPtr<MethodInfo> callee = rt_->AcquireMethod(method_index);
+    const TypeDesc* sig = callee->signature();
+
+    bool is_variadic = callee->IsLegacyVariadic();
+    uint32_t expected_argc = callee->FormalArgc();
 
     uint32_t arg_count = 0;
     if (argc) {
         arg_count = *argc;
     } else {
-        auto parser = graph_->rt()->image()->GetTypeParser(method->signature);
-        [[maybe_unused]] bool success = parser.ReadFunctionSignatureArgCount(&arg_count);
-        assert(success);
+        arg_count = expected_argc;
     }
 
     for (uint32_t i = 0; i < stack_.size() - arg_count; i++)
@@ -1481,8 +1525,36 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         }
     }
 
-    bool is_void = graph_->rt()->image()->IsVoidMethod(method);
-    const TypeDesc* return_td = nullptr;
+    bool package_variadic = (!sig->is_native() && is_variadic && arg_count >= expected_argc);
+
+    if (package_variadic) {
+        uint32_t variadic_count = arg_count - expected_argc;
+
+        const TypeDesc* flat_array_td = rt_->GetFlatArrayType(cell_type_, 1 + variadic_count);
+        VReg array_reg = AllocateTemp(flat_array_td);
+
+        VReg count_reg = AllocateTemp(cell_type_);
+        emit(LL_LOAD_CONST, variadic_count, count_reg);
+
+        VReg idx_reg = AllocateTemp(cell_type_);
+        emit(LL_LOAD_CONST, 0, idx_reg);
+        emit(LL_STOR_ELEM_FLAT_I32, (uint32_t)(1 + variadic_count), (uint16_t)cell_type_->slot_size(), array_reg, idx_reg, count_reg);
+        FreeReg(count_reg);
+        FreeReg(idx_reg);
+
+        for (uint32_t i = 0; i < variadic_count; i++) {
+            idx_reg = AllocateTemp(cell_type_);
+            emit(LL_LOAD_CONST, i + 1, idx_reg);
+            emit(LL_STOR_ELEM_FLAT_I32, (uint32_t)(1 + variadic_count), (uint16_t)cell_type_->slot_size(), array_reg, idx_reg, argv[expected_argc + i]);
+            FreeReg(idx_reg);
+            FreeReg(argv[expected_argc + i]);
+        }
+
+        argv.resize(expected_argc + 1);
+        argv[expected_argc] = array_reg;
+    }
+
+    bool is_void = (sig->return_type()->kind() == TypeKind::Void);
 
     if (is_void) {
         EmitCall(method, VReg(), std::span<VReg>(argv));
@@ -1491,52 +1563,42 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         return;
     }
 
-    if (!is_void) {
-        // :TODO: make a helper function for this
-        auto parser = graph_->rt()->image()->GetTypeParser(method->signature);
-        uint32_t unused_argc;
-        parser.ReadFunctionSignatureArgCount(&unused_argc);
-        uint8_t variadic;
-        parser.GetByte(&variadic);
-        if (variadic == cb::kLegacyVariadic) {
-            parser.NextByte();
-        }
-        return_td = graph_->rt()->LoadType(parser);
-        assert(return_td != nullptr);
+    const TypeDesc* return_td = sig->return_type();
+
+    std::span<VReg> call_argv;
+    std::span<VReg> call_args_to_free;
+
+    if (argv.size() > 0) {
+        std::span<VReg> arr = pool_.make_n<VReg>(argv.size());
+        for (size_t i = 0; i < argv.size(); i++)
+            arr[i] = argv[i];
+        call_argv = arr;
     }
 
-    if (return_td) {
-        std::span<VReg> call_argv;
-        std::span<VReg> call_args_to_free;
-
-        if (argv.size() > 0) {
-            std::span<VReg> arr = pool_.make_n<VReg>(argv.size());
-            for (size_t i = 0; i < argv.size(); i++)
-                arr[i] = argv[i];
-            call_argv = arr;
-        }
-
-        if (args_to_free.size() > 0) {
-            std::span<VReg> arr = pool_.make_n<VReg>(args_to_free.size());
-            for (size_t i = 0; i < args_to_free.size(); i++)
-                arr[i] = args_to_free[i];
-            call_args_to_free = arr;
-        }
-
-        pushStack(CreateCallNode(return_td, method, std::move(call_argv), std::move(call_args_to_free)));
+    if (args_to_free.size() > 0) {
+        std::span<VReg> arr = pool_.make_n<VReg>(args_to_free.size());
+        for (size_t i = 0; i < args_to_free.size(); i++)
+            arr[i] = args_to_free[i];
+        call_args_to_free = arr;
     }
+
+    pushStack(CreateCallNode(return_td, method_index, std::move(call_argv), std::move(call_args_to_free)));
 }
 
 void MethodLowerer::EmitCall(const smx_rtti_method* method, VReg dest_reg,
                              const std::span<VReg>& argv)
 {
+    // Natives have one extra argument, the argument count.
+    uint32_t callee_args = (uint32_t)argv.size();
+    if (method->flags & kRttiMethod_Native)
+        callee_args += 1;
+    max_callee_args_ = std::max(max_callee_args_, callee_args);
+
     emit(LL_CALL, method, (uint8_t)argv.size(), (uint16_t)dest_reg.index);
-    for (uint32_t i = 0; i < argv.size(); i++) {
+    for (uint32_t i = 0; i < argv.size(); i++)
         emitVal(argv[i]);
-    }
-    for (uint32_t i = 0; i < argv.size(); i++) {
+    for (uint32_t i = 0; i < argv.size(); i++)
         FreeReg(argv[i]);
-    }
 }
 
 VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
@@ -1549,13 +1611,15 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             return node->reg;
 
         case ExprNode::kCall: {
+            const smx_rtti_method* method = rt_->image()->GetMethod(node->call.method_index);
+
             if (target_reg.valid() && node->type->IsHeapItem()) {
                 // We cannot emit an LL_RELEASE(target_reg) before EmitCall because
                 // doing so would destroy the old array before returning the new one,
                 // causing a crash if they share the same physical array instance
                 // (e.g. self-assignment like x = get_array(x)).
                 VReg temp = AllocateTemp(node->type);
-                EmitCall(node->call.method, temp, node->call.argv);
+                EmitCall(method, temp, node->call.argv);
                 for (VReg reg : node->call.args_to_free)
                     FreeReg(reg);
                 emit(LL_RELEASE, target_reg);
@@ -1564,7 +1628,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 return target_reg;
             }
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            EmitCall(node->call.method, dest, node->call.argv);
+            EmitCall(method, dest, node->call.argv);
             for (VReg reg : node->call.args_to_free)
                 FreeReg(reg);
             return dest;
@@ -1614,10 +1678,12 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             LLOp op = node->load_elem.opcode;
 
             if (base->IsFlatArray()) {
-                VReg addr_dest = AllocateTemp(cell_type_);
-                emit(LL_IDXADDR_FLAT, (uint32_t)base->array_size(), (uint16_t)base->array_elt()->element_size(), base_reg, index_reg, addr_dest);
-                emit(op, addr_dest, dest);
-                FreeReg(addr_dest);
+                emit(op, LoadElemFlatArgs{
+                    .array_size = (uint32_t)base->array_size(),
+                    .base_reg = base_reg.index,
+                    .index_reg = index_reg.index,
+                    .dest_reg = dest.index
+                });
             } else {
                 emit(op, base_reg, index_reg, dest);
             }
@@ -1685,7 +1751,7 @@ void MethodLowerer::FreeReg(VReg reg) {
     }
 }
 
-std::unique_ptr<InterpCode> LowerMethod(ControlFlowGraph* graph, MethodInfo* method) {
+std::unique_ptr<LLCode> LowerMethod(ControlFlowGraph* graph, MethodInfo* method) {
     MethodLowerer lowerer(graph, method);
     return lowerer.Lower();
 }

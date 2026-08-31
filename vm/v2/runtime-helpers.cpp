@@ -49,8 +49,7 @@ Int64Mod(int64_t* pri, int64_t* alt, int64_t* pri_dest) {
     return SP_ERROR_NONE;
 }
 
-void
-ReportOutOfBoundsError(cell_t index, cell_t bounds) {
+void ReportOutOfBoundsError(cell_t index, cell_t bounds) {
     if (bounds == INT_MAX) {
         // This is an internal protection against negative indices on arrays with
         // unknown size.

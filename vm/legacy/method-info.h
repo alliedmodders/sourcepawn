@@ -48,9 +48,14 @@ class MethodInfo final : public BaseMethodInfo
     uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
     int validationError() const { return validation_error_; }
-    uint32_t pcode_offset() const override { return pcode_offset_; }
+    uint32_t pcode_offset() const { return pcode_offset_; }
+    uint32_t frame_id() const override { return pcode_offset_; }
     uint32_t TranslateInterpCip(const uint8_t* cip) const override;
+    uint32_t TranslateJitCip(uint32_t cip) const override { return pcode_offset() + cip; }
     int32_t max_stack() const { return max_stack_; }
+
+    const char* GetName() const override;
+    const char* GetFilePath() const override;
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {

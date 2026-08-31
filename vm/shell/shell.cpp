@@ -56,9 +56,7 @@ BaseFilename(const char* path)
   return path;
 }
 
-static void
-DumpStack(IFrameIterator& iter)
-{
+static void DumpStack(IFrameIterator& iter) {
   int index_count = 0;
   for (; !iter.Done(); iter.Next()) {
     if (iter.IsInternalFrame())
@@ -646,9 +644,14 @@ int main(int argc, char** argv)
   }
 
   if (show_version.value()) {
-    fprintf(stdout, "SourcePawn version: %s\n", SM_VERSION_STRING);
-    if (sEnv->IsJitAvailable())
-      fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
+    if ((sEnv = Environment::New()) == nullptr) {
+      fprintf(stderr, "Could not initialize ISourcePawnEnvironment\n");
+      return 1;
+    }
+    fprintf(stdout, "%s\n", sEnv->GetEngineName());
+    sEnv->Shutdown();
+    delete sEnv;
+    sEnv = nullptr;
     return 0;
   }
 

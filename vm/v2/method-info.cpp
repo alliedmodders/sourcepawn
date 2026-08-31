@@ -21,45 +21,29 @@
 
 namespace sp::v2 {
 
-MethodInfo::MethodInfo(Runtime* rt, uint32_t method_index)
+MethodInfo::MethodInfo(Runtime* rt, uint32_t method_index, const TypeDesc* signature)
  : rt_(rt),
    method_index_(method_index),
-   code_kind_(CodeKind::None),
    max_stack_(0),
    max_eval_stack_depth_(0),
-   max_eval_stack_bytes_(0)
- {
-    code_.jit = nullptr;
- }
+   max_eval_stack_bytes_(0),
+   signature_(signature)
+ {}
 
 uint32_t MethodInfo::pcode_offset() const {
     return rt_->image()->GetMethod(method_index_)->pcode_start;
 }
 
-MethodInfo::~MethodInfo() {
-    if (code_kind_ == CodeKind::Jit)
-        delete code_.jit;
-    else if (code_kind_ == CodeKind::Interp)
-        delete code_.interp;
+MethodInfo::~MethodInfo() = default;
+
+void MethodInfo::setCompiledFunction(CompiledFunction* fun) {
+    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
+    jit_.reset(fun);
 }
 
-void
-MethodInfo::setCompiledFunction(CompiledFunction* fun) {
-    assert(code_kind_ == CodeKind::None);
-
-    // Grab the lock before linking code in, since the watchdog timer will look
-    // at this on another thread.
+void MethodInfo::set_llcode(std::unique_ptr<LLCode> code) {
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    code_.jit = fun;
-    code_kind_ = CodeKind::Jit;
-}
-
-void MethodInfo::setInterpCode(std::unique_ptr<InterpCode> code) {
-    assert(code_kind_ == CodeKind::None);
-
-    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    code_.interp = code.release();
-    code_kind_ = CodeKind::Interp;
+    llcode_ = std::move(code);
 }
 
 void
@@ -94,11 +78,27 @@ const TypeDesc* MethodInfo::GetTypeOfLocal(cell_t offset) const {
 }
 
 uint32_t MethodInfo::TranslateInterpCip(const uint8_t* cip) const {
-    assert(interp());
-    const uint8_t* ll_bytes = interp()->bytes();
-    assert(cip >= ll_bytes && cip < ll_bytes + interp()->size());
+    assert(llcode());
+    const uint8_t* ll_bytes = llcode()->bytes();
+    assert(cip >= ll_bytes && cip < ll_bytes + llcode()->size());
     uint32_t ll_offset = (uint32_t)(cip - ll_bytes);
-    return interp()->LookupHighOffset(ll_offset);
+    return llcode()->LookupHighOffset(ll_offset);
+}
+
+uint32_t MethodInfo::TranslateJitCip(uint32_t cip) const {
+    assert(llcode());
+    return llcode()->LookupHighOffset(cip);
+}
+
+const char* MethodInfo::GetName() const {
+    auto method = rt_->image()->GetMethod(method_index_);
+    if (!method)
+        return nullptr;
+    return rt_->image()->names() + method->name;
+}
+
+const char* MethodInfo::GetFilePath() const {
+    return rt_->image()->LookupFile(pcode_offset());
 }
 
 } // namespace sp::v2

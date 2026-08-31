@@ -19,7 +19,7 @@
 
 #include <amtl/am-platform.h>
 #include <sp_vm_types.h>
-#if defined(SP_HAS_JIT)
+#if defined(SP_JIT_V1) || defined(SP_JIT_V2)
 #    error "Wrong architecture!"
 #endif
 

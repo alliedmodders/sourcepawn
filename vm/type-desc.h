@@ -29,6 +29,8 @@ enum class TypeKind : uint8_t {
     Char8,
     Any,
     TopFunction,
+    Function,
+    LegacyVarArgs,
     Null,
     Array,
     FixedArray,
@@ -97,6 +99,15 @@ class TypeDesc final {
         clsdef.field_offsets = field_offsets;
     }
 
+    TypeDesc(const TypeDesc* return_type, std::span<const TypeDesc*> args, bool is_native)
+      : kind_(TypeKind::Function),
+        can_global_cache_(false)
+    {
+        func.return_type = return_type;
+        func.args = args;
+        func.is_native = is_native;
+    }
+
     // Size needed to store a value of this type into a variable slot.
     uint32_t slot_size() const {
         assert(kind_ != TypeKind::Void);
@@ -107,6 +118,10 @@ class TypeDesc final {
                 return (array.size * array.elt->element_size() + 3) & ~3;
             case TypeKind::EnumStruct:
                 return clsdef.total_size;
+            case TypeKind::Function:
+            case TypeKind::LegacyVarArgs:
+                assert(false);
+                return 0;
             default:
                 return sizeof(int32_t);
         }
@@ -186,6 +201,22 @@ class TypeDesc final {
         return ref;
     }
 
+    bool IsFunction() const { return kind_ == TypeKind::Function; }
+    const TypeDesc* return_type() const {
+        assert(IsFunction());
+        return func.return_type;
+    }
+    std::span<const TypeDesc*> args() const {
+        assert(IsFunction());
+        return func.args;
+    }
+    bool is_native() const {
+        assert(IsFunction());
+        return func.is_native;
+    }
+
+    bool IsLegacyVarArgs() const { return kind_ == TypeKind::LegacyVarArgs; }
+
     bool IsHeapItem() const {
         switch (kind_) {
             case TypeKind::ArraySlice:
@@ -216,6 +247,8 @@ class TypeDesc final {
     typedef void (*Finalizer)(HeapItem* item);
     Finalizer finalizer() const { return finalizer_; }
 
+    static size_t OffsetOfKind() { return offsetof(TypeDesc, kind_); }
+
 #ifndef NDEBUG
   public:
     static constexpr uint32_t kMagic = 0x54595045;
@@ -244,6 +277,11 @@ class TypeDesc final {
             uint32_t total_size;
             std::span<uint32_t> field_offsets;
         } clsdef;
+        struct {
+            const TypeDesc* return_type;
+            std::span<const TypeDesc*> args;
+            bool is_native;
+        } func;
     };
 };
 

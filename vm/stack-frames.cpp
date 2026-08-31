@@ -22,7 +22,7 @@
 #    include "x86/frames-x86.h"
 #elif defined(KE_ARCH_X64)
 #    include "x64/frames-x64.h"
-#elif !defined(SP_HAS_JIT)
+#elif !defined(SP_JIT_V1) && !defined(SP_JIT_V2)
 #    include "null-frame-layout.h"
 #endif
 
@@ -30,10 +30,9 @@ using namespace ke;
 using namespace sp;
 using namespace SourcePawn;
 
-InvokeFrame::InvokeFrame(BaseRuntime* cx, ucell_t entry_cip)
+InvokeFrame::InvokeFrame(BaseRuntime* cx)
  : prev_(Environment::get()->top()),
-   cx_(cx),
-   entry_cip_(0) {
+   cx_(cx) {
     Environment::get()->enterInvoke(this);
 }
 
@@ -44,7 +43,7 @@ InvokeFrame::~InvokeFrame() {
 
 InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method,
                                      const uint8_t* const* cip)
- : InvokeFrame(cx, method->pcode_offset()),
+ : InvokeFrame(cx),
    method_(method),
    cip_(cip),
    native_index_(-1) {
@@ -66,8 +65,8 @@ InterpInvokeFrame::leaveNativeCall() {
     native_index_ = -1;
 }
 
-JitInvokeFrame::JitInvokeFrame(BaseRuntime* cx, ucell_t entry_cip)
- : InvokeFrame(cx, entry_cip),
+JitInvokeFrame::JitInvokeFrame(BaseRuntime* cx)
+ : InvokeFrame(cx),
    prev_exit_fp_(Environment::get()->exit_fp()) {
 }
 
@@ -99,11 +98,6 @@ InterpFrameIterator::type() const {
     return current_;
 }
 
-cell_t InterpFrameIterator::function_cip() const {
-    assert(current_ == FrameType::Scripted);
-    return ivk_->method()->pcode_offset();
-}
-
 cell_t InterpFrameIterator::cip() const {
     assert(current_ == FrameType::Scripted);
     const uint8_t* ptr = *ivk_->cip_;
@@ -118,13 +112,13 @@ InterpFrameIterator::native_index() const {
 
 // This constructor is for find_entry_fp() in the JIT.
 JitFrameIterator::JitFrameIterator(Environment* env)
- : JitFrameIterator(env->top()->cx()->GetBaseRuntime(), env->exit_fp()) {
-}
+ : JitFrameIterator(env->top()->cx()->GetBaseRuntime(), env->exit_fp())
+{}
 
 JitFrameIterator::JitFrameIterator(BaseRuntime* rt, intptr_t* exit_fp)
  : rt_(rt),
-   cur_frame_(FrameLayout::FromFp(exit_fp)) {
-
+   cur_frame_(FrameLayout::FromFp(exit_fp))
+{
     assert(cur_frame_->frame_type() == JitFrameType::Exit);
     assert(cur_frame_->return_address);
     assert(cur_frame_->prev_fp);
@@ -138,8 +132,7 @@ JitFrameIterator::done() const {
     return cur_frame_->frame_type() == JitFrameType::Entry;
 }
 
-void
-JitFrameIterator::next() {
+void JitFrameIterator::next() {
     assert(!done());
 
     pc_ = cur_frame_->return_address;
@@ -161,15 +154,14 @@ JitFrameIterator::type() const {
     }
 }
 
-cell_t
-JitFrameIterator::function_cip() const {
-    assert(cur_frame_->frame_type() == JitFrameType::Scripted);
-    return cur_frame_->function_id();
+BaseMethodInfo* JitFrameIterator::method() const {
+    if (cur_frame_->frame_type() != JitFrameType::Scripted)
+        return nullptr;
+    return rt_->GetMethodFromFrameId(cur_frame_->function_id());
 }
 
-cell_t
-JitFrameIterator::cip() const {
-    ke::RefPtr<BaseMethodInfo> method = rt_->GetMethodFromFrameId(function_cip());
+cell_t JitFrameIterator::cip() const {
+    ke::RefPtr<BaseMethodInfo> method = rt_->GetMethodFromFrameId(cur_frame_->function_id());
     if (!method)
         return 0;
 
@@ -179,9 +171,9 @@ JitFrameIterator::cip() const {
 
     if (cip_ == kInvalidCip) {
         if (pc_)
-            cip_ = fn->FindCipByPc(pc_);
+            cip_ = method->TranslateJitCip(fn->FindCipByPc(pc_));
         else
-            cip_ = function_cip();
+            cip_ = 0;
     }
     return cip_;
 }
@@ -193,9 +185,10 @@ JitFrameIterator::native_index() const {
 }
 
 FrameIterator::FrameIterator()
- : ivk_(nullptr)
- , runtime_(nullptr)
- , next_exit_fp_(nullptr) {
+ : ivk_(nullptr),
+   runtime_(nullptr),
+   next_exit_fp_(nullptr)
+{
     Reset();
 }
 
@@ -266,7 +259,7 @@ FrameIterator::FilePath() const {
 
     ucell_t cip = frame_cursor_->cip();
     if (cip == kInvalidCip)
-        return runtime_->image()->LookupFile(frame_cursor_->function_cip());
+        return frame_cursor_->method()->GetFilePath();
 
     return runtime_->image()->LookupFile(cip);
 }
@@ -283,8 +276,7 @@ FrameIterator::FunctionName() const {
     }
 
     if (IsScriptedFrame()) {
-        cell_t function_cip = frame_cursor_->function_cip();
-        return runtime_->image()->LookupFunction(function_cip);
+        return frame_cursor_->method()->GetName();
     }
 
     return nullptr;

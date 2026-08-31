@@ -10,10 +10,12 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include <sp_vm_api.h>
 #include "code-stubs.h"
+
 #include "debug-metadata.h"
 #include "linking.h"
+#include <sp_vm_api.h>
+#include "v2/jit.h"
 #include "v2/runtime.h"
 #include "x64/constants-x64.h"
 #include "x64/macro-assembler-x64.h"
@@ -113,11 +115,62 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ bind(&error);
     __ jmp(&ret);
 
+    Label report_error;
+    Label throw_timeout;
+    Label return_reported_error;
+    Label return_to_invoke;
+    Label throw_error_code[SP_MAX_ERROR_CODES];
+
+    __ bind(&report_error);
+    {
+        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
+        __ movl(ArgReg0, rax);
+        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::InvokeReportError));
+        __ leaveExitFrame();
+        __ jmp(&return_to_invoke);
+    }
+
+    __ bind(&throw_timeout);
+    {
+        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
+        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::InvokeReportTimeout));
+        __ leaveExitFrame();
+        __ jmp(&return_to_invoke);
+    }
+
+    __ bind(&return_reported_error);
+    __ call(&return_to_invoke);
+
+    __ bind(&return_to_invoke);
+    {
+        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
+        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::FindEntryFp));
+        __ leaveExitFrame();
+        __ movq(rbp, rax);
+        __ jmp(&error);
+    }
+
+    for (int i = 1; i < SP_MAX_ERROR_CODES; i++) {
+        __ bind(&throw_error_code[i]);
+        __ movl(rax, i);
+        __ jmp(&report_error);
+    }
+
     invoke_stub_v2_ = LinkCode(env_, masm, "<jit invoke stub>", {});
     if (!invoke_stub_v2_.entry)
         return false;
 
-    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry) + error.offset();
+    uint8_t* entry = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry);
+    return_stubs_v2_.emergency_return = entry + error.offset();
+    return_stubs_v2_.report_error = entry + report_error.offset();
+    return_stubs_v2_.throw_timeout = entry + throw_timeout.offset();
+    return_stubs_v2_.return_reported_error = entry + return_reported_error.offset();
+    for (int i = 1; i < SP_MAX_ERROR_CODES; i++) {
+        return_stubs_v2_.throw_error_code[i] = entry + throw_error_code[i].offset();
+    }
+    return_stubs_v2_.throw_error_code[0] = return_stubs_v2_.report_error;
+
+    return_stub_ = return_stubs_v2_.emergency_return;
     return true;
 }
 

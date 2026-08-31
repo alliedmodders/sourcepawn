@@ -66,7 +66,7 @@ module.sources += [
   'v2/scripted-invoker.cpp',
 ]
 
-if 'SP_HAS_JIT' in module.compiler.defines:
+if 'SP_JIT_V1' in module.compiler.defines:
   module.sources += [
     'legacy/jit.cpp',
     'linking.cpp',
@@ -84,4 +84,13 @@ if 'SP_HAS_JIT' in module.compiler.defines:
       'x64/assembler-x64.cpp',
       'x64/features-x64.cpp',
       'x64/macro-assembler-x64.cpp',
+    ]
+if 'SP_JIT_V2' in module.compiler.defines:
+  module.sources += [
+    'v2/jit.cpp',
+  ]
+  if module.compiler.target.arch == 'x86':
+    module.sources += [
+      'v2/x86/code-stubs-x86.cpp',
+      'v2/x86/jit_x86.cpp',
     ]

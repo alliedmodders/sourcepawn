@@ -37,6 +37,7 @@ class Runtime;
 }
 
 extern ke::args::ToggleOption show_lowered;
+extern ke::args::ToggleOption show_jit;
 
 class DumpTool final {
   public:
@@ -64,6 +65,7 @@ class DumpTool final {
     void DumpRttiGlobals();
     void DumpLegacyCode();
     void DumpLoweredCode(uint32_t method_index);
+    void DumpJitCode(uint32_t method_index);
 
     template <bool SearchForMethods>
     void DumpCodeRangeV1(cell_t pcode_start, cell_t pcode_end);

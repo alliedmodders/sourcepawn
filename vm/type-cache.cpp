@@ -48,15 +48,34 @@ const TypeDesc* TypeCache::GetPrimitive(TypeKind kind) {
     return primitives_[index];
 }
 
+const TypeDesc* TypeCache::CreateFunction(const TypeDesc* return_type, const std::vector<const TypeDesc*>& args, bool is_native) {
+    FunctionLookupKey key(return_type, std::span<const TypeDesc* const>(args.data(), args.size()), is_native);
+    auto p = cache_.findForAdd(key);
+    if (p.found())
+        return *p;
+
+    const TypeDesc** args_copy = nullptr;
+    if (!args.empty()) {
+        args_copy = pool_.alloc<const TypeDesc*>(args.size());
+        for (size_t i = 0; i < args.size(); i++)
+            args_copy[i] = args[i];
+    }
+    std::span<const TypeDesc*> args_span(args_copy, args.size());
+    TypeDesc* td = NewTypeDesc(pool_, return_type, args_span, is_native);
+
+    cache_.add(p, td);
+    return td;
+}
+
 const TypeDesc* TypeCache::GetSlice(const TypeDesc* elt) {
     TypeCacheKey key(TypeKind::ArraySlice, elt, 0);
 
     auto p = cache_.findForAdd(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::ArraySlice, elt);
-    cache_.add(p, key, td);
+    cache_.add(p, td);
     return td;
 }
 
@@ -65,13 +84,13 @@ const TypeDesc* TypeCache::GetArray(const TypeDesc* elt) {
 
     auto p = cache_.findForAdd(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::Array, elt);
     if (elt->IsHeapItem())
         td->set_finalizer(SpArray::NestedFinalizer);
 
-    cache_.add(p, key, td);
+    cache_.add(p, td);
     return td;
 }
 
@@ -80,13 +99,13 @@ const TypeDesc* TypeCache::GetFixedArray(const TypeDesc* elt, uint32_t size) {
 
     auto p = cache_.findForAdd(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, elt, size);
     if (elt->IsHeapItem())
         td->set_finalizer(SpArray::NestedFinalizer);
 
-    cache_.add(p, key, td);
+    cache_.add(p, td);
     return td;
 }
 
@@ -96,10 +115,10 @@ const TypeDesc* TypeCache::GetFlatArray(const TypeDesc* elt, uint32_t size) {
 
     auto p = cache_.findForAdd(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::FlatArray, elt, size);
-    cache_.add(p, key, td);
+    cache_.add(p, td);
     return td;
 }
 
@@ -109,10 +128,10 @@ const TypeDesc* TypeCache::GetReference(const TypeDesc* elt) {
 
     auto p = cache_.findForAdd(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::Reference, elt);
-    cache_.add(p, key, td);
+    cache_.add(p, td);
     return td;
 }
 
@@ -121,7 +140,7 @@ const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classde
 
     auto p = cache_.find(key);
     if (p.found())
-        return p->value;
+        return *p;
 
     auto image = rt->image();
     images_.insert(image->shared_from_this());
@@ -155,7 +174,7 @@ const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classde
     TypeDesc* td = NewTypeDesc(pool_, classdef, total_size, field_offsets);
     auto p2 = cache_.findForAdd(key);
     assert(!p2.found());
-    cache_.add(p2, key, td);
+    cache_.add(p2, td);
     return td;
 }
 

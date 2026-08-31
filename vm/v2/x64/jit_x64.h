@@ -124,8 +124,6 @@ class Compiler : public CompilerBase
 
   private:
     void emitPrologue() override;
-    void emitThrowPath(int err) override;
-    void emitErrorHandlers() override;
     void emitOutOfBoundsError(OutOfBoundsError* path) override;
     void emitDebugBreakHandler() override;
     void emitCallThunk(CallThunk* thunk) override;

@@ -29,6 +29,7 @@
 #include "environment.h"
 #include "md5/md5.h"
 #include "objects.h"
+#include "runtime-helpers.h"
 #include "v2/method-info.h"
 #include "v2/method-verifier.h"
 #include "watchdog_timer.h"
@@ -111,9 +112,6 @@ bool Runtime::Initialize() {
         return strcmp(a.name, b.name) < 0;
     });
 
-    if (data_only_)
-        return true;
-
     if (!InitializeContext())
         return false;
     if (!InitializeGlobals())
@@ -192,7 +190,8 @@ bool Runtime::InitializeGlobals() {
         assert(string);
 
         auto blob = image_->ReadDataBlob(string->offset);
-        assert(blob);
+        if (!blob)
+            return false;
 
         auto char_type = GetPrimitiveType(TypeKind::Char8);
         auto td = GetFixedArrayType(char_type, (uint32_t)blob->size() + 1);
@@ -244,7 +243,11 @@ RefPtr<MethodInfo> Runtime::AcquireMethod(uint32_t method_index) {
     if (!rtti_method)
         return nullptr;
 
-    RefPtr<MethodInfo> method = new MethodInfo(this, method_index);
+    const TypeDesc* signature = LoadMethodSignature(method_index);
+    if (!signature)
+        return nullptr;
+
+    RefPtr<MethodInfo> method = new MethodInfo(this, method_index, signature);
 
     // Grab the lock before linking code in, since the watchdog timer will look
     // at this list on another thread.
@@ -508,7 +511,7 @@ bool Runtime::UsesDirectArrays() {
 }
 
 bool Runtime::CallGlobalCtor() {
-    cell_t ignore_result;
+    cell_t ignore_result = 0;
 
     auto ctor_index = image_->FindRttiMethod(".ctor");
     if (!ctor_index)
@@ -683,20 +686,19 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
         return false;
     }
 
-    /* Save our previous state. */
+
     ke::SaveRestore<uint32_t> save_sp(env_->sp());
 
-    /* Push parameters */
-    if (!env_->addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
+    uint32_t frame_base = env_->sp();
+    if (!env_->addStack(num_params * sizeof(cell_t)))
         return false;
-    cell_t* sp = env_->heap().ToPhysAddr<cell_t*>(env_->sp());
+    cell_t* sp = env_->heap().ToPhysAddr<cell_t*>(frame_base);
 
-    sp[0] = num_params;
     for (unsigned int i = 0; i < num_params; i++)
-        sp[i + 1] = params[i];
+        sp[i] = params[i];
 
     // Enter the execution engine.
-    bool ok = env_->Invoke(this, method, result);
+    bool ok = env_->Invoke(this, method, frame_base, result);
 
 
     return ok;
@@ -934,6 +936,60 @@ const TypeDesc* Runtime::LoadTypeFromId(uint32_t type_id) {
     return LoadType(parser);
 }
 
+const TypeDesc* Runtime::LoadMethodSignature(uint32_t method_index) {
+    const smx_rtti_method* method = image_->GetMethod(method_index);
+    if (!method) {
+        ReportError("invalid method index");
+        return nullptr;
+    }
+
+    auto parser = image_->GetTypeParser(method->signature);
+
+    uint32_t expected_argc;
+    if (!parser.ReadFunctionSignatureArgCount(&expected_argc)) {
+        ReportError("invalid function signature");
+        return nullptr;
+    }
+
+    uint8_t variadic;
+    if (!parser.GetByte(&variadic)) {
+        ReportError("invalid function signature");
+        return nullptr;
+    }
+
+    if (variadic == cb::kLegacyVariadic)
+        parser.NextByte();
+
+    uint8_t type_byte;
+    if (!parser.GetByte(&type_byte)) {
+        ReportError("invalid function signature");
+        return nullptr;
+    }
+
+    const TypeDesc* return_type = nullptr;
+    if (type_byte != cb::kVoid) {
+        return_type = LoadType(parser);
+        if (!return_type)
+            return nullptr;
+    } else {
+        parser.NextByte();
+        return_type = GetPrimitiveType(TypeKind::Void);
+    }
+
+    std::vector<const TypeDesc*> args;
+    for (uint32_t i = 0; i < expected_argc; i++) {
+        const TypeDesc* arg = LoadArgType(parser);
+        if (!arg)
+            return nullptr;
+        args.push_back(arg);
+    }
+
+    if (variadic == cb::kLegacyVariadic)
+        args.push_back(GetPrimitiveType(TypeKind::LegacyVarArgs));
+
+    return env_->types()->CreateFunction(return_type, args, (method->flags & kRttiMethod_Native) != 0);
+}
+
 const TypeDesc* Runtime::GetReferenceType(const TypeDesc* td) {
     return env_->types()->GetReference(td);
 }
@@ -1058,27 +1114,20 @@ Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* 
     return array;
 }
 
-bool Runtime::FillArray(SpArray* array, uint32_t data_offset) {
-    assert(!array->td->array_elt()->IsHeapItem());
+void Runtime::FillArray(SpArray* array, uint32_t data_offset) {
+    assert(array->td->kind() == TypeKind::FixedArray);
 
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();
     assert(data_bytes);
 
     auto elt_size = array->td->array_elt()->element_size();
-    if (*data_bytes % elt_size != 0) {
-        ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-    auto elt_count = *data_bytes / elt_size;
-    if (elt_count > array->length) {
-        ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
-        return false;
-    }
+    assert(*data_bytes % elt_size == 0);
+    [[maybe_unused]] auto elt_count = *data_bytes / elt_size;
+    assert(elt_count <= array->length);
 
     auto data = heap_.ToPhysAddr<uint8_t*>(array->data);
     memcpy(data, br.cursor(), *data_bytes);
-    return true;
 }
 
 void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset) {
@@ -1107,14 +1156,11 @@ void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {
 }
 
 Handle<SpArray> Runtime::NewSlice(SpArray* array, uint32_t index) {
-    // We are only allowed to slice one-dimensional arrays.
-    // :TODO: check this in verifier, not here.
-    if (array->td->array_elt()->IsArrayish()) {
-        ReportErrorNumber(SP_ERROR_INVALID_INSTRUCTION);
+    assert(!array->td->array_elt()->IsArrayish());
+    if (index >= array->length) {
+        ReportOutOfBoundsError(index, array->length);
         return nullptr;
     }
-
-    assert(index <= array->length);
 
     auto td = array->td;
     if (td->kind() != TypeKind::ArraySlice)
@@ -1125,6 +1171,17 @@ Handle<SpArray> Runtime::NewSlice(SpArray* array, uint32_t index) {
         return nullptr;
     slice->length = array->length - index;
     slice->data = heap_.ToLocalAddr(GetArrayElem(array, index));
+    return slice;
+}
+
+Handle<SpArray> Runtime::NewSliceEs(uint32_t data, uint32_t size) {
+    auto td = GetSliceType(GetPrimitiveType(TypeKind::Any));
+    auto slice = heap_.New<SpArray>(td);
+    if (!slice)
+        return nullptr;
+
+    slice->length = size;
+    slice->data = data;
     return slice;
 }
 

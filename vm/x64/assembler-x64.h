@@ -427,7 +427,7 @@ class Assembler : public AssemblerBase
 
             uint32_t data_index;
             if (src_pc >= 0) {
-                assert(src_pc <= code_size());
+                assert(static_cast<size_t>(src_pc) <= code_size());
 
                 uint8_t* base = buffer() + src_pc - 6;
                 assert(*base == 0xff);
@@ -590,7 +590,7 @@ class Assembler : public AssemblerBase
 
         intptr_t rip = pc();
         if (src->bound()) {
-            assert(src->offset() < pc());
+            assert(static_cast<uint32_t>(src->offset()) < pc());
 
             intptr_t delta = rip - intptr_t(src->offset());
             assert(delta >= INT_MIN && delta <= INT_MAX);

@@ -79,7 +79,7 @@ class InterpInvokeFrame;
 class InvokeFrame
 {
   protected:
-    InvokeFrame(BaseRuntime* cx, ucell_t cip);
+    InvokeFrame(BaseRuntime* cx);
     ~InvokeFrame();
 
   public:
@@ -88,10 +88,6 @@ class InvokeFrame
     }
     BaseRuntime* cx() const {
         return cx_;
-    }
-
-    ucell_t entry_cip() const {
-        return entry_cip_;
     }
 
     virtual JitInvokeFrame* AsJitInvokeFrame() {
@@ -104,7 +100,6 @@ class InvokeFrame
   protected:
     InvokeFrame* prev_;
     BaseRuntime* cx_;
-    ucell_t entry_cip_;
 };
 
 // Created by the interpreter. These are 1:1 with interpreter frames, for now.
@@ -142,7 +137,7 @@ class InterpInvokeFrame final : public InvokeFrame
 class JitInvokeFrame final : public InvokeFrame
 {
   public:
-    JitInvokeFrame(BaseRuntime* cx, ucell_t cip);
+    JitInvokeFrame(BaseRuntime* cx);
     ~JitInvokeFrame();
 
     JitInvokeFrame* AsJitInvokeFrame() override {
@@ -168,9 +163,9 @@ class InlineFrameIterator
     virtual bool done() const = 0;
     virtual void next() = 0;
     virtual FrameType type() const = 0;
-    virtual cell_t function_cip() const = 0;
     virtual cell_t cip() const = 0;
     virtual uint32_t native_index() const = 0;
+    virtual BaseMethodInfo* method() const = 0;
 };
 
 class InterpFrameIterator final : public InlineFrameIterator
@@ -181,9 +176,9 @@ class InterpFrameIterator final : public InlineFrameIterator
     bool done() const override;
     void next() override;
     FrameType type() const override;
-    cell_t function_cip() const override;
     cell_t cip() const override;
     uint32_t native_index() const override;
+    BaseMethodInfo* method() const override { return ivk_->method(); }
 
   private:
     InterpInvokeFrame* ivk_;
@@ -199,9 +194,9 @@ class JitFrameIterator final : public InlineFrameIterator
     bool done() const override;
     void next() override;
     FrameType type() const override;
-    cell_t function_cip() const override;
     cell_t cip() const override;
     uint32_t native_index() const override;
+    BaseMethodInfo* method() const override;
 
     FrameLayout* frame() const {
         return cur_frame_;

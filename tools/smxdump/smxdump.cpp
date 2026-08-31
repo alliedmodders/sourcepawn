@@ -10,16 +10,22 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include <inttypes.h>
-#include <sp_vm_api.h>
-#include <amtl/experimental/am-argparser.h>
-#include "vm/environment.h"
-#include "vm/smx-image.h"
-#include "vm/binary-reader.h"
-#include "vm/legacy/opcodes.h"
-#include "vm/v2/opcodes.h"
-#include "v2/runtime.h"
 #include "smxdump.h"
+
+#include <inttypes.h>
+
+#include <capstone/capstone.h>
+
+#include <amtl/experimental/am-argparser.h>
+#include <sp_vm_api.h>
+#include "v2/jit.h"
+#include "v2/method-info.h"
+#include "v2/runtime.h"
+#include "vm/binary-reader.h"
+#include "vm/environment.h"
+#include "vm/legacy/opcodes.h"
+#include "vm/smx-image.h"
+#include "vm/v2/opcodes.h"
 
 using namespace ke;
 using namespace ke::args;
@@ -33,6 +39,8 @@ ToggleOption show_name_offsets(nullptr, "--show-name-offsets", Some(false),
                                "Show all name offsets");
 ToggleOption show_lowered(nullptr, "--lower", Some(false),
                           "Show lowered opcodes");
+ToggleOption show_jit(nullptr, "--jit", Some(false),
+                      "Disassemble JIT compiled methods");
 
 class ShellDebugListener : public IDebugListener
 {
@@ -240,6 +248,8 @@ void DumpTool::DumpRttiMethods() {
             if (is_v2) {
                 if (show_lowered.value())
                     DumpLoweredCode(i);
+                else if (show_jit.value())
+                    DumpJitCode(i);
                 else
                     DumpCodeRangeV2(method->pcode_start, method->pcode_end);
             } else {
@@ -504,40 +514,103 @@ void DumpTool::DumpLegacyCode() {
 static int Dump(const char* file) {
     ExceptionHandler eh(sEnv);
 
-    if (show_lowered.value()) {
-        std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file));
+    if (show_lowered.value() || show_jit.value()) {
+        std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, true));
         if (!rt) {
             fprintf(stderr, "Could not load %s: %s\n", file,
                     (eh.Message() ? eh.Message() : "unknown error"));
             return 1;
         }
         if (rt->image()->hdr()->version < SmxConsts::SP_VERSION_2) {
-            fprintf(stderr, "Lowering is only supported for version 2+ binaries.\n");
+            fprintf(stderr, "Lowering or JIT compilation are only supported for version 2+ binaries.\n");
+            return 1;
+        }
+#if !defined(SP_JIT_V2)
+        if (show_jit.value()) {
+            fprintf(stderr, "JIT disassembly is not supported on this platform.\n");
+            return 1;
+        }
+#endif
+        auto v2_rt = rt->AsV2();
+        DumpTool tool(file, nullptr, v2_rt);
+        tool.Dump();
+    } else {
+        struct FileCloser {
+            void operator()(FILE* fp) const {
+                fclose(fp);
+            }
+        };
+        std::unique_ptr<FILE, FileCloser> fp(fopen(file, "rb"));
+        if (!fp) {
+            fprintf(stderr, "Could not open %s\n", file);
             return 1;
         }
 
-        auto v2_rt = static_cast<v2::Runtime*>(rt.get());
-        DumpTool tool(file, nullptr, v2_rt);
+        auto smx = std::make_unique<SmxImage>(fp.get());
+        if (!smx->validate()) {
+            fprintf(stderr, "Could not parse %s: %s\n", file,
+                    (eh.Message() ? eh.Message() : "unknown error"));
+            return 1;
+        }
+
+        DumpTool tool(file, std::move(smx));
         tool.Dump();
-        return 0;
     }
-
-    std::unique_ptr<FILE, decltype(&::fclose)> fp(fopen(file, "rb"), ::fclose);
-    if (!fp) {
-        fprintf(stderr, "Could not open %s\n", file);
-        return 1;
-    }
-
-    auto smx = std::make_unique<SmxImage>(fp.get());
-    if (!smx->validate()) {
-        fprintf(stderr, "Could not parse %s: %s\n", file,
-                (eh.Message() ? eh.Message() : "unknown error"));
-        return 1;
-    }
-
-    DumpTool tool(file, std::move(smx));
-    tool.Dump();
     return 0;
+}
+
+#if defined(SP_JIT_V2)
+#if defined(__x86_64__) || defined(_M_X64)
+static constexpr cs_arch kCapstoneArch = CS_ARCH_X86;
+static constexpr cs_mode kCapstoneMode = CS_MODE_64;
+#elif defined(__i386__) || defined(_M_IX86)
+static constexpr cs_arch kCapstoneArch = CS_ARCH_X86;
+static constexpr cs_mode kCapstoneMode = CS_MODE_32;
+#elif defined(__aarch64__) || defined(_M_ARM64)
+static constexpr cs_arch kCapstoneArch = CS_ARCH_ARM64;
+static constexpr cs_mode kCapstoneMode = CS_MODE_ARM;
+#else
+# error "Unsupported Capstone architecture for JIT disassembly"
+#endif
+#endif
+
+void DumpTool::DumpJitCode(uint32_t method_index) {
+#if defined(SP_JIT_V2)
+    auto method = runtime_->AcquireMethod(method_index);
+    if (!method) {
+        fprintf(stdout, "    ; Method not found\n");
+        return;
+    }
+    if (!method->jit() && !v2::CompilerBase::Compile(runtime_, method)) {
+        fprintf(stdout, "    ; JIT compilation error\n");
+        return;
+    }
+
+    CompiledFunction* jit = method->jit();
+    void* entry = jit->GetEntryAddress();
+    size_t size = jit->GetCodeSize();
+
+    csh handle;
+
+    if (int err = cs_open(kCapstoneArch, kCapstoneMode, &handle); err != CS_ERR_OK) {
+        fprintf(stdout, "    ; capstone error %d\n", err);
+        return;
+    }
+    cs_insn* insn;
+    size_t count = cs_disasm(handle, reinterpret_cast<const uint8_t*>(entry), size, reinterpret_cast<uint64_t>(entry), 0, &insn);
+    if (count > 0) {
+        for (size_t j = 0; j < count; j++) {
+            if (insn[j].op_str[0])
+                fprintf(stdout, "    0x%" PRIx64 ": %s %s\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
+            else
+                fprintf(stdout, "    0x%" PRIx64 ": %s\n", insn[j].address, insn[j].mnemonic);
+        }
+        cs_free(insn, count);
+    } else {
+        fprintf(stdout, "    ; JIT compilation error\n");
+    }
+    cs_close(&handle);
+#endif
 }
 
 int main(int argc, char** argv)
