@@ -17,6 +17,7 @@
 //
 #include "v2/interp/interpreter.h"
 
+#include <cstddef>
 #include <fenv.h>
 #include <inttypes.h>
 #include <math.h>
@@ -30,7 +31,7 @@
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
-#include "v2/interp/interp-code.h"
+#include "v2/interp/llcode.h"
 #include "v2/interp/ll-op.h"
 #include "v2/interp/lowering.h"
 #include "v2/method-info.h"
@@ -38,6 +39,83 @@
 #include "v2/pcode-reader.h"
 #include "v2/runtime-helpers.h"
 #include "v2/runtime.h"
+
+
+#define BINARY_OP_I32(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                uint16_t dest = reader_.read<uint16_t>(); \
+                vregs_[dest] = vregs_[a] oper vregs_[b]; \
+                break; \
+            }
+
+#define BINARY_OP_F32(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                uint16_t dest = reader_.read<uint16_t>(); \
+                vregs_[dest] = sp_ftoc(sp_ctof(vregs_[a]) oper sp_ctof(vregs_[b])); \
+                break; \
+            }
+
+#define COMPARE_OP_F32(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                uint16_t dest = reader_.read<uint16_t>(); \
+                vregs_[dest] = (sp_ctof(vregs_[a]) oper sp_ctof(vregs_[b])) ? 1 : 0; \
+                break; \
+            }
+
+#define BINARY_OP_I64(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                uint16_t dest = reader_.read<uint16_t>(); \
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = \
+                    *reinterpret_cast<int64_t*>(&vregs_[a]) oper *reinterpret_cast<int64_t*>(&vregs_[b]); \
+                break; \
+            }
+
+#define COMPARE_OP_I64(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                uint16_t dest = reader_.read<uint16_t>(); \
+                vregs_[dest] = (*reinterpret_cast<int64_t*>(&vregs_[a]) oper *reinterpret_cast<int64_t*>(&vregs_[b])) ? 1 : 0; \
+                break; \
+            }
+
+#define UNARY_JUMP_OP(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                cell_t offset = reader_.read<int32_t>(); \
+                if (vregs_[a] oper 0) { \
+                    if (offset < (cell_t)(insn_begin - ll_code)) { \
+                        if (!CheckTimeout()) \
+                            return false; \
+                    } \
+                    reader_.set_cursor(ll_code + offset); \
+                } \
+                break; \
+            }
+
+#define BINARY_JUMP_OP(op, oper) \
+            case op: { \
+                uint16_t a = reader_.read<uint16_t>(); \
+                uint16_t b = reader_.read<uint16_t>(); \
+                cell_t offset = reader_.read<int32_t>(); \
+                if (vregs_[a] oper vregs_[b]) { \
+                    if (offset < (cell_t)(insn_begin - ll_code)) { \
+                        if (!CheckTimeout()) \
+                            return false; \
+                    } \
+                    reader_.set_cursor(ll_code + offset); \
+                } \
+                break; \
+            }
+
 #include "watchdog_timer.h"
 
 namespace sp::v2 {
@@ -52,7 +130,7 @@ bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
     }
 
     Interpreter interpreter(cx, method);
-    if (!interpreter.run())
+    if (!interpreter.run_internal({}))
         return false;
 
     *rval = interpreter.return_value();
@@ -73,12 +151,28 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
    phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_))
 {}
 
-bool Interpreter::run() {
+bool Interpreter::CheckTimeout() {
+    if (!env_->watchdog()->HandleInterrupt()) {
+        rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
+        return false;
+    }
+    return true;
+}
+
+bool Interpreter::run_internal(std::span<cell_t> args) {
     const uint8_t* insn_begin = reader_.cursor();
     const uint8_t* ll_code = method_->interp()->bytes();
 
     InterpInvokeFrame ivk(rt_, method_, &insn_begin);
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
+
+    ke::ScopeGuard guard([&]() -> void {
+        while (env_->top() != &ivk) {
+            InvokeFrame* top = env_->top();
+            top->AsInterpInvokeFrame()->~InterpInvokeFrame();
+        }
+    });
+
     ke::SaveRestore<uint32_t> saveSp(rt_->sp());
 
     const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
@@ -91,51 +185,38 @@ bool Interpreter::run() {
         saveHp.emplace(rt_->heap());
     }
 
-    cell_t locals_size = CalcLocalsSize();
-    assert(locals_size >= 0);
-
-    if (locals_size && !rt_->addStack(-locals_size))
-        return false;
-
-    uint32_t eval_depth = method_->max_eval_stack_depth();
-    uint32_t stack_bytes = method_->max_eval_stack_bytes();
-    assert(stack_bytes % sizeof(cell_t) == 0);
-
-    if (stack_bytes + eval_depth > 0) {
-        // Round up depth to keep sp_ aligned.
-        eval_depth = ke::Align(eval_depth, sizeof(cell_t));
-        if (!rt_->addStack(-(cell_t)(stack_bytes + eval_depth)))
+    uint32_t num_regs = method_->interp()->num_regs();
+    if (num_regs > 0) {
+        uint32_t bytes = num_regs * sizeof(cell_t);
+        if (!rt_->addStack(-(cell_t)bytes))
             return false;
-
-        uint8_t* base = rt_->heap().ToPhysAddr<uint8_t*>(rt_->sp());
-
-        // We reserve two chunks of data off the stack.
-        //    "eval_stack", which holds the operand stack.
-        //    "stack_types", which holds the types of entries on the operand stack.
-        // This distinction is needed because some operands are two cells instead
-        // of one (eg for 64-bit values).
-        //
-        // The operand stack is placed at lower addresses, so we can use a sliding
-        // window mechanism into the new function call.
-        uint8_t* sp_bottom = base;
-        uint8_t* sp_top = base + stack_bytes;
-
-        eval_stack_top_ = reinterpret_cast<cell_t*>(sp_top);
-        eval_stack_limit_ = reinterpret_cast<cell_t*>(sp_bottom);
-        eval_stack_ptr_ = eval_stack_top_;
-
-        stack_types_top_ = sp_top + eval_depth;
-        stack_types_limit_ = sp_top;
-        stack_types_ptr_ = stack_types_top_;
+        vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(rt_->sp()), num_regs);
     }
 
-    if (!InitLocals())
-        return false;
+    uint32_t current_reg = 0;
+
+    if (args.data() != nullptr) {
+        for (size_t i = 0; i < method_->arg_types().size(); i++) {
+            vregs_[current_reg++] = args[i];
+        }
+    } else {
+        for (size_t i = 0; i < method_->arg_types().size(); i++) {
+            vregs_[current_reg++] = phys_frm_[1 + i];
+        }
+    }
+
+    uint32_t local_regs_start = current_reg;
+    uint32_t num_local_regs = 0;
+    for (size_t i = 0; i < method_->local_types().size(); i++) {
+        num_local_regs += method_->local_types()[i]->slot_size() / sizeof(cell_t);
+    }
+    if (num_local_regs > 0)
+        memset(&vregs_[local_regs_start], 0, num_local_regs * sizeof(cell_t));
 
     while (!has_returned_ && reader_.more()) {
         insn_begin = reader_.cursor();
 
-        if (Environment::get()->IsDebugBreakEnabled()) {
+        if (env_->IsDebugBreakEnabled()) {
             uint32_t ll_offset = (uint32_t)(insn_begin - ll_code);
             uint32_t high_offset = method_->interp()->LookupHighOffset(ll_offset);
             if (smx_->IsLineBoundary(high_offset)) {
@@ -145,228 +226,216 @@ bool Interpreter::run() {
             }
         }
 
+#ifndef NDEBUG
         if (env_->spew_interp_ops()) {
             LLOp op = (LLOp)*reinterpret_cast<const uint16_t*>(insn_begin);
             fprintf(stdout, "  [%05u] %s\n", (uint32_t)(insn_begin - ll_code), GetLLOpName(op));
         }
+#endif
 
         LLOp op = (LLOp)reader_.read<uint16_t>();
 
         switch (op) {
             case LL_NOP:
                 break;
-            case LL_LOAD_GLB: {
+            case LL_LOAD_GLB_X32: {
                 uint16_t index = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
-                const TypeDesc* td = rt_->GetTypeOfGlobal(index);
-                if (td->IsInt64()) {
-                    int64_t* ptr = rt_->acquireInt64Addr(addr);
-                    if (!ptr)
-                        return false;
-                    pushInt64(*ptr);
-                } else {
-                    cell_t val;
-                    if (!rt_->getCellValue(addr, &val))
-                        return false;
-                    pushCell(val);
-                }
+                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
+                if (!ptr)
+                    return false;
+                vregs_[dest] = *ptr;
                 break;
             }
-            case LL_LOAD_S: {
-                cell_t offset = reader_.readInt16();
-                const TypeDesc* td = method_->GetTypeOfLocal(offset);
-                if (td->IsInt64())
-                    pushInt64(getLocalInt64(offset));
-                else
-                    pushCell(getLocalCell(offset));
+            case LL_LOAD_GLB_X64: {
+                uint16_t index = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
+                int64_t* ptr = heap_.ToPhysAddr<int64_t*>(addr);
+                if (!ptr)
+                    return false;
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = *ptr;
                 break;
             }
             case LL_LOAD_I_I32:
             case LL_LOAD_I_F32: {
-                cell_t addr = popCell();
-                cell_t val;
-                if (!rt_->getCellValue(addr, &val))
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
+                if (!ptr)
                     return false;
-                pushCell(val);
+                vregs_[dest] = *ptr;
                 break;
             }
             case LL_LOAD_I_I64: {
-                cell_t addr = popCell();
-                int64_t* ptr = rt_->acquireInt64Addr(addr);
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                int64_t* ptr = heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
                 if (!ptr)
                     return false;
-                pushInt64(*ptr);
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = *ptr;
                 break;
             }
             case LL_LOAD_I_U8: {
-                cell_t addr = popCell();
-                cell_t val;
-                if (!rt_->getCellValue(addr, &val))
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
+                if (!ptr)
                     return false;
-                val &= 0xff;
-                pushCell(val);
+                vregs_[dest] = *ptr & 0xff;
                 break;
             }
             case LL_LOAD_ELEM_A:
             case LL_LOAD_ELEM_I32:
-            case LL_LOAD_ELEM_F32: {
-                uint32_t index = popCell();
-                uint32_t base = popCell();
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
-                if (index >= array->length) {
-                    ReportOutOfBoundsError(index, array->length);
-                    return false;
-                }
-                void* elt = rt_->GetArrayElem(array, index);
-                pushCell(*reinterpret_cast<cell_t*>(elt));
-                break;
-            }
-            case LL_LOAD_ELEM_I64: {
-                uint32_t index = popCell();
-                uint32_t base = popCell();
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
-                if (index >= array->length) {
-                    ReportOutOfBoundsError(index, array->length);
-                    return false;
-                }
-                void* elt = rt_->GetArrayElem(array, index);
-                pushInt64(*reinterpret_cast<int64_t*>(elt));
-                break;
-            }
+            case LL_LOAD_ELEM_F32:
+            case LL_LOAD_ELEM_I64:
             case LL_LOAD_ELEM_U8: {
-                uint32_t index = popCell();
-                uint32_t base = popCell();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                
+                uint32_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
                 if (index >= array->length) {
                     ReportOutOfBoundsError(index, array->length);
                     return false;
                 }
                 void* elt = rt_->GetArrayElem(array, index);
-                pushCell(*reinterpret_cast<uint8_t*>(elt));
+                if (op == LL_LOAD_ELEM_I64)
+                    *reinterpret_cast<int64_t*>(&vregs_[dest_reg]) = *reinterpret_cast<int64_t*>(elt);
+                else if (op == LL_LOAD_ELEM_U8)
+                    vregs_[dest_reg] = *reinterpret_cast<uint8_t*>(elt);
+                else
+                    vregs_[dest_reg] = *reinterpret_cast<cell_t*>(elt);
                 break;
             }
             case LL_ADDR_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
-                pushCell(rt_->GetGlobalAddr(index));
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = rt_->GetGlobalAddr(index);
                 break;
             }
-            case LL_STOR_GLB: {
+            case LL_STOR_GLB_X32: {
                 uint16_t index = reader_.read<uint16_t>();
+                uint16_t val = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
-                const TypeDesc* td = rt_->GetTypeOfGlobal(index);
-                if (td->IsInt64()) {
-                    int64_t val = popInt64();
-                    int64_t* ptr = rt_->acquireInt64Addr(addr);
-                    if (!ptr)
-                        return false;
-                    *ptr = val;
-                } else {
-                    cell_t val = popCell();
-                    if (!rt_->setCellValue(addr, val))
-                        return false;
-                }
+                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(addr);
+                if (!ptr)
+                    return false;
+                *ptr = vregs_[val];
                 break;
             }
-            case LL_STOR_S: {
-                cell_t offset = reader_.readInt16();
-                const TypeDesc* td = method_->GetTypeOfLocal(offset);
-                if (td->IsInt64()) {
-                    int64_t val = popInt64();
-                    getLocalInt64(offset) = val;
-                } else {
-                    cell_t val = popCell();
-                    setLocalCell(offset, val);
-                }
-                break;
-            }
-            case LL_STOR_S_C: {
-                cell_t slot = reader_.readInt16();
-                cell_t value = reader_.readCell();
-                setLocalCell(slot, value);
+            case LL_STOR_GLB_X64: {
+                uint16_t index = reader_.read<uint16_t>();
+                uint16_t val = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
+                int64_t* ptr = heap_.ToPhysAddr<int64_t*>(addr);
+                if (!ptr)
+                    return false;
+                *ptr = *reinterpret_cast<int64_t*>(&vregs_[val]);
                 break;
             }
             case LL_STOR_I_I32:
             case LL_STOR_I_F32: {
-                cell_t val = popCell();
-                cell_t addr = popCell();
-                if (!rt_->setCellValue(addr, val))
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t val = reader_.read<uint16_t>();
+                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
+                if (!ptr)
                     return false;
+                *ptr = vregs_[val];
                 break;
             }
             case LL_STOR_I_I64: {
-                int64_t val = popInt64();
-                cell_t addr = popCell();
-                int64_t* ptr = rt_->acquireInt64Addr(addr);
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t val = reader_.read<uint16_t>();
+                int64_t* ptr = heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
                 if (!ptr)
                     return false;
-                *ptr = val;
+                *ptr = *reinterpret_cast<int64_t*>(&vregs_[val]);
                 break;
             }
             case LL_STOR_I_U8: {
-                cell_t val = popCell();
-                cell_t addr_val = popCell();
-                uint8_t* addr = rt_->heap().ToPhysAddr<uint8_t*>(addr_val);
-                if (!addr)
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t val = reader_.read<uint16_t>();
+                uint8_t* dest_addr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[addr]);
+                if (!dest_addr)
                     return false;
-                *addr = uint8_t(val);
+                *dest_addr = uint8_t(vregs_[val]);
+                break;
+            }
+            case LL_MOVE: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = vregs_[src];
+                break;
+            }
+            case LL_MOVE_I64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = *reinterpret_cast<int64_t*>(&vregs_[src]);
+                break;
+            }
+            case LL_LOAD_CONST: {
+                cell_t val = reader_.read<cell_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = val;
+                break;
+            }
+            case LL_LOAD_CONST_I64: {
+                int64_t val = reader_.read<int64_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = val;
                 break;
             }
             case LL_STOR_ELEM_I32:
-            case LL_STOR_ELEM_F32: {
-                cell_t val = popCell();
-                uint32_t index = popCell();
-                uint32_t base = popCell();
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
-                if (index >= array->length) {
-                    ReportOutOfBoundsError(index, array->length);
-                    return false;
-                }
-                void* elt = rt_->GetArrayElem(array, index);
-                *reinterpret_cast<cell_t*>(elt) = val;
-                break;
-            }
-            case LL_STOR_ELEM_I64: {
-                int64_t val = popInt64();
-                uint32_t index = popCell();
-                uint32_t base = popCell();
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
-                if (index >= array->length) {
-                    ReportOutOfBoundsError(index, array->length);
-                    return false;
-                }
-                void* elt = rt_->GetArrayElem(array, index);
-                *reinterpret_cast<int64_t*>(elt) = val;
-                break;
-            }
+            case LL_STOR_ELEM_F32:
+            case LL_STOR_ELEM_I64:
             case LL_STOR_ELEM_U8: {
-                cell_t val = popCell();
-                uint32_t index = popCell();
-                uint32_t base = popCell();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t val_reg = reader_.read<uint16_t>();
+                
+                uint32_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
                 if (index >= array->length) {
                     ReportOutOfBoundsError(index, array->length);
                     return false;
                 }
                 void* elt = rt_->GetArrayElem(array, index);
-                *reinterpret_cast<uint8_t*>(elt) = uint8_t(val);
+                if (op == LL_STOR_ELEM_I64)
+                    *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
+                else if (op == LL_STOR_ELEM_U8)
+                    *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
+                else
+                    *reinterpret_cast<cell_t*>(elt) = vregs_[val_reg];
                 break;
             }
             case LL_IDXADDR: {
-                uint32_t index = popCell();
-                uint32_t base = popCell();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                
+                uint32_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
                 if (index >= array->length) {
                     ReportOutOfBoundsError(index, array->length);
                     return false;
                 }
-
                 void* elt_addr = rt_->GetArrayElem(array, index);
-                pushCell(rt_->heap().ToLocalAddr(elt_addr));
+                vregs_[dest_reg] = rt_->heap().ToLocalAddr(elt_addr);
                 break;
             }
             case LL_SLICE: {
-                uint32_t index = popCell();
-                uint32_t base = popCell();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                
+                uint32_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
                 if (index >= array->length) {
                     ReportOutOfBoundsError(index, array->length);
@@ -375,31 +444,39 @@ bool Interpreter::run() {
                 auto slice = rt_->NewSlice(array, index);
                 if (!slice)
                     return false;
-                pushCell(rt_->heap().ToLocalAddr(slice));
+                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice);
                 break;
             }
             case LL_IDXADDR_FLAT: {
                 uint32_t size = reader_.read<uint32_t>();
-                uint32_t elt_size = reader_.read<uint32_t>();
-                cell_t index = popCell();
-                cell_t base = popCell();
+                uint32_t elt_size = reader_.read<uint16_t>();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                
+                cell_t base = vregs_[base_reg];
+                cell_t index = vregs_[index_reg];
                 if (index < 0 || (uint32_t)index >= size) {
                     ReportOutOfBoundsError(index, size);
                     return false;
                 }
-                pushCell(base + index * elt_size);
+                vregs_[dest_reg] = base + index * elt_size;
                 break;
             }
             case LL_ARRAY_TO_FLAT: {
-                cell_t addr = popCell();
+                uint16_t addr_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                cell_t addr = vregs_[addr_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(addr);
-                pushCell(array->data);
+                vregs_[dest_reg] = array->data;
                 break;
             }
             case LL_COPYARRAY_FLAT: {
                 uint32_t bytes = reader_.read<uint32_t>();
-                cell_t src_addr = popCell();
-                cell_t dest_addr = popCell();
+                uint16_t src_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                cell_t src_addr = vregs_[src_reg];
+                cell_t dest_addr = vregs_[dest_reg];
                 uint8_t* dest = rt_->heap().ToPhysAddr<uint8_t*>(dest_addr);
                 uint8_t* src = rt_->heap().ToPhysAddr<uint8_t*>(src_addr);
                 memcpy(dest, src, bytes);
@@ -408,260 +485,241 @@ bool Interpreter::run() {
             case LL_FILLARRAY_FLAT: {
                 uint32_t data_offs = reader_.read<uint32_t>();
                 const TypeDesc* td = reader_.read<const TypeDesc*>();
-                cell_t local_addr = popCell();
+                uint16_t addr_reg = reader_.read<uint16_t>();
+                cell_t local_addr = vregs_[addr_reg];
                 rt_->FillFlatArray(local_addr, td, data_offs);
                 break;
             }
             case LL_SLICE_FLAT: {
                 const TypeDesc* td = reader_.read<const TypeDesc*>();
-                uint32_t index = popCell();
-                cell_t base = popCell();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                cell_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
                 auto slice = rt_->NewFlatSlice(base, td, index);
                 if (!slice)
                     return false;
-                pushCell(rt_->heap().ToLocalAddr(slice));
+                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice);
                 break;
             }
-
-#define DO_STOR_ELEM(pop_type, val_type) { \
-                uint32_t size = reader_.read<uint32_t>(); \
-                uint32_t elt_size = reader_.read<uint32_t>(); \
-                val_type val = pop##pop_type(); \
-                cell_t index = popCell(); \
-                cell_t base = popCell(); \
-                if (index < 0 || (uint32_t)index >= size) { \
-                    ReportOutOfBoundsError(index, size); \
-                    return false; \
-                } \
-                val_type* addr = rt_->heap().ToPhysAddr<val_type*>(base + index * elt_size); \
-                *addr = val; \
-            }
-
             case LL_STOR_ELEM_FLAT_I32:
             case LL_STOR_ELEM_FLAT_F32:
-                DO_STOR_ELEM(Cell, cell_t);
-                break;
             case LL_STOR_ELEM_FLAT_I64:
-                DO_STOR_ELEM(Int64, int64_t);
+            case LL_STOR_ELEM_FLAT_U8: {
+                uint32_t array_size = reader_.read<uint32_t>();
+                uint32_t element_size = reader_.read<uint16_t>();
+                uint16_t base_reg = reader_.read<uint16_t>();
+                uint16_t index_reg = reader_.read<uint16_t>();
+                uint16_t val_reg = reader_.read<uint16_t>();
+                
+                uint32_t base = vregs_[base_reg];
+                uint32_t index = vregs_[index_reg];
+                if (index >= array_size) {
+                    ReportOutOfBoundsError(index, array_size);
+                    return false;
+                }
+                uint8_t* elt = rt_->heap().ToPhysAddr<uint8_t*>(base + (index * element_size));
+                if (op == LL_STOR_ELEM_FLAT_I64)
+                    *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
+                else if (op == LL_STOR_ELEM_FLAT_U8)
+                    *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
+                else
+                    *reinterpret_cast<cell_t*>(elt) = vregs_[val_reg];
                 break;
-            case LL_STOR_ELEM_FLAT_U8:
-                DO_STOR_ELEM(Cell, uint8_t);
-                break;
+            }
 
-#undef DO_STOR_ELEM
-
-            case LL_POP: {
-                popStack();
-                break;
-            }
-            case LL_DUP: {
-                StackValue v = popValue();
-                pushValue(v);
-                pushValue(v);
-                break;
-            }
-            case LL_SWAP: {
-                StackValue b = popValue();
-                StackValue a = popValue();
-                pushValue(b);
-                pushValue(a);
-                break;
-            }
-            case LL_PUSH_C: {
-                cell_t val = reader_.readCell();
-                pushCell(val);
-                break;
-            }
-            case LL_PUSH_C_I8: {
-                int8_t val = reader_.read<int8_t>();
-                pushCell(val);
-                break;
-            }
-            case LL_PUSH_C_I64: {
-                int64_t val = reader_.read<int64_t>();
-                pushInt64(val);
-                break;
-            }
-            case LL_CVT_I64: {
-                cell_t val = popCell();
-                pushInt64((int64_t)val);
-                break;
-            }
-            case LL_TRUNCATE_I64: {
-                int64_t val = popInt64();
-                pushCell((cell_t)val);
-                break;
-            }
-            case LL_TEST_I64: {
-                int64_t val = popInt64();
-                pushCell(!!val);
-                break;
-            }
-            case LL_INVERT_I64: {
-                int64_t val = popInt64();
-                pushInt64(~val);
-                break;
-            }
-            case LL_NEG_I64: {
-                int64_t val = popInt64();
-                pushInt64(-val);
-                break;
-            }
-            case LL_SMUL_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left * right);
-                break;
-            }
+            BINARY_OP_I64(LL_SMUL_I64, *)
             case LL_SDIV_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                int64_t left = *reinterpret_cast<int64_t*>(&vregs_[a]);
+                int64_t right = *reinterpret_cast<int64_t*>(&vregs_[b]);
                 int64_t result;
                 int err = Int64Div(&right, &left, &result);
                 if (err != SP_ERROR_NONE) {
                     rt_->ReportErrorNumber(err);
                     return false;
                 }
-                pushInt64(result);
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = result;
                 break;
             }
             case LL_SMOD_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                int64_t left = *reinterpret_cast<int64_t*>(&vregs_[a]);
+                int64_t right = *reinterpret_cast<int64_t*>(&vregs_[b]);
                 int64_t result;
                 int err = Int64Mod(&right, &left, &result);
                 if (err != SP_ERROR_NONE) {
                     rt_->ReportErrorNumber(err);
                     return false;
                 }
-                pushInt64(result);
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = result;
                 break;
             }
-            case LL_ADD_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left + right);
-                break;
-            }
-            case LL_SUB_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left - right);
-                break;
-            }
-            case LL_SHL_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left << right);
-                break;
-            }
-            case LL_SSHR_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left >> right);
-                break;
-            }
+            BINARY_OP_I64(LL_ADD_I64, +)
+            BINARY_OP_I64(LL_SUB_I64, -)
+            BINARY_OP_I64(LL_SHL_I64, <<)
+            BINARY_OP_I64(LL_SSHR_I64, >>)
             case LL_SHR_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(uint64_t(left) >> uint64_t(right));
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint64_t left = *reinterpret_cast<uint64_t*>(&vregs_[a]);
+                uint64_t right = *reinterpret_cast<uint64_t*>(&vregs_[b]);
+                *reinterpret_cast<uint64_t*>(&vregs_[dest]) = (left >> right);
                 break;
             }
-            case LL_OR_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left | right);
+            BINARY_OP_I64(LL_OR_I64, |)
+            BINARY_OP_I64(LL_AND_I64, &)
+            BINARY_OP_I64(LL_XOR_I64, ^)
+            COMPARE_OP_I64(LL_EQ_I64, ==)
+            COMPARE_OP_I64(LL_NEQ_I64, !=)
+            COMPARE_OP_I64(LL_SLESS_I64, <)
+            COMPARE_OP_I64(LL_SLEQ_I64, <=)
+            COMPARE_OP_I64(LL_SGRTR_I64, >)
+            COMPARE_OP_I64(LL_SGEQ_I64, >=)
+            case LL_NEG_I64: {
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = -(*reinterpret_cast<int64_t*>(&vregs_[a]));
                 break;
             }
-            case LL_AND_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left & right);
+            case LL_INVERT_I64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) =
+                    ~(*reinterpret_cast<int64_t*>(&vregs_[src]));
                 break;
             }
-            case LL_XOR_I64: {
-                int64_t right = popInt64();
-                int64_t left = popInt64();
-                pushInt64(left ^ right);
+            case LL_TEST_I64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = (*reinterpret_cast<int64_t*>(&vregs_[src]) != 0) ? 1 : 0;
                 break;
             }
-            case LL_RETN: {
-                has_returned_ = true;
-                return_value_ = popCell();
-                break;
-            }
+            case LL_RETN:
             case LL_RETV: {
-                has_returned_ = true;
+                cell_t result = 0;
+                if (op == LL_RETN) {
+                    uint16_t srcreg = reader_.read<uint16_t>();
+                    result = vregs_[srcreg];
+                }
+
+                if (ivk_ == &ivk) {
+                    has_returned_ = true;
+                    return_value_ = result;
+                    break;
+                }
+
+                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_);
+                const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
+                bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
+
+                ivk_->~InterpInvokeFrame();
+
+                ivk_ = env_->top()->AsInterpInvokeFrame();
+                ivk_->setCip(&insn_begin);
+
+                method_ = frame->caller_method;
+
+                const uint8_t* caller_code = method_->interp()->bytes();
+                reader_ = BinaryReader(caller_code, caller_code + method_->interp()->size());
+                reader_.set_cursor(frame->saved_cip);
+                ll_code = caller_code;
+
+                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
+                cell_t stack_amount = (cell_t)(frm_ + frame_size - rt_->sp());
+                if (!rt_->addStack(stack_amount))
+                    return false;
+                frm_ = frame->prev_frame;
+
+                if (!is_global_ctor) {
+                    rt_->hp_scope() = frame->hp_scope;
+                    rt_->heap().RestorePosition(frame->heap_pos);
+                }
+
+                uint32_t num_caller_regs = method_->interp()->num_regs();
+                vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(rt_->sp()), num_caller_regs);
+
+                if (frame->dest_reg != 0xFFFF)
+                    vregs_[frame->dest_reg] = result;
                 break;
             }
             case LL_LOAD_FN: {
-                uint32_t method_index = (uint32_t)reader_.readCell();
+                uint32_t method_index = reader_.read<uint32_t>();
+                uint16_t dest = reader_.read<uint16_t>();
                 funcid_t id = (method_index << 1) | 1;
-                pushCell(id);
+                vregs_[dest] = id;
                 break;
             }
             case LL_LOAD_STR: {
-                uint16_t index = reader_.read<uint16_t>();
-                pushCell(rt_->GetStringAddr(index));
+                uint32_t index = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = rt_->GetStringAddr(index);
                 break;
             }
             case LL_LOAD_FLD_X32: {
                 uint32_t offset = reader_.read<uint32_t>();
-                cell_t obj_addr = popCell();
-                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
-                pushCell(*reinterpret_cast<cell_t*>(base_ptr + offset));
+                uint16_t base = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[base]);
+                vregs_[dest] = *reinterpret_cast<cell_t*>(base_ptr + offset);
                 break;
             }
             case LL_LOAD_FLD_X64: {
                 uint32_t offset = reader_.read<uint32_t>();
-                cell_t obj_addr = popCell();
-                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
-                pushInt64(*reinterpret_cast<int64_t*>(base_ptr + offset));
+                uint16_t base = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[base]);
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) =
+                    *reinterpret_cast<int64_t*>(base_ptr + offset);
                 break;
             }
             case LL_ADDR_FLD: {
                 uint32_t offset = reader_.read<uint32_t>();
-                cell_t obj_addr = popCell();
-                pushCell(obj_addr + offset);
+                uint16_t base = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = vregs_[base] + offset;
                 break;
             }
             case LL_STOR_FLD_X32: {
                 uint32_t offset = reader_.read<uint32_t>();
-                cell_t val = popCell();
-                cell_t obj_addr = popCell();
+                uint16_t basereg = reader_.read<uint16_t>();
+                uint16_t valreg = reader_.read<uint16_t>();
+                cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
-                *reinterpret_cast<cell_t*>(base_ptr + offset) = val;
+                *reinterpret_cast<cell_t*>(base_ptr + offset) = vregs_[valreg];
                 break;
             }
             case LL_STOR_FLD_X64: {
                 uint32_t offset = reader_.read<uint32_t>();
-                int64_t val = popInt64();
-                cell_t obj_addr = popCell();
+                uint16_t basereg = reader_.read<uint16_t>();
+                uint16_t valreg = reader_.read<uint16_t>();
+                cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
-                *reinterpret_cast<int64_t*>(base_ptr + offset) = val;
+                *reinterpret_cast<int64_t*>(base_ptr + offset) =
+                    *reinterpret_cast<int64_t*>(&vregs_[valreg]);
                 break;
             }
-            case LL_CALL:
-            case LL_CALLN: {
-                uint32_t method_index = (uint32_t)reader_.readCell();
-                const smx_rtti_method* method = smx_->GetMethod(method_index);
-                if (op == LL_CALLN) {
-                    uint8_t nargs = reader_.read<uint8_t>();
-                    pushCell(nargs);
-                } else {
-                    auto parser = smx_->GetTypeParser(method->signature);
-                    uint32_t arg_count;
-                    if (!parser.ReadFunctionSignatureArgCount(&arg_count)) {
-                        rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
-                        return false;
-                    }
-                    pushCell(arg_count);
-                }
+            case LL_CALL: {
+                const smx_rtti_method* method = reader_.read<const smx_rtti_method*>();
+                uint8_t nargs = reader_.read<uint8_t>();
+                uint16_t dest = reader_.read<uint16_t>();
 
+                uint32_t method_index = method - smx_->GetMethod(0);
                 uint32_t native_index;
                 cell_t result = 0;
                 if (rt_->GetNativeIndex(method_index, &native_index)) {
-                    cell_t* params = eval_stack_ptr_;
+                    cell_t params[256];
+                    params[0] = nargs;
+                    for (uint8_t i = 0; i < nargs; i++) {
+                        uint16_t arg_reg = reader_.read<uint16_t>();
+                        params[i + 1] = vregs_[arg_reg];
+                    }
 
                     NativeEntry* native = rt_->NativeAt(native_index);
                     ivk_->enterNativeCall(native_index);
@@ -683,330 +741,215 @@ bool Interpreter::run() {
                     RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
                     if (!target->Validate())
                         return false;
-                    {
-                        // Update sp_ so that the callee can find its parameters.
-                        auto updated_sp = rt_->heap().ToLocalAddr(eval_stack_ptr_);
-                        ke::SaveAndSet<uint32_t> save_updated_sp(&rt_->sp(), updated_sp);
-                        if (!Run(rt_, target, &result))
-                            return false;
+                    
+                    if (!target->interp()) {
+                        ke::RefPtr<ControlFlowGraph> graph = target->BuildGraph();
+                        if (!graph) return false;
+                        std::unique_ptr<InterpCode> code = LowerMethod(graph, target.get());
+                        target->setInterpCode(std::move(code));
                     }
-                }
-                // An OP_CALL is always preceded by pushing the argument count.
-                cell_t nparams = popCell();
-                for (cell_t i = 0; i < nparams; i++)
-                    popStack();
 
-                if (!smx_->IsVoidMethod(method))
-                    pushCell(result);
+                    size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
+                    uint32_t num_callee_regs = target->interp()->num_regs();
+                    cell_t stack_amount = -(cell_t)(frame_size + num_callee_regs * sizeof(cell_t));
+                    if (!rt_->addStack(stack_amount))
+                        return false;
+
+                    uint32_t frame_addr = rt_->sp() + num_callee_regs * sizeof(cell_t);
+
+                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(rt_->sp());
+                    for (uint8_t i = 0; i < nargs; i++) {
+                        uint16_t arg_reg = reader_.read<uint16_t>();
+                        new_vregs[i] = vregs_[arg_reg];
+                    }
+
+                    InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_addr);
+                    frame->caller_method = method_.get();
+                    frame->saved_cip = reader_.cursor();
+                    frame->dest_reg = dest;
+                    frame->prev_frame = frm_;
+                    frame->hp_scope = rt_->hp_scope();
+                    frame->heap_pos = rt_->heap().GetPosition();
+
+                    ivk_->setCip(&frame->saved_cip);
+
+                    new (&frame->ivk) InterpInvokeFrame(rt_, target.get(), &insn_begin);
+
+                    frm_ = frame_addr;
+                    ivk_ = &frame->ivk;
+                    vregs_ = std::span<cell_t>(new_vregs, num_callee_regs);
+                    method_ = target;
+
+                    const uint8_t* callee_code = method_->interp()->bytes();
+                    reader_ = BinaryReader(callee_code, callee_code + method_->interp()->size());
+                    ll_code = callee_code;
+                    continue;
+                }
+
+                if (dest != 0xFFFF)
+                    vregs_[dest] = result;
                 break;
             }
             case LL_JUMP: {
-                cell_t offset = reader_.readCell();
+                cell_t offset = reader_.read<int32_t>();
                 if (offset < (cell_t)(insn_begin - ll_code)) {
-                    if (!Environment::get()->watchdog()->HandleInterrupt()) {
-                        rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
+                    if (!CheckTimeout())
                         return false;
-                    }
                 }
                 reader_.set_cursor(ll_code + offset);
                 break;
             }
-            case LL_JZER:
-            case LL_JNZ:
-            case LL_JEQ:
-            case LL_JNEQ:
-            case LL_JSLESS:
-            case LL_JSLEQ:
-            case LL_JSGRTR:
-            case LL_JSGEQ: {
-                cell_t offset = reader_.readCell();
-                cell_t a, b;
-                bool jump = false;
-                switch (op) {
-                    case LL_JZER:
-                        a = popCell();
-                        jump = a == 0;
-                        break;
-                    case LL_JNZ:
-                        a = popCell();
-                        jump = a != 0;
-                        break;
-                    case LL_JEQ:
-                        b = popCell();
-                        a = popCell();
-                        jump = a == b;
-                        break;
-                    case LL_JNEQ:
-                        b = popCell();
-                        a = popCell();
-                        jump = a != b;
-                        break;
-                    case LL_JSLESS:
-                        b = popCell();
-                        a = popCell();
-                        jump = a < b;
-                        break;
-                    case LL_JSLEQ:
-                        b = popCell();
-                        a = popCell();
-                        jump = a <= b;
-                        break;
-                    case LL_JSGRTR:
-                        b = popCell();
-                        a = popCell();
-                        jump = a > b;
-                        break;
-                    case LL_JSGEQ:
-                        b = popCell();
-                        a = popCell();
-                        jump = a >= b;
-                        break;
-                    default: assert(false);
+            UNARY_JUMP_OP(LL_JZER, ==)
+            UNARY_JUMP_OP(LL_JNZ, !=)
+            BINARY_JUMP_OP(LL_JEQ, ==)
+            BINARY_JUMP_OP(LL_JNEQ, !=)
+            BINARY_JUMP_OP(LL_JSLESS, <)
+            BINARY_JUMP_OP(LL_JSLEQ, <=)
+            BINARY_JUMP_OP(LL_JSGRTR, >)
+            BINARY_JUMP_OP(LL_JSGEQ, >=)
+            case LL_SWITCH: {
+                uint16_t val_reg = reader_.read<uint16_t>();
+                cell_t ncases = reader_.read<cell_t>();
+                cell_t default_offset = reader_.read<int32_t>();
+                cell_t val = vregs_[val_reg];
+                cell_t jump_offset = default_offset;
+                for (cell_t i = 0; i < ncases; i++) {
+                    cell_t case_val = reader_.read<cell_t>();
+                    cell_t case_offset = reader_.read<int32_t>();
+                    if (case_val == val)
+                        jump_offset = case_offset;
                 }
-                if (jump) {
-                    if (offset < (cell_t)(insn_begin - ll_code)) {
-                        if (!Environment::get()->watchdog()->HandleInterrupt()) {
-                            rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
-                            return false;
-                        }
-                    }
-                    reader_.set_cursor(ll_code + offset);
-                }
+                reader_.set_cursor(ll_code + jump_offset);
                 break;
             }
-            case LL_SHL: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a << b);
-                break;
-            }
+            BINARY_OP_I32(LL_SHL, <<)
+            BINARY_OP_I32(LL_SSHR, >>)
             case LL_SHR: {
-                cell_t right = popCell();
-                cell_t left = popCell();
-                pushCell(uint32_t(left) >> uint32_t(right));
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = uint32_t(vregs_[a]) >> uint32_t(vregs_[b]);
                 break;
             }
-            case LL_SSHR: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a >> b);
-                break;
-            }
-            case LL_SMUL_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a * b);
-                break;
-            }
+            BINARY_OP_I32(LL_SMUL_I32, *)
             case LL_SDIV_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                if (b == 0) {
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                if (vregs_[b] == 0) {
                     rt_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
                     return false;
                 }
-                if (b == -1 && a == cell_t(0x80000000)) {
+                if (vregs_[b] == -1 && vregs_[a] == cell_t(0x80000000)) {
                     rt_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
                     return false;
                 }
-                pushCell(a / b);
+                vregs_[dest] = vregs_[a] / vregs_[b];
                 break;
             }
             case LL_SMOD_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                if (b == 0) {
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                if (vregs_[b] == 0) {
                     rt_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
                     return false;
                 }
-                if (b == -1 && a == cell_t(0x80000000)) {
+                if (vregs_[b] == -1 && vregs_[a] == cell_t(0x80000000)) {
                     rt_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
                     return false;
                 }
-                pushCell(a % b);
+                vregs_[dest] = vregs_[a] % vregs_[b];
                 break;
             }
-            case LL_ADD_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a + b);
-                break;
-            }
-            case LL_SUB_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a - b);
-                break;
-            }
-            case LL_AND: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a & b);
-                break;
-            }
-            case LL_OR: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a | b);
-                break;
-            }
-            case LL_XOR: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                pushCell(a ^ b);
-                break;
-            }
+            BINARY_OP_I32(LL_ADD_I32, +)
+            BINARY_OP_I32(LL_SUB_I32, -)
+            BINARY_OP_I32(LL_AND, &)
+            BINARY_OP_I32(LL_OR, |)
+            BINARY_OP_I32(LL_XOR, ^)
+            BINARY_OP_I32(LL_EQ_I32, ==)
+            BINARY_OP_I32(LL_NEQ_I32, !=)
+            BINARY_OP_I32(LL_SLESS_I32, <)
+            BINARY_OP_I32(LL_SLEQ_I32, <=)
+            BINARY_OP_I32(LL_SGRTR_I32, >)
+            BINARY_OP_I32(LL_SGEQ_I32, >=)
             case LL_NOT: {
-                cell_t val = popCell();
-                pushCell(val ? 0 : 1);
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = vregs_[a] ? 0 : 1;
                 break;
             }
             case LL_NEG: {
-                cell_t val = popCell();
-                pushCell(-val);
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = -vregs_[src];
                 break;
             }
             case LL_INVERT: {
-                cell_t val = popCell();
-                pushCell(~val);
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = ~vregs_[src];
                 break;
             }
-
-            case LL_EQ_I32:
-            case LL_NEQ_I32:
-            case LL_SLESS_I32:
-            case LL_SLEQ_I32:
-            case LL_SGRTR_I32:
-            case LL_SGEQ_I32: {
-                cell_t b = popCell();
-                cell_t a = popCell();
-                cell_t result = 0;
-                switch (op) {
-                    case LL_SGRTR_I32: result = (a > b) ? 1 : 0; break;
-                    case LL_SGEQ_I32:  result = (a >= b) ? 1 : 0; break;
-                    case LL_SLEQ_I32:  result = (a <= b) ? 1 : 0; break;
-                    case LL_SLESS_I32: result = (a < b) ? 1 : 0; break;
-                    case LL_EQ_I32:    result = (a == b) ? 1 : 0; break;
-                    case LL_NEQ_I32:   result = (a != b) ? 1 : 0; break;
-                    default: assert(false);
-                }
-                pushCell(result);
-                break;
-            }
-            case LL_EQ_I64:
-            case LL_NEQ_I64:
-            case LL_SLESS_I64:
-            case LL_SLEQ_I64:
-            case LL_SGRTR_I64:
-            case LL_SGEQ_I64: {
-                int64_t b = popInt64();
-                int64_t a = popInt64();
-                cell_t result = 0;
-                switch (op) {
-                    case LL_SGRTR_I64: result = (a > b) ? 1 : 0; break;
-                    case LL_SGEQ_I64:  result = (a >= b) ? 1 : 0; break;
-                    case LL_SLEQ_I64:  result = (a <= b) ? 1 : 0; break;
-                    case LL_SLESS_I64: result = (a < b) ? 1 : 0; break;
-                    case LL_EQ_I64:    result = (a == b) ? 1 : 0; break;
-                    case LL_NEQ_I64:   result = (a != b) ? 1 : 0; break;
-                    default: assert(false);
-                }
-                pushCell(result);
+            case LL_TEST_I32: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = vregs_[src] ? 1 : 0;
                 break;
             }
             case LL_TEST_F32: {
-                cell_t val = popCell();
-                FloatCellUnion f(val);
-                pushCell((f.f32 && !ke::IsNaN(f.f32)) ? 1 : 0);
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                float f = sp_ctof(vregs_[src]);
+                vregs_[dest] = (f != 0.0f && !ke::IsNaN(f)) ? 1 : 0;
                 break;
             }
             case LL_NEG_F32: {
-                cell_t val = popCell();
-                FloatCellUnion f(val);
-                pushCell(FloatCellUnion(-f.f32).cell);
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = sp_ftoc(-sp_ctof(vregs_[src]));
                 break;
             }
-            case LL_MUL_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                pushCell(FloatCellUnion(a.f32 * b.f32).cell);
-                break;
-            }
-            case LL_DIV_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                pushCell(FloatCellUnion(a.f32 / b.f32).cell);
-                break;
-            }
+            BINARY_OP_F32(LL_MUL_F32, *)
+            BINARY_OP_F32(LL_DIV_F32, /)
             case LL_MOD_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                pushCell(FloatCellUnion(fmodf(a.f32, b.f32)).cell);
+                uint16_t a = reader_.read<uint16_t>();
+                uint16_t b = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = sp_ftoc(fmodf(sp_ctof(vregs_[a]), sp_ctof(vregs_[b])));
                 break;
             }
-            case LL_ADD_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                pushCell(FloatCellUnion(a.f32 + b.f32).cell);
-                break;
-            }
-            case LL_SUB_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                pushCell(FloatCellUnion(a.f32 - b.f32).cell);
-                break;
-            }
-            case LL_EQ_F32:
-            case LL_NEQ_F32:
-            case LL_LESS_F32:
-            case LL_LEQ_F32:
-            case LL_GRTR_F32:
-            case LL_GEQ_F32: {
-                cell_t b_val = popCell();
-                cell_t a_val = popCell();
-                FloatCellUnion a(a_val);
-                FloatCellUnion b(b_val);
-                cell_t result = 0;
-                switch (op) {
-                    case LL_GRTR_F32: result = (a.f32 > b.f32); break;
-                    case LL_GEQ_F32:  result = (a.f32 >= b.f32); break;
-                    case LL_LEQ_F32:  result = (a.f32 <= b.f32); break;
-                    case LL_LESS_F32: result = (a.f32 < b.f32); break;
-                    case LL_EQ_F32:    result = (a.f32 == b.f32); break;
-                    case LL_NEQ_F32:   result = (a.f32 != b.f32); break;
-                    default: assert(false);
-                }
-                pushCell(result);
-                break;
-            }
+            BINARY_OP_F32(LL_ADD_F32, +)
+            BINARY_OP_F32(LL_SUB_F32, -)
+            COMPARE_OP_F32(LL_EQ_F32, ==)
+            COMPARE_OP_F32(LL_NEQ_F32, !=)
+            COMPARE_OP_F32(LL_LESS_F32, <)
+            COMPARE_OP_F32(LL_LEQ_F32, <=)
+            COMPARE_OP_F32(LL_GRTR_F32, >)
+            COMPARE_OP_F32(LL_GEQ_F32, >=)
             case LL_CVT_F32: {
-                cell_t val = popCell();
-                pushCell(FloatCellUnion((float)val).cell);
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = sp_ftoc((float)vregs_[src]);
                 break;
             }
-            case LL_INC: {
-                cell_t val = popCell();
-                pushCell(val + 1);
+            case LL_CVT_I64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = (int64_t)vregs_[src];
                 break;
             }
-            case LL_DEC: {
-                cell_t val = popCell();
-                pushCell(val - 1);
+            case LL_TRUNCATE_I64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = (cell_t)*reinterpret_cast<int64_t*>(&vregs_[src]);
                 break;
             }
             case LL_COPYARRAY: {
-                SpArray* src = heap_.ToPhysAddr<SpArray*>(popCell());
-                SpArray* dest = heap_.ToPhysAddr<SpArray*>(popCell());
+                uint16_t srcreg = reader_.read<uint16_t>(); // src
+                uint16_t destreg = reader_.read<uint16_t>(); // dest
+                SpArray* src = heap_.ToPhysAddr<SpArray*>(vregs_[srcreg]);
+                SpArray* dest = heap_.ToPhysAddr<SpArray*>(vregs_[destreg]);
                 assert(dest->td->kind() == TypeKind::FixedArray);
 
                 if (src->length > dest->length) {
@@ -1025,32 +968,88 @@ bool Interpreter::run() {
             }
             case LL_COPYOBJ: {
                 uint32_t bytes = reader_.read<uint32_t>();
-                cell_t src_addr = popCell();
-                cell_t dest_addr = popCell();
+                uint16_t srcreg = reader_.read<uint16_t>();
+                uint16_t destreg = reader_.read<uint16_t>();
+                cell_t src_addr = vregs_[srcreg];
+                cell_t dest_addr = vregs_[destreg];
                 uint8_t* dest = heap_.ToPhysAddr<uint8_t*>(dest_addr);
                 uint8_t* src = heap_.ToPhysAddr<uint8_t*>(src_addr);
                 memcpy(dest, src, bytes);
                 break;
             }
-            case LL_ADDR_S: {
-                cell_t slot = reader_.readInt16();
-                cell_t address = frm_ + StackOffset(slot);
-                pushCell(address);
+            case LL_NEWARRAY: {
+                auto td = reader_.read<const TypeDesc*>();
+                uint16_t size_reg = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint32_t size;
+                if (td->kind() == TypeKind::Array) {
+                    cell_t val = vregs_[size_reg];
+                    if (val < 0) {
+                        rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+                        return false;
+                    }
+                    size = val;
+                } else {
+                    size = td->array_size();
+                }
+                auto array = rt_->NewArray(td, size);
+                if (!array)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(array);
                 break;
             }
-            case LL_SWITCH: {
-                cell_t ncases = reader_.readCell();
-                cell_t defaultOffset = reader_.readCell();
-                cell_t val = popCell();
-                cell_t jumpOffset = defaultOffset;
-                for (cell_t i = 0; i < ncases; i++) {
-                    cell_t case_val = reader_.readCell();
-                    cell_t case_offset = reader_.readCell();
-                    if (case_val == val) {
-                        jumpOffset = case_offset;
-                    }
-                }
-                reader_.set_cursor(ll_code + jumpOffset);
+
+            case LL_NEWFIXEDARRAY: {
+                auto td = reader_.read<const TypeDesc*>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint32_t size = td->array_size();
+                auto array = rt_->NewArray(td, size);
+                if (!array)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(array);
+                break;
+            }
+            case LL_NEWBULKARRAY: {
+                uint8_t dims = reader_.read<uint8_t>();
+                auto td = reader_.read<const TypeDesc*>();
+                uint16_t size_reg = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+
+                auto array = rt_->NewBulkArray(td, dims, &vregs_[size_reg]);
+
+                if (!array)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(array);
+                break;
+            }
+            case LL_FILLARRAY: {
+                uint32_t data_offset = reader_.read<uint32_t>();
+                uint16_t src = reader_.read<uint16_t>(); // array addr
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(vregs_[src]);
+                if (!rt_->FillArray(array, data_offset))
+                    return false;
+                break;
+            }
+            case LL_ARRAY_TO_NATIVE: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                uint32_t addr = vregs_[src];
+                assert((addr & kNativePointerTag) == 0);
+                vregs_[dest] = addr | kNativePointerTag;
+                break;
+            }
+            case LL_SLICE_ES: {
+                uint32_t cell_count = reader_.read<uint32_t>();
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                cell_t base = vregs_[src];
+                SpArray* slice = rt_->heap().AllocTyped<SpArray>();
+                if (!slice)
+                    return false;
+                slice->td = rt_->GetSliceType(rt_->GetPrimitiveType(TypeKind::Any));
+                slice->length = cell_count;
+                slice->data = base;
+                vregs_[dest] = rt_->heap().ToLocalAddr(slice);
                 break;
             }
             case LL_HEAP_SAVE: {
@@ -1062,67 +1061,15 @@ bool Interpreter::run() {
                 rt_->leaveHeapScope();
                 break;
             }
-            case LL_NEWARRAY: {
-                uint32_t type_id = reader_.read<uint32_t>();
-                auto td = rt_->LoadTypeFromId(type_id);
-                uint32_t size;
-                if (td->kind() == TypeKind::Array) {
-                    size = popCell();
-                    if (size < 0) {
-                        rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
-                        return false;
-                    }
-                } else {
-                    size = td->array_size();
-                }
-                auto array = rt_->NewArray(td, size);
-                if (!array)
-                    return false;
-                pushCell(rt_->heap().ToLocalAddr(array));
-                break;
-            }
-            case LL_NEWBULKARRAY: {
-                uint8_t dims = reader_.read<uint8_t>();
-                uint32_t type_id = reader_.read<uint32_t>();
-                auto td = rt_->LoadTypeFromId(type_id);
-                auto array = rt_->NewBulkArray(td, dims, eval_stack_ptr_);
-                if (!array)
-                    return false;
-                for (size_t i = 0; i < dims; i++)
-                    popStack();
-                pushCell(rt_->heap().ToLocalAddr(array));
-                break;
-            }
-            case LL_FILLARRAY: {
-                uint32_t data_offset = reader_.readCell();
-
-                uint32_t addr = popCell();
-                auto array = rt_->heap().ToPhysAddr<SpArray*>(addr);
-                if (!rt_->FillArray(array, data_offset))
-                    return false;
-                break;
-            }
-            case LL_ARRAY_TO_NATIVE: {
-                uint32_t addr = popCell();
-                assert((addr & kNativePointerTag) == 0);
-
-                pushCell(addr | kNativePointerTag);
-                break;
-            }
-            case LL_SLICE_ES: {
-                uint32_t cell_count = reader_.read<uint32_t>();
-                cell_t base = popCell();
-                SpArray* slice = rt_->heap().AllocTyped<SpArray>();
-                if (!slice)
-                    return false;
-                slice->td = rt_->GetSliceType(rt_->GetPrimitiveType(TypeKind::Any));
-                slice->length = cell_count;
-                slice->data = base;
-                pushCell(rt_->heap().ToLocalAddr(slice));
+            case LL_ADDR_S: {
+                uint16_t reg = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = rt_->heap().ToLocalAddr(&vregs_[reg]);
                 break;
             }
 
             default:
+                fprintf(stderr, "Unimplemented opcode: %s\n", GetLLOpName(op));
                 assert(false);
                 return false;
         }
@@ -1131,123 +1078,6 @@ bool Interpreter::run() {
     return true;
 }
 
-cell_t Interpreter::StackOffset(cell_t slot) {
-    if (slot < 0) {
-        // -1 is because we can't encode 0-based arguments, because 0 is local.
-        // +1 because we skip the argument count.
-        return (-slot - 1 + 1) * sizeof(cell_t);
-    }
 
-    return method_->local_offsets().at(slot);
-}
-
-cell_t Interpreter::getLocalCell(int32_t slot) {
-    return phys_frm_[StackOffset(slot) / sizeof(cell_t)];
-}
-
-void Interpreter::setLocalCell(int32_t slot, cell_t value) {
-    phys_frm_[StackOffset(slot) / sizeof(cell_t)] = value;
-}
-
-int64_t& Interpreter::getLocalInt64(int32_t slot) {
-    return *reinterpret_cast<int64_t*>(&phys_frm_[StackOffset(slot) / sizeof(cell_t)]);
-}
-
-void Interpreter::pushCell(cell_t value) {
-    assert(stack_types_ptr_ > stack_types_limit_);
-    assert(eval_stack_ptr_ > eval_stack_limit_);
-    *--stack_types_ptr_ = (uint8_t)StackType::Cell;
-    *--eval_stack_ptr_ = value;
-}
-
-cell_t Interpreter::popCell() {
-    assert(stack_types_ptr_ < stack_types_top_);
-    assert((StackType)*stack_types_ptr_ == StackType::Cell);
-    assert(eval_stack_ptr_ < eval_stack_top_);
-    stack_types_ptr_++;
-    return *eval_stack_ptr_++;
-}
-
-void Interpreter::pushInt64(int64_t value) {
-    assert(stack_types_ptr_ > stack_types_limit_);
-    assert(eval_stack_ptr_ - 2 >= eval_stack_limit_);
-    *--stack_types_ptr_ = (uint8_t)StackType::Int64;
-    eval_stack_ptr_ -= 2;
-    *reinterpret_cast<int64_t*>(eval_stack_ptr_) = value;
-}
-
-int64_t Interpreter::popInt64() {
-    assert(stack_types_ptr_ < stack_types_top_);
-    assert((StackType)*stack_types_ptr_ == StackType::Int64);
-    assert(eval_stack_ptr_ + 2 <= eval_stack_top_);
-    stack_types_ptr_++;
-    int64_t val = *reinterpret_cast<int64_t*>(eval_stack_ptr_);
-    eval_stack_ptr_ += 2;
-    return val;
-}
-
-void Interpreter::popStack() {
-    assert(stack_types_ptr_ < stack_types_top_);
-    StackType type = (StackType)*(stack_types_ptr_++);
-    if (type == StackType::Cell) {
-        assert(eval_stack_ptr_ < eval_stack_top_);
-        eval_stack_ptr_++;
-    } else {
-        assert(eval_stack_ptr_ + 2 <= eval_stack_top_);
-        eval_stack_ptr_ += 2;
-    }
-}
-
-Interpreter::StackValue Interpreter::popValue() {
-    assert(stack_types_ptr_ < stack_types_top_);
-    StackValue v;
-    v.type = (StackType)*stack_types_ptr_;
-    if (v.type == StackType::Cell) {
-        v.u.cell = popCell();
-    } else {
-        v.u.i64 = popInt64();
-    }
-    return v;
-}
-
-void Interpreter::pushValue(const StackValue& v) {
-    if (v.type == StackType::Cell)
-        pushCell(v.u.cell);
-    else if (v.type == StackType::Int64)
-        pushInt64(v.u.i64);
-}
-
-int32_t Interpreter::CalcLocalsSize() {
-    if (!method_->local_offsets().empty())
-        return -method_->local_offsets().back();
-
-    if (method_->local_types().empty())
-        return 0;
-
-    // Cache this calculation for future runs.
-    method_->local_offsets() = ke::FixedArray<int32_t>(method_->local_types().size());
-
-    int32_t size = 0;
-    for (size_t i = 0; i < method_->local_types().size(); i++) {
-        auto td = method_->local_types().at(i);
-
-        size += td->slot_size();
-        method_->local_offsets().at(i) = -size;
-    }
-    return size;
-}
-
-bool Interpreter::InitLocals() {
-    for (size_t i = 0; i < method_->local_types().size(); i++) {
-        auto td = method_->local_types().at(i);
-        if (td->kind() == TypeKind::FixedArray) {
-            auto array = rt_->NewArray(td, td->array_size());
-            if (!array)
-                return false;
-            setLocalCell(i, rt_->heap().ToLocalAddr(array));
-        }
-    }
-    return true;
-}
 
 } // namespace sp::v2

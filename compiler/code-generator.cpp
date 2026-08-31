@@ -417,7 +417,7 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         assert(!inner->is_flat());
         ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
 
-        uint32_t len = array ? (uint32_t)array->exprs().size() : inner->size();
+        uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
         for (size_t i = 0; i < len; i++) {
             __ emit(OP_DUP);
             __ PUSH_C(i);
@@ -1565,6 +1565,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         } else if (auto type = return_type->as<ArrayType>()) {
             assert(!type->is_flat());
             auto slot = AcquireTempSlot(call, type);
+            EmitArrayCtor(type, nullptr, 0);
+            __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_LOAD_S, VarSlot(slot));
             hidden_slot = {slot};
         } else {

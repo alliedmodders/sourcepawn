@@ -33,14 +33,17 @@ class InterpCode
         uint32_t high;
     };
 
-    InterpCode(std::unique_ptr<uint8_t[]> bytes, size_t size, std::vector<OffsetMapping>&& mappings)
+    InterpCode(std::unique_ptr<uint8_t[]> bytes, size_t size, uint32_t num_regs,
+               std::vector<OffsetMapping>&& mappings)
      : bytes_(std::move(bytes)),
        size_(size),
+       num_regs_(num_regs),
        mappings_(std::move(mappings))
     {}
 
     const uint8_t* bytes() const { return bytes_.get(); }
     size_t size() const { return size_; }
+    uint32_t num_regs() const { return num_regs_; }
 
     uint32_t LookupHighOffset(uint32_t low_offset) const {
         if (mappings_.empty())
@@ -59,6 +62,7 @@ class InterpCode
   private:
     std::unique_ptr<uint8_t[]> bytes_;
     size_t size_;
+    uint32_t num_regs_;
     std::vector<OffsetMapping> mappings_;
 };
 

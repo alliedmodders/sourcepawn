@@ -145,7 +145,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* base;
             if (!popStack(&base))
                 return false;
-            if (!base->IsArrayish())
+            if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             const TypeDesc* elt = base->array_elt();
@@ -171,7 +171,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* base;
             if (!popStack(&base))
                 return false;
-            if (!base->IsArrayish())
+            if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return ValidateStore(base->array_elt(), val);
         }
@@ -211,7 +211,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&base))
                 return false;
 
-            if (!base->IsArrayish())
+            if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             if (op == OP_SLICE) {
@@ -539,7 +539,9 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc *src, *dest;
             if (!popStack(&src) || !popStack(&dest))
                 return false;
-            if (!src->IsArrayish() || (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray))
+            if (!verifyArrayType(src) || !verifyArrayType(dest))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray) {
                 if (src->array_size() > dest->array_size())
@@ -591,7 +593,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* td;
             if (!popStack(&td))
                 return false;
-            if (!td->IsArrayish())
+            if (!verifyArrayType(td))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             uint32_t data_offs = read<uint32_t>();
@@ -650,7 +652,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* td;
             if (!popStack(&td))
                 return false;
-            if (!td->IsArrayish())
+            if (!verifyArrayType(td))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(td);
         }
@@ -770,7 +772,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* base;
             if (!popStack(&base))
                 return false;
-            if (!base->IsArrayish())
+            if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             if (td->kind() == TypeKind::FixedArray) {

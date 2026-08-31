@@ -123,6 +123,7 @@ class InterpInvokeFrame final : public InvokeFrame
     }
 
     BaseMethodInfo* method() const { return method_; }
+    void setCip(const uint8_t* const* cip) { cip_ = cip; }
 
   private:
     BaseMethodInfo* method_;

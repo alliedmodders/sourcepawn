@@ -12,6 +12,9 @@
 //
 
 #include "control-flow.h"
+
+#include <algorithm>
+
 #include <amtl/am-string.h>
 #include "v2/opcodes.h"
 
@@ -369,6 +372,37 @@ Block::startPc() const {
 uint32_t
 Block::endPc() const {
     return end_ - graph_.rt()->code().bytes;
+}
+
+void Block::replaceSuccessor(size_t index, Block* new_target) {
+    Block* old_target = successors_[index].get();
+    auto it = std::find(old_target->predecessors_.begin(), old_target->predecessors_.end(), this);
+    assert(it != old_target->predecessors_.end());
+    old_target->predecessors_.erase(it);
+
+    successors_[index] = new_target;
+    new_target->predecessors_.push_back(this);
+}
+
+void ControlFlowGraph::splitCriticalEdges() {
+    std::vector<ke::RefPtr<Block>> original_blocks;
+    for (auto iter = blocks_.begin(); iter != blocks_.end(); iter++)
+        original_blocks.push_back(*iter);
+
+    for (const auto& block : original_blocks) {
+        if (block->successors().size() <= 1)
+            continue;
+
+        for (size_t i = 0; i < block->successors().size(); i++) {
+            Block* succ = block->successors()[i].get();
+            if (succ->predecessors().size() <= 1)
+                continue;
+
+            ke::RefPtr<Block> split_block = newBlock(nullptr);
+            split_block->endWithJump(nullptr, succ);
+            block->replaceSuccessor(i, split_block.get());
+        }
+    }
 }
 
 } // namespace sp::v2

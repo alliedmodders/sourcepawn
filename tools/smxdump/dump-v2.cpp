@@ -11,50 +11,63 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "smxdump.h"
-#include "vm/smx-image.h"
-#include "vm/binary-reader.h"
+
 #include <inttypes.h>
+
+#include <amtl/am-string.h>
+
+#include "vm/binary-reader.h"
+#include "vm/smx-image.h"
 
 using namespace ke;
 using namespace sp;
 using namespace SourcePawn;
 
-void DumpTool::PrintEscaped(std::string_view s) {
+std::string DumpTool::EscapeString(std::string_view s) {
+    std::string res;
     for (char c : s) {
         unsigned char uc = (unsigned char)c;
-        if (uc == '\"') fprintf(stdout, "\\\"");
-        else if (uc == '\\') fprintf(stdout, "\\\\");
-        else if (uc == '\n') fprintf(stdout, "\\n");
-        else if (uc == '\r') fprintf(stdout, "\\r");
-        else if (uc == '\t') fprintf(stdout, "\\t");
-        else if (uc >= 32 && uc <= 126) fputc(uc, stdout);
-        else fprintf(stdout, "\\x%02x", uc);
+        if (uc == '\"') {
+            res += "\\\"";
+        } else if (uc == '\\') {
+            res += "\\\\";
+        } else if (uc == '\n') {
+            res += "\\n";
+        } else if (uc == '\r') {
+            res += "\\r";
+        } else if (uc == '\t') {
+            res += "\\t";
+        } else if (uc >= 32 && uc <= 126) {
+            res += c;
+        } else {
+            char buf[8];
+            snprintf(buf, sizeof(buf), "\\x%02x", uc);
+            res += buf;
+        }
     }
+    return res;
 }
 
-void DumpTool::DumpString(uint16_t index) {
-    auto table = smx_->rtti_stringpool();
-    if (!table || index >= table->row_count) {
-        fprintf(stdout, " unknown_string_%u", index);
-        return;
-    }
+std::string DumpTool::DumpString(uint16_t index) {
+    auto table = smx()->rtti_stringpool();
+    if (!table || index >= table->row_count)
+        return "unknown_string_" + std::to_string(index);
 
-    auto entry = smx_->getRttiRow<smx_rtti_string>(table, index);
-    auto blob = smx_->ReadDataBlob(entry->offset);
-    if (!blob) {
-        fprintf(stdout, " <invalid_blob_0x%x>", entry->offset);
-        return;
-    }
+    auto entry = smx()->getRttiRow<smx_rtti_string>(table, index);
+    auto blob = smx()->ReadDataBlob(entry->offset);
+    if (!blob)
+        return std::string("<invalid_blob_0x") + ke::Sprintf("%x", entry->offset).get() + ">";
 
     std::string_view s = *blob;
-    fprintf(stdout, " \"");
+    std::string res = "\"";
     if (s.length() > 60) {
-        PrintEscaped(s.substr(0, 57));
-        fprintf(stdout, "...");
+        res += EscapeString(s.substr(0, 57));
+        res += "...\"";
     } else {
-        PrintEscaped(s);
+        res += EscapeString(s);
+        res += "\"";
     }
-    fprintf(stdout, "\"");
+    return res;
 }
 
 void DumpTool::DumpCodeRangeV2(uint32_t pcode_start, uint32_t pcode_end) {
@@ -126,7 +139,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         }
 
         case OP_LOAD_STR:
-            DumpString(reader.read<uint16_t>());
+            fprintf(stdout, " %s", DumpString(reader.read<uint16_t>()).c_str());
             break;
 
         case OP_PUSH_C_I8:

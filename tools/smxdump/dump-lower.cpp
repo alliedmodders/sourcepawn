@@ -11,14 +11,21 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "smxdump.h"
-#include "vm/smx-image.h"
-#include "v2/runtime.h"
-#include "v2/method-info.h"
-#include "v2/interp/lowering.h"
-#include "v2/interp/interp-code.h"
-#include "v2/interp/ll-op.h"
-#include "vm/binary-reader.h"
+
 #include <inttypes.h>
+
+#include <string>
+#include <vector>
+
+#include <amtl/am-string.h>
+#include "v2/interp/ll-op.h"
+#include "v2/interp/llcode.h"
+#include "v2/interp/lowering.h"
+#include "v2/method-info.h"
+#include "v2/runtime.h"
+#include "vm/binary-reader.h"
+#include "vm/smx-image.h"
+#include "vm/type-desc.h"
 
 using namespace ke;
 using namespace sp;
@@ -42,6 +49,21 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
     const uint8_t* cip = ll_code;
     const uint8_t* code_end = ll_code + ll_size;
 
+    uint32_t argc = method->arg_types().size();
+    uint32_t total_regs = argc;
+    for (size_t i = 0; i < method->local_types().size(); i++)
+        total_regs += method->local_types()[i]->slot_size() / sizeof(cell_t);
+
+    auto FormatRegister = [&](uint16_t reg) -> std::string {
+        if (reg == 0xffff)
+            return "none";
+        if (reg < argc)
+            return "a" + std::to_string(reg);
+        if (reg < total_regs)
+            return "r" + std::to_string(reg - argc);
+        return "v" + std::to_string(reg);
+    };
+
     while (cip < code_end) {
         uint32_t ll_offset = (uint32_t)(cip - ll_code);
         uint32_t high_offset = method->interp()->LookupHighOffset(ll_offset);
@@ -58,271 +80,162 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
         BinaryReader reader(cip + 2);
 
         switch (op) {
-            case LL_NOP:
-            case LL_POP:
-            case LL_DUP:
-            case LL_RETN:
-            case LL_SHL:
-            case LL_SHR:
-            case LL_SSHR:
-            case LL_SMUL_I32:
-            case LL_SDIV_I32:
-            case LL_SMOD_I32:
-            case LL_ADD_I32:
-            case LL_SUB_I32:
-            case LL_AND:
-            case LL_OR:
-            case LL_XOR:
-            case LL_NOT:
-            case LL_NEG:
-            case LL_INVERT:
-            case LL_EQ_I32:
-            case LL_NEQ_I32:
-            case LL_SLESS_I32:
-            case LL_SLEQ_I32:
-            case LL_SGRTR_I32:
-            case LL_SGEQ_I32:
-            case LL_INC:
-            case LL_DEC:
-            case LL_HEAP_SAVE:
-            case LL_HEAP_RESTORE:
-            case LL_TEST_F32:
-            case LL_NEG_F32:
-            case LL_MUL_F32:
-            case LL_DIV_F32:
-            case LL_ADD_F32:
-            case LL_SUB_F32:
-            case LL_EQ_F32:
-            case LL_NEQ_F32:
-            case LL_LESS_F32:
-            case LL_LEQ_F32:
-            case LL_GRTR_F32:
-            case LL_GEQ_F32:
-            case LL_CVT_F32:
-            case LL_MOD_F32:
-            case LL_CVT_I64:
-            case LL_TRUNCATE_I64:
-            case LL_TEST_I64:
-            case LL_INVERT_I64:
-            case LL_NEG_I64:
-            case LL_SMUL_I64:
-            case LL_SDIV_I64:
-            case LL_ADD_I64:
-            case LL_SUB_I64:
-            case LL_SHL_I64:
-            case LL_SSHR_I64:
-            case LL_SHR_I64:
-            case LL_EQ_I64:
-            case LL_NEQ_I64:
-            case LL_OR_I64:
-            case LL_AND_I64:
-            case LL_XOR_I64:
-            case LL_SLESS_I64:
-            case LL_SLEQ_I64:
-            case LL_SGRTR_I64:
-            case LL_SGEQ_I64:
-            case LL_SMOD_I64:
-            case LL_SWAP:
-            case LL_RETV:
-            case LL_ARRAY_TO_NATIVE:
-            case LL_SLICE:
-            case LL_LOAD_I_I32:
-            case LL_LOAD_I_U8:
-            case LL_LOAD_I_I64:
-            case LL_LOAD_I_F32:
-            case LL_STOR_I_I32:
-            case LL_STOR_I_U8:
-            case LL_STOR_I_I64:
-            case LL_STOR_I_F32:
-            case LL_LOAD_ELEM_I32:
-            case LL_LOAD_ELEM_F32:
-            case LL_LOAD_ELEM_I64:
-            case LL_LOAD_ELEM_U8:
-            case LL_LOAD_ELEM_A:
-            case LL_STOR_ELEM_I32:
-            case LL_STOR_ELEM_F32:
-            case LL_STOR_ELEM_I64:
-            case LL_STOR_ELEM_U8:
-            case LL_COPYARRAY:
-            case LL_ARRAY_TO_FLAT:
-            case LL_COPYARRAY_FLAT:
-            case LL_SLICE_FLAT:
-                break;
-
-            case LL_LOAD_GLB:
-            case LL_STOR_GLB:
-            case LL_ADDR_GLB: {
-                uint16_t index = reader.read<uint16_t>();
-                auto globals = smx()->rtti_globals();
-                if (globals && index < globals->row_count) {
-                    auto global = smx()->getRttiRow<smx_rtti_global>(globals, index);
-                    fprintf(stdout, " %s", smx()->names() + global->name);
-                } else {
-                    fprintf(stdout, " unknown_global_%u", index);
+            case LL_SWITCH: {
+                cell_t ncases = reader.read<cell_t>();
+                fprintf(stdout, " cases:%d", (int)ncases);
+                cell_t def_offset = reader.read<cell_t>();
+                for (cell_t c = 0; c < ncases; c++) {
+                    cell_t val = reader.read<cell_t>();
+                    cell_t target_offset = reader.read<cell_t>();
+                    fprintf(stdout, "\n        case %d: %04x", (int)val, (uint32_t)target_offset);
                 }
-                break;
-            }
-
-            case LL_LOAD_S:
-            case LL_STOR_S:
-            case LL_ADDR_S:
-                fprintf(stdout, " %d", reader.read<int16_t>());
-                break;
-
-            case LL_STOR_S_C: {
-                int16_t offset = reader.read<int16_t>();
-                cell_t value = reader.read<cell_t>();
-                fprintf(stdout, " %d, %d", offset, value);
-                break;
-            }
-
-            case LL_PUSH_C:
-                fprintf(stdout, " %d", reader.read<cell_t>());
-                break;
-
-            case LL_PUSH_C_I8:
-                fprintf(stdout, " %d", (int)reader.read<int8_t>());
-                break;
-
-            case LL_PUSH_C_I64:
-                fprintf(stdout, " %" PRId64, reader.read<int64_t>());
-                break;
-
-            case LL_LOAD_FN: {
-                uint32_t method_index = reader.read<uint32_t>();
-                if (auto method = smx()->GetMethod(method_index))
-                    fprintf(stdout, " %s", smx()->names() + method->name);
-                else
-                    fprintf(stdout, " unknown_method_%u", method_index);
+                fprintf(stdout, "\n        default: %04x", (uint32_t)def_offset);
                 break;
             }
 
             case LL_CALL: {
-                uint32_t method_index = reader.read<uint32_t>();
-                if (auto method = smx()->GetMethod(method_index))
-                    fprintf(stdout, " %s", smx()->names() + method->name);
-                else
-                    fprintf(stdout, " unknown_method_%u", method_index);
-                break;
-            }
-
-            case LL_CALLN: {
-                uint32_t method_index = reader.read<uint32_t>();
+                auto method = reader.read<const smx_rtti_method*>();
                 uint8_t nargs = reader.read<uint8_t>();
-                if (auto method = smx()->GetMethod(method_index))
-                    fprintf(stdout, " %s %u", smx()->names() + method->name, nargs);
-                else
-                    fprintf(stdout, " unknown_method_%u %u", method_index, nargs);
+                uint16_t dest_reg = reader.read<uint16_t>();
+                std::vector<std::string> args;
+                args.push_back(smx()->names() + method->name);
+                args.push_back(std::to_string(nargs));
+                if (dest_reg != 0xffff)
+                    args.push_back("dest:" + FormatRegister(dest_reg));
+                for (uint32_t i = 0; i < nargs; i++)
+                    args.push_back(FormatRegister(reader.read<uint16_t>()));
+                fprintf(stdout, " %s", ke::Join(args, ", ").c_str());
                 break;
             }
 
-            case LL_JUMP:
-            case LL_JZER:
-            case LL_JNZ:
-            case LL_JEQ:
-            case LL_JNEQ:
-            case LL_JSLESS:
-            case LL_JSLEQ:
-            case LL_JSGRTR:
-            case LL_JSGEQ: {
-                cell_t target_offset = reader.read<cell_t>();
-                cell_t target_id = reader.read<cell_t>();
-                fprintf(stdout, " %04x ; block %d", (uint32_t)target_offset, (int)target_id);
-                break;
-            }
+            default: {
+                const LLArgFmt* args = nullptr;
+                size_t nargs = 0;
 
-            case LL_NEWARRAY: {
-                uint32_t type_id = reader.read<uint32_t>();
-                auto rtti = smx()->GetTypeIdParser(type_id);
-                fprintf(stdout, " %s", DumpType(rtti).c_str());
-                break;
-            }
-
-            case LL_NEWBULKARRAY: {
-                uint8_t ndims = reader.read<uint8_t>();
-                uint32_t type_id = reader.read<uint32_t>();
-                auto rtti = smx()->GetTypeIdParser(type_id);
-                fprintf(stdout, " dims:%u %s", ndims, DumpType(rtti).c_str());
-                break;
-            }
-
-            case LL_FILLARRAY: {
-                uint32_t data_offs = reader.read<uint32_t>();
-                reader.read<const TypeDesc*>();
-                fprintf(stdout, " 0x%x", data_offs);
-                break;
-            }
-
-            case LL_FILLARRAY_FLAT: {
-                uint32_t data_offs = reader.read<uint32_t>();
-                fprintf(stdout, " 0x%x", data_offs);
-                break;
-            }
-
-            case LL_LOAD_FLD_X32:
-            case LL_LOAD_FLD_X64:
-            case LL_ADDR_FLD:
-            case LL_STOR_FLD_X32:
-            case LL_STOR_FLD_X64: {
-                uint32_t offset = reader.read<uint32_t>();
-                fprintf(stdout, " offset:%u", offset);
-                break;
-            }
-
-            case LL_IDXADDR:
-            case LL_IDXADDR_FLAT: {
-                uint32_t array_size = reader.read<uint32_t>();
-                uint32_t elt_size = reader.read<uint32_t>();
-                fprintf(stdout, " size:%u elt_size:%u", array_size, elt_size);
-                break;
-            }
-
-            case LL_LOAD_STR:
-                DumpString(reader.read<uint16_t>());
-                break;
-
-            case LL_STOR_ELEM_FLAT_I32:
-            case LL_STOR_ELEM_FLAT_F32:
-            case LL_STOR_ELEM_FLAT_I64:
-            case LL_STOR_ELEM_FLAT_U8: {
-                uint32_t array_size = reader.read<uint32_t>();
-                uint32_t elt_size = reader.read<uint32_t>();
-                fprintf(stdout, " size:%u elt_size:%u", array_size, elt_size);
-                break;
-            }
-
-            case LL_SLICE_ES: {
-                uint32_t cell_count = reader.read<uint32_t>();
-                fprintf(stdout, " cells:%u", cell_count);
-                break;
-            }
-
-            case LL_COPYOBJ: {
-                uint32_t size = reader.read<uint32_t>();
-                fprintf(stdout, " size:%u", size);
-                break;
-            }
-
-            case LL_SWITCH: {
-                cell_t ncases = reader.read<cell_t>();
-                fprintf(stdout, " cases:%d", (int)ncases);
-                for (cell_t c = 0; c < ncases; c++) {
-                    cell_t val = reader.read<cell_t>();
-                    cell_t target_offset = reader.read<cell_t>();
-                    cell_t target_id = reader.read<cell_t>();
-                    fprintf(stdout, "\n        case %d: %04x ; block %d", (int)val, (uint32_t)target_offset, (int)target_id);
+                switch (op) {
+#define FOR_EACH_OPCODE(op_name, val, text, ...) \
+                case LL_##op_name: { \
+                    static const LLArgFmt fmt[] = __VA_ARGS__; \
+                    args = fmt; \
+                    nargs = sizeof(fmt) / sizeof(LLArgFmt); \
+                    break; \
                 }
-                cell_t def_offset = reader.read<cell_t>();
-                cell_t def_id = reader.read<cell_t>();
-                fprintf(stdout, "\n        default: %04x ; block %d", (uint32_t)def_offset, (int)def_id);
+                LL_OPCODE_LIST(FOR_EACH_OPCODE)
+#undef FOR_EACH_OPCODE
+                }
+
+                std::vector<std::string> op_args;
+                for (size_t i = 0; i < nargs; i++) {
+                    switch (args[i]) {
+                        case LL_FMT_REG:
+                            op_args.push_back(FormatRegister(reader.read<uint16_t>()));
+                            break;
+                        case LL_FMT_TYPEDESC: {
+                            auto td = reader.read<const TypeDesc*>();
+                            op_args.push_back(DumpType(td));
+                            break;
+                        }
+                        case LL_FMT_METHOD_PTR: {
+                            auto method = reader.read<const smx_rtti_method*>();
+                            op_args.push_back(smx()->names() + method->name);
+                            break;
+                        }
+                        case LL_FMT_METHOD_ID: {
+                            uint32_t method_index = reader.read<uint32_t>();
+                            auto method = smx()->GetMethod(method_index);
+                            op_args.push_back(smx()->names() + method->name);
+                            break;
+                        }
+                        case LL_FMT_STR_ID:
+                            op_args.push_back(DumpString(reader.read<uint16_t>()));
+                            break;
+                        case LL_FMT_U8:
+                            op_args.push_back(std::to_string(reader.read<uint8_t>()));
+                            break;
+                        case LL_FMT_U16:
+                            op_args.push_back(std::to_string(reader.read<uint16_t>()));
+                            break;
+                        case LL_FMT_GLB_ID: {
+                            uint16_t index = reader.read<uint16_t>();
+                            auto globals = smx()->rtti_globals();
+                            auto global = smx()->getRttiRow<smx_rtti_global>(globals, index);
+                            op_args.push_back(smx()->names() + global->name);
+                            break;
+                        }
+                        case LL_FMT_STACK_ID:
+                            op_args.push_back(FormatRegister(reader.read<uint16_t>()));
+                            break;
+                        case LL_FMT_I32:
+                            op_args.push_back(std::to_string(reader.read<int32_t>()));
+                            break;
+                        case LL_FMT_U32:
+                            op_args.push_back(std::to_string(reader.read<uint32_t>()));
+                            break;
+                        case LL_FMT_CELL:
+                            op_args.push_back(std::to_string(reader.read<cell_t>()));
+                            break;
+                        case LL_FMT_I64:
+                            op_args.push_back(std::to_string(reader.read<int64_t>()));
+                            break;
+                        case LL_FMT_TARGET: {
+                            cell_t target_offset = reader.read<cell_t>();
+                            char buf[16];
+                            snprintf(buf, sizeof(buf), "%04x", (uint32_t)target_offset);
+                            op_args.push_back(buf);
+                            break;
+                        }
+                        case LL_FMT_SWITCH:
+                        case LL_FMT_CALL:
+                            break;
+                    }
+                }
+
+                if (!op_args.empty())
+                    fprintf(stdout, " %s", ke::Join(op_args, ", ").c_str());
                 break;
             }
-
-            default:
-                break;
         }
 
         fprintf(stdout, "\n");
         cip = reader.cursor();
+    }
+}
+
+std::string DumpTool::DumpType(const TypeDesc* td) {
+    if (!td)
+        return "null";
+    switch (td->kind()) {
+        case TypeKind::Bool:
+            return "bool";
+        case TypeKind::Int32:
+            return "int";
+        case TypeKind::Int64:
+            return "int64";
+        case TypeKind::Float32:
+            return "float";
+        case TypeKind::Char8:
+            return "char";
+        case TypeKind::Any:
+            return "any";
+        case TypeKind::Void:
+            return "void";
+        case TypeKind::TopFunction:
+            return "function";
+        case TypeKind::Array:
+            return DumpType(td->array_elt()) + "[]";
+        case TypeKind::FixedArray:
+            return DumpType(td->array_elt()) + "[" + std::to_string(td->array_size()) + "]";
+        case TypeKind::FlatArray:
+            return DumpType(td->array_elt()) + "[flat:" + std::to_string(td->array_size()) + "]";
+        case TypeKind::ArraySlice:
+            return DumpType(td->array_elt()) + "[slice]";
+        case TypeKind::Reference:
+            return DumpType(td->ref_type()) + "&";
+        case TypeKind::EnumStruct:
+            if (td->HasClassdef() && td->cls())
+                return std::string("enum_struct ") + (smx()->names() + td->cls()->name);
+            return "enum_struct";
+        default:
+            return "unknown";
     }
 }

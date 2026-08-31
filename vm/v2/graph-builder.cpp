@@ -38,6 +38,8 @@ GraphBuilder::build() {
     if (!scan())
         return nullptr;
 
+    graph_->splitCriticalEdges();
+
     graph_->computeOrdering();
     graph_->computeDominance();
     if (!graph_->computeLoopHeaders()) {

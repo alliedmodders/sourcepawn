@@ -23,6 +23,7 @@
 #include "binary-reader.h"
 #include "heap-defaults.h"
 #include <sp_vm_types.h>
+#include <span>
 #include "stack-frames.h"
 
 namespace sp {
@@ -36,6 +37,18 @@ using namespace ke;
 class Runtime;
 class MethodInfo;
 
+struct InterpFrame {
+    InterpInvokeFrame ivk;
+    MethodInfo* caller_method;
+
+    const uint8_t* saved_cip;
+
+    uint32_t dest_reg;
+    uint32_t prev_frame;
+    uint32_t hp_scope;
+    sp::HeapImpl::Position heap_pos;
+};
+
 class Interpreter final
 {
   public:
@@ -44,39 +57,9 @@ class Interpreter final
   private:
     Interpreter(Runtime* cx, RefPtr<MethodInfo> method);
 
-    bool run();
+    bool run_internal(std::span<cell_t> args);
+    bool CheckTimeout();
     cell_t return_value() const { return return_value_; }
-
-    int32_t CalcLocalsSize();
-    bool InitLocals();
-
-  private:
-    cell_t StackOffset(cell_t offset);
-    cell_t getLocalCell(int32_t slot);
-    void setLocalCell(int32_t slot, cell_t value);
-    int64_t& getLocalInt64(int32_t slot);
-
-  private:
-    enum class StackType : uint8_t {
-        Cell,
-        Int64
-    };
-
-    struct StackValue {
-        StackType type;
-        union {
-          cell_t cell;
-          int64_t i64;
-        } u;
-    };
-
-    void pushCell(cell_t value);
-    cell_t popCell();
-    void pushInt64(int64_t value);
-    int64_t popInt64();
-    void popStack();
-    StackValue popValue();
-    void pushValue(const StackValue& v);
 
   private:
     Environment* env_;
@@ -92,12 +75,7 @@ class Interpreter final
     cell_t* phys_frm_;
     InterpInvokeFrame* ivk_;
 
-    uint8_t* stack_types_top_ = nullptr;
-    uint8_t* stack_types_limit_ = nullptr;
-    uint8_t* stack_types_ptr_ = nullptr;
-    cell_t* eval_stack_top_ = nullptr;
-    cell_t* eval_stack_limit_ = nullptr;
-    cell_t* eval_stack_ptr_ = nullptr;
+    std::span<cell_t> vregs_;
 };
 
 } // namespace sp::v2

@@ -24,6 +24,7 @@
 namespace sp {
 class SmxImage;
 struct smx_rtti_method;
+class TypeDesc;
 
 namespace debug {
 class FastRtti;
@@ -56,6 +57,7 @@ class DumpTool final {
     void DumpSignature(uint32_t offset);
     void DumpLocals(const sp::smx_rtti_method* method);
     std::string DumpType(sp::FastRtti& rtti);
+    std::string DumpType(const sp::TypeDesc* td);
     void DumpRttiEnums();
     const char* GetClassdefPrefix(uint32_t flags);
     void DumpRttiClassdefs();
@@ -68,8 +70,8 @@ class DumpTool final {
 
     void DumpOpcodeV1(const cell_t* method_start, const cell_t* cip, sp::v1::OPCODE op);
     void DumpCodeRangeV2(uint32_t pcode_start, uint32_t pcode_end);
-    void PrintEscaped(std::string_view s);
-    void DumpString(uint16_t index);
+    std::string EscapeString(std::string_view s);
+    std::string DumpString(uint16_t index);
     void DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp::v2::OPCODE op);
 
   private:

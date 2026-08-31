@@ -127,6 +127,7 @@ class Block : public ke::Refcounted<Block>, public ke::InlineListNode<Block>
     void addTarget(Block* target);
     void endWithJump(const uint8_t* cip, Block* target);
     void end(const uint8_t* end_at, BlockEnd end_type);
+    void replaceSuccessor(size_t index, Block* new_target);
 
     void setImmediateDominator(Block* block);
     void addImmediatelyDominated(Block* block);
@@ -209,6 +210,8 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
     void setEntry(ke::RefPtr<Block>&& block) { entry_ = std::move(block); }
 
     ke::RefPtr<Block> newBlock(const uint8_t* start);
+
+    void splitCriticalEdges();
 
     // Compute reverse/postorder traversal of the graph. This re-orders blocks.
     void computeOrdering();

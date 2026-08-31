@@ -167,18 +167,8 @@ class Runtime final : public BaseRuntime,
     int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
 
     bool addStack(cell_t amount);
-    bool getCellValue(cell_t address, cell_t* out);
-    bool setCellValue(cell_t address, cell_t value);
     bool heapAlloc(uint32_t amount, cell_t* out);
     cell_t* heapAllocEx(uint32_t amount, cell_t* out);
-    cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
-
-    int64_t* acquireInt64Addr(cell_t address) {
-        cell_t* addr = acquireAddrRange(address, sizeof(int64_t));
-        if (!addr)
-            return nullptr;
-        return reinterpret_cast<int64_t*>(addr);
-    }
 
     Environment* env() const { return env_; }
 

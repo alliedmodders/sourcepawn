@@ -15,7 +15,7 @@
 #include "compiled-function.h"
 #include "environment.h"
 #include "graph-builder.h"
-#include "v2/interp/interp-code.h"
+#include "v2/interp/llcode.h"
 #include "v2/method-verifier.h"
 
 

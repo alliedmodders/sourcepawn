@@ -24,8 +24,10 @@
 
 #include <memory>
 #include <new>
+#include <span>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <amtl/am-bits.h>
@@ -102,6 +104,31 @@ class PoolAllocator final
             return nullptr;
 
         return reinterpret_cast<T*>(ptr);
+    }
+
+    template <typename T, typename... Args>
+    T* make(Args&&... args) {
+        void* ptr = rawAllocate(sizeof(T));
+        if (!ptr)
+            return nullptr;
+        return new (ptr) T(std::forward<Args>(args)...);
+    }
+
+    template <typename T>
+    std::span<T> make_n(size_t count) {
+        if (!ke::IsUintPtrMultiplySafe(count, sizeof(T))) {
+            fprintf(stderr, "allocation overflow\n");
+            return {};
+        }
+        void* ptr = rawAllocate(count * sizeof(T));
+        if (!ptr)
+            return {};
+
+        T* elements = reinterpret_cast<T*>(ptr);
+        for (size_t i = 0; i < count; i++)
+            new (&elements[i]) T();
+
+        return std::span<T>(elements, count);
     }
 
   private:

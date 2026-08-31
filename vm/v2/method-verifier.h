@@ -58,6 +58,13 @@ class MethodVerifier final
     const TypeDesc* verifyStackOffset(cell_t offset);
     bool verifyDatAddress(cell_t offset);
     bool verifyDatString(uint16_t index);
+    bool verifyArrayType(const TypeDesc* type) {
+        if (!type->IsArrayish())
+            return false;
+        if (type->array_elt()->element_size() > UINT16_MAX)
+            return false;
+        return true;
+    }
     const TypeDesc* verifyGlobalIndex(uint16_t index);
     bool verifyJumpOffset(cell_t offset);
     bool verifyParamCount(cell_t nparams);

@@ -845,33 +845,6 @@ int Runtime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
     return SP_ERROR_NONE;
 }
 
-bool Runtime::getCellValue(cell_t address, cell_t* out) {
-    assert((uintptr_t)(const void*)out % sizeof(cell_t) == 0);
-
-    cell_t* ptr = heap_.ToPhysAddr<cell_t*>(address);
-    if (!ptr)
-        return false;
-
-    if ((uintptr_t)(const void*)ptr % sizeof(cell_t) == 0) {
-        *out = *ptr;
-    } else {
-        for (size_t i = 0; i < sizeof(cell_t); ++i) {
-            ((unsigned char*)out)[i] = ((unsigned char*)ptr)[i];
-        }
-    }
-
-    return true;
-}
-
-bool Runtime::setCellValue(cell_t address, cell_t value) {
-    cell_t* ptr = heap_.ToPhysAddr<cell_t*>(address);
-    if (!ptr)
-        return false;
-
-    *ptr = value;
-    return true;
-}
-
 bool Runtime::heapAlloc(uint32_t amount, cell_t* out) {
     return heapAllocEx(amount, out) != nullptr;
 }
@@ -885,10 +858,6 @@ cell_t* Runtime::heapAllocEx(uint32_t amount, cell_t* out) {
 
     *out = heap_.ToLocalAddr(ptr);
     return reinterpret_cast<cell_t*>(ptr);
-}
-
-cell_t* Runtime::acquireAddrRange(cell_t address, uint32_t bounds) {
-    return heap_.ToPhysAddr<cell_t*>(address);
 }
 
 bool Runtime::addStack(cell_t amount) {
@@ -1323,7 +1292,7 @@ void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data
 
     auto elt_size = td->array_elt()->element_size();
     assert(*data_bytes % elt_size == 0);
-    auto elt_count = *data_bytes / elt_size;
+    [[maybe_unused]] auto elt_count = *data_bytes / elt_size;
     assert(elt_count <= td->array_size());
 
     auto data = heap_.ToPhysAddr<uint8_t*>(local_addr);
