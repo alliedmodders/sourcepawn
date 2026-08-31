@@ -1060,16 +1060,17 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
         case OP_STOR_GLB: {
             uint16_t index = reader_.read<uint16_t>();
+            const TypeDesc* type = graph_->rt()->GetTypeOfGlobal(index);
             ExprNode* val = popStack();
             FlushEmitStack();
             VReg val_reg = EmitNode(val);
 
             LLOp llop = LL_STOR_GLB_X32;
-            if (val->type->IsHeapItem())
+            if (type->IsHeapItem())
                 llop = LL_STOR_GLB_A;
-            else if (val->type->IsWideInt())
+            else if (type->IsWideInt())
                 llop = LL_STOR_GLB_X64;
-            else if (val->type->IsFloat64())
+            else if (type->IsFloat64())
                 llop = LL_STOR_GLB_X64;
 
             emit(llop, index, val_reg);
@@ -1515,6 +1516,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             uint16_t index = reader_.read<uint16_t>();
             const TypeDesc* closure_td = rt_->LoadClosureType(method_->method_index());
             uint32_t offset = closure_td->upvar_slot_offset(index);
+            const TypeDesc* upvar_td = closure_td->upvar_type(index);
             ExprNode* val = popStack();
 
             FlushEmitStack();
@@ -1524,11 +1526,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             emit(LL_CALLEE, callee_reg);
 
             LLOp llop;
-            if (val->type->IsHeapItem())
+            if (upvar_td->IsHeapItem())
                 llop = LL_STOR_UPVAR_A;
-            else if (val->type->IsWideInt())
+            else if (upvar_td->IsWideInt())
                 llop = LL_STOR_UPVAR_X64;
-            else if (val->type->IsFloat64())
+            else if (upvar_td->IsFloat64())
                 llop = LL_STOR_UPVAR_X64;
             else
                 llop = LL_STOR_UPVAR_X32;
