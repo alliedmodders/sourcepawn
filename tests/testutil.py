@@ -99,6 +99,19 @@ def manifest_get(manifest, filename, key, default_value = None):
   return default_value
 
 
+def load_golden_tests(path):
+  if not os.path.exists(path):
+    raise Exception("Legacy compiler found, but golden test list {0} is missing".format(path))
+  tests = set()
+  with open(path, 'rt', encoding='utf-8') as fp:
+    for line in fp:
+      line = line.strip()
+      if not line or line.startswith('#'):
+        continue
+      tests.add(line.replace('\\', '/'))
+  return tests
+
+
 def find_executable(path):
   if os.path.exists(path):
     pass

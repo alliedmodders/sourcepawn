@@ -12,6 +12,8 @@ import sys
 import testutil
 from testutil import manifest_get
 
+OLDSPCOMP_GOLDEN_FILE = 'oldspcomp-golden.txt'
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('objdir', type=str, help='Build folder to test.')
@@ -127,6 +129,41 @@ class TestPlan(object):
 
   def find_compilers(self):
     self.find_spcomp()
+    self.find_oldspcomp()
+
+  def find_oldspcomp(self):
+    search_in = os.path.join(self.args.objdir, 'oldspcomp')
+    found = self.find_executables_in(search_in, 'oldspcomp')
+    if not len(found):
+      return
+
+    golden_path = os.path.join(os.path.split(os.path.abspath(__file__))[0],
+                               OLDSPCOMP_GOLDEN_FILE)
+    golden = testutil.load_golden_tests(golden_path)
+
+    for arch, path in found:
+      env = None
+      if self.args.coverage:
+        env = self.env_.copy()
+        env['LLVM_PROFILE_FILE'] = 'oldspcomp-%9m.profraw'
+
+      spcomp = {
+        'path': os.path.abspath(path),
+        'arch': arch,
+        'name': 'oldspcomp',
+        'args': [],
+        'env': env,
+      }
+
+      if self.args.spcomp_args:
+        spcomp['args'].extend(self.args.spcomp_args)
+
+      self.modes.append({
+        'name': 'legacy',
+        'spcomp': spcomp,
+        'args': [],
+        'golden': golden,
+      })
 
   def find_spcomp(self):
     search_in = os.path.join(self.args.objdir, 'spcomp')
@@ -413,6 +450,8 @@ class TestRunner(object):
     for test in self.plan.tests:
       test.prepare()
       if not test.should_run(mode):
+        continue
+      if mode.get('golden') is not None and test.unique_name not in mode['golden']:
         continue
       if not self.run_test(mode, test):
         self.failures_.add(test)

@@ -9,7 +9,9 @@ enum struct TestStruct {
 
 native void printnum(int n);
 native void printnum64(int64 n);
+#if defined __sourcepawn2
 native void printnumptr(intptr n);
+#endif
 native void writenum(int n);
 native void printfloat(float n);
 native void writefloat(float n);
