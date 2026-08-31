@@ -368,7 +368,7 @@ class Type : public PoolObject
     }
 
     int podLoadSize() const {
-        if (kind_ == TypeKind::Enum)
+        if (kind_ == TypeKind::Enum || kind_ == TypeKind::Methodmap)
             return 4;
         if (kind_ != TypeKind::Builtin)
             return -1;
