@@ -41,11 +41,11 @@ SmxImage::validate() {
         return error("bad header");
 
     switch (hdr_->version) {
-        case SmxConsts::SP1_VERSION_1_0:
-        case SmxConsts::SP1_VERSION_1_1:
-        case SmxConsts::SP1_VERSION_1_7:
-        case SmxConsts::SP1_VERSION_1_13:
-        case SmxConsts::SP1_VERSION_CODE_V2:
+        case SmxConsts::SP_VERSION_1_0:
+        case SmxConsts::SP_VERSION_1_1:
+        case SmxConsts::SP_VERSION_1_7:
+        case SmxConsts::SP_VERSION_1_13:
+        case SmxConsts::SP_VERSION_2:
             break;
         default:
             return error("unsupported version");
@@ -53,6 +53,9 @@ SmxImage::validate() {
 
     switch (hdr_->compression) {
         case SmxConsts::FILE_COMPRESSION_GZ: {
+            if (hdr_->version >= SmxConsts::SP_VERSION_2)
+                return error("v2 code does not support compression");
+
             // We don't support junk in binaries, check that disksize matches the actual file size.
             // (this is to avoid a known crash in inflate() if told that data is bigger than it is)
             if (hdr_->disksize > length_)
@@ -662,7 +665,7 @@ SmxImage::validateDebugInfo() {
 
     if (debug_symbols_section_) {
         // See the note about unpacked debug sections in smx-headers.h.
-        if (hdr_->version == SmxConsts::SP1_VERSION_1_0 && !findSection(".dbg.natives")) {
+        if (hdr_->version == SmxConsts::SP_VERSION_1_0 && !findSection(".dbg.natives")) {
             debug_syms_unpacked_ = reinterpret_cast<const sp_u_fdbg_symbol_t*>(
                 buffer() + debug_symbols_section_->dataoffs);
         } else {

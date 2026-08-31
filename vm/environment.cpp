@@ -406,7 +406,7 @@ LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t
     }
 
     BaseRuntime* pRuntime = nullptr;
-    if (image->hdr()->version < SmxConsts::SP1_VERSION_CODE_V2) {
+    if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
         pRuntime = new sp::v1::PluginRuntime(image.release());
     } else {
         pRuntime = new sp::v2::PluginRuntime(image.release());

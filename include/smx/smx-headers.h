@@ -40,22 +40,22 @@ struct SmxConsts {
     // File format verison number.
     // 0x0101 - SourcePawn 1.0; initial version used by SourceMod 1.0.
     // 0x0102 - SourcePawn 1.1; used by SourceMod 1.1+.
-    // 0x0200 - Used by spcomp2.
+    // 0x0200 - SourcePawn 2.0.
     //
     // The major version bits (8-15) indicate a product number. Consumers should
     // reject any version for a different product.
     //
     // The minor version bits (0-7) indicate a compatibility revision. Any minor
     // version higher than the current version should be rejected.
-    static const uint16_t SP1_VERSION_1_0 = 0x0101;
-    static const uint16_t SP1_VERSION_1_1 = 0x0102;
-    static const uint16_t SP1_VERSION_1_7 = 0x0107;
-    static const uint16_t SP1_VERSION_1_13 = 0x0113;
-    static const uint16_t SP1_VERSION_CODE_V2 = 0x0200;
-    static const uint16_t SP1_VERSION_MIN = SP1_VERSION_1_0;
-    static const uint16_t SP1_VERSION_MAX = SP1_VERSION_CODE_V2;
+    static const uint16_t SP_VERSION_1_0 = 0x0101;
+    static const uint16_t SP_VERSION_1_1 = 0x0102;
+    static const uint16_t SP_VERSION_1_7 = 0x0107;
+    static const uint16_t SP_VERSION_1_13 = 0x0113;
+    static const uint16_t SP_VERSION_2 = 0x0200;
+    static const uint16_t SP_VERSION_MIN = SP_VERSION_1_0;
+    static const uint16_t SP_VERSION_MAX = SP_VERSION_2;
 
-    // Compression types.
+    // Compression types. Must be 0 for SP_VERSION_2.
     static const uint8_t FILE_COMPRESSION_NONE = 0;
     static const uint8_t FILE_COMPRESSION_GZ = 1;
 

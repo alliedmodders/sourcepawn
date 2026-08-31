@@ -31,7 +31,7 @@ SmxBuilder::write(ISmxBuffer* buf)
 {
   sp_file_hdr_t header;
   header.magic = SmxConsts::FILE_MAGIC;
-  header.version = SmxConsts::SP1_VERSION_1_1;
+  header.version = SmxConsts::SP_VERSION_2;
   header.compression = SmxConsts::FILE_COMPRESSION_NONE;
 
   header.disksize = sizeof(header) +
