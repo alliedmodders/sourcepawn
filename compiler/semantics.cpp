@@ -1253,6 +1253,9 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
         report(first, first->val().constval() ? 206 : 205);
     }
 
+    if (first->val().type()->isWideType())
+        first = expr->set_first(BuildSimpleCast(first, BuiltinType::Bool));
+
     if (second->lvalue())
         second = expr->set_second(new RvalueExpr(second));
     if (third->lvalue())
