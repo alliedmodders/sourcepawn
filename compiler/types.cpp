@@ -147,6 +147,10 @@ ArrayType::ArrayType(Type* inner, int size, bool is_flat)
     inner_type_ = inner;
     size_ = size;
     is_flat_ = is_flat;
+    if (auto child = inner->as<ArrayType>())
+        rank_ = child->rank() + 1;
+    else
+        rank_ = 0;
 }
 
 TypeManager::TypeManager(CompileContext& cc)

@@ -20,37 +20,254 @@
 #include "coercion-rules.h"
 
 #include "parse-node.h"
+#include "sctracker.h"
 #include "semantics-inl.h"
+#include "semantics.h"
 
 namespace sp {
 namespace cc {
 
-std::optional<BuiltinType> FindBinaryCoercionRule(Type* left, Type* right, int raw_token) {
-    if (left->isInt64() || right->isInt64()) {
-        Type* other = left;
-        if (other->isInt64())
-            other = right;
+static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtContext why) {
+    switch (kind) {
+        case BuiltinType::Bool:
+            if (to->isAny())
+                return ConversionKind::Trivial;
 
-        if (!(other->isInt() || other->isInt64()))
-            return {BuiltinType::Void};
+            // Rule for legacy compatibility.
+            if (why == CvtContext::Assignment && to->isInt())
+                return ConversionKind::Trivial;
 
-        return {BuiltinType::Int64};
+            if (to->isEnum() || to->isMethodmap() || to->isChar() || to->isInt())
+                return ConversionKind::TagMismatch;
+            break;
+
+        case BuiltinType::Char:
+            if (to->isAny() || to->isInt())
+                return ConversionKind::Trivial;
+            if (to->isEnum() || to->isMethodmap())
+                return ConversionKind::TagMismatch;
+            break;
+
+        case BuiltinType::Int:
+            if (to->isAny() || to->isChar())
+                return ConversionKind::Trivial;
+
+            // Rule for legacy compatibility.
+            if (why == CvtContext::Assignment && to->isInt())
+                return ConversionKind::Trivial;
+
+            if (to->isBool() || to->isEnum() || to->isMethodmap())
+                return ConversionKind::TagMismatch;
+            if (to->isFloat() || to->isInt64())
+                return ConversionKind::Numeric;
+            break;
+
+        case BuiltinType::Null:
+            if (to->isNullable())
+                return ConversionKind::None;
+            if (auto map = to->asMethodmap(); map && map->nullable())
+                return ConversionKind::CoerceNull;
+            if (to->isFunction() || to->as<FunctionType>() || to->isTypedef())
+                return ConversionKind::CoerceNull;
+            break;
+
+        case BuiltinType::Any:
+            if (to->isInt64())
+                return ConversionKind::Numeric;
+            if (to->coercesFromInt() || to->isFloat() || to->isFunction() || to->as<FunctionType>())
+                return ConversionKind::Trivial;
+            break;
+
+        case BuiltinType::Float:
+            if (to->isAny())
+                return ConversionKind::Trivial;
+            break;
+
+        default:
+            break;
     }
-    if (left->isFloat() || right->isFloat()) {
-        int oper_tok = NormalizeBinaryToken(raw_token);
-        if (IsBitwise(oper_tok))
-            return {BuiltinType::Void};
 
-        Type* other = left;
-        if (other->isFloat())
-            other = right;
+    return ConversionKind::Illegal;
+}
 
-        if (!(other->isFloat() || !other->isFloat()))
-            return {BuiltinType::Void};
+ConversionKind FindArrayConversion(ArrayType* from, ArrayType* to, CvtContext why) {
+    if (from->rank() != to->rank())
+        return ConversionKind::Illegal;
 
-        return {BuiltinType::Float};
+    assert(why == CvtContext::Assignment || why == CvtContext::Operator || why == CvtContext::FuncArg);
+
+    if (why == CvtContext::Assignment && !to->is_fixed() && from->is_flat())
+        return ConversionKind::Illegal;
+
+    // Hacky shortcut for single rank arrays, allowing strings to be copied
+    // into char arrays of greater or equal size.
+    if (why == CvtContext::Assignment && from->isCharArray() && to->isCharArray() &&
+        from->size() && from->size() <= to->size())
+    {
+        return ConversionKind::None;
     }
-    return {};
+
+    ArrayType* from_iter = from;
+    ArrayType* to_iter = to;
+    while (from_iter) {
+        if (from_iter->size()) {
+            if (to_iter->size() && from_iter->size() != to_iter->size())
+                return ConversionKind::Illegal;
+        } else {
+            if (to_iter->size())
+                return ConversionKind::Illegal;
+        }
+        auto next = from_iter->inner()->as<ArrayType>();
+        if (!next)
+            break;
+        from_iter = next;
+        to_iter = to_iter->inner()->as<ArrayType>();
+    }
+
+    if (from_iter->inner() != to_iter->inner())
+        return ConversionKind::Illegal;
+    return ConversionKind::None;
+}
+
+static ConversionKind FindEnumConversion(Type* from, Type* to, CvtContext why) {
+    if (from->isMethodmap() && to->isMethodmap()) {
+        if (HasTagOnInheritanceChain(from, to))
+            return ConversionKind::None;
+        if (why == CvtContext::FuncArg && HasTagOnInheritanceChain(to, from))
+            return ConversionKind::Trivial;
+    }
+
+    if (to->isEnum () || to->isMethodmap())
+        return ConversionKind::TagMismatch;
+
+    if (!to->isBuiltin())
+        return ConversionKind::Illegal;
+
+    switch (to->builtin_type()) {
+        case BuiltinType::Bool:
+        case BuiltinType::Char:
+        case BuiltinType::Float:
+            return ConversionKind::TagMismatch;
+        case BuiltinType::Int:
+            // Rule for legacy compatibility.
+            if (why == CvtContext::Assignment)
+                return ConversionKind::Trivial;
+            return ConversionKind::TagMismatch;
+        default:
+            return ConversionKind::Illegal;
+    }
+}
+
+static ConversionKind CheckFunctions(FunctionType* from, FunctionType* to, CvtContext why) {
+    if (from->variadic() != to->variadic())
+        return ConversionKind::Illegal;
+
+    if (from->nargs() != to->nargs())
+        return ConversionKind::Illegal;
+
+    ConversionKind best = ConversionKind::None;
+    for (size_t i = 0; i < from->nargs(); i++) {
+        QualType from_arg = from->arg_type(i);
+        QualType to_arg = to->arg_type(i);
+        auto ck = FindConversion(*from_arg, *to_arg, CvtContext::FuncArg);
+        if (!HasImplicitConversion(ck))
+            return ConversionKind::Illegal;
+        if (static_cast<uint32_t>(ck) < static_cast<uint32_t>(best))
+            best = ck;
+    }
+    return best;
+}
+
+static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContext why) {
+    if (to->isCanonicalFunction())
+        return ConversionKind::Trivial;
+
+    if (auto other = to->as<FunctionType>())
+        return CheckFunctions(from, other, why);
+
+    if (!to->isFunction())
+        return ConversionKind::Illegal;
+
+    ConversionKind best = ConversionKind::Illegal;
+
+    auto fe = to->toFunction();
+    for (const auto& other : fe->entries) {
+        auto ck = CheckFunctions(from, other, why);
+        if (static_cast<uint32_t>(ck) > static_cast<uint32_t>(best))
+            best = ck;
+        if (best == ConversionKind::None)
+            break;
+    }
+    return best;
+}
+
+static ConversionKind FindFuncConversion(funcenum_t* fe, Type* to, CvtContext why) {
+    if (to->isCanonicalFunction())
+        return ConversionKind::Trivial;
+
+    ConversionKind best = ConversionKind::Illegal;
+    for (const auto& from : fe->entries) {
+        auto ck = FindConversion(from, to, why);
+        if (static_cast<uint32_t>(ck) > static_cast<uint32_t>(best))
+            best = ck;
+        if (best == ConversionKind::None)
+            break;
+    }
+    return best;
+}
+
+ConversionKind FindConversion(Type* from, Type* to, CvtContext why) {
+    // Early shortcut for identity. We never check identity again.
+    if (from == to)
+        return ConversionKind::None;
+
+    switch (from->kind()) {
+        case TypeKind::Builtin:
+            return FindBuiltinConversion(from->builtin_type(), to, why);
+
+        case TypeKind::Object:
+            assert(false);
+            break;
+
+        case TypeKind::EnumStruct:
+        case TypeKind::Pstruct:
+            assert(false);
+            break;
+
+        case TypeKind::Methodmap:
+        case TypeKind::Enum:
+            if (to->isAny())
+                return ConversionKind::Trivial;
+            return FindEnumConversion(from, to, why);
+
+        case TypeKind::Function:
+            if (to->isAny())
+                return ConversionKind::Trivial;
+            if (from->isCanonicalFunction())
+                return ConversionKind::Illegal;
+            return FindFuncConversion(from->toFunction(), to, why);
+
+        case TypeKind::FunctionSignature:
+            if (to->isAny())
+                return ConversionKind::Trivial;
+            return FindFuncConversion(from->to<FunctionType>(), to, why);
+
+        case TypeKind::Typedef:
+            assert(false);
+            break;
+
+        case TypeKind::Reference:
+            return ConversionKind::Illegal;
+
+        case TypeKind::Array: {
+            auto other = to->as<ArrayType>();
+            if (!other)
+                return ConversionKind::Illegal;
+            return FindArrayConversion(from->to<ArrayType>(), other, why);
+        }
+    }
+
+    return ConversionKind::Illegal;
 }
 
 } // namespace cc

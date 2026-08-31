@@ -23,6 +23,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "coercion-rules.h"
 #include "compile-context.h"
 #include "sc.h"
 #include "scopes.h"
@@ -228,6 +229,8 @@ class Semantics final
     bool CheckRvalue(const token_pos_t& pos, const value& val);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
+    Expr* BuildConversion(Expr* from, const Conversion& cv);
+    Expr* BuildConversion(Expr* from, ConversionKind ck, Type* to);
     Expr* BuildSimpleCast(Expr* from, BuiltinType type);
     Expr* CoerceNull(Expr* expr, Type* formal);
 
@@ -298,8 +301,13 @@ class Semantics final
     };
     bool CheckBinaryExprImpl(BinaryExprState& state);
     bool CheckAssignmentLHS(BinaryExprState& state);
-    bool CheckAssignmentRHS(BinaryExprState& state);
-    bool CheckOperatorTypes(BinaryExprState& state);
+
+    struct BinaryOperator {
+        Conversion left;
+        Conversion right;
+    };
+    std::optional<BinaryOperator> FindBinaryOperator(int token, Type* left_type, Type* right_type);
+    std::optional<BinaryOperator> FindEqualityOperator(Type* left_type, Type* right_type);
 
   private:
     CompileContext& cc_;

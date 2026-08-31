@@ -40,6 +40,7 @@
 #include "lexer.h"
 #include "parse-node.h"
 #include "sc.h"
+#include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
 
@@ -361,21 +362,60 @@ void break_on_error(int number)
 }
 #endif
 
+static std::string ToString(QualType type);
+static std::string ToString(Type* type);
+
+static std::string ToString(Type* type) {
+    if (!type)
+        return "unknown";
+    if (auto sig = type->as<FunctionType>()) {
+        std::string str = "function ";
+        str += ToString(sig->return_type());
+        str += "(";
+        for (unsigned int i = 0; i < sig->nargs(); i++) {
+            if (i > 0)
+                str += ", ";
+            str += ToString(sig->arg_type(i));
+        }
+        if (sig->variadic()) {
+            if (sig->nargs() > 0)
+                str += ", ";
+            str += "...";
+        }
+        str += ")";
+        return str;
+    }
+    if (type->isFunction()) {
+        if (auto func = type->asFunction()) {
+            if (!func->anonymous)
+                return func->name->chars();
+            if (func->entries.size() == 1)
+                return ToString(func->entries[0]);
+        }
+        return type->kindName();
+    }
+    return type->prettyName();
+}
+
+static std::string ToString(QualType type) {
+    std::string str;
+    if (type.is_const())
+        str += "const ";
+    str += ToString(*type);
+    return str;
+}
+
 MessageBuilder&
 MessageBuilder::operator <<(Type* type)
 {
-    args_.emplace_back(type->prettyName());
+    args_.emplace_back(ToString(type));
     return *this;
 }
 
 MessageBuilder&
 MessageBuilder::operator <<(QualType type)
 {
-    std::string message;
-    if (type.is_const())
-        message += "const ";
-    message += type->prettyName();
-    args_.emplace_back(message);
+    args_.emplace_back(ToString(type));
     return *this;
 }
 

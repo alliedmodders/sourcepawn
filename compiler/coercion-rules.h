@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <stdint.h>
+
 #include <optional>
 
 #include "types.h"
@@ -26,10 +28,55 @@
 namespace sp {
 namespace cc {
 
-// Return std::nullopt if no rule exists, BuiltinType::Void if the operation
-// is forbidden, and any other BuiltinType for the conversion to use on
-// operands (as well as the output type).
-std::optional<BuiltinType> FindBinaryCoercionRule(Type* left, Type* right, int token);
+// These are ordered from "worst" to "best" conversion scenarios.
+enum class ConversionKind : uint32_t {
+    // No conversion is possible.
+    Illegal,
+    // Conversion is possible with an explicit cast.
+    NeedsCast,
+    // Trivial conversion that would yield a tag warning in the tag system.
+    TagMismatch,
+    // A numeric conversion operation is needed.
+    Numeric,
+    // Coercion of null to an integer 0 for nullable methodmaps/functions.
+    CoerceNull,
+    // Trivial conversion that is internally a bitcast.
+    Trivial,
+    // No conversion is necessary.
+    None,
+};
+
+enum class CvtContext {
+    Argument,
+    Assignment,
+    Operator,
+    FuncArg,
+};
+
+static inline bool HasImplicitConversion(ConversionKind ck) {
+    return static_cast<uint32_t>(ck) > static_cast<uint32_t>(ConversionKind::NeedsCast);
+}
+
+static inline bool IsNopConversion(ConversionKind ck) {
+    switch (ck) {
+        case ConversionKind::TagMismatch:
+        case ConversionKind::Trivial:
+        case ConversionKind::None:
+            return true;
+        default:
+            return false;
+    }
+}
+
+struct Conversion {
+    ConversionKind ck = ConversionKind::Illegal;
+    Type* type = nullptr;
+
+    bool IsImplicit() const { return HasImplicitConversion(ck); }
+    bool IsNop() const { return IsNopConversion(ck); }
+};
+
+ConversionKind FindConversion(Type* from, Type* to, CvtContext why);
 
 } // namespace cc
 } // namespace sp

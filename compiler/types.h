@@ -282,12 +282,19 @@ class Type : public PoolObject
     bool isAddressType() const;
     bool isNullable() const;
 
+    bool isEnumOrMethodmap() const { return isEnum() || isMethodmap(); }
+
     // True if a value representation can be > 1 cell.
     bool isComposite() const { return isArray() || isEnumStruct(); }
 
     bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
 
     bool canOperatorOverload() const;
+
+    BuiltinType builtin_type() const {
+        assert(isBuiltin());
+        return builtin_type_;
+    }
 
     // Size of an element in an array.
     std::optional<uint32_t> maybe_lit_size() const {
@@ -467,6 +474,8 @@ class FunctionType : public Type {
     QualType arg_type(unsigned int i) { return args_[i]; }
     bool variadic() const { return variadic_; }
 
+    static bool is_a(const Type* type) { return type->kind() == TypeKind::FunctionSignature; }
+
   private:
     PoolArray<QualType> args_;
     bool variadic_;
@@ -477,6 +486,7 @@ class ArrayType : public Type {
     ArrayType(Type* inner, int size, bool is_flat);
 
     int size() const { return size_; }
+    int rank() const { return rank_; }
 
     // Note that is_fixed() does not imply flat, but flat does imply fixed.
     // This is different from TypeDesc where Flat and Fixed are internally
@@ -488,6 +498,7 @@ class ArrayType : public Type {
 
   private:
     int size_;
+    int rank_;
     bool is_flat_;
 };
 

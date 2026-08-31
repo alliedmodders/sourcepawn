@@ -417,8 +417,7 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
     }
 
-    AutoErrorPos aep(pos_);
-    matchtag(type_.type, type, 0);
+    sc.sema()->PerformCoercion(pos_, type_.type, QualType(type), Semantics::Assignment);
 
     already_bound_ = true;
     return true;

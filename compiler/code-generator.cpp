@@ -1004,11 +1004,9 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     auto oper = NormalizeBinaryToken(token);
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
-    if (expr->enum_struct_copy()) {
+    Type* left_type = left->val().type();
+    if (token == '=' && left_type->isEnumStruct()) {
         EmitRvalueFromLvalue(left);
-
-        assert(IsAssignOp(token));
-        assert(!oper);
 
         EmitExpr(right);
         auto es = left->val().type()->asEnumStruct();
@@ -1018,11 +1016,8 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         return;
     }
 
-    if (expr->array_copy()) {
+    if (token == '=' && left_type->isFixedArray()) {
         EmitRvalueFromLvalue(left);
-
-        assert(IsAssignOp(token));
-        assert(!oper);
 
         EmitExpr(right);
         __ emit(OP_COPYARRAY);
@@ -1047,7 +1042,6 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         left_val = left->val();
     }
 
-    assert(!expr->array_copy());
     assert(!left_val.type()->isArray() || !left_val.type()->to<ArrayType>()->is_flat());
 
     EmitExpr(right);

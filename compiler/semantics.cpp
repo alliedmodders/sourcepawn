@@ -721,18 +721,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
     }
 
     int token = state.expr->token();
-    bool is_null_compare = false;
-    if (token != '=') {
-        is_null_compare = (token == tlEQ || token == tlNE) &&
-                          (state.left->val().type()->isNullable() ||
-                           state.right->val().type()->isNullable());
-        if (!is_null_compare) {
-            if (!CheckScalarType(state.left))
-                return false;
-            if (!CheckScalarType(state.right))
-                return false;
-        }
-    }
+    int op_token = NormalizeBinaryToken(token);
 
     if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
@@ -772,124 +761,104 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
     if (state.right->lvalue())
         state.right = state.expr->set_right(new RvalueExpr(state.right));
 
-    // The assignment operator is overloaded separately.
-    if (IsAssignOp(token)) {
-        if (!CheckAssignmentRHS(state))
-            return false;
-    }
-
-    auto* left_val = &state.left->val();
-    auto* right_val = &state.right->val();
-
-    auto oper_tok = NormalizeBinaryToken(state.expr->token());
-    if (oper_tok && !is_null_compare) {
-        assert(token != '=');
-
-        if (!SupportsOperators(left_val->type())) {
-            report(state.left, 33) << left_val->type();
-            return false;
-        }
-        if (!SupportsOperators(right_val->type())) {
-            report(state.right, 33) << right_val->type();
-            return false;
-        }
-    }
-
-    if (is_null_compare) {
-        if (left_val->type()->isArray() && right_val->type()->isArray()) {
-            if (!PerformTypeCheck(state.right, left_val->type(), right_val->type(), Semantics::Assignment))
-                return false;
-        }
-    }
-
-    auto& val = state.expr->val();
-    val.ident = iEXPRESSION;
-    val.set_type(left_val->type());
-
-    if (oper_tok) {
-        if (!CheckOperatorTypes(state))
-            return false;
-        if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
-            val.type()->coercesFromInt())
-        {
-            char boolresult = FALSE;
-            matchtag(left_val->type(), right_val->type(), FALSE);
-            val.ident = iCONSTEXPR;
-            val.set_constval(calc(left_val->constval(), oper_tok, right_val->constval(),
-                                  &boolresult));
-        }
-
-        if (IsChainedOp(token) || token == tlEQ || token == tlNE)
-            val.set_type(types_->type_bool());
-    }
-
-    return true;
-}
-
-bool Semantics::CheckOperatorTypes(BinaryExprState& state) {
-    auto* left_val = &state.left->val();
-    auto* right_val = &state.right->val();
-
-    // For the purposes of tag matching, we consider the order to be irrelevant.
-    Type* left_type = left_val->type();
+    auto left_type = state.left->val().type();
     if (left_type->isReference())
         left_type = left_type->inner();
 
-    Type* right_type = right_val->type();
-    if (right_type->isReference())
-        right_type = right_type->inner();
+    auto right_type = state.right->val().type();
+    assert(!right_type->isReference());
 
-    if (auto cr = FindBinaryCoercionRule(left_type, right_type, state.expr->token()); cr) {
-        if (*cr == BuiltinType::Void) {
-            report(state.expr, 461) << get_token_string(state.expr->token()) << left_type << right_type;
+    auto& val = state.expr->val();
+
+    Type* assign_type;
+    std::optional<BinaryOperator> op;
+    if (token != '=') {
+        op = FindBinaryOperator(op_token, left_type, right_type);
+        if (!op) {
+            report(state.expr, 461) << get_token_string(token) << left_type << right_type;
             return false;
         }
 
-        if (!right_type->isBuiltin(*cr))
-            state.right = state.expr->set_right(BuildSimpleCast(state.right, *cr));
+        if (op->left.ck == ConversionKind::TagMismatch)
+            report(state.left, 213) << op->left.type << left_type;
+        if (op->right.ck == ConversionKind::TagMismatch)
+            report(state.right, 213) << op->right.type << right_type;
 
-        if (!left_type->isBuiltin(*cr)) {
-            if (IsAssignOp(state.expr->token())) {
-                report(state.expr, 462) << state.right->val().type() << left_type;
-                return false;
-            }
-            state.left = state.expr->set_left(BuildSimpleCast(state.left, *cr));
-        }
+        if (!op->right.IsNop())
+            state.right = state.expr->set_right(BuildConversion(state.right, op->right));
+        if (!op->left.IsNop() && !IsAssignOp(token))
+            state.left = state.expr->set_left(BuildConversion(state.left, op->left));
 
-        state.expr->val().set_type(state.left->val().type());
-        return true;
+        if (IsCompare(token))
+            assign_type = types_->type_bool();
+        else
+            assign_type = op->left.type;
+    } else {
+        assign_type = right_type;
     }
 
-    matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
+    if (IsAssignOp(token)) {
+        // Check that there is a valid conversion from the right-hand side to the left.
+        auto ck = FindConversion(assign_type, left_type, CvtContext::Assignment);
+        if (ck == ConversionKind::NeedsCast) {
+            report(state.expr, 462) << assign_type << left_type;
+            return false;
+        }
+        if (!HasImplicitConversion(ck)) {
+            auto diag_ck = FindConversion(left_type, assign_type, CvtContext::Assignment);
+            if (diag_ck == ConversionKind::Numeric) {
+                report(state.expr, 462) << assign_type << left_type;
+            } else if (assign_type->isVoid()) {
+                report(state.expr, 466);
+            } else if (!left_type->isFixedArray() && assign_type->isFlatArray()) {
+                report(state.expr, 473) << assign_type << left_type;
+            } else {
+                report(state.expr, 450) << assign_type << left_type;
+            }
+            return false;
+        }
+
+        if (ck == ConversionKind::TagMismatch)
+            report(state.expr, 213) << left_type << assign_type;
+
+        if (op) {
+            // We can't currently handle a left-side conversion for assignment. Can
+            // this even happen yet?
+            //
+            // We also can't encode a conversion of the intermediate result of the compound
+            // assignment. Can this happen either? We'd need the result of the operation to have an
+            // implicit numeric conversion, which seems impossible.
+            if (!op->left.IsNop() || !IsNopConversion(ck)) {
+                report(state.expr, 462) << assign_type << left_type;
+                return false;
+            }
+        } else {
+            // This is a non-compound assignment with a conversion, so update the right-hand side.
+            if (!IsNopConversion(ck))
+                state.right = state.expr->set_right(BuildConversion(state.right, ck, left_type));
+        }
+        val.set_expr(left_type);
+    } else {
+        val.set_expr(assign_type);
+    }
+
+    auto* left_val = &state.left->val();
+    auto* right_val = &state.right->val();
+
+    if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
+        val.type()->coercesFromInt())
+    {
+        char boolresult = FALSE;
+        matchtag(left_val->type(), right_val->type(), FALSE);
+        val.ident = iCONSTEXPR;
+        val.set_constval(calc(left_val->constval(), op_token, right_val->constval(),
+                              &boolresult));
+    }
+
     return true;
 }
 
 bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
-    int left_ident = state.left->val().ident;
-    if (left_ident == iARRAYELEM || state.left->val().type()->isCharArray()) {
-        // This is a special case, assigned to a packed character in a cell
-        // is permitted.
-        return true;
-    }
-
-    int oper_tok = NormalizeBinaryToken(state.expr->token());
-    if (auto left_array = state.left->val().type()->as<ArrayType>()) {
-        // array assignment is permitted too (with restrictions)
-        if (oper_tok) {
-            report(state.expr, 23);
-            return false;
-        }
-
-        if (left_array->is_flat()) {
-            for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
-                if (!iter->size()) {
-                    report(state.left, 46);
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
     if (!state.left->lvalue()) {
         report(state.expr, 22);
         return false;
@@ -901,103 +870,6 @@ bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
     if (!state.expr->initializer() && left_val.sym() && left_val.sym()->is_const()) {
         report(state.expr, 22);
         return false;
-    }
-    return true;
-}
-
-bool Semantics::CheckAssignmentRHS(BinaryExprState& state) {
-    const auto& left_val = state.left->val();
-    const auto& right_val = state.right->val();
-
-    if (left_val.ident == iVARIABLE) {
-        const auto& right_val = state.right->val();
-        int oper_tok = NormalizeBinaryToken(state.expr->token());
-        if (right_val.ident == iVARIABLE && right_val.sym() == left_val.sym() && !oper_tok)
-            report(state.expr, 226) << left_val.sym()->name(); // self-assignment
-    }
-
-    if (left_val.type()->as<ArrayType>()) {
-        if (!PerformCoercion(state.expr, left_val.type(), right_val.type(), Semantics::Assignment))
-            return false;
-
-        auto left_array = left_val.type()->to<ArrayType>();
-        if (left_array->size() > 0) {
-            auto right_array = right_val.type()->to<ArrayType>();
-            if (right_array->inner()->isArray()) {
-                report(state.expr, 23);
-                return false;
-            }
-            if (right_array->size() == 0) {
-                report(state.expr, 9);
-                return false;
-            }
-            state.expr->set_array_copy(true);
-        }
-    } else {
-        if (right_val.type()->isArray()) {
-            // Hack. Special case array literals assigned to an enum struct,
-            // since we don't have the infrastructure to deduce an RHS type
-            // yet.
-            if (!left_val.type()->isEnumStruct() || !state.right->as<ArrayExpr>()) {
-                report(state.expr, 6); // must be assigned to an array
-                return false;
-            }
-            return true;
-        }
-    }
-
-    // int64 handling (gross, yes).
-    auto left_type = left_val.type();
-    if (left_type->isReference())
-        left_type = left_type->inner();
-
-    if (left_type->isInt64() || right_val.type()->isInt64()) {
-        if (!left_type->isInt64()) {
-            if (left_type->isInt())
-                report(state.expr, 454);
-            else
-                report(state.expr, 450) << right_val.type() << left_type;
-            return false;
-        }
-        if (!right_val.type()->isInt64()) {
-            if (!CanPromoteToInt64(right_val.type())) {
-                report(state.expr, 450) << right_val.type() << left_type;
-                return false;
-            }
-            state.right = state.expr->set_right(BuildSimpleCast(state.right, BuiltinType::Int64));
-        }
-        return true;
-    }
-
-    int oper_tok = NormalizeBinaryToken(state.expr->token());
-    if (oper_tok) {
-        // This is a compound assignment, the binary operation is checked later.
-        return true;
-    }
-
-    // Allow trivial conversion between char/int.
-    if ((left_val.type()->isChar() && right_val.type()->isInt()) ||
-        (left_val.type()->isInt() && right_val.type()->isInt()))
-    {
-        return true;
-    }
-
-    if (right_val.type()->isVoid()) {
-        report(state.expr, 466);
-        return false;
-    }
-
-    if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
-        if (left_val.type() != right_val.type()) {
-            report(state.expr, 134) << left_val.type() << right_val.type();
-            return false;
-        }
-
-        state.expr->set_enum_struct_copy(true);
-    } else if (!left_val.type()->isArray()) {
-        matchtag(left_val.type(), right_val.type(), TRUE);
-
-        state.right = state.expr->set_right(CoerceNull(state.right, left_type));
     }
     return true;
 }
@@ -1023,14 +895,42 @@ bool Expr::FoldToConstant() {
             return to<BinaryExpr>()->FoldToConstant();
         case ExprKind::TernaryExpr:
             return to<TernaryExpr>()->FoldToConstant();
+        case ExprKind::CastExpr:
+            return to<CastExpr>()->FoldToConstant();
+        case ExprKind::SimpleCastExpr:
+            return to<SimpleCastExpr>()->FoldToConstant();
         default:
             return false;
     }
 }
 
-bool
-BinaryExpr::FoldToConstant()
-{
+bool CastExpr::FoldToConstant() {
+    cell val;
+    Type* from_type;
+    if (!expr_->EvalConst(&val, &from_type))
+        return false;
+    val_.set_constval(val);
+    val_.ident = iCONSTEXPR;
+    val_.set_type(type());
+    return true;
+}
+
+bool SimpleCastExpr::FoldToConstant() {
+    cell val;
+    Type* from_type;
+    if (!from_->EvalConst(&val, &from_type))
+        return false;
+    if (to_->isFloat() && from_type->coercesToInt()) {
+        float f = (float)val;
+        val = sp::FloatCellUnion(f).cell;
+    }
+    val_.set_constval(val);
+    val_.ident = iCONSTEXPR;
+    val_.set_type(to_);
+    return true;
+}
+
+bool BinaryExpr::FoldToConstant() {
     cell left_val, right_val;
     Type* left_type;
     Type* right_type;
@@ -2804,7 +2704,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
         expr = stmt->set_expr(new RvalueExpr(expr));
 
     const auto& v = expr->val();
-    if (tag_ok && !v.type()->coercesToInt())
+    if (tag_ok && !(v.type()->coercesToInt() || v.type()->isFloat()))
         report(450) << v.type() << types_->type_int();
 
     ke::Maybe<FlowType> flow;
@@ -2829,9 +2729,8 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
                 report(expr, 8);
                 continue;
             }
-            if (tag_ok) {
+            if (tag_ok)
                 CheckSwitchCaseType(expr, v.type(), type);
-            }
 
             if (!case_values.count(value))
                 case_values.emplace(value);
@@ -3190,6 +3089,20 @@ bool Semantics::IsThisAtom(sp::Atom* atom) {
     if (!this_atom_)
         this_atom_ = cc_.atom("this");
     return atom == this_atom_;
+}
+
+Expr* Semantics::BuildConversion(Expr* from, const Conversion& cv) {
+    return BuildConversion(from, cv.ck, cv.type);
+}
+
+Expr* Semantics::BuildConversion(Expr* from, ConversionKind ck, Type* to) {
+    if (ck == ConversionKind::Numeric) {
+        assert(to->isBuiltin());
+        return BuildSimpleCast(from, to->builtin_type());
+    }
+    if (ck == ConversionKind::CoerceNull)
+        return CoerceNull(from, to);
+    return from;
 }
 
 Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {

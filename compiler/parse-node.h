@@ -26,6 +26,7 @@
 #include <optional>
 
 #include "ast-types.h"
+#include "coercion-rules.h"
 #include "expressions.h"
 #include "lexer.h"
 #include "sc.h"
@@ -681,20 +682,14 @@ class BinaryExpr final : public BinaryExprBase
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
     void set_initializer() { initializer_ = true; }
-    bool array_copy() const { return array_copy_; }
-    void set_array_copy(bool copy) { array_copy_ = copy; }
     bool initializer() const { return initializer_; }
-    bool enum_struct_copy() const { return enum_struct_copy_; }
-    void set_enum_struct_copy(bool copy) { enum_struct_copy_ = copy; }
 
   private:
     bool ValidateAssignmentLHS();
     bool ValidateAssignmentRHS(SemaContext& sc);
 
   private:
-    bool array_copy_ = false;
     bool initializer_ = false;
-    bool enum_struct_copy_ = false;
 };
 
 class LogicalExpr final : public BinaryExprBase
@@ -827,6 +822,7 @@ class CastExpr final : public Expr
     {}
 
     bool Bind(SemaContext& sc) override;
+    bool FoldToConstant();
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::CastExpr; }
 
@@ -1063,6 +1059,7 @@ class SimpleCastExpr final : public EmitOnlyExpr
     SimpleCastExpr(Expr* from, Type* to);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SimpleCastExpr; }
+    bool FoldToConstant();
 
     Expr* from() const { return from_; }
     Type* to() const { return to_; }

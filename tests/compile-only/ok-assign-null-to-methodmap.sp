@@ -1,6 +1,10 @@
-#include <shell>
+methodmap Panel __nullable__ {
+    property Panel Child {
+        public native set(Panel p);
+    }
+}
 
 public void main() {
-    Handle h;
-    h = null;
+    Panel p;
+    p.Child = null;
 }

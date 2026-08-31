@@ -1,1 +1,1 @@
-(4) : error 450: no viable conversion from 'float[]' to 'int[]'
+(4) : error 461: operator '==' not defined for types 'int[]' and 'float[]'
