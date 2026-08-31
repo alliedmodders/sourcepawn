@@ -986,6 +986,10 @@ const TypeDesc* Runtime::LoadClosureType(uint32_t method_index) {
     if (!signature)
         return nullptr;
 
+    if (!(method->flags & kRttiMethod_HasUpvars)) {
+        ReportError("method signature has ClosureSlots but missing HasUpvars flag");
+        return nullptr;
+    }
     FastRtti parser = image_->GetTypeParser(method->locals);
     uint8_t b;
     if (!parser.GetNextByte(&b) || b != cb::kClosureSlots)

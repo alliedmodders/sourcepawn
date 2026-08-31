@@ -237,6 +237,8 @@ void DumpTool::DumpRttiMethods() {
                 fprintf(stdout, "    .flags = native\n");
             if (method->flags & kRttiMethod_Closure)
                 fprintf(stdout, "    .flags = closure\n");
+            if (method->flags & kRttiMethod_HasUpvars)
+                fprintf(stdout, "    .flags = has_upvars\n");
             if (!(method->flags & kRttiMethod_Native)) {
                 uint8_t visibility = method->flags & kRttiMethodVisibilityMask;
                 if (visibility == kRttiMethodVisibility_Private)

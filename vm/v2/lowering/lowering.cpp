@@ -1077,7 +1077,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_LOAD_FN: {
-            uint32_t fn_id = reader_.read<uint32_t>();
+            uint32_t table_id = reader_.read<uint32_t>();
+            assert(GetTableIdSelector(table_id) == kTableId_RttiMethod);
+            uint32_t fn_id = GetTableIdIndex(table_id);
             const TypeDesc* td = rt_->LoadMethodSignature(fn_id);
             pushStack(CreateLoadFnNode(td, fn_id));
             break;
@@ -1258,20 +1260,26 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_CALL: {
-            uint32_t method_id = reader_.read<uint32_t>();
+            uint32_t table_id = reader_.read<uint32_t>();
+            assert(GetTableIdSelector(table_id) == kTableId_RttiMethod);
+            uint32_t method_id = GetTableIdIndex(table_id);
             LowerCall(method_id, {});
             break;
         }
 
         case OP_CALLN: {
-            uint32_t method_id = reader_.read<uint32_t>();
+            uint32_t table_id = reader_.read<uint32_t>();
+            assert(GetTableIdSelector(table_id) == kTableId_RttiMethod);
+            uint32_t method_id = GetTableIdIndex(table_id);
             uint8_t nargs = reader_.read<uint8_t>();
             LowerCall(method_id, {nargs});
             break;
         }
 
         case OP_CALLVA: {
-            uint32_t method_id = reader_.read<uint32_t>();
+            uint32_t table_id = reader_.read<uint32_t>();
+            assert(GetTableIdSelector(table_id) == kTableId_RttiMethod);
+            uint32_t method_id = GetTableIdIndex(table_id);
             uint8_t nargs = reader_.read<uint8_t>();
             int32_t offset = -(int32_t)(method_->FormalArgc() + 1);
             LowerCall(method_id, {nargs}, nullptr, VReg(), OffsetToVReg(offset));
@@ -1304,7 +1312,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_NEWCLOSURE: {
-            uint32_t method_id = reader_.read<uint32_t>();
+            uint32_t table_id = reader_.read<uint32_t>();
+            assert(GetTableIdSelector(table_id) == kTableId_RttiMethod);
+            uint32_t method_id = GetTableIdIndex(table_id);
             const TypeDesc* closure_td = rt_->LoadClosureType(method_id);
             uint8_t num_upvars = (uint8_t)closure_td->upvar_types().size();
 

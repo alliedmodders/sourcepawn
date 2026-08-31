@@ -74,6 +74,7 @@ static constexpr uint32_t kMaxTableIndex = (1 << kTableId_IndexBits) - 1;
 
 // List of table identifiers.
 static constexpr uint32_t kTableId_RttiField = 0x00;
+static constexpr uint32_t kTableId_RttiMethod = 0x01;
 
 static inline uint32_t GetTableIdSelector(uint32_t table_id) {
     return table_id & ((1 << kTableId_SelectorBits) - 1);
@@ -105,6 +106,7 @@ static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
 static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
 static constexpr uint32_t kRttiMethod_Native = 0x4;
 static constexpr uint32_t kRttiMethod_Closure = 0x8;
+static constexpr uint32_t kRttiMethod_HasUpvars = 0x10;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {

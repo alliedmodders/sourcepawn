@@ -48,6 +48,7 @@ namespace v2 {
     FOR_EACH(IDXADDR, 12, "idxaddr", 1) \
     FOR_EACH(PUSH_C, 13, "push.c", 5) \
     FOR_EACH(RETN, 14, "retn", 1) \
+    /* Calls the method table entry indicated by the encoded table ID. */ \
     FOR_EACH(CALL, 15, "call", 5) \
     FOR_EACH(JUMP, 16, "jump", 5) \
     FOR_EACH(JZER, 17, "jzer", 5) \
@@ -97,12 +98,17 @@ namespace v2 {
     FOR_EACH(CVT_I64, 52, "cvt.i64", 1) \
     FOR_EACH(TRUNCATE_I64, 53, "truncate.i64", 1) \
     FOR_EACH(SWAP, 54, "swap", 1) \
+    /* Given a table ID to the method table, pushes an SpFunction onto the
+     * stack for the given function entry. The function must not have upvars.
+     */ \
     FOR_EACH(LOAD_FN, 55, "load.fn", 5) \
     FOR_EACH(LOAD_I_I64, 56, "load.i.i64", 1) \
     FOR_EACH(STOR_I_I64, 57, "stor.i.i64", 1) \
     FOR_EACH(RETV, 58, "retv", 1) \
     FOR_EACH(PUSH_C_I8, 59, "push.c.i8", 2) \
-    /* CALLN is only used for variadic natives. */ \
+    /* Same as CALL, but only used for variadic natives. An uint8_t immediate
+     * specifies the number of arguments.
+     */ \
     FOR_EACH(CALLN, 60, "calln", 6) \
     FOR_EACH(PUSH_C_I64, 61, "push.c.i64", 9) \
     FOR_EACH(ADDR_GLB, 62, "addr.glb", 3) \
@@ -186,14 +192,14 @@ namespace v2 {
     FOR_EACH(LOAD_NULL, 90, "load.null", 1) \
     /* Call a variadic native function, unrolling the variadic argument vector
      * from the parent function into the arguments of the callee. The argument
-     * is a method_id and uint8_t argc.
+     * is a method table id and uint8_t argc.
      */ \
     FOR_EACH(CALLVA, 91, "callva", 6) \
     /* Same as CALL, except the function is popped off the stack rather than
      * encoded as a method id.
      */ \
     FOR_EACH(CALLI, 92, "calli", 1) \
-    /* Pops an encoded method ID off the stack and converts it into a closure
+    /* Pops a funcid_t off the stack and converts it into a closure
      * object, which is pushed back onto the stack.
      *
      * The function signature must match the encoded type id.

@@ -172,11 +172,17 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         case OP_CALLN:
         case OP_CALLVA:
         {
-            uint32_t method_index = reader.read<uint32_t>();
-            if (auto method = smx_->GetMethod(method_index))
-                fprintf(stdout, " %s", smx_->names() + method->name);
-            else
-                fprintf(stdout, " unknown_method_%u", method_index);
+            uint32_t table_id = reader.read<uint32_t>();
+            uint32_t selector = GetTableIdSelector(table_id);
+            uint32_t method_index = GetTableIdIndex(table_id);
+            if (selector == kTableId_RttiMethod) {
+                if (auto method = smx_->GetMethod(method_index))
+                    fprintf(stdout, " %s", smx_->names() + method->name);
+                else
+                    fprintf(stdout, " unknown_method_%u", method_index);
+            } else {
+                fprintf(stdout, " table_id_%u", table_id);
+            }
 
             if (op == OP_CALLN || op == OP_CALLVA) {
                 uint8_t nargs = reader.read<uint8_t>();

@@ -169,6 +169,9 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
+    if (index > kMaxTableIndex)
+        report(fun, 484);
+
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(fun->name());
     method.pcode_start = pcode_start;
@@ -225,6 +228,8 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
         method.flags = kRttiMethod_Native;
     if (fun->signature()->conv() == FunctionType::Closure)
         method.flags |= kRttiMethod_Closure;
+    if (fun->NumUpvars())
+        method.flags |= kRttiMethod_HasUpvars;
 
     // Only add a method table entry if we actually had locals or lines.
     if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
@@ -267,7 +272,7 @@ RttiBuilder::add_enumstruct(Type* type)
         fields_->at(field_idx) = info;
 
         if (field_idx > kMaxTableIndex) {
-            report(484);
+            report(es_decl, 484);
             field_idx = kMaxTableIndex;
         }
         field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
@@ -311,7 +316,7 @@ uint32_t RttiBuilder::add_class(Type* type) {
         fields_->at(field_idx) = info;
 
         if (field_idx > kMaxTableIndex) {
-            report(484);
+            report(field, 484);
             field_idx = kMaxTableIndex;
         }
         field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
@@ -360,7 +365,7 @@ RttiBuilder::add_struct(Type* type)
         fields_->at(field_idx) = field;
 
         if (field_idx > kMaxTableIndex) {
-            report(484);
+            report(arg, 484);
             field_idx = kMaxTableIndex;
         }
         field_id_map_[arg] = MakeTableId(kTableId_RttiField, field_idx);

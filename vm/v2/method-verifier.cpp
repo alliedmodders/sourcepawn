@@ -493,9 +493,14 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_CALL:
         case OP_CALLN:
         case OP_CALLVA: {
-            uint32_t method_index = (uint32_t)readCell();
+            uint32_t table_id = (uint32_t)readCell();
+            if (GetTableIdSelector(table_id) != kTableId_RttiMethod)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            uint32_t method_index = GetTableIdIndex(table_id);
             uint32_t arg_count;
             const smx_rtti_method* method = smx_->GetMethod(method_index);
+            if (method->flags & kRttiMethod_HasUpvars)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             if (op == OP_CALLVA) {
                 if (!(method->flags & kRttiMethod_Native)) {
@@ -682,8 +687,14 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
 
         case OP_LOAD_FN: {
-            uint32_t method_index = readCell();
-            if (!smx_->GetMethod(method_index))
+            uint32_t table_id = readCell();
+            if (GetTableIdSelector(table_id) != kTableId_RttiMethod)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            uint32_t method_index = GetTableIdIndex(table_id);
+            const smx_rtti_method* target = smx_->GetMethod(method_index);
+            if (!target)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (target->flags & kRttiMethod_HasUpvars)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* td = rt_->LoadMethodSignature(method_index);
             if (!td)
@@ -884,7 +895,10 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_NEWCLOSURE: {
-            uint32_t method_index = readCell();
+            uint32_t table_id = readCell();
+            if (GetTableIdSelector(table_id) != kTableId_RttiMethod)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            uint32_t method_index = GetTableIdIndex(table_id);
             const smx_rtti_method* target = smx_->GetMethod(method_index);
             if (!target)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -1360,18 +1374,22 @@ bool MethodVerifier::verifyLocalSlots() {
     // Check for closure upvar slots before local slots.
     {
         uint8_t b;
-        if (parser.GetByte(&b) && b == cb::kClosureSlots) {
-            parser.NextByte();
-            uint16_t upvar_count;
-            if (!parser.ReadUint16(&upvar_count))
-                return reportError(SP_ERROR_FILE_FORMAT);
+        if (parser.GetByte(&b)) {
+            if (b == cb::kClosureSlots) {
+                parser.NextByte();
+                uint16_t upvar_count;
+                if (!parser.ReadUint16(&upvar_count))
+                    return reportError(SP_ERROR_FILE_FORMAT);
 
-            upvar_types_ = ke::FixedArray<const TypeDesc*>(upvar_count);
-            for (uint16_t i = 0; i < upvar_count; i++) {
-                auto td = rt_->LoadType(parser);
-                if (!td)
-                    return false;
-                upvar_types_[i] = td;
+                upvar_types_ = ke::FixedArray<const TypeDesc*>(upvar_count);
+                for (uint16_t i = 0; i < upvar_count; i++) {
+                    auto td = rt_->LoadType(parser);
+                    if (!td)
+                        return false;
+                    upvar_types_[i] = td;
+                }
+            } else if (method_->flags & kRttiMethod_HasUpvars) {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             }
         }
     }

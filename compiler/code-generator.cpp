@@ -2480,7 +2480,8 @@ void CodeGenerator::EmitCall(const CallTarget& target, cell nargs, bool is_sprea
                 auto entry = rtti_->add_method(fun, 0);
                 rtti_->finish_method(fun, entry, LocalSlotSignature{}, 0);
 
-                __ bind_to(&fun->cg()->method_id, entry.method_index);
+                uint32_t table_id = MakeTableId(kTableId_RttiMethod, entry.method_index);
+                __ bind_to(&fun->cg()->method_id, table_id);
             }
         }
 
@@ -2643,7 +2644,8 @@ smx_rtti_debug_method CodeGenerator::AddFunctionEntry(FunctionDecl* fun, uint32_
     assert(fun->impl());
 
     auto debug_method = rtti_->add_method(fun, pcode_start);
-    __ bind_to(&fun->cg()->method_id, debug_method.method_index);
+    uint32_t table_id = MakeTableId(kTableId_RttiMethod, debug_method.method_index);
+    __ bind_to(&fun->cg()->method_id, table_id);
     return {debug_method};
 }
 
