@@ -29,7 +29,6 @@
 #include "code-generator.h"
 #include "coercion-rules.h"
 #include "errors.h"
-#include "constant-fold.h"
 #include "lexer.h"
 #include "parse-node.h"
 #include "sctracker.h"
@@ -1073,34 +1072,8 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         val.set_expr(assign_type);
     }
 
-    auto* left_val = &state.left->val();
-    auto* right_val = &state.right->val();
-
-    if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
-        val.type()->coercesFromInt())
-    {
-        char boolresult = FALSE;
-        CheckCoercion(state.expr, left_val->type(), right_val->type(), CvtContext::Operator);
-        val.ident = iCONSTEXPR;
-        cell folded = calc(left_val->const_i32(), op_token, right_val->const_i32(),
-                           &boolresult);
-
-        // If a constant operation overflows, promote it to the next sized up
-        // integer.
-        if (val.type()->isInt16() &&
-            (folded < std::numeric_limits<int16_t>::min() ||
-             folded > std::numeric_limits<int16_t>::max()))
-        {
-            val.set_expr(types_->type_int());
-        }
-        if (val.type()->isInt8() &&
-            (folded < std::numeric_limits<int8_t>::min() ||
-             folded > std::numeric_limits<int8_t>::max()))
-        {
-            val.set_expr(types_->type_int());
-        }
-        val.set_constval(folded);
-    }
+    // Finally, do a constant folding pass.
+    state.expr->FoldToConstant();
 
     return true;
 }
@@ -1413,19 +1386,10 @@ static inline bool IsValidIntWidthChange(Type* from, Type* to) {
     // to be 64-bit.
     if ((from->isInt64() && to->isDouble()) || (from->isDouble() && to->isInt64()))
         return true;
-
-    if (from->isWideInt()) {
-        return to->isInt() ||
-               to->isInt16() ||
-               to->isInt8() ||
-               to->isWideInt();
-    }
-    if (to->isWideInt()) {
-        return from->isInt() ||
-               from->isAny() ||
-               from->isInt16() ||
-               from->isInt8();
-    }
+    if (from->isWideInt())
+        return to->isInt() || to->isInt16() || to->isInt8() || to->isWideInt();
+    if (to->isWideInt())
+        return from->isInt() || from->isAny() || from->isInt16() || from->isInt8();
     return false;
 }
 

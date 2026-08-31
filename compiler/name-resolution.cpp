@@ -25,7 +25,6 @@
 
 #include "array-helpers.h"
 #include "errors.h"
-#include "constant-fold.h"
 #include "parse-node.h"
 #include "parser.h"
 #include "sc.h"

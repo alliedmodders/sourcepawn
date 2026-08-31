@@ -31,7 +31,6 @@
 #include "compile-context.h"
 #include "compile-options.h"
 #include "errors.h"
-#include "constant-fold.h"
 #include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"
@@ -419,6 +418,9 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
     } else if (type->inner()->isIntPtr() && ctor) {
         EmitArrayFillIntptr(type, ctor->as<ArrayExpr>());
     } else if (ctor) {
+        if (type->inner()->isHeapItem())
+            return EmitArrayFillHeapItems(type, ctor->as<ArrayExpr>());
+
         std::optional<uint32_t> fill_data_pos;
 
         auto iter = fill_data_cache_.find(ctor);
@@ -483,6 +485,21 @@ void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, Array
         // Otherwise, the allocation is now on the stack.
         if (!inner->is_flat())
             __ emit(OP_STOR_I_A);
+    }
+}
+
+void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ArrayExpr* array) {
+    uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
+    for (size_t i = 0; i < len; i++) {
+        __ emit(OP_DUP);
+        __ PUSH_C(i);
+
+        if (array && i < array->exprs().size())
+            EmitExpr(array->exprs().at(i));
+        else
+            __ emit(OP_LOAD_NULL);
+
+        __ emit(OP_STOR_ELEM_A);
     }
 }
 

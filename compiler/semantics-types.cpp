@@ -238,7 +238,7 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
             return;
         }
     }
-    if (formal->isInt8() && actual->isInt() && node->val().ident == iCONSTEXPR) {
+    if (formal->isInt8() && (actual->isInt() || actual->isInt16()) && node->val().ident == iCONSTEXPR) {
         cell_t v = node->val().const_i32();
         if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
             report(node->pos(), 179) << v

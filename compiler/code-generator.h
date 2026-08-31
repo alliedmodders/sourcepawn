@@ -89,6 +89,7 @@ class CodeGenerator final
     void EmitEnumStructCopy(QualType type, Expr* rhs);
     void EmitArrayFillStructs(ArrayType* type, ArrayExpr* expr);
     void EmitArrayFillArrays(ArrayType* type, ArrayType* inner, ArrayExpr* expr);
+    void EmitArrayFillHeapItems(ArrayType* type, ArrayExpr* expr);
     void EmitArrayFillIntptr(ArrayType* type, ArrayExpr* expr);
     uint32_t EmitArrayFillData(ArrayType* type, ArrayExpr* array);
     uint32_t EmitStringFillData(ArrayType* type, StringExpr* array);

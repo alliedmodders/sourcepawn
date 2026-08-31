@@ -75,7 +75,6 @@
 
 #include "builtin-generator.h"
 #include "errors.h"
-#include "constant-fold.h"
 #include "lexer.h"
 #include "sc.h"
 #include "sci18n.h"
