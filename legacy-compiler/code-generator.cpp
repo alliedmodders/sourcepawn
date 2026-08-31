@@ -212,7 +212,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl:
             EmitFunctionDecl(stmt->to<FunctionDecl>());
             break;
         case StmtKind::EnumStructDecl:

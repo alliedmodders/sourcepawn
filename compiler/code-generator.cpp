@@ -203,8 +203,7 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             EmitSwitchStmt(stmt->to<SwitchStmt>());
             break;
         case StmtKind::FunctionDecl:
-        case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl: {
+        case StmtKind::MemberFunctionDecl: {
             auto fun = stmt->to<FunctionDecl>();
             if (fun_ && fun->is_live())
                 AddFunctionToQueue(fun);

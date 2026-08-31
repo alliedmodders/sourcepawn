@@ -198,7 +198,6 @@ bool Semantics::CheckStmt(Stmt* stmt) {
             return CheckSwitchStmt(stmt->to<SwitchStmt>());
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl:
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
         case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
@@ -1342,7 +1341,6 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl:
             val.set_function(decl->as<FunctionDecl>());
             break;
         case StmtKind::EnumStructDecl:
@@ -1607,11 +1605,11 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     if (base_val.ident == iTYPENAME) {
         auto map = MethodmapDecl::LookupMethodmap(base_val.typename_decl());
         auto member = map ? map->FindMember(expr->name()) : nullptr;
-        if (!member || !member->as<MethodmapMethodDecl>()) {
+        if (!member || !member->as<MemberFunctionDecl>()) {
             report(expr, 444) << base_val.typename_decl()->name() << expr->name();
             return false;
         }
-        auto method = member->as<MethodmapMethodDecl>();
+        auto method = member->as<MemberFunctionDecl>();
         if (!method->is_static()) {
             report(expr, 176) << method->decl_name() << map->name();
             return false;
@@ -1662,7 +1660,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return true;
     }
 
-    auto method = member->as<MethodmapMethodDecl>();
+    auto method = member->as<MemberFunctionDecl>();
     if (method->is_static()) {
         report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
         return false;
@@ -1698,11 +1696,12 @@ CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             assert(expr->token() == '.');
 
             auto resolved = expr->resolved();
-            if (auto method = resolved->as<MethodmapMethodDecl>()) {
-                auto map = method->parent()->as<MethodmapDecl>();
-                if (map->ctor() == method) {
-                    report(call, 84) << method->parent()->name();
-                    return {};
+            if (auto method = resolved->as<MemberFunctionDecl>()) {
+                if (auto map = method->parent()->as<MethodmapDecl>()) {
+                    if (map->ctor() == method) {
+                        report(call, 84) << method->parent()->name();
+                        return {};
+                    }
                 }
             }
 

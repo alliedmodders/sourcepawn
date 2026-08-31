@@ -508,7 +508,7 @@ Decl* Parser::parse_class() {
     auto stmt = new ClassDecl(pos, class_name);
 
     std::vector<LayoutFieldDecl*> fields;
-    std::vector<FunctionDecl*> methods;
+    std::vector<MemberFunctionDecl*> methods;
 
     int opening_line = lexer_->fline();
     while (!lexer_->match('}')) {
@@ -538,7 +538,7 @@ Decl* Parser::parse_class() {
     }
 
     new (&stmt->fields()) PoolArray<LayoutFieldDecl*>(fields);
-    new (&stmt->methods()) PoolArray<FunctionDecl*>(methods);
+    new (&stmt->methods()) PoolArray<MemberFunctionDecl*>(methods);
 
     lexer_->require_newline(TerminatorPolicy::Newline);
     return stmt;
@@ -2022,7 +2022,7 @@ Parser::parse_methodmap()
 
     lexer_->need('{');
 
-    std::vector<MethodmapMethodDecl*> methods;
+    std::vector<MemberFunctionDecl*> methods;
     std::vector<PropertyDecl*> props;
     while (!lexer_->match('}')) {
         bool ok = true;
@@ -2050,14 +2050,14 @@ Parser::parse_methodmap()
         }
     }
 
-    new (&decl->methods()) PoolArray<MethodmapMethodDecl*>(methods);
+    new (&decl->methods()) PoolArray<MemberFunctionDecl*>(methods);
     new (&decl->properties()) PoolArray<PropertyDecl*>(props);
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
 }
 
-MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
+MemberFunctionDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     auto pos = lexer_->pos();
 
     bool is_static = lexer_->match(tSTATIC);
@@ -2100,7 +2100,7 @@ MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     auto fqn = cc_.atom(fullname);
 
     auto is_ctor = (!is_dtor && map->name() == symbol);
-    auto fun = new MethodmapMethodDecl(pos, ret_type, map, is_ctor, is_dtor);
+    auto fun = new MemberFunctionDecl(pos, map, ret_type, is_ctor, is_dtor);
     if (is_static)
         fun->set_is_static();
     fun->set_name(fqn);

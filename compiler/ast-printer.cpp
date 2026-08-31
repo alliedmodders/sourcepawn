@@ -361,7 +361,8 @@ void AstPrinter::PrintFunctionDecl(FunctionDecl* node, bool is_last) {
 }
 
 void AstPrinter::PrintMemberFunctionDecl(MemberFunctionDecl* node, bool is_last) {
-    fprintf(out_, "MemberFunctionDecl: %s::%s\n", node->parent()->name()->chars(), node->name()->chars());
+    fprintf(out_, "MemberFunctionDecl: %s::%s (ctor: %d, dtor: %d)\n", node->parent()->name()->chars(), node->name()->chars(),
+            node->is_ctor(), node->is_dtor());
     stack_.push_back(is_last);
     for (size_t i = 0; i < node->args().size(); i++)
         Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
@@ -460,17 +461,6 @@ void AstPrinter::PrintChangeScopeNode(ChangeScopeNode* node, bool is_last) {
 
 void AstPrinter::PrintPropertyDecl(PropertyDecl* node, bool is_last) {
     fprintf(out_, "PropertyDecl: %s\n", node->name()->chars());
-}
-
-void AstPrinter::PrintMethodmapMethodDecl(MethodmapMethodDecl* node, bool is_last) {
-    fprintf(out_, "MethodmapMethodDecl: %s (ctor: %d, dtor: %d)\n", node->name()->chars(),
-            node->is_ctor(), node->is_dtor());
-    stack_.push_back(is_last);
-    for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
-    if (node->body())
-        Print(node->body(), true);
-    stack_.pop_back();
 }
 
 void AstPrinter::PrintLogicalExpr(LogicalExpr* node, bool is_last) {
