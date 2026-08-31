@@ -80,6 +80,12 @@ void Compiler::EmitPrologue(const FrameInfo& frame) {
     __ subq(rsp, kNativeStackAllowance);
     __ assertStackAligned();
 
+    // Check this after stack alignment, otherwise the error thunk could crash
+    // due to a misaligned stack.
+    __ movq(rax, Operand(env_reg, Environment::offsetOfThreadStackLimit()));
+    __ cmpq(rsp, rax);
+    JumpOnError(below, SP_ERROR_STACKLOW);
+
     __ lea(frm, Operand(dat_reg, stk, NoScale));
 
     if (frame.frame_size) {

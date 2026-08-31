@@ -82,6 +82,10 @@ static constexpr int kCalleeSlotOffset = 8;
 void Compiler::EmitPrologue(const FrameInfo& frame) {
     __ enterFrame(JitFrameType::Scripted, method_info_->frame_id());
 
+    __ movl(eax, Operand(ExternalAddress(env_->addressOfThreadStackLimit())));
+    __ cmpl(esp, eax);
+    JumpOnError(below, SP_ERROR_STACKLOW);
+
     __ push(frm);
     __ subl(esp, kNativeStackAllowance);
     __ movl(frm, stk);

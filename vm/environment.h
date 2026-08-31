@@ -151,6 +151,11 @@ class Environment : public ISourcePawnEnvironment
     uint32_t* addressOfSp() { return &sp_; }
     uint32_t* addressOfSpBase() { return &sp_base_; }
     uint32_t* addressOfSpTop() { return &sp_top_; }
+    intptr_t thread_stack_limit() const { return thread_stack_limit_; }
+    intptr_t* addressOfThreadStackLimit() { return &thread_stack_limit_; }
+    static inline size_t offsetOfThreadStackLimit() {
+        return offsetof(Environment, thread_stack_limit_);
+    }
     bool addStack(uint32_t amount);
     bool dropStack(uint32_t amount);
     static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
@@ -315,6 +320,7 @@ class Environment : public ISourcePawnEnvironment
     uint32_t sp_base_ = 0;
     uint32_t sp_top_ = 0;
     uint32_t sp_ = 0;
+    intptr_t thread_stack_limit_ = 0;
 };
 
 class EnterProfileScope

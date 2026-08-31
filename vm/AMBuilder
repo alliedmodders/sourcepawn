@@ -33,6 +33,14 @@ module.sources += [
   'watchdog_timer.cpp',
 ]
 
+if module.compiler.target.platform == 'mac':
+    module.sources += ['platform-macos.cpp']
+elif module.compiler.target.platform == 'windows':
+    module.sources += ['platform-windows.cpp']
+
+if module.compiler.target.platform != 'windows':
+    module.sources += ['platform-posix.cpp']
+
 if '64' in module.compiler.target.arch:
   module.sources += ['virtmem-64bit.cpp']
 else:

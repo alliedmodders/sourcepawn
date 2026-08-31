@@ -14,6 +14,8 @@
 
 #include <stdarg.h>
 
+#include <algorithm>
+
 #include <amtl/am-raii.h>
 #include "api.h"
 #include "code-stubs.h"
@@ -27,6 +29,7 @@
 #endif
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
+#include "platform.h"
 #include "v2/interpreter.h"
 #if defined(SP_JIT_V2)
 #    include "v2/jit.h"
@@ -99,6 +102,18 @@ Environment::Initialize() {
     sp_base_ = heap_.ToLocalAddr(stack_.get());
     sp_top_ = sp_base_ + kDefaultStackSize;
     sp_ = sp_base_;
+
+    intptr_t base = GetThreadStackLimit();
+    if (!base)
+        return false;
+
+    intptr_t page = GetPageSize();
+    if (!page)
+        return false;
+
+    // The JIT's stack limit should leave enough headroom for error reporting.
+    static constexpr intptr_t kErrorReportHeadroom = 64 * 1024;
+    thread_stack_limit_ = base + std::max(page, kErrorReportHeadroom);
 
     if (!builtins_->Initialize())
         return false;

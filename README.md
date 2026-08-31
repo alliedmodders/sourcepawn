@@ -68,13 +68,9 @@ Overview
 --------
 
 The SourcePawn source tree is divided into the following folders:
- - `compiler` - The legacy compiler, currently used in SourceMod.
- - `vm` - The virtual machine and just-in-time compiler.
- - `exp` - Experimental projects.
-  - `compiler` - The v2 compiler for SourcePawn 1.7.
-   - `docgen` - The documentation generator and web frontend.
-   - `tools`
-    - `docparse` - Parse files into JSON that can be consumed by documentation generators.
+ - `compiler` - The V2 compiler.
+ - `legacy-compiler` - The V1 compiler.
+ - `vm` - The virtual machine and JIT suite.
 
 History
 -------
@@ -233,17 +229,22 @@ SourcePawn 1.13 was released on July X, 2026.
 
 SourcePawn 2.0 is currently in development.
 
-This release is a gigantic overhaul of the language and its implementation. For
-a full writeup, see docs/SourcePawn2.md.
+This release is an overhaul of the language and its implementation. For a full
+writeup, see docs/SourcePawn2.md.
 
 On the language itself:
  - Arrays can now be returned, allocated, and re-assigned without deep copies.
  - Global arrays can now be reassigned or reallocated.
  - Array references can be null.
+ - Functions can be nested, and capture variables.
+ - Class declarations with heap allocated objects are now supported.
+ - `intptr`, `int8`, `int16`, and `double` types have been added.
+ - Type checking is much more rigorous, as is binary verification.
+ - Primitive reference-counted memory management is now available.
 
 A new virtual machine and bytecode has been added to address a number of
-shortcomings and maintenance issues in the old design. The "v2" VM is used for
-all new binaries. The legacy VM is still used for older binaries.
+shortcomings and maintenance issues. The V2 VM is used for all new binaries.
+The legacy VM is still used for older binaries.
 
  - The bytecode is now purely stack based. The two-register scheme of the
    legacy VM resulted in needless instructions and a great deal of internal
@@ -254,4 +255,4 @@ all new binaries. The legacy VM is still used for older binaries.
    fully typed and register based, for faster execution.
  - The interpreter now uses a switch loop for faster execution.
  - Instructions are encoded with 8 bit alignment instead of 32, making the code
-   stream much smaller. 
+   stream much smaller.

@@ -41,7 +41,11 @@ Compiler::~Compiler()
 
 void Compiler::emitPrologue() {
     size_t frame_items = __ enterFrame(JitFrameType::Scripted, pcode_start_) + 1;
-    (void)frame_items;
+    (void) frame_items;
+
+    __ movq(rax, Operand(env_reg, Environment::offsetOfThreadStackLimit()));
+    __ cmpq(rsp, rax);
+    jumpOnError(below, SP_ERROR_STACKLOW);
 
     assert(frame_items == 3);
 
