@@ -108,7 +108,6 @@ class CodeGenerator final
     void EmitSliceExpr(SliceExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
     void EmitCallExpr(CallExpr* expr, unsigned int flags);
-    void EmitCallHiddenArray(CallExpr* expr);
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
     void EmitNumber64Expr(Number64Expr* expr);
@@ -216,6 +215,7 @@ class CodeGenerator final
 
     void EnterTempSlotScope();
     void LeaveTempSlotScope();
+    cell_t AcquireTempSlot(ParseNode* node, Type* type);
     cell_t AcquireTempSlot(ParseNode* node, BuiltinType type);
 
     uint16_t AcquireGlobalSlot(VarDeclBase* decl);
@@ -261,8 +261,8 @@ class CodeGenerator final
     tr::vector<DebugSymbol> global_syms_;
     tr::vector<std::pair<SymbolScope*, tr::vector<DebugSymbol>>> static_syms_;
     tr::unordered_set<SymbolScope*> static_scopes_;
-    std::list<std::pair<uint32_t, BuiltinType>> free_temp_slots_;
-    std::list<std::pair<uint32_t, BuiltinType>> used_temp_slots_;
+    std::list<std::pair<uint32_t, Type*>> free_temp_slots_;
+    std::list<std::pair<uint32_t, Type*>> used_temp_slots_;
     Label ret_2d_array_;
 
     // Data queue cache.

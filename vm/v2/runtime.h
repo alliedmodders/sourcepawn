@@ -113,9 +113,16 @@ class Runtime final : public BaseRuntime,
     bool GetNativeIndex(uint32_t method_index, uint32_t* index) const;
     uint32_t GetGlobalAddr(uint16_t index) const { return global_addrs_[index]; }
     uint32_t GetStringAddr(uint16_t index) const { return string_addrs_[index]; }
+    const TypeDesc* GetStringLitType(uint16_t index);
 
     const TypeDesc* LoadType(FastRtti& rtti);
+    const TypeDesc* LoadArgType(FastRtti& rtti);
     const TypeDesc* LoadTypeFromId(uint32_t type_id);
+    const TypeDesc* GetReferenceType(const TypeDesc* td);
+    const TypeDesc* GetArrayType(const TypeDesc* elt);
+    const TypeDesc* GetFixedArrayType(const TypeDesc* elt, uint32_t size);
+    const TypeDesc* GetSliceType(const TypeDesc* elt);
+    const TypeDesc* GetPrimitiveType(TypeKind kind);
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 

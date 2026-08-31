@@ -28,6 +28,7 @@ enum class TypeKind : uint8_t {
     Array,
     FixedArray,
     ArraySlice,
+    Reference,
 };
 
 class TypeDesc final {
@@ -44,8 +45,10 @@ class TypeDesc final {
         can_global_cache_(elt->can_global_cache()),
         elt_(elt)
     {
-        assert(kind == TypeKind::Array || kind == TypeKind::ArraySlice);
-        array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+        assert(kind == TypeKind::Array || kind == TypeKind::ArraySlice ||
+               kind == TypeKind::Reference);
+        if (kind != TypeKind::Reference)
+            array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
     }
 
     TypeDesc(const TypeDesc* elt, uint32_t array_size)
@@ -117,6 +120,13 @@ class TypeDesc final {
     bool IsArrayish() const {
         return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
                kind_ == TypeKind::ArraySlice;
+    }
+    bool IsReference() const {
+        return kind_ == TypeKind::Reference;
+    }
+    const TypeDesc* ref_type() const {
+        assert(IsReference());
+        return elt_;
     }
 
   private:

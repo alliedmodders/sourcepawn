@@ -514,7 +514,6 @@ class DumpTool final {
             case OP_TRACKER_PUSH_C:
             case OP_STACK:
             case OP_PUSH_S:
-            case OP_HEAP:
             case OP_CONST_PRI:
             case OP_CONST_ALT:
             case OP_LOAD_S_PRI:
@@ -710,7 +709,6 @@ class DumpTool final {
             case OP_PUSH_C:
             case OP_ADD_C:
             case OP_SMUL_C:
-            case OP_HEAP:
                 fprintf(stdout, " %d", reader.read<cell_t>());
                 break;
 

@@ -37,11 +37,12 @@ const TypeDesc* TypeCache::GetPrimitive(TypeKind kind) {
     assert(kind < TypeKind::Array);
 
     size_t index = (uint8_t)kind;
-    if (index < primitives_.size() && primitives_[index])
-        return primitives_[index];
+    if (index >= primitives_.size())
+        primitives_.resize(index + 1);
 
-    primitives_.resize(index + 1);
-    primitives_[index] = NewTypeDesc(pool_, kind);
+    if (!primitives_[index])
+        primitives_[index] = NewTypeDesc(pool_, kind);
+
     return primitives_[index];
 }
 
@@ -58,7 +59,7 @@ const TypeDesc* TypeCache::GetSlice(const TypeDesc* elt) {
 }
 
 const TypeDesc* TypeCache::GetArray(const TypeDesc* elt) {
-    TypeCacheKey key(TypeKind::Array, elt, 0);
+    TypeCacheKey key(TypeKind::Array, elt);
 
     auto p = cache_.findForAdd(key);
     if (p.found())
@@ -77,6 +78,19 @@ const TypeDesc* TypeCache::GetFixedArray(const TypeDesc* elt, uint32_t size) {
         return p->value;
 
     TypeDesc* td = NewTypeDesc(pool_, elt, size);
+    cache_.add(p, key, td);
+    return td;
+}
+
+const TypeDesc* TypeCache::GetReference(const TypeDesc* elt) {
+    assert(!elt->IsReference());
+    TypeCacheKey key(TypeKind::Reference, elt);
+
+    auto p = cache_.findForAdd(key);
+    if (p.found())
+        return p->value;
+
+    TypeDesc* td = NewTypeDesc(pool_, TypeKind::Reference, elt);
     cache_.add(p, key, td);
     return td;
 }

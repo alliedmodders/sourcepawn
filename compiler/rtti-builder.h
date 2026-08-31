@@ -83,8 +83,9 @@ class RttiBuilder
     uint32_t encode_signature(FunctionDecl* decl);
     void encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
-    void encode_type_into(std::vector<uint8_t>& bytes, Type* type);
-    void encode_type_into(std::vector<uint8_t>& bytes, QualType type);
+    void encode_type_into(std::vector<uint8_t>& bytes, Type* type, bool force_by_ref = false);
+    void encode_type_into(std::vector<uint8_t>& bytes, QualType qt, bool force_by_ref = false);
+
     void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
     void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type);

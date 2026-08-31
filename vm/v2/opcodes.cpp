@@ -68,7 +68,6 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_PUSH_C:
         case OP_ADD_C:
         case OP_SMUL_C:
-        case OP_HEAP:
         case OP_LOAD_GLB:
         case OP_LOAD_GLB_I64:
         case OP_STOR_GLB:

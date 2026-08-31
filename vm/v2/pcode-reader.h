@@ -196,11 +196,6 @@ class PcodeReader
                 return visitor_->visitPUSH_C_I64(value);
             }
 
-            case OP_HEAP: {
-                cell_t amount = readCell();
-                return visitor_->visitHEAP(amount);
-            }
-
             case OP_CVT_I64: {
                 cell_t slot = readInt16();
                 return visitor_->visitCVT_I64(slot);

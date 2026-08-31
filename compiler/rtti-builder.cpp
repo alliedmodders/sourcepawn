@@ -388,9 +388,9 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     encode_type_into(bytes, return_type);
 
     if (hidden_arg)
-        encode_type_into(bytes, hidden_arg);
+        encode_type_into(bytes, hidden_arg, hidden_arg->isInt64());
     for (const auto& arg : fun->args())
-        encode_type_into(bytes, arg->type());
+        encode_type_into(bytes, arg->type(), arg->type()->isInt64());
 
     return type_pool_.add(bytes);
 }
@@ -474,11 +474,11 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
     return 0;
 }
 
-void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type) {
-    encode_type_into(bytes, QualType(type));
+void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type, bool force_by_ref) {
+    encode_type_into(bytes, QualType(type), force_by_ref);
 }
 
-void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
+void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, bool force_by_ref) {
     if (qt.is_const())
         bytes.emplace_back(cb::kConst);
 
@@ -496,9 +496,10 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
             array = array->inner()->to<ArrayType>();
         }
         type = array->inner();
-    } else if (type->isReference()) {
+    } else if (type->isReference() || force_by_ref) {
         bytes.emplace_back(cb::kByRef);
-        type = type->inner();
+        if (type->isReference())
+            type = type->inner();
     }
 
     if (uint8_t b = TypeToRttiBytecode(type)) {
@@ -557,8 +558,10 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionTyp
 
     encode_type_into(bytes, ft->return_type());
 
-    for (size_t i = 0; i < ft->nargs(); i++)
-        encode_type_into(bytes, ft->arg_type(i));
+    for (size_t i = 0; i < ft->nargs(); i++) {
+        QualType type = ft->arg_type(i);
+        encode_type_into(bytes, type, type->isInt64());
+    }
 }
 
 int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {

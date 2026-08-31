@@ -156,10 +156,11 @@ bool Runtime::InitializeGlobals() {
         auto blob = image_->ReadDataBlob(string->offset);
         assert(blob);
 
-        auto td = types_.GetFixedArray(types_.GetPrimitive(TypeKind::Char8), blob->size() + 1);
+        auto char_type = GetPrimitiveType(TypeKind::Char8);
+        auto td = GetFixedArrayType(char_type, (uint32_t)blob->size() + 1);
         assert(td);
 
-        auto array = NewArray(td, td->array_size());
+        auto array = NewArray(td, (uint32_t)td->array_size());
         if (!array)
             return false;
 
@@ -889,8 +890,8 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
         return false;
     }
 
-    const TypeDesc* elt_td = types_.GetArray(types_.GetPrimitive(TypeKind::Any));
-    const TypeDesc* td = types_.GetArray(elt_td);
+    const TypeDesc* elt_td = GetArrayType(GetPrimitiveType(TypeKind::Any));
+    const TypeDesc* td = GetArrayType(elt_td);
 
     SpArray* array = NewArray(td, length);
     if (!array)
@@ -976,20 +977,19 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
         return nullptr;
     }
 
-    auto global_types = env_->types();
     switch (b) {
         case cb::kBool:
-            return global_types->GetPrimitive(TypeKind::Bool);
+            return GetPrimitiveType(TypeKind::Bool);
         case cb::kInt32:
-            return global_types->GetPrimitive(TypeKind::Int32);
+            return GetPrimitiveType(TypeKind::Int32);
         case cb::kFloat32:
-            return global_types->GetPrimitive(TypeKind::Float32);
+            return GetPrimitiveType(TypeKind::Float32);
         case cb::kChar8:
-            return global_types->GetPrimitive(TypeKind::Char8);
+            return GetPrimitiveType(TypeKind::Char8);
         case cb::kAny:
-            return global_types->GetPrimitive(TypeKind::Any);
+            return GetPrimitiveType(TypeKind::Any);
         case cb::kTopFunction:
-            return global_types->GetPrimitive(TypeKind::TopFunction);
+            return GetPrimitiveType(TypeKind::TopFunction);
         case cb::kEnum: {
             uint32_t index;
             if (!parser.ReadUint32_Leb128(&index))
@@ -997,10 +997,10 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             if (index >= image_->rtti_enums()->row_count)
                 ReportError("invalid enum index in type data");
             // Rewrite to int32 for now.
-            return global_types->GetPrimitive(TypeKind::Int32);
+            return GetPrimitiveType(TypeKind::Int32);
         }
         case cb::kInt64:
-            return global_types->GetPrimitive(TypeKind::Int64);
+            return GetPrimitiveType(TypeKind::Int64);
         case cb::kFixedArray: {
             uint32_t size;
             if (!parser.ReadUint32_Leb128(&size) || !size) {
@@ -1010,17 +1010,13 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             auto td = LoadType(parser);
             if (!td)
                 return nullptr;
-            if (td->can_global_cache())
-                return global_types->GetFixedArray(td, size);
-            return types_.GetFixedArray(td, size);
+            return GetFixedArrayType(td, size);
         }
         case cb::kArray: {
             auto td = LoadType(parser);
             if (!td)
                 return nullptr;
-            if (td->can_global_cache())
-                return global_types->GetArray(td);
-            return types_.GetArray(td);
+            return GetArrayType(td);
         }
         case cb::kFunctionPtr: {
             uint32_t index;
@@ -1028,7 +1024,7 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
                 ReportError("Invalid type data");
                 return nullptr;
             }
-            return global_types->GetPrimitive(TypeKind::TopFunction);
+            return GetPrimitiveType(TypeKind::TopFunction);
         }
         default:
             assert(false);
@@ -1038,9 +1034,80 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
     }
 }
 
+const TypeDesc* Runtime::LoadArgType(FastRtti& parser) {
+    uint8_t b;
+    if (!parser.GetByte(&b)) {
+        ReportError("Invalid type data");
+        return nullptr;
+    }
+
+    if (b == cb::kConst) {
+        parser.NextByte();
+        if (!parser.GetByte(&b)) {
+            ReportError("Invalid type data");
+            return nullptr;
+        }
+    }
+
+    if (b == cb::kByRef)
+        parser.NextByte();
+
+    const TypeDesc* td = LoadType(parser);
+    if (!td)
+        return nullptr;
+
+    if (b == cb::kByRef)
+        return GetReferenceType(td);
+    return td;
+}
+
 const TypeDesc* Runtime::LoadTypeFromId(uint32_t type_id) {
     FastRtti parser = image_->GetTypeIdParser(type_id);
     return LoadType(parser);
+}
+
+const TypeDesc* Runtime::GetReferenceType(const TypeDesc* td) {
+    if (td->can_global_cache())
+        return env_->types()->GetReference(td);
+    return types_.GetReference(td);
+}
+
+const TypeDesc* Runtime::GetPrimitiveType(TypeKind kind) {
+    return env_->types()->GetPrimitive(kind);
+}
+
+const TypeDesc* Runtime::GetArrayType(const TypeDesc* elt) {
+    if (elt->can_global_cache())
+        return env_->types()->GetArray(elt);
+    return types_.GetArray(elt);
+}
+
+const TypeDesc* Runtime::GetFixedArrayType(const TypeDesc* elt, uint32_t size) {
+    if (elt->can_global_cache())
+        return env_->types()->GetFixedArray(elt, size);
+    return types_.GetFixedArray(elt, size);
+}
+
+const TypeDesc* Runtime::GetSliceType(const TypeDesc* elt) {
+    if (elt->can_global_cache())
+        return env_->types()->GetSlice(elt);
+    return types_.GetSlice(elt);
+}
+
+const TypeDesc* Runtime::GetStringLitType(uint16_t index) {
+    if (string_addrs_.size() > 0 && string_addrs_[index] != 0) {
+        uint32_t addr = string_addrs_[index];
+        auto array = heap_.ToPhysAddr<SpArray*>(addr);
+        return array->td;
+    }
+
+    auto string = image_->getRttiRow<smx_rtti_string>(image_->rtti_stringpool(), index);
+    auto blob = image_->ReadDataBlob(string->offset);
+    if (!blob)
+        return nullptr;
+
+    auto char_type = GetPrimitiveType(TypeKind::Char8);
+    return GetFixedArrayType(char_type, (uint32_t)blob->size() + 1);
 }
 
 uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
@@ -1203,12 +1270,8 @@ SpArray* Runtime::NewSlice(SpArray* array, uint32_t index) {
     assert(index <= array->length);
 
     auto td = array->td;
-    if (td->kind() != TypeKind::ArraySlice) {
-        if (td->array_elt()->can_global_cache())
-            td = env_->types()->GetSlice(td->array_elt());
-        else
-            td = types_.GetSlice(td->array_elt());
-    }
+    if (td->kind() != TypeKind::ArraySlice)
+        td = GetSliceType(td->array_elt());
 
     auto slice = heap_.AllocTyped<SpArray>();
     if (!slice)

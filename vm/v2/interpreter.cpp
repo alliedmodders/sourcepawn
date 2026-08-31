@@ -335,14 +335,6 @@ bool Interpreter::run() {
                 pushInt64(val);
                 break;
             }
-            case OP_HEAP: {
-                uint32_t amount = reader_.read<uint32_t>();
-                cell_t address;
-                if (!rt_->heapAlloc(amount, &address))
-                    return false;
-                pushCell(address);
-                break;
-            }
             case OP_CVT_I64: {
                 cell_t val = popCell();
                 pushInt64((int64_t)val);
@@ -869,22 +861,17 @@ bool Interpreter::run() {
             case OP_COPYARRAY: {
                 SpArray* src = heap_.ToPhysAddr<SpArray*>(popCell());
                 SpArray* dest = heap_.ToPhysAddr<SpArray*>(popCell());
-                if (src->td->kind() != TypeKind::FixedArray ||
-                    dest->td->kind() != TypeKind::FixedArray)
-                {
-                    rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
-                    return false;
-                }
-                auto src_elt = src->td->array_elt();
-                auto dest_elt = dest->td->array_elt();
-                if (src_elt->element_size() != dest_elt->element_size()) {
-                    rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
-                    return false;
-                }
+                assert(dest->td->kind() == TypeKind::FixedArray);
+
                 if (src->length > dest->length) {
                     rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
                     return false;
                 }
+
+                auto src_elt = src->td->array_elt();
+                auto dest_elt = dest->td->array_elt();
+                assert(src_elt->element_size() == dest_elt->element_size());
+
                 auto src_data = heap_.ToPhysAddr<uint8_t*>(src->data);
                 auto dest_data = heap_.ToPhysAddr<uint8_t*>(dest->data);
                 memcpy(dest_data, src_data, src->length * src_elt->element_size());

@@ -147,7 +147,7 @@ void CodeGenerator::EmitStmtList(StmtList* list) {
 }
 
 void CodeGenerator::EmitStmt(Stmt* stmt) {
-    std::list<std::pair<uint32_t, BuiltinType>> prev_used_temp_slots;
+    std::list<std::pair<uint32_t, Type*>> prev_used_temp_slots;
 
     if (fun_) {
         AddDebugLine(stmt->pos());
@@ -1257,6 +1257,12 @@ void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
     }
 }
 
+static inline Type* UnwrapRef(Type* type) {
+    if (type->isReference())
+        return type->inner();
+    return type;
+}
+
 void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     auto return_type = call->fun()->return_type();
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
@@ -1323,12 +1329,11 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             }
 
             if (needs_temp) {
+                auto slot = AcquireTempSlot(expr, UnwrapRef(val.type()));
                 if (val.type()->isInt64()) {
-                    auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
                     __ emit(OP_STOR_S_I64, VarSlot(slot));
                     __ emit(OP_ADDR_S, VarSlot(slot));
                 } else {
-                    auto slot = AcquireTempSlot(expr, BuiltinType::Int);
                     __ emit(OP_STOR_S, VarSlot(slot));
                     __ emit(OP_ADDR_S, VarSlot(slot));
                 }
@@ -1355,22 +1360,12 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     std::optional<uint32_t> hidden_slot;
 
     if (call->fun()->needs_hidden_arg()) {
-        if (return_type->isArray()) {
-            EmitCallHiddenArray(call);
-
-            hidden_slot = {AcquireTempSlot(call, BuiltinType::Int)};
-            __ emit(OP_DUP);
-            __ emit(OP_STOR_S, VarSlot(*hidden_slot));
+        if (auto type = return_type->as<ArrayType>()) {
+            auto slot = AcquireTempSlot(call, type);
+            __ emit(OP_LOAD_S, VarSlot(slot));
+            hidden_slot = {slot};
         } else if (return_type->isEnumStruct()) {
-#if 0
-            cell retsize = return_type->CellStorageSize();
-            assert(retsize);
-
-            hidden_slot = {AcquireTempSlot(call, BuiltinType::Int)};
-            __ emit(OP_HEAP, retsize * sizeof(cell));
-            __ emit(OP_DUP);
-            __ emit(OP_STOR_S, VarSlot(*hidden_slot));
-#endif
+            assert(false);
             assert(false);
         } else {
             assert(return_type->isInt64());
@@ -1394,20 +1389,6 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     }
 }
 
-void CodeGenerator::EmitCallHiddenArray(CallExpr* call) {
-    auto fun = call->fun();
-
-    auto type = fun->return_type()->as<ArrayType>();
-    assert(type);
-
-    for (auto iter = type; iter; iter = iter->inner()->as<ArrayType>())
-        assert(iter->size() > 0);
-
-    uint32_t type_id = rtti_->to_typeid(type);
-
-    __ emit(OP_NEWARRAY, type_id);
-}
-
 void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     const auto& arg = expr->arg();
     assert(!arg->type()->isInt64());
@@ -1426,7 +1407,7 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     } else {
         EmitExpr(init);
         if (arg->type()->isReference()) {
-            auto temp_slot = AcquireTempSlot(expr, BuiltinType::Int);
+            auto temp_slot = AcquireTempSlot(expr, arg->type()->inner());
             __ emit(OP_STOR_S, VarSlot(temp_slot));
             __ emit(OP_ADDR_S, VarSlot(temp_slot));
         }
@@ -1500,6 +1481,9 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
             EmitExpr(stmt->expr());
             __ emit(OP_RETN);
         }
+    } else if (fun_->MustReturnValue() || !fun_->return_type()->isVoid()) {
+        __ PUSH_C(0);
+        __ emit(OP_RETN);
     } else {
         /* this return statement contains no expression */
         __ emit(OP_RETV);
@@ -1644,10 +1628,17 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
         default: {
             auto var = lval.sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->type()->isInt64())
-                    __ emit(OP_STOR_S_I64, VarSlot(var->addr()));
-                else
+                if (var->type()->isInt64()) {
+                    if (var->vclass() == sARGUMENT) {
+                        __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                        __ emit(OP_SWAP);
+                        __ emit(OP_STOR_I_I64);
+                    } else {
+                        __ emit(OP_STOR_S_I64, VarSlot(var->addr()));
+                    }
+                } else {
                     __ emit(OP_STOR_S, VarSlot(var->addr()));
+                }
             } else {
                 uint16_t slot = AcquireGlobalSlot(var);
                 if (var->type()->isInt64())
@@ -1963,7 +1954,10 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     }
 
     if (info->body()->flow_type() != Flow_Return) {
-        if (info->MustReturnValue()) {
+        // MustReturnValue can be false, even for non-void functions. This
+        // preserves compatibility with legacy scripts where "public" allowed
+        // implicit "return 0".
+        if (info->MustReturnValue() || !info->return_type()->isVoid()) {
             __ PUSH_C(0);
             __ emit(OP_RETN);
         } else {
@@ -2193,20 +2187,23 @@ CodeGenerator::AutoEnterScope::~AutoEnterScope() {
 }
 
 cell_t CodeGenerator::AcquireTempSlot(ParseNode* node, BuiltinType builtin_type) {
+    return AcquireTempSlot(node, cc_.types()->GetBuiltin(builtin_type));
+}
+
+cell_t CodeGenerator::AcquireTempSlot(ParseNode* node, Type* type) {
     auto iter = free_temp_slots_.begin();
     while (iter != free_temp_slots_.end()) {
-        if ((*iter).second == builtin_type) {
+        if ((*iter).second == type) {
             used_temp_slots_.splice(used_temp_slots_.end(), free_temp_slots_, iter);
             return (*iter).first;
         }
         iter++;
     }
 
-    auto type = cc_.types()->GetBuiltin(builtin_type);
     uint32_t slot = rtti_->AddLocalSlot(&locals_, QualType(type));
     if (slot > INT16_MAX)
         report(node->pos(), 467);
-    used_temp_slots_.emplace_back(slot, builtin_type);
+    used_temp_slots_.emplace_back(slot, type);
     return slot;
 }
 

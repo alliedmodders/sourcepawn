@@ -30,11 +30,6 @@ class Runtime;
 class MethodVerifier final
 {
   public:
-    enum class OperandType {
-        Cell,
-        Int64
-    };
-
     explicit MethodVerifier(Runtime* rt, uint32_t method_index);
 
     typedef std::function<void(uint32_t)> ExternalFuncRefCallback;
@@ -47,6 +42,11 @@ class MethodVerifier final
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     ke::FixedArray<const TypeDesc*>&& local_types() { return std::move(local_types_); }
 
+    const TypeDesc* cell_type() const;
+    const TypeDesc* any_type() const;
+    const TypeDesc* int64_type() const;
+    const TypeDesc* float32_type() const;
+
   private:
     bool more() const {
         return cip_ < stop_at_;
@@ -54,7 +54,7 @@ class MethodVerifier final
 
   private:
     bool verifyOp(OPCODE op);
-    bool verifyStackOffset(cell_t offset, uint32_t op_size);
+    const TypeDesc* verifyStackOffset(cell_t offset);
     bool verifyDatAddress(cell_t offset);
     bool verifyDatString(uint16_t index);
     const TypeDesc* verifyGlobalIndex(uint16_t index);
@@ -96,7 +96,7 @@ class MethodVerifier final
         }
 
         uint32_t heap_scope_depth;
-        std::vector<OperandType> stack;
+        std::vector<const TypeDesc*> stack;
         uint32_t stack_bytes;
 
         std::unique_ptr<VerifyData> entry;
@@ -106,13 +106,18 @@ class MethodVerifier final
     bool mergeTracker(Block* block, VerifyData* other);
     bool verifyJoin(VerifyData* first, VerifyData* other);
     bool verifyJoins(Block* block);
-    bool pushStack(OperandType type);
-    bool popStack(OperandType type);
-    bool popStack(OperandType* type);
+    bool pushStack(const TypeDesc* type);
+    bool popStack(TypeKind kind);
+    bool popStack(const TypeDesc** type);
+    bool popCell();
+    bool popIntOrFloat();
+    bool popInt32();
     bool popStack(uint32_t num_operands);
     bool pushHeap(uint32_t num_cells);
 
     bool verifyLocalSlots();
+
+    bool ValidateStore(const TypeDesc* dest, const TypeDesc* src);
 
   private:
     Runtime* rt_;
@@ -121,7 +126,9 @@ class MethodVerifier final
     Block* block_;
     const smx_rtti_method* method_ = nullptr;
     ke::FixedArray<const TypeDesc*> local_types_;
+    ke::FixedArray<const TypeDesc*> arg_types_;
     std::vector<Block*> verify_joins_;
+    const TypeDesc* return_type_ = nullptr;
     uint32_t arg_count_ = 0;
     int code_version_;
     uint32_t code_features_;

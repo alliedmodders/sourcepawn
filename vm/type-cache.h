@@ -25,6 +25,11 @@ struct TypeCacheKey {
     explicit TypeCacheKey(TypeKind kind)
       : kind(kind)
     {}
+    TypeCacheKey(TypeKind array_kind, const TypeDesc* elt_kind)
+      : kind(array_kind), elt_kind(elt_kind)
+    {
+        assert(kind == TypeKind::Array || kind == TypeKind::Reference);
+    }
     TypeCacheKey(TypeKind array_kind, const TypeDesc* elt_kind, uint32_t size)
       : kind(array_kind), elt_kind(elt_kind), size(size)
     {
@@ -35,7 +40,7 @@ struct TypeCacheKey {
     bool operator ==(const TypeCacheKey& other) const {
         if (kind != other.kind)
             return false;
-        if (kind == TypeKind::Array || kind == TypeKind::ArraySlice)
+        if (kind == TypeKind::Array || kind == TypeKind::ArraySlice || kind == TypeKind::Reference)
             return elt_kind == other.elt_kind;
         if (kind == TypeKind::FixedArray) {
             return elt_kind == other.elt_kind &&
@@ -57,6 +62,7 @@ class TypeCache final {
     const TypeDesc* GetFixedArray(const TypeDesc* elt, uint32_t size);
     const TypeDesc* GetArray(const TypeDesc* elt);
     const TypeDesc* GetSlice(const TypeDesc* elt);
+    const TypeDesc* GetReference(const TypeDesc* elt);
 
   private:
     PoolAllocator pool_;
