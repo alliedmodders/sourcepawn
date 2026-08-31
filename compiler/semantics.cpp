@@ -3576,14 +3576,16 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     if (from->lvalue())
         from = new RvalueExpr(from);
 
-    // Half-assed constant folding for int->int64 casts. We don't do this for
-    // intptr since the width is not known at compile time.
+    // Half-assed constant folding for int->wide casts.
     Expr* to;
     if (from->val().ident == iCONSTEXPR && from->val().type()->isInt() &&
-        type == BuiltinType::Int64)
+        (type == BuiltinType::Int64 || type == BuiltinType::IntPtr))
     {
         int64_t v = from->val().const_i32();
-        to = new NumberExpr(from->pos(), types_->GetBuiltin(type), v);
+        if (type == BuiltinType::Int64)
+            to = new NumberExpr(from->pos(), types_->GetBuiltin(type), v);
+        else
+            to = new NumberExpr(from->pos(), types_->GetBuiltin(type), cell(v));
     } else {
         to = new SimpleCastExpr(from, types_->GetBuiltin(type));
         to->val().set_expr(types_->GetBuiltin(type));

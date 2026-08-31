@@ -725,9 +725,12 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         else
             rhs.set_constval(val.type()->normalize(), 0);
 
-        // Optimize to a single instruction if we can.
+        // Optimize to a single instruction if we can. Note that intptr has a
+        // lit size of 4 bytes, but OP_STOR_S_C doesn't accept it (yet), so
+        // we have to exclude it.
         auto lit_size = rhs.type()->maybe_lit_size();
         if (rhs.ident == iCONSTEXPR && lit_size && lit_size <= sizeof(cell_t) &&
+            !rhs.type()->isWideType() &&
             val.ident == iVARIABLE && val.sym()->vclass() == sLOCAL &&
             !val.sym()->is_shared() && !val.type()->isHeapItem())
         {
@@ -747,16 +750,20 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         } else if (!ctor && rhs.type()->isDouble()) {
             __ emit(OP_PUSH_C_F64, DoubleValue(0.0));
         } else if (rhs.ident == iCONSTEXPR) {
-            if (rhs.type()->isNull() && val.type()->isHeapItem())
+            if (rhs.type()->isNull() && val.type()->isHeapItem()) {
                 __ emit(OP_LOAD_NULL);
-            else if (rhs.type()->isFloat())
+            } else if (rhs.type()->isFloat()) {
                 __ emit(OP_PUSH_C_F32, rhs.const_cell());
-            else if (rhs.type()->isDouble())
+            } else if (rhs.type()->isDouble()) {
                 __ emit(OP_PUSH_C_F64, DoubleValue(rhs.const_double()));
-            else if (rhs.type()->isInt64())
+            } else if (rhs.type()->isInt64()) {
                 __ emit(OP_PUSH_C_I64, Int64Value(rhs.const_int64()));
-            else
+            } else if (rhs.type()->isIntPtr()) {
+                __ PUSH_C(rhs.const_intptr());
+                __ emit(OP_CVT_INTPTR);
+            } else {
                 __ PUSH_C(rhs.const_cell());
+            }
         } else {
             EmitExpr(ctor);
         }
@@ -815,16 +822,20 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
 
     if (expr->val().ident == iCONSTEXPR) {
         if (!(flags & EMIT_DISCARD_RESULT)) {
-            if (expr->val().type()->isNull())
+            if (expr->val().type()->isNull()) {
                 __ emit(OP_LOAD_NULL);
-            else if (expr->val().type()->isFloat())
+            } else if (expr->val().type()->isFloat()) {
                 __ emit(OP_PUSH_C_F32, expr->val().const_cell());
-            else if (expr->val().type()->isDouble())
+            } else if (expr->val().type()->isDouble()) {
                 __ emit(OP_PUSH_C_F64, DoubleValue(expr->val().const_double()));
-            else if (expr->val().type()->isInt64())
+            } else if (expr->val().type()->isInt64()) {
                 __ emit(OP_PUSH_C_I64, Int64Value(expr->val().const_int64()));
-            else
+            } else if (expr->val().type()->isIntPtr()) {
+                __ PUSH_C(expr->val().const_intptr());
+                __ emit(OP_CVT_INTPTR);
+            } else {
                 __ PUSH_C(expr->val().const_cell());
+            }
         }
         return;
     }
@@ -1778,7 +1789,6 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
 void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     const auto& arg = expr->arg();
-    assert(!arg->type()->isInt64() && !arg->type()->isDouble());
 
     auto init = arg->init_rhs();
 
@@ -1807,10 +1817,14 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
             EmitRvalue(init->val());
         else
             EmitExpr(init);
-        if (arg->type()->isReference()) {
-            auto temp_slot = AcquireTempSlot(expr, arg->type()->inner());
-            __ emit(OP_STOR_S, VarSlot(temp_slot));
-            __ emit(OP_ADDR_S, VarSlot(temp_slot));
+
+        // Reference and wide type arguments need temporary slots to pass by
+        // reference.
+        if (arg->type()->isReference() || arg->type()->isWideType()) {
+            Type* slot_type = arg->type()->isReference() ? arg->type()->inner() : *arg->type();
+            auto slot = AcquireTempSlot(expr, slot_type);
+            __ emit(OP_STOR_S, VarSlot(slot));
+            __ emit(OP_ADDR_S, VarSlot(slot));
         }
     }
 }
