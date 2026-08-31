@@ -266,14 +266,18 @@ SmxImage::validateCode() {
         SmxConsts::kCodeFeatureHeapScopes |
         SmxConsts::kCodeFeatureNullFunctions |
         SmxConsts::kCodeFeatureTypedOps;
-
-    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
-        if ((features & supported_features) != supported_features)
-            return error("invalid feature set");
-    }
-
     if (features & ~supported_features)
         return error("unsupported feature set; code is too new");
+
+    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+        uint32_t required_features =
+            SmxConsts::kCodeFeatureDirectArrays |
+            SmxConsts::kCodeFeatureHeapScopes |
+            SmxConsts::kCodeFeatureNullFunctions |
+            SmxConsts::kCodeFeatureTypedOps;
+        if ((features & required_features) != required_features)
+            return error("invalid feature set");
+    }
 
     const uint8_t* blob = reinterpret_cast<const uint8_t*>(code) + code->code;
     code_ = Blob<sp_file_code_t>(section, code, blob, code->codesize, features);

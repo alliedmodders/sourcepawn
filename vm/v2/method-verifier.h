@@ -65,22 +65,16 @@ class MethodVerifier final
         {}
         VerifyData(const VerifyData& other)
          : stack_balance(other.stack_balance),
-           heap_balance(other.heap_balance),
-           tracker_balance(other.tracker_balance),
            heap_scope_depth(other.heap_scope_depth)
         {}
 
         VerifyData& operator=(const VerifyData& other) {
             stack_balance = other.stack_balance;
-            heap_balance = other.heap_balance;
-            tracker_balance = other.tracker_balance;
             heap_scope_depth = other.heap_scope_depth;
             return *this;
         }
 
         uint32_t stack_balance;
-        std::vector<int32_t> heap_balance;
-        std::vector<int32_t> tracker_balance;
         uint32_t heap_scope_depth;
 
         std::unique_ptr<VerifyData> entry;
@@ -93,7 +87,6 @@ class MethodVerifier final
     bool pushStack(uint32_t num_cells);
     bool popStack(uint32_t num_cells);
     bool pushHeap(uint32_t num_cells);
-    bool popHeap(uint32_t num_cells);
 
     bool verifyLocalSlots();
 

@@ -368,11 +368,11 @@ MethodVerifier::verifyOp(OPCODE op) {
                     return pushStack(num_cells);
                 return popStack(num_cells);
             } else if (op == OP_HEAP) {
-                if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-                    if (value >= 0)
-                        return pushHeap(num_cells);
-                    return popHeap(num_cells);
-                } else if (value < 0) {
+                if (value < 0) {
+                    reportError(SP_ERROR_INSTRUCTION_PARAM);
+                    return false;
+                }
+                if (!value || value > INT_MAX / 4 || (value % 4) != 0) {
                     reportError(SP_ERROR_INSTRUCTION_PARAM);
                     return false;
                 }
@@ -401,10 +401,6 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return false;
             if (!popStack(ndims - 1))
                 return false;
-            if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-                block_->data<VerifyData>()->heap_balance.push_back(-1);
-                block_->data<VerifyData>()->tracker_balance.push_back(-1);
-            }
             return true;
         }
 
@@ -447,18 +443,10 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
 
         case OP_HEAP_SAVE:
-            if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
             block_->data<VerifyData>()->heap_scope_depth++;
             return true;
 
         case OP_HEAP_RESTORE:
-            if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
             if (!block_->data<VerifyData>()->heap_scope_depth) {
                 reportError(SP_ERROR_INVALID_INSTRUCTION);
                 return false;
@@ -484,68 +472,9 @@ MethodVerifier::readCell() {
     return *cip_++;
 }
 
-// spcomp had a long standing bug where "break" in a loop would not correctly
-// free dynamic arrays. This bug was extremely rare, and probably never
-// manifested in noticeable behavior. Nonetheless it did occur and we need to
-// make sure validation does not get confused.
-static inline bool
-DetectCompilerBreakBug(Block* block) {
-    // First, walk up the dominator tree until we find a loop header.
-    Block* dom = block->idom();
-    while (!dom->isLoopHeader() && !dom->predecessors().empty())
-        dom = dom->idom();
-
-    // If no loop was found, this is not the bug we're looking for.
-    if (!dom->isLoopHeader())
-        return false;
-
-    block->graph()->newEpoch();
-
-    // To figure out whether or not this block is "leaving" the loop, we need to
-    // compute the set of blocks owned by the loop. We do this by computing
-    // the predecessors of each backedge.
-    std::vector<Block*> worklist;
-    for (const auto& pred : dom->predecessors()) {
-        if (pred->id() >= dom->id()) {
-            pred->setVisited();
-            worklist.emplace_back(pred);
-        }
-    }
-
-    while (!worklist.empty()) {
-        Block* block = ke::PopBack(&worklist);
-        for (const auto& pred : block->predecessors()) {
-            // Note: we need to make sure we don't predecessors beyond the initial
-            // loop header.
-            if (pred->visited() || pred->id() < dom->id())
-                continue;
-
-            // This node should be dominated by the loop header.
-            assert(dom->dominates(pred));
-
-            // Keep walking up nodes.
-            pred->setVisited();
-            worklist.emplace_back(pred);
-        }
-    }
-
-    // If we never visited the original block, that means it is not in the
-    // predecessor set of of any backedge. It could be a break.
-    return !block->visited();
-}
-
 bool
 MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
     if (first->stack_balance != other->stack_balance) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-
-    if (first->tracker_balance.size() != other->tracker_balance.size()) {
-        if (DetectCompilerBreakBug(block_)) {
-            block_->set_has_compiler_break_bug();
-            return true;
-        }
         reportError(SP_ERROR_INSTRUCTION_PARAM);
         return false;
     }
@@ -560,68 +489,7 @@ MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
 bool
 MethodVerifier::mergeTracker(Block* block, VerifyData* other) {
     VerifyData* join = block->data<VerifyData>();
-    if (!verifyJoin(join, other))
-        return false;
-
-    if (code_features_ & SmxConsts::kCodeFeatureHeapScopes)
-        return true;
-
-    if (block->has_compiler_break_bug())
-        return true;
-
-    // If our tracker value is determinate, but another branch was different
-    // (or indeterminate), we allow this and convert the propagated amount to
-    // be indeterminate.
-    auto heap_cursor = join->heap_balance.size();
-    for (auto cursor = join->tracker_balance.size(); cursor != 0; cursor--) {
-        size_t index = cursor - 1;
-        cell_t this_amount = join->tracker_balance[index];
-        cell_t other_amount = other->tracker_balance[index];
-        if (this_amount == -1 || other_amount == this_amount)
-            continue;
-
-        // Convert this tracker entry into an unknown quantity.
-        join->tracker_balance[index] = -1;
-
-        // If the amount was zero, there's no heap cursor entry, so fab one.
-        if (this_amount == 0) {
-            // note: heap_cursor is +1, so we're inserting after the current element.
-            join->heap_balance.emplace(join->heap_balance.begin() + heap_cursor, -1);
-            continue;
-        }
-
-        // If there's no heap entries, something went wrong when we analyzec the
-        // tracker opcode.
-        if (heap_cursor == 0) {
-            reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return false;
-        }
-
-        // Walk the heap and fix up static tracking to be indeterminate.
-        while (heap_cursor != 0) {
-            auto entry = join->heap_balance.begin() + (heap_cursor - 1);
-            if (*entry < this_amount) {
-                this_amount -= *entry;
-                if (join->heap_balance.erase(entry) != join->heap_balance.begin())
-                    heap_cursor--;
-                continue;
-            }
-            if (*entry == this_amount) {
-                *entry = -1;
-                heap_cursor--;
-                break;
-            }
-            if (*entry > this_amount) {
-                *entry -= this_amount;
-
-                // note: heap_cursor doesn't change, since we modified in-place and
-                // inserted the new value after.
-                join->heap_balance.emplace(entry + 1, -1);
-                break;
-            }
-        }
-    }
-    return true;
+    return verifyJoin(join, other);
 }
 
 bool
@@ -717,38 +585,6 @@ MethodVerifier::popStack(uint32_t num_cells) {
     }
 
     v->stack_balance -= num_cells;
-    return true;
-}
-
-bool
-MethodVerifier::pushHeap(uint32_t num_cells) {
-    VerifyData* v = block_->data<VerifyData>();
-    if (!num_cells || num_cells > INT_MAX / 4) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-    if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-        if (v->heap_balance.empty() || v->heap_balance.back() == -1)
-            v->heap_balance.push_back(num_cells);
-        else
-            v->heap_balance.back() += num_cells;
-    }
-    return true;
-}
-
-bool
-MethodVerifier::popHeap(uint32_t num_cells) {
-    VerifyData* v = block_->data<VerifyData>();
-    if (v->heap_balance.empty() || v->heap_balance.back() == -1 ||
-        uint32_t(v->heap_balance.back()) < num_cells) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-    if (!(code_features_ & SmxConsts::kCodeFeatureHeapScopes)) {
-        v->heap_balance.back() -= num_cells;
-        if (v->heap_balance.back() == 0)
-            v->heap_balance.pop_back();
-    }
     return true;
 }
 

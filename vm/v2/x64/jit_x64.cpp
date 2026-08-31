@@ -184,12 +184,7 @@ bool CompilerBase::IsSupported() {
 }
 
 bool CompilerBase::SupportsPlugin(PluginContext* cx) {
-    const auto& code = cx->code();
-    uint32_t required_features =
-        SmxConsts::kCodeFeatureHeapScopes |
-        SmxConsts::kCodeFeatureNullFunctions |
-        SmxConsts::kCodeFeatureTypedOps;
-    return (code.features & required_features) == required_features;
+    return true;
 }
 
 void CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
