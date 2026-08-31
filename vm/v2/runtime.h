@@ -112,6 +112,7 @@ class Runtime final : public BaseRuntime,
     ScriptedInvoker* GetFunctionByMethodIndex(uint32_t method_index);
     bool GetNativeIndex(uint32_t method_index, uint32_t* index) const;
     uint32_t GetGlobalAddr(uint16_t index) const { return global_addrs_[index]; }
+    const TypeDesc* GetTypeOfGlobal(uint16_t index);
     uint32_t GetStringAddr(uint16_t index) const { return string_addrs_[index]; }
     const TypeDesc* GetStringLitType(uint16_t index);
 
@@ -161,8 +162,6 @@ class Runtime final : public BaseRuntime,
     int generateArray(cell_t dims, cell_t* stk, bool autozero);
     int generateFullArray(uint32_t argc, cell_t* argv, int autozero);
 
-    bool pushHeap(cell_t value);
-    bool popHeap(cell_t* out);
     bool addStack(cell_t amount);
     bool getCellValue(cell_t address, cell_t* out);
     bool setCellValue(cell_t address, cell_t value);
@@ -189,7 +188,12 @@ class Runtime final : public BaseRuntime,
     Environment* env_;
     std::vector<NativeEntry> natives_;
     std::unordered_map<uint32_t, uint32_t> native_map_;
-    std::unique_ptr<sp_pubvar_t[]> pubvars_;
+    struct PubvarEntry {
+        sp_pubvar_t pubvar;
+        uint32_t global_index;
+        cell_t local_addr;
+    };
+    std::vector<PubvarEntry> pubvars_;
     std::vector<sp_public_t> publics_;
     std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;
     std::vector<RefPtr<MethodInfo>> methods_;

@@ -35,7 +35,6 @@
 #include "semantics-inl.h"
 #include "symbols.h"
 #include "type-checker.h"
-#include "value-inl.h"
 
 namespace sp {
 namespace cc {
@@ -876,7 +875,7 @@ bool BinaryExprChecker::CheckOperatorTypes() {
 
 bool BinaryExprChecker::CheckAssignmentLHS() {
     int left_ident = left_->val().ident;
-    if (left_ident == iARRAYCHAR) {
+    if (left_ident == iARRAYELEM || left_->val().type()->isCharArray()) {
         // This is a special case, assigned to a packed character in a cell
         // is permitted.
         return true;
@@ -1538,11 +1537,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto& out_val = expr->val();
     out_val = base_val;
 
-    /* set type to fetch... INDIRECTLY */
-    if (array->isCharArray())
-        out_val.set_slice(iARRAYCHAR, base_val.sym);
-    else
-        out_val.set_slice(iARRAYCELL, base_val.sym);
+    out_val.set_slice(iARRAYELEM, base_val.sym);
     out_val.set_type(array->inner());
     return true;
 }
@@ -1820,7 +1815,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     Type* field_type = field->type_info().type;
 
     val.set_type(field_type);
-    val.ident = iARRAYCELL;
+    val.ident = iARRAYELEM;
     return true;
 }
 
@@ -1872,7 +1867,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
 
     const auto& cv = child->val();
     switch (cv.ident) {
-        case iARRAYCELL:
+        case iARRAYELEM:
         case iVARIABLE:
         case iEXPRESSION:
             if (auto es = cv.type()->asEnumStruct()) {
@@ -1890,11 +1885,6 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 val.set_constval(1);
                 report(expr, 252);
             }
-            return true;
-
-        case iARRAYCHAR:
-            report(expr, 252);
-            val.set_constval(1);
             return true;
 
         case iTYPENAME: {
@@ -2160,7 +2150,10 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
 
-        if (!lvalue || val->ident == iARRAYCHAR) {
+        if (!lvalue ||
+            (val->ident == iARRAYELEM &&
+             (val->type()->isChar() || val->type()->isInt64())))
+        {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
@@ -3101,7 +3094,7 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
 static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
     if (to && !(to->inner()->isArray() || to->inner()->isEnumStruct()))
         return false;
-    if (val.ident == iARRAYCELL || val.ident == iARRAYCHAR) {
+    if (val.ident == iARRAYELEM || val.ident == iARRAYELEM) {
         if (val.type()->isEnumStruct() || val.type()->isArray())
             return false;
         if (to && (val.type()->lit_size() != to->inner()->lit_size()))

@@ -45,8 +45,8 @@ namespace cc {
 enum IdentifierKind {
     iINVALID = 0,
     iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
-    iARRAYCELL = 5,     /* array element, cell that must be fetched indirectly */
-    iARRAYCHAR = 6,     /* array element, character from cell from array */
+    iARRAYELEM = 5,     /* array element, cell that must be fetched indirectly */
+    iADDRESS = 6,       /* explicit address on the stack */
     iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
     iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
     iFUNCTN = 9,

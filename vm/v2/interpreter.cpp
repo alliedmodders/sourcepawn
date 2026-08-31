@@ -139,43 +139,34 @@ bool Interpreter::run() {
             case OP_LOAD_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
-                cell_t val;
-                if (!rt_->getCellValue(addr, &val))
-                    return false;
-                pushCell(val);
-                break;
-            }
-            case OP_LOAD_GLB_I64: {
-                uint16_t index = reader_.read<uint16_t>();
-                cell_t addr = rt_->GetGlobalAddr(index);
-                int64_t* ptr = rt_->acquireInt64Addr(addr);
-                if (!ptr)
-                    return false;
-                pushInt64(*ptr);
+                const TypeDesc* td = rt_->GetTypeOfGlobal(index);
+                if (td->IsInt64()) {
+                    int64_t* ptr = rt_->acquireInt64Addr(addr);
+                    if (!ptr)
+                        return false;
+                    pushInt64(*ptr);
+                } else {
+                    cell_t val;
+                    if (!rt_->getCellValue(addr, &val))
+                        return false;
+                    pushCell(val);
+                }
                 break;
             }
             case OP_LOAD_S: {
-                cell_t slot = reader_.readInt16();
-                cell_t val = getLocalCell(slot);
-                pushCell(val);
+                cell_t offset = reader_.readInt16();
+                const TypeDesc* td = method_->GetTypeOfLocal(offset);
+                if (td->IsInt64()) {
+                    int64_t val = getLocalInt64(offset);
+                    pushInt64(val);
+                } else {
+                    cell_t val = getLocalCell(offset);
+                    pushCell(val);
+                }
                 break;
             }
-            case OP_LOAD_S_I64: {
-                cell_t slot = reader_.readInt16();
-                int64_t val = getLocalInt64(slot);
-                pushInt64(val);
-                break;
-            }
-            case OP_LREF_S: {
-                cell_t slot = reader_.readInt16();
-                cell_t addr = getLocalCell(slot);
-                cell_t val;
-                if (!rt_->getCellValue(addr, &val))
-                    return false;
-                pushCell(val);
-                break;
-            }
-            case OP_LOAD_I: {
+            case OP_LOAD_I_I32:
+            case OP_LOAD_I_F32: {
                 cell_t addr = popCell();
                 cell_t val;
                 if (!rt_->getCellValue(addr, &val))
@@ -191,13 +182,51 @@ bool Interpreter::run() {
                 pushInt64(*ptr);
                 break;
             }
-            case OP_LODB_I: {
+            case OP_LOAD_I_U8: {
                 cell_t addr = popCell();
                 cell_t val;
                 if (!rt_->getCellValue(addr, &val))
                     return false;
                 val &= 0xff;
                 pushCell(val);
+                break;
+            }
+            case OP_LOAD_ELEM_A:
+            case OP_LOAD_ELEM_I32:
+            case OP_LOAD_ELEM_F32: {
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                pushCell(*reinterpret_cast<cell_t*>(elt));
+                break;
+            }
+            case OP_LOAD_ELEM_I64: {
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                pushInt64(*reinterpret_cast<int64_t*>(elt));
+                break;
+            }
+            case OP_LOAD_ELEM_U8: {
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                pushCell(*reinterpret_cast<uint8_t*>(elt));
                 break;
             }
             case OP_ADDR_GLB: {
@@ -208,25 +237,30 @@ bool Interpreter::run() {
             case OP_STOR_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
-                cell_t val = popCell();
-                if (!rt_->setCellValue(addr, val))
-                    return false;
-                break;
-            }
-            case OP_STOR_GLB_I64: {
-                uint16_t index = reader_.read<uint16_t>();
-                cell_t addr = rt_->GetGlobalAddr(index);
-                int64_t val = popInt64();
-                int64_t* ptr = rt_->acquireInt64Addr(addr);
-                if (!ptr)
-                    return false;
-                *ptr = val;
+                const TypeDesc* td = rt_->GetTypeOfGlobal(index);
+                if (td->IsInt64()) {
+                    int64_t val = popInt64();
+                    int64_t* ptr = rt_->acquireInt64Addr(addr);
+                    if (!ptr)
+                        return false;
+                    *ptr = val;
+                } else {
+                    cell_t val = popCell();
+                    if (!rt_->setCellValue(addr, val))
+                        return false;
+                }
                 break;
             }
             case OP_STOR_S: {
-                cell_t slot = reader_.readInt16();
-                cell_t val = popCell();
-                setLocalCell(slot, val);
+                cell_t offset = reader_.readInt16();
+                const TypeDesc* td = method_->GetTypeOfLocal(offset);
+                if (td->IsInt64()) {
+                    int64_t val = popInt64();
+                    getLocalInt64(offset) = val;
+                } else {
+                    cell_t val = popCell();
+                    setLocalCell(offset, val);
+                }
                 break;
             }
             case OP_STOR_S_C: {
@@ -235,15 +269,8 @@ bool Interpreter::run() {
                 setLocalCell(slot, value);
                 break;
             }
-            case OP_SREF_S: {
-                cell_t slot = reader_.readInt16();
-                cell_t addr = getLocalCell(slot);
-                cell_t val = popCell();
-                if (!rt_->setCellValue(addr, val))
-                    return false;
-                break;
-            }
-            case OP_STOR_I: {
+            case OP_STOR_I_I32:
+            case OP_STOR_I_F32: {
                 cell_t val = popCell();
                 cell_t addr = popCell();
                 if (!rt_->setCellValue(addr, val))
@@ -259,13 +286,53 @@ bool Interpreter::run() {
                 *ptr = val;
                 break;
             }
-            case OP_STRB_I: {
+            case OP_STOR_I_U8: {
                 cell_t val = popCell();
                 cell_t addr_val = popCell();
                 uint8_t* addr = rt_->heap().ToPhysAddr<uint8_t*>(addr_val);
                 if (!addr)
                     return false;
                 *addr = uint8_t(val);
+                break;
+            }
+            case OP_STOR_ELEM_I32:
+            case OP_STOR_ELEM_F32: {
+                cell_t val = popCell();
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                *reinterpret_cast<cell_t*>(elt) = val;
+                break;
+            }
+            case OP_STOR_ELEM_I64: {
+                int64_t val = popInt64();
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                *reinterpret_cast<int64_t*>(elt) = val;
+                break;
+            }
+            case OP_STOR_ELEM_U8: {
+                cell_t val = popCell();
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                void* elt = rt_->GetArrayElem(array, index);
+                *reinterpret_cast<uint8_t*>(elt) = uint8_t(val);
                 break;
             }
             case OP_IDXADDR: {
@@ -310,14 +377,6 @@ bool Interpreter::run() {
                 StackValue a = popValue();
                 pushValue(b);
                 pushValue(a);
-                break;
-            }
-            case OP_DUP_ROTATE: {
-                StackValue b = popValue();
-                StackValue a = popValue();
-                pushValue(b);
-                pushValue(a);
-                pushValue(b);
                 break;
             }
             case OP_PUSH_C: {
@@ -436,22 +495,6 @@ bool Interpreter::run() {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left ^ right);
-                break;
-            }
-            case OP_STOR_S_C_I64: {
-                cell_t slot = reader_.readInt16();
-                cell_t cell0 = reader_.readCell();
-                cell_t cell1 = reader_.readCell();
-                int64_t* dest = &getLocalInt64(slot);
-                Int64CellUnion u(cell0, cell1);
-                *dest = u.i64;
-                break;
-            }
-            case OP_STOR_S_I64: {
-                cell_t slot = reader_.readInt16();
-                int64_t val = popInt64();
-                int64_t* dest = &getLocalInt64(slot);
-                *dest = val;
                 break;
             }
             case OP_RETN: {
@@ -704,28 +747,7 @@ bool Interpreter::run() {
                 pushCell(~val);
                 break;
             }
-            case OP_ADD_C: {
-                cell_t value = reader_.readCell();
-                cell_t val = popCell();
-                pushCell(val + value);
-                break;
-            }
-            case OP_SMUL_C: {
-                cell_t value = reader_.readCell();
-                cell_t val = popCell();
-                pushCell(val * value);
-                break;
-            }
-            case OP_ZERO_S: {
-                cell_t offset = reader_.readInt16();
-                setLocalCell(offset, 0);
-                break;
-            }
-            case OP_ZERO_S_I64: {
-                cell_t offset = reader_.readInt16();
-                getLocalInt64(offset) = 0;
-                break;
-            }
+
             case OP_EQ:
             case OP_NEQ:
             case OP_SLESS:
@@ -886,7 +908,6 @@ bool Interpreter::run() {
             case OP_SWITCH: {
                 cell_t tableOffset = reader_.readCell();
                 BinaryReader table(code_ + tableOffset, code_ + rt_->code().length);
-                assert((OPCODE)table.read<uint8_t>() == OP_CASETBL);
                 cell_t ncases = table.readCell();
                 cell_t defaultOffset = table.readCell();
                 auto cases = reinterpret_cast<const CaseTableEntry*>(table.getBytes(ncases * sizeof(CaseTableEntry)));
@@ -899,11 +920,6 @@ bool Interpreter::run() {
                     }
                 }
                 reader_.set_cursor(code_ + jumpOffset);
-                break;
-            }
-            case OP_CASETBL: {
-                cell_t ncases = reader_.readCell();
-                reader_.getBytes(((ncases * 2) + 1) * sizeof(cell_t));
                 break;
             }
             case OP_HEAP_SAVE: {

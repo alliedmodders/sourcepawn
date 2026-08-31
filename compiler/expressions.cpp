@@ -35,7 +35,6 @@
 #include "semantics.h"
 #include "symbols.h"
 #include "types.h"
-#include "value-inl.h"
 
 namespace sp {
 namespace cc {

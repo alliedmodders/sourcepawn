@@ -254,12 +254,6 @@ bool Compiler::visitSTOR_S(cell_t offset, PawnReg src) {
     return true;
 }
 
-bool Compiler::visitSREF_S_PRI(cell_t offset) {
-    __ movl(tmp, Operand(frm, StackOffset(offset)));
-    __ movl(Operand(dat, tmp, NoScale), pri);
-    return true;
-}
-
 bool Compiler::visitSTOR_I() {
     emitCheckAddress(alt);
     __ movl(Operand(dat, alt, NoScale), pri);
@@ -563,10 +557,7 @@ bool Compiler::visitINVERT() {
     return true;
 }
 
-bool Compiler::visitADD_C(cell_t value) {
-    __ addl(pri, value);
-    return true;
-}
+
 
 bool Compiler::visitSMUL_C(cell_t value) {
     __ imull(pri, pri, value);
@@ -576,11 +567,6 @@ bool Compiler::visitSMUL_C(cell_t value) {
 bool Compiler::visitZERO(PawnReg dest) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ xorl(reg, reg);
-    return true;
-}
-
-bool Compiler::visitZERO_S(cell_t offset) {
-    __ movl(Operand(frm, StackOffset(offset)), 0);
     return true;
 }
 
@@ -1161,12 +1147,6 @@ bool Compiler::visitXOR_I64(cell_t slot) {
     return true;
 }
 
-bool Compiler::visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) {
-    Int64CellUnion u(cell0, cell1);
-    __ movq(rcx, u.i64);
-    __ movq(Operand(frm, StackOffset(slot)), rcx);
-    return true;
-}
 
 bool Compiler::visitCompareOp64(CompareOp op) {
     emitCheckAddress(pri, sizeof(int64_t));
@@ -1314,12 +1294,6 @@ bool Compiler::visitSTOR_S_PRI_I64(cell_t slot) {
 
     __ movq(tmp, Operand(dat, pri, NoScale, 0));
     __ movq(Operand(frm, StackOffset(slot)), tmp);
-    return true;
-}
-
-bool Compiler::visitZERO_S_I64(cell_t offset) {
-    __ xorq(tmp, tmp);
-    __ movq(Operand(frm, StackOffset(offset)), tmp);
     return true;
 }
 

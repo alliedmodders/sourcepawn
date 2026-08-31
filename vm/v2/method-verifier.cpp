@@ -61,6 +61,7 @@ ke::RefPtr<ControlFlowGraph>
 MethodVerifier::verify() {
     method_ = smx_->GetMethod(method_index_);
     assert(method_);
+    assert(!(method_->flags & kRttiMethod_Native));
 
     auto& code = rt_->code();
     code_ = code.bytes + method_->pcode_start;
@@ -114,7 +115,8 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_NOP:
             return true;
 
-        case OP_LOAD_I: {
+        case OP_LOAD_I_I32:
+        case OP_LOAD_I_F32: {
             const TypeDesc* addr;
             if (!popStack(&addr))
                 return false;
@@ -132,7 +134,49 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(int64_type());
         }
 
-        case OP_STOR_I: {
+        case OP_LOAD_ELEM_I32:
+        case OP_LOAD_ELEM_F32:
+        case OP_LOAD_ELEM_I64:
+        case OP_LOAD_ELEM_U8:
+        case OP_LOAD_ELEM_A: {
+            if (!popInt32())
+                return false;
+            const TypeDesc* base;
+            if (!popStack(&base))
+                return false;
+            if (!base->IsArrayish())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            const TypeDesc* elt = base->array_elt();
+            if (op == OP_LOAD_ELEM_I64) {
+                if (!elt->IsInt64())
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return pushStack(int64_type());
+            }
+            if (op == OP_LOAD_ELEM_U8)
+                return pushStack(cell_type());
+            return pushStack(elt);
+        }
+
+        case OP_STOR_ELEM_I32:
+        case OP_STOR_ELEM_F32:
+        case OP_STOR_ELEM_I64:
+        case OP_STOR_ELEM_U8: {
+            const TypeDesc* val;
+            if (!popStack(&val))
+                return false;
+            if (!popInt32())
+                return false;
+            const TypeDesc* base;
+            if (!popStack(&base))
+                return false;
+            if (!base->IsArrayish())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return ValidateStore(base->array_elt(), val);
+        }
+
+        case OP_STOR_I_I32:
+        case OP_STOR_I_F32: {
             const TypeDesc* val;
             if (!popStack(&val))
                 return false;
@@ -159,7 +203,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_IDXADDR:
         case OP_SLICE: {
             // Pops index, pops base address, pushes result.
-            if (!popIntOrFloat())
+            if (!popInt32())
                 return false;
 
             const TypeDesc* base;
@@ -240,13 +284,6 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(v->stack.back());
 
-        case OP_DUP_ROTATE: {
-            const TypeDesc *t1, *t2;
-            if (!popStack(&t1) || !popStack(&t2))
-                return false;
-            return pushStack(t1) && pushStack(t2) && pushStack(t1);
-        }
-
         case OP_SWAP: {
             const TypeDesc *t1, *t2;
             if (!popStack(&t1) || !popStack(&t2))
@@ -275,26 +312,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(td);
         }
 
-        case OP_LREF_S:
-        {
-            cell_t offset = readInt16();
-            auto td = verifyStackOffset(offset);
-            if (!td)
-                return false;
-            if (!td->IsReference())
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return pushStack(td->ref_type());
-        }
-
-        case OP_LOAD_S_I64:
-        {
-            cell_t offset = readInt16();
-            auto td = verifyStackOffset(offset);
-            if (!td)
-                return false;
-            return pushStack(td);
-        }
-
         case OP_STOR_S:
         {
             cell_t offset = readInt16();
@@ -305,39 +322,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&td))
                 return false;
             return ValidateStore(local, td);
-        }
-
-        case OP_SREF_S:
-        {
-            cell_t offset = readInt16();
-            auto local = verifyStackOffset(offset);
-            if (!local)
-                return false;
-            if (!local->IsReference())
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            const TypeDesc* td;
-            if (!popStack(&td))
-                return false;
-            return ValidateStore(local->ref_type(), td);
-        }
-        case OP_ZERO_S:
-        {
-            cell_t offset = readInt16();
-            auto local = verifyStackOffset(offset);
-            if (!local)
-                return false;
-            return ValidateStore(local, cell_type());
-        }
-
-        case OP_ZERO_S_I64:
-        {
-            cell_t offset = readInt16();
-            auto local = verifyStackOffset(offset);
-            if (!local)
-                return false;
-            if (!local->IsInt64())
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            return ValidateStore(local, int64_type());
         }
 
         case OP_STOR_S_C: {
@@ -369,31 +353,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SMOD_I64:
             return popStack(TypeKind::Int64) && popStack(TypeKind::Int64) && pushStack(int64_type());
 
-        case OP_STOR_S_I64:
-        {
-            cell_t offset = readInt16();
-            auto local = verifyStackOffset(offset);
-            if (!local)
-                return false;
-            if (!local->IsInt64())
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            const TypeDesc* val;
-            if (!popStack(&val))
-                return false;
-            return ValidateStore(local, val);
-        }
-
-        case OP_STOR_S_C_I64: {
-            cell_t offset = readInt16();
-            readCell();
-            readCell();
-            auto local = verifyStackOffset(offset);
-            if (!local)
-                return false;
-            if (!local->IsInt64())
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            return ValidateStore(local, int64_type());
-        }
 
         case OP_LOAD_GLB:
         {
@@ -401,17 +360,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto td = verifyGlobalIndex(index);
             if (!td)
                 return false;
-            return pushStack(td);
-        }
-
-        case OP_LOAD_GLB_I64:
-        {
-            uint16_t index = read<uint16_t>();
-            auto td = verifyGlobalIndex(index);
-            if (!td)
-                return false;
-            if (!td->IsInt64())
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return pushStack(td);
         }
 
@@ -427,20 +375,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return ValidateStore(global, val);
         }
 
-        case OP_STOR_GLB_I64:
-        {
-            uint16_t index = read<uint16_t>();
-            auto global = verifyGlobalIndex(index);
-            if (!global)
-                return false;
-            if (!global->IsInt64())
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            const TypeDesc* val;
-            if (!popStack(&val))
-                return false;
-            return ValidateStore(global, val);
-        }
-
         case OP_ADDR_GLB:
         {
             uint16_t index = read<uint16_t>();
@@ -450,7 +384,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetReferenceType(td));
         }
 
-        case OP_LODB_I: {
+        case OP_LOAD_I_U8: {
             const TypeDesc* addr;
             if (!popStack(&addr))
                 return false;
@@ -459,7 +393,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(cell_type());
         }
 
-        case OP_STRB_I: {
+        case OP_STOR_I_U8: {
             const TypeDesc* val;
             if (!popStack(&val))
                 return false;
@@ -545,22 +479,10 @@ MethodVerifier::verifyOp(OPCODE op) {
             readCell();
             return popCell() && popCell();
 
-        case OP_ADD_C:
-        case OP_SMUL_C: {
-            readCell();
-            const TypeDesc* type;
-            if (!popStack(&type))
-                return false;
-            return pushStack(type);
-        }
 
         case OP_SWITCH:
-            readCell();
+            cip_ = insn_ + GetSwitchOpcodeSize(insn_);
             return popCell();
-
-        case OP_CASETBL:
-            cip_ = insn_ + GetCaseTableSize(insn_);
-            return true;
 
         case OP_COPYARRAY: {
             const TypeDesc *src, *dest;
@@ -581,7 +503,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!td)
                 return false;
             if (td->kind() == TypeKind::Array) {
-                if (!popIntOrFloat())
+                if (!popInt32())
                     return false;
             } else if (td->kind() != TypeKind::FixedArray) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -606,7 +528,7 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             for (uint32_t i = 0; i < count; i++) {
-                if (!popIntOrFloat())
+                if (!popInt32())
                     return false;
             }
             return pushStack(td);

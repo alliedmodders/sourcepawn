@@ -148,6 +148,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                     return false;
 
                 params[i] = context_->heap().ToLocalAddr(array);
+                addr = context_->heap().ToPhysAddr<void*>(array->data);
                 memcpy(addr, arg.u.addr, arg.array_size * sizeof(cell_t));
                 break;
             }
@@ -159,6 +160,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                     return false;
 
                 params[i] = context_->heap().ToLocalAddr(array);
+                addr = context_->heap().ToPhysAddr<void*>(array->data);
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
@@ -193,7 +195,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         SafeStrcpy((char*)debugNameForCrashDumps + 1, debugNameLength - 1, debugName);
     }
 
-    if (!context_->InvokeMethod(GetFunctionID(), params.data(), args.argc, result))
+    if (!context_->InvokeMethod(method_index_, params.data(), args.argc, result))
         return false;
 
     assert(!env->hasPendingException());

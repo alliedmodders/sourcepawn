@@ -41,7 +41,7 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
 
 // These count opcodes in # of bytes.
 const char* GetOpcodeName(OPCODE op);
-int GetCaseTableSize(const uint8_t* cip);
+int GetSwitchOpcodeSize(const uint8_t* cip);
 
 static inline int GetOpcodeSize(OPCODE op) {
     switch (op) {
@@ -57,8 +57,8 @@ static inline int GetOpcodeSize(OPCODE op) {
 static inline const uint8_t*
 NextInstruction(const uint8_t* cip) {
     OPCODE op = (OPCODE)*cip;
-    if (op == OP_CASETBL)
-        return cip + GetCaseTableSize(cip);
+    if (op == OP_SWITCH)
+        return cip + GetSwitchOpcodeSize(cip);
     return cip + GetOpcodeSize(op);
 }
 

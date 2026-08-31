@@ -1856,9 +1856,8 @@ class MethodmapMethodDecl : public MemberFunctionDecl {
 inline bool Expr::lvalue() const {
     switch (val_.ident) {
         case iVARIABLE:
-        case iARRAYCHAR:
-        case iARRAYCELL:
         case iACCESSOR:
+        case iARRAYELEM:
             if (kind() == ExprKind::RvalueExpr)
                 return false;
             return true;

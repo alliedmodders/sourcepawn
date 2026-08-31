@@ -45,8 +45,8 @@ const char* GetOpcodeName(OPCODE op) {
     return names[op];
 }
 
-int GetCaseTableSize(const uint8_t* cip) {
-    assert((OPCODE)*cip == OP_CASETBL);
+int GetSwitchOpcodeSize(const uint8_t* cip) {
+    assert((OPCODE)*cip == OP_SWITCH);
     cip++;
     return (*reinterpret_cast<const cell_t*>(cip) * (sizeof(cell_t) * 2)) + 1 + sizeof(cell_t) * 2;
 }
@@ -65,13 +65,12 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
     fprintf(fp, " %s ", GetOpcodeName(op));
 
     switch (op) {
-        case OP_PUSH_C:
-        case OP_ADD_C:
-        case OP_SMUL_C:
         case OP_LOAD_GLB:
-        case OP_LOAD_GLB_I64:
         case OP_STOR_GLB:
-        case OP_STOR_GLB_I64:
+            fprintf(fp, "%d", reader.read<uint16_t>());
+            break;
+
+        case OP_PUSH_C:
             fprintf(fp, "%d", reader.read<cell_t>());
             break;
 
@@ -98,11 +97,6 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_OR_I64:
         case OP_AND_I64:
         case OP_XOR_I64:
-        case OP_ZERO_S:
-        case OP_ZERO_S_I64:
-        case OP_STOR_S_I64:
-        case OP_LREF_S:
-        case OP_SREF_S:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 
@@ -126,13 +120,6 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
             break;
         }
 
-        case OP_STOR_S_C_I64: {
-            int16_t slot = reader.read<int16_t>();
-            cell_t cell0 = reader.read<cell_t>();
-            cell_t cell1 = reader.read<cell_t>();
-            fprintf(fp, "%d, %d, %d", slot, cell0, cell1);
-            break;
-        }
 
         case OP_LOAD_FN:
         case OP_CALL:

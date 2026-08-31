@@ -49,7 +49,6 @@ class Compiler : public CompilerBase
     bool visitADDR(PawnReg dest, cell_t offset) override;
     bool visitSTOR_PRI(cell_t offset) override;
     bool visitSTOR_S(cell_t offset, PawnReg src) override;
-    bool visitSREF_S_PRI(cell_t offset) override;
     bool visitSTOR_I() override;
     bool visitSTRB_I() override;
     bool visitIDXADDR() override;
@@ -77,10 +76,8 @@ class Compiler : public CompilerBase
     bool visitNOT() override;
     bool visitNEG() override;
     bool visitINVERT() override;
-    bool visitADD_C(cell_t value) override;
     bool visitSMUL_C(cell_t value) override;
     bool visitZERO(PawnReg dest) override;
-    bool visitZERO_S(cell_t offset) override;
     bool visitCompareOp(CompareOp op) override;
     bool visitINC_PRI() override;
     bool visitDEC_PRI() override;
@@ -112,7 +109,6 @@ class Compiler : public CompilerBase
     bool visitOR_I64(cell_t slot) override;
     bool visitAND_I64(cell_t slot) override;
     bool visitXOR_I64(cell_t slot) override;
-    bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) override;
     bool visitCompareOp64(CompareOp op) override;
     bool visitTEST_F32() override;
     bool visitNEG_F32() override;
@@ -124,7 +120,6 @@ class Compiler : public CompilerBase
     bool visitCVT_F32() override;
     bool visitMOD_ALT_F32() override;
     bool visitSTOR_S_PRI_I64(cell_t slot) override;
-    bool visitZERO_S_I64(cell_t offset) override;
     bool visitSTOR_S_C(cell_t slot, cell_t value) override;
 
   private:

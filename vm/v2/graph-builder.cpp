@@ -152,6 +152,11 @@ GraphBuilder::scanFlow() -> FlowState {
             current_ = nullptr;
             return FlowState::Ended;
 
+        case OP_SWITCH: {
+            // If this is a switch, we need specialized logic.
+            return scanSwitchFlow(insn);
+        }
+
         case OP_JUMP:
         case OP_JZER:
         case OP_JNZ:
@@ -160,8 +165,7 @@ GraphBuilder::scanFlow() -> FlowState {
         case OP_JSLESS:
         case OP_JSLEQ:
         case OP_JSGRTR:
-        case OP_JSGEQ:
-        case OP_SWITCH: {
+        case OP_JSGEQ: {
             cell_t target_pos = read();
             const uint8_t* target = rt_->code().bytes + target_pos;
             uint32_t target_byte_number = getByteNumber(target);
@@ -172,14 +176,7 @@ GraphBuilder::scanFlow() -> FlowState {
                 error(SP_ERROR_INSTRUCTION_PARAM);
                 return FlowState::Error;
             }
-            assert(op == OP_SWITCH || jump_targets_.test(target_byte_number));
-
-            // If this is a switch, we need specialized logic.
-            if (op == OP_SWITCH) {
-                // Re-position cip_ to be the casetable location.
-                cip_ = target;
-                return scanSwitchFlow(insn);
-            }
+            assert(jump_targets_.test(target_byte_number));
 
             RefPtr<Block> target_block = getOrAddBlock(target);
 
@@ -217,15 +214,6 @@ GraphBuilder::scanFlow() -> FlowState {
 
 auto
 GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
-    if (!insn_bitmap_.test(getByteNumber(cip_))) {
-        error(SP_ERROR_INSTRUCTION_PARAM);
-        return FlowState::Error;
-    }
-    if (readOp() != OP_CASETBL) {
-        error(SP_ERROR_INSTRUCTION_PARAM);
-        return FlowState::Error;
-    }
-
     cell_t ncases = read();
     cell_t default_offset = read();
 
@@ -314,13 +302,13 @@ GraphBuilder::prescan() {
 
         // Deduce parameter count.
         int opcode_bytes;
-        if (op == OP_CASETBL) {
+        if (op == OP_SWITCH) {
             if (cip_ + sizeof(cell_t) > stop_at_)
                 return error(SP_ERROR_INVALID_INSTRUCTION);
             cell_t ncases = *reinterpret_cast<const cell_t*>(cip_);
             if (ncases > (INT_MAX - 1) / 4)
                 return error(SP_ERROR_INVALID_INSTRUCTION);
-            opcode_bytes = (ncases * (sizeof(cell_t) * 2)) + sizeof(cell_t) * 2;
+            opcode_bytes = sizeof(cell_t) * 2 + (ncases * (sizeof(cell_t) * 2));
         } else {
             int opcode_size = GetOpcodeSize(op);
             if (opcode_size == 0) {
@@ -336,12 +324,12 @@ GraphBuilder::prescan() {
             return error(SP_ERROR_INVALID_INSTRUCTION);
 
         // If this is a control opcode, we need to markup any jump targets.
-        if (IsControlOpcode(op) && op != OP_RETN && op != OP_RETV) {
+        if (IsControlOpcode(op) && op != OP_RETN && op != OP_RETV && op != OP_SWITCH) {
             // All jump instructions, and SWITCH, have the target as an immediate
             // value.
             if (!prescan_jump_target(op, *reinterpret_cast<const cell_t*>(cip_)))
                 return false;
-        } else if (op == OP_CASETBL) {
+        } else if (op == OP_SWITCH) {
             if (!prescan_casetable(cip_, opcode_bytes))
                 return false;
         }
@@ -381,7 +369,7 @@ GraphBuilder::prescan_jump_target(OPCODE op, cell_t target) {
 bool
 GraphBuilder::prescan_casetable(const uint8_t* pos, cell_t size) {
     const uint8_t* end = pos + size;
-    // OP_CASETBL:
+    // OP_SWITCH:
     //   ncases
     //   default_offset
     //   [value, offset]

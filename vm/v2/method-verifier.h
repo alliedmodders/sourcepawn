@@ -41,6 +41,7 @@ class MethodVerifier final
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     ke::FixedArray<const TypeDesc*>&& local_types() { return std::move(local_types_); }
+    ke::FixedArray<const TypeDesc*>&& arg_types() { return std::move(arg_types_); }
 
     const TypeDesc* cell_type() const;
     const TypeDesc* any_type() const;

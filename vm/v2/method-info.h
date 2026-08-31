@@ -53,7 +53,9 @@ class MethodInfo final : public BaseMethodInfo
     uint32_t method_index() const { return method_index_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
+    const TypeDesc* GetTypeOfLocal(cell_t offset) const;
     const ke::FixedArray<const TypeDesc*>& local_types() const { return local_types_; }
+    const ke::FixedArray<const TypeDesc*>& arg_types() const { return arg_types_; }
     ke::FixedArray<int32_t>& local_offsets() { return local_offsets_; }
 
     void setCompiledFunction(CompiledFunction* fun);
@@ -79,6 +81,7 @@ class MethodInfo final : public BaseMethodInfo
     uint32_t max_eval_stack_depth_;
     uint32_t max_eval_stack_bytes_;
     ke::FixedArray<const TypeDesc*> local_types_;
+    ke::FixedArray<const TypeDesc*> arg_types_;
     ke::FixedArray<int32_t> local_offsets_;
 };
 

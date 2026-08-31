@@ -133,7 +133,6 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void casetbl(cell_t ncases, Label* def) {
-    write<uint8_t>(static_cast<uint8_t>(OP_CASETBL));
     write<cell_t>(ncases);
     encodeAbsoluteAddress(def);
   }

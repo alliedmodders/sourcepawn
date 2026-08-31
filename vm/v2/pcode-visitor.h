@@ -38,14 +38,13 @@ class PcodeVisitor
     virtual bool visitLOAD_GLB(cell_t srcaddr) = 0;
     virtual bool visitLOAD_S(cell_t srcoffs) = 0;
     virtual bool visitLREF_S(cell_t srcoffs) = 0;
-    virtual bool visitLOAD_I() = 0;
-    virtual bool visitLODB_I() = 0;
+    virtual bool visitLOAD_I_I32() = 0;
+    virtual bool visitLOAD_I_U8() = 0;
     virtual bool visitADDR_S(cell_t offset) = 0;
     virtual bool visitSTOR_GLB(cell_t address) = 0;
     virtual bool visitSTOR_S(cell_t offset) = 0;
-    virtual bool visitSREF_S(cell_t offset) = 0;
-    virtual bool visitSTOR_I() = 0;
-    virtual bool visitSTRB_I() = 0;
+    virtual bool visitSTOR_I_I32() = 0;
+    virtual bool visitSTOR_I_U8() = 0;
     virtual bool visitLOAD_FN(uint32_t method_index) = 0;
     virtual bool visitIDXADDR(uint8_t rank_size, int32_t bounds) = 0;
     virtual bool visitPUSH_C(cell_t value) = 0;
@@ -53,6 +52,7 @@ class PcodeVisitor
     virtual bool visitPUSH_C_I64(int64_t value) = 0;
     virtual bool visitPOP() = 0;
     virtual bool visitDUP() = 0;
+    virtual bool visitDUP2() = 0;
     virtual bool visitSWAP() = 0;
     virtual bool visitDUP_ROTATE() = 0;
     virtual bool visitHEAP(cell_t amount) = 0;
@@ -76,10 +76,7 @@ class PcodeVisitor
     virtual bool visitNOT() = 0;
     virtual bool visitNEG() = 0;
     virtual bool visitINVERT() = 0;
-    virtual bool visitADD_C(cell_t value) = 0;
     virtual bool visitSMUL_C(cell_t value) = 0;
-    virtual bool visitZERO_S(cell_t offset) = 0;
-    virtual bool visitZERO_S_I64(cell_t offset) = 0;
     virtual bool visitCompareOp(CompareOp op) = 0;
     virtual bool visitINC() = 0;
     virtual bool visitDEC() = 0;
@@ -106,8 +103,6 @@ class PcodeVisitor
     virtual bool visitAND_I64(cell_t slot) = 0;
     virtual bool visitXOR_I64(cell_t slot) = 0;
     virtual bool visitSTOR_S_C(cell_t slot, cell_t value) = 0;
-    virtual bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) = 0;
-    virtual bool visitSTOR_S_I64(cell_t slot) = 0;
     virtual bool visitCompareOp64(CompareOp op) = 0;
     virtual bool visitTEST_F32() = 0;
     virtual bool visitNEG_F32() = 0;
@@ -118,6 +113,17 @@ class PcodeVisitor
     virtual bool visitCVT_F32() = 0;
     virtual bool visitMOD_F32() = 0;
     virtual bool visitCompareOpF32(CompareOp op) = 0;
+    virtual bool visitLOAD_ELEM_I32() = 0;
+    virtual bool visitLOAD_ELEM_F32() = 0;
+    virtual bool visitLOAD_ELEM_I64() = 0;
+    virtual bool visitLOAD_ELEM_U8() = 0;
+    virtual bool visitSTOR_ELEM_I32() = 0;
+    virtual bool visitSTOR_ELEM_F32() = 0;
+    virtual bool visitSTOR_ELEM_I64() = 0;
+    virtual bool visitSTOR_ELEM_U8() = 0;
+    virtual bool visitLOAD_I_F32() = 0;
+    virtual bool visitSTOR_I_F32() = 0;
+    virtual bool visitLOAD_ELEM_A() = 0;
 };
 
 } // namespace sp::v2

@@ -117,16 +117,11 @@ class PcodeReader
                 return visitor_->visitLOAD_S(offset);
             }
 
-            case OP_LREF_S: {
-                cell_t offset = readInt16();
-                return visitor_->visitLREF_S(offset);
-            }
+            case OP_LOAD_I_I32:
+                return visitor_->visitLOAD_I_I32();
 
-            case OP_LOAD_I:
-                return visitor_->visitLOAD_I();
-
-            case OP_LODB_I:
-                return visitor_->visitLODB_I();
+            case OP_LOAD_I_U8:
+                return visitor_->visitLOAD_I_U8();
 
             case OP_STOR_GLB: {
                 cell_t address = readCell();
@@ -144,16 +139,11 @@ class PcodeReader
                 return visitor_->visitSTOR_S_C(offset, value);
             }
 
-            case OP_SREF_S: {
-                cell_t offset = readInt16();
-                return visitor_->visitSREF_S(offset);
-            }
+            case OP_STOR_I_I32:
+                return visitor_->visitSTOR_I_I32();
 
-            case OP_STOR_I:
-                return visitor_->visitSTOR_I();
-
-            case OP_STRB_I:
-                return visitor_->visitSTRB_I();
+            case OP_STOR_I_U8:
+                return visitor_->visitSTOR_I_U8();
 
             case OP_LOAD_FN: {
                 uint32_t method_index = (uint32_t)readCell();
@@ -174,9 +164,6 @@ class PcodeReader
 
             case OP_SWAP:
                 return visitor_->visitSWAP();
-
-            case OP_DUP_ROTATE:
-                return visitor_->visitDUP_ROTATE();
 
             case OP_PUSH_C:
             {
@@ -257,16 +244,6 @@ class PcodeReader
                 cell_t slot = readInt16();
                 return visitor_->visitXOR_I64(slot);
             }
-            case OP_STOR_S_C_I64: {
-                cell_t slot = readInt16();
-                cell_t cell0 = readCell();
-                cell_t cell1 = readCell();
-                return visitor_->visitSTOR_S_C_I64(slot, cell0, cell1);
-            }
-            case OP_STOR_S_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSTOR_S_I64(slot);
-            }
 
             case OP_RETN:
                 return visitor_->visitRETN();
@@ -337,24 +314,7 @@ class PcodeReader
             case OP_INVERT:
                 return visitor_->visitINVERT();
 
-            case OP_ADD_C: {
-                cell_t val = readCell();
-                return visitor_->visitADD_C(val);
-            }
 
-            case OP_SMUL_C: {
-                cell_t val = readCell();
-                return visitor_->visitSMUL_C(val);
-            }
-
-            case OP_ZERO_S: {
-                cell_t offset = readInt16();
-                return visitor_->visitZERO_S(offset);
-            }
-            case OP_ZERO_S_I64: {
-                cell_t offset = readInt16();
-                return visitor_->visitZERO_S_I64(offset);
-            }
 
             case OP_EQ:
                 return visitor_->visitCompareOp(CompareOp::Eq);
@@ -433,9 +393,6 @@ class PcodeReader
                 {
                     ke::SaveAndSet<const uint8_t*> saved_pos(&cip_, casetbl);
 
-                    assert((OPCODE)*cip_ == OP_CASETBL);
-                    cip_++;
-
                     ncases = *reinterpret_cast<const cell_t*>(cip_);
                     cip_ += sizeof(cell_t);
                     defaultOffset = *reinterpret_cast<const cell_t*>(cip_);
@@ -445,15 +402,6 @@ class PcodeReader
 
                 return visitor_->visitSWITCH(
                     defaultOffset, reinterpret_cast<const CaseTableEntry*>(table), ncases);
-            }
-
-            case OP_CASETBL: {
-                cell_t ncases = readCell();
-
-                getBytes(((ncases * 2) + 1) * sizeof(cell_t));
-
-                // Nothing to do here. This is handled in OP_SWITCH.
-                return true;
             }
 
             case OP_HEAP_SAVE:

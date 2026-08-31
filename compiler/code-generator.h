@@ -99,7 +99,7 @@ class CodeGenerator final
     void EmitUnary(UnaryExpr* expr);
     void EmitIncDec(IncDecExpr* expr, unsigned int flags);
     void EmitBinary(BinaryExpr* expr, unsigned int flags);
-    void EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right, bool save_rhs = false);
+    void EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* right);
     void EmitLogicalExpr(LogicalExpr* expr);
     void EmitChainedCompareExpr(ChainedCompareExpr* expr);
     void EmitTernaryExpr(TernaryExpr* expr, unsigned int flags);
@@ -153,13 +153,16 @@ class CodeGenerator final
     //   iVARIABLE: nothing is pushed.
     //
     // IndexExpr, base[index]:
-    //   iARRAYCHAR: &base[index] is pushed.
-    //   iARRAYCELL: &base[index] is pushed, and loaded if the inner type is not
+    //   iARRAYELEM: &base[index] is pushed, and loaded if the inner type is not
     //               a value type (inner arrays are not considered value types).
     //
     // FieldAccessExpr: base.field
     //   iACCESSOR: |base| is pushed.
-    const value& BindLvalue(Expr* expr);
+    //
+    // If |simple_address| is true, then iARRAYELEM is converted to an iADDRESS.
+    // This is useful if the caller does not want to deal with complex stack
+    // operations.
+    value BindLvalue(Expr* expr, bool simple_address = false);
 
   private:
     enum MemuseType {
@@ -213,8 +216,6 @@ class CodeGenerator final
 
     using CallGraph = tr::unordered_map<FunctionDecl*, tr::vector<FunctionDecl*>>;
 
-    void EnterTempSlotScope();
-    void LeaveTempSlotScope();
     cell_t AcquireTempSlot(ParseNode* node, Type* type);
     cell_t AcquireTempSlot(ParseNode* node, BuiltinType type);
 
@@ -235,7 +236,6 @@ class CodeGenerator final
     friend class AutoEnterScope;
 
   private:
-    typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
     typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
     typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
@@ -251,7 +251,6 @@ class CodeGenerator final
     SmxBuilder smx_;
     RefPtr<SmxNameTable> names_;
     RefPtr<SmxDataSection> smx_data_;
-    RefPtr<SmxPubvarSection> pubvars_;
     RefPtr<SmxCodeSection> code_;
     std::unique_ptr<RttiBuilder> rtti_;
 

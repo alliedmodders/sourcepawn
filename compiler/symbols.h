@@ -31,6 +31,7 @@
 #include "sc.h"
 #include "source-location.h"
 #include "stl/stl-unordered-map.h"
+#include "value.h"
 
 namespace sp {
 namespace cc {
@@ -49,69 +50,6 @@ enum ScopeKind {
     sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
     sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
     sFILE_STATIC = 5, /* only appears on SymbolScope, to clarify sSTATIC */
-};
-
-struct value {
-    value() : ident(iINVALID), sym(nullptr), type_(nullptr) {}
-
-    IdentifierKind ident : 6;
-    Decl* sym;
-    QualType type_;
-
-    Type* type() const { return *type_; }
-    QualType qualified() const { return type_; }
-    void set_type(Type* type) { type_ = QualType(type); }
-    void set_type(QualType type) { type_ = type; }
-
-    // Returns whether the value can be rematerialized based on static
-    // information, or whether it is the result of an expression.
-    bool canRematerialize() const;
-
-    void set_variable(Decl* decl, QualType type) {
-        this->ident = iVARIABLE;
-        this->sym = decl;
-        set_type(type);
-    }
-    void set_expr(QualType type) {
-        this->ident = iEXPRESSION;
-        set_type(type);
-    }
-
-    MethodmapPropertyDecl* accessor() const {
-        if (ident != iACCESSOR)
-            return nullptr;
-        return accessor_;
-    }
-    void set_accessor(MethodmapPropertyDecl* accessor) {
-        ident = iACCESSOR;
-        accessor_ = accessor;
-    }
-    cell constval() const {
-        assert(ident == iCONSTEXPR);
-        return constval_;
-    }
-    void set_constval(cell val) {
-        ident = iCONSTEXPR;
-        constval_ = val;
-    }
-
-    void set_slice(IdentifierKind ident, Decl* sym) {
-        this->ident = ident;
-        this->sym = sym;
-    }
-
-    union {
-        // when ident == iACCESSOR
-        MethodmapPropertyDecl* accessor_;
-        // when ident == iCONSTEXPR
-        cell constval_;
-    };
-
-    static value ErrorValue() {
-        value v = {};
-        v.ident = iCONSTEXPR;
-        return v;
-    }
 };
 
 static inline bool IsLocal(int kind) {

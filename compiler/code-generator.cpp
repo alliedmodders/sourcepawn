@@ -36,7 +36,6 @@
 #include "semantics-inl.h"
 #include "symbols.h"
 #include "utils/compact-encoding.h"
-#include "value-inl.h"
 
 namespace sp {
 namespace cc {
@@ -52,7 +51,6 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
 
     names_ = new SmxNameTable(".names");
     smx_data_ = new SmxDataSection(".data");
-    pubvars_ = new SmxPubvarSection(".pubvars");
     code_ = new SmxCodeSection(".code");
     rtti_ = std::make_unique<RttiBuilder>(cc, names_);
 }
@@ -106,7 +104,6 @@ void CodeGenerator::FinishSmx() {
 
     smx_.add(code_);
     smx_.add(smx_data_);
-    smx_.add(pubvars_);
     smx_.add(names_);
     rtti_->finish(smx_);
 }
@@ -287,12 +284,6 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
 
     if (decl->is_public() || decl->is_used())
         EnqueueDebugSymbol(decl, asm_.position());
-
-    if (decl->is_public()) {
-        sp_file_pubvars_t& pubvar = pubvars_->add();
-        pubvar.address = decl->addr();
-        pubvar.name = names_->add(decl->name());
-    }
 }
 
 void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
@@ -344,7 +335,7 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
                 __ emit(OP_STOR_GLB, VarSlot(var->addr()));
         } else if (auto n64 = init->as<Number64Expr>()) {
             __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
-            __ emit(OP_STOR_GLB_I64, VarSlot(var->addr()));
+            __ emit(OP_STOR_GLB, VarSlot(var->addr()));
         } else if (init->val().ident == iCONSTEXPR) {
             __ PUSH_C(init->val().constval());
             __ emit(OP_STOR_GLB, VarSlot(var->addr()));
@@ -400,13 +391,13 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
 
             // If the inner array is fixed, then it's already been allocated.
             if (inner->is_fixed())
-                __ emit(OP_LOAD_I);
+                __ emit(OP_LOAD_I_I32);
 
             EmitArrayCtor(inner, array->exprs().at(i), 0);
 
             // Otherwise, the allocation is now on the stack.
             if (!inner->is_fixed())
-                __ emit(OP_STOR_I);
+                __ emit(OP_STOR_I_I32);
         }
 
         // No longer need the parent address.
@@ -552,22 +543,18 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             if (val.ident == iCONSTEXPR) {
                 __ emit(OP_STOR_S_C, VarSlot(slot), val.constval());
             } else if (auto n64 = init->right()->as<Number64Expr>()) {
-                Int64CellUnion u(*n64->ToInt64());
-                __ emit(OP_STOR_S_C_I64, VarSlot(slot), u.cells[0], u.cells[1]);
+                __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
+                __ emit(OP_STOR_S, VarSlot(slot));
             } else {
                 EmitExpr(init->right());
-                if (num_cells == 1)
-                    __ emit(OP_STOR_S, VarSlot(slot));
-                else if (num_cells == 2)
-                    __ emit(OP_STOR_S_I64, VarSlot(slot));
-                else
-                    assert(false);
+                __ emit(OP_STOR_S, VarSlot(slot));
+                assert(num_cells == 1 || num_cells == 2);
             }
-        } else if (num_cells == 2) {
-            __ emit(OP_ZERO_S_I64, VarSlot(slot));
         } else if (num_cells == 1) {
-            // Note: we no longer honor "decl" for scalars.
-            __ emit(OP_ZERO_S, VarSlot(slot));
+            __ emit(OP_STOR_S_C, VarSlot(slot), 0);
+        } else if (num_cells == 2) {
+            __ emit(OP_PUSH_C_I64, Int64Value(0));
+            __ emit(OP_STOR_S, VarSlot(slot));
         }
     }
 }
@@ -788,13 +775,18 @@ CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* targ
     return false;
 }
 
-const value& CodeGenerator::BindLvalue(Expr* expr) {
-    const auto& val = expr->val();
+value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
+    value val = expr->val();
     switch (val.ident) {
         case iVARIABLE:
             break;
-        case iARRAYCELL:
-        case iARRAYCHAR:
+        case iARRAYELEM:
+            EmitExpr(expr, EMIT_ALLOW_LVALUE);
+            if (simple_address) {
+                __ emit(OP_IDXADDR);
+                val.ident = iADDRESS;
+            }
+            break;
         case iACCESSOR:
             EmitExpr(expr, EMIT_ALLOW_LVALUE);
             break;
@@ -805,7 +797,8 @@ const value& CodeGenerator::BindLvalue(Expr* expr) {
 }
 
 void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
-    const auto& val = BindLvalue(expr->expr());
+    bool discard = !!(flags & EMIT_DISCARD_RESULT);
+    value val = BindLvalue(expr->expr(), true);
 
     Type* type = val.type();
     if (type->isReference())
@@ -817,14 +810,14 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
 
     EmitRvalue(val);
 
-    bool discard = !!(flags & EMIT_DISCARD_RESULT);
+    // We use a temporary to store the result value, if we need to due to the
+    // l-value mucking up the operand stack.
+    std::optional<uint32_t> temp_slot;
 
     if (!expr->prefix() && !discard) {
-        if (!val.canRematerialize())
-            __ emit(OP_DUP_ROTATE);
-        else
-            __ emit(OP_DUP);
-        // Stack is now either [PRE_VAL, ADDR, PRE_VAL] or [PRE_VAL, PRE_VAL]
+        temp_slot = {AcquireTempSlot(expr, type)};
+        __ emit(OP_DUP);
+        __ emit(OP_STOR_S, VarSlot(*temp_slot));
     }
 
     if (type->isInt64()) {
@@ -840,44 +833,62 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     }
 
     if (expr->prefix() && !discard) {
-        if (!val.canRematerialize())
-            __ emit(OP_DUP_ROTATE);
-        else
-            __ emit(OP_DUP);
-        // Stack is now either [POST_VAL, ADDR, POST_VAL] or [POST_VAL, POST_VAL]
+        __ emit(OP_DUP);
+        if (!val.canRematerialize()) {
+            temp_slot = {AcquireTempSlot(expr, type)};
+            __ emit(OP_STOR_S, VarSlot(*temp_slot));
+        }
     }
 
     EmitStore(expr, val);
+
+    if (temp_slot)
+        __ emit(OP_LOAD_S, VarSlot(*temp_slot));
+}
+
+static inline bool StackSlotsForLval(const value& v) {
+    switch (v.ident) {
+        case iVARIABLE:
+            return 0;
+        case iACCESSOR:
+        case iADDRESS:
+        case iEXPRESSION:
+            return 1;
+        case iARRAYELEM:
+            return 2;
+        default:
+            assert(false);
+            return 0;
+    }
 }
 
 void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     auto left = expr->left();
-    const auto& left_val = left->val();
-
     auto right = expr->right();
 
     auto token = expr->token();
     auto oper = NormalizeBinaryToken(token);
+    bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
     if (expr->array_copy_length()) {
         auto val = BindLvalue(left);
-        if (val.ident == iVARIABLE)
-            EmitAddress(val.sym->as<VarDeclBase>());
+        EmitRvalue(val);
 
         assert(IsAssignOp(token));
         assert(!oper);
 
         EmitExpr(right);
-        if (!(flags & EMIT_DISCARD_RESULT))
-            __ emit(OP_DUP_ROTATE);
         __ emit(OP_COPYARRAY);
         return;
     }
 
+    value left_val;
     if (IsAssignOp(token)) {
-        BindLvalue(left);
+        left_val = BindLvalue(left, !!oper);
 
         if (oper) {
+            assert(StackSlotsForLval(left_val) <= 1);
+
             // assign-modify needs the base address twice (load, store).
             if (!left_val.canRematerialize())
                 __ emit(OP_DUP);
@@ -886,32 +897,47 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         }
     } else {
         EmitExpr(left);
+        left_val = left->val();
     }
 
     assert(!expr->array_copy_length());
     assert(!left_val.type()->isArray());
 
-    EmitBinaryInner(expr, oper, left, right);
+    EmitExpr(right);
+    EmitBinaryTail(expr, oper, left, right);
 
     if (IsAssignOp(token)) {
-        if (!(flags & EMIT_DISCARD_RESULT)) {
-            // Stack is either [base val] or [val].
-            if (!left_val.canRematerialize() && oper)
-                __ emit(OP_DUP_ROTATE);
-            else
-                __ emit(OP_DUP);
-            // Stack is now either [val base val] or [val val].
+        std::optional<uint32_t> temp_slot;
+
+        if (!discard) {
+            // Stack is one of the following cases.
+            //   iVARIABLE:
+            //      [val]
+            //   iARRAYELEM: (implies !oper)
+            //      [base, index, val]
+            //   iADDRESS: (implies oper)
+            //      [base, val]
+            //   iACCESSOR:
+            //   iEXPRESSION:
+            //      [base, val]
+            //
+            // Since we have !discard, we need to preserve the calculated value,
+            // which we do via a local if there is too much stack manipulation
+            // involved.
+            __ emit(OP_DUP);
+            if (!left_val.canRematerialize()) {
+                auto temp_type = expr->val().type();
+                temp_slot = {AcquireTempSlot(expr, temp_type)};
+                __ emit(OP_STOR_S, VarSlot(*temp_slot));
+            }
         }
         EmitStore(expr, left_val);
+        if (temp_slot)
+            __ emit(OP_LOAD_S, VarSlot(*temp_slot));
     }
 }
 
-void CodeGenerator::EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right, bool save) {
-    EmitExpr(right);
-
-    if (save)
-        __ emit(OP_DUP_ROTATE);
-
+void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* right) {
     Type* effective = left->val().type();
     if (effective->isReference())
         effective = effective->inner();
@@ -1161,24 +1187,40 @@ void CodeGenerator::EmitChainedCompareExpr(ChainedCompareExpr* root) {
 
     Expr* left = root->first();
 
+    std::unordered_map<Type*, uint32_t> temp_slots;
+
     assert(root->ops().size() > 0);
     for (size_t i = 0; i < root->ops().size(); i++) {
         const auto& op = root->ops().at(i);
         int oper_tok = NormalizeBinaryToken(op.token);
+
+        EmitExpr(op.expr);
+
+        std::optional<uint32_t> temp_slot;
         if (i != root->ops().size() - 1) {
-            EmitBinaryInner(root, oper_tok, left, op.expr, true /* save */);
-            __ emit(OP_JZER, &on_false);
-        } else {
-            EmitBinaryInner(root, oper_tok, left, op.expr, false /* save */);
-            __ emit(OP_JZER, &last_false);
+            auto temp_type = op.expr->val().type();
+            if (auto iter = temp_slots.find(temp_type); iter != temp_slots.end()) {
+                temp_slot = {iter->second};
+            } else {
+                temp_slot = {AcquireTempSlot(op.expr, temp_type)};
+                temp_slots.emplace(temp_type, *temp_slot);
+            }
+
+            __ emit(OP_DUP);
+            __ emit(OP_STOR_S, VarSlot(*temp_slot));
         }
+
+        EmitBinaryTail(root, oper_tok, left, op.expr);
+        __ emit(OP_JZER, &on_false);
+
+        if (temp_slot)
+            __ emit(OP_LOAD_S, VarSlot(*temp_slot));
         left = op.expr;
     }
 
     __ PUSH_C(1);
     __ emit(OP_JUMP, &done);
     __ bind(&on_false);
-    __ emit(OP_POP);
     __ bind(&last_false);
     __ PUSH_C(0);
     __ bind(&done);
@@ -1220,15 +1262,13 @@ void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
     EmitExpr(expr->base());
     EmitExpr(expr->index());
 
-    __ emit(OP_IDXADDR);
-
     auto& base_val = expr->base()->val();
     auto array_type = base_val.type()->as<ArrayType>();
 
     // The indexed item is another array (multi-dimensional arrays).
     if (array_type->inner()->isArray()) {
         assert(expr->val().type()->isArray());
-        __ emit(OP_LOAD_I);
+        __ emit(OP_LOAD_ELEM_A);
     }
 }
 
@@ -1252,8 +1292,10 @@ void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
         return;
 
     if (LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>()) {
-        if (field->offset())
-            __ emit(OP_ADD_C, field->offset() << 2);
+        if (field->offset()) {
+            __ PUSH_C(field->offset() << 2);
+            __ emit(OP_ADD);
+        }
     }
 }
 
@@ -1291,7 +1333,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
         bool lvalue = expr->lvalue();
         if (lvalue)
-            BindLvalue(expr);
+            BindLvalue(expr, true);
         else
             EmitExpr(expr);
 
@@ -1331,7 +1373,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             if (needs_temp) {
                 auto slot = AcquireTempSlot(expr, UnwrapRef(val.type()));
                 if (val.type()->isInt64()) {
-                    __ emit(OP_STOR_S_I64, VarSlot(slot));
+                    __ emit(OP_STOR_S, VarSlot(slot));
                     __ emit(OP_ADDR_S, VarSlot(slot));
                 } else {
                     __ emit(OP_STOR_S, VarSlot(slot));
@@ -1349,7 +1391,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             assert(val.type()->isInt64());
 
             auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
-            __ emit(OP_STOR_S_I64, VarSlot(slot));
+            __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
 
@@ -1385,7 +1427,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         if (return_type->isArray() || return_type->isEnumStruct())
             __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
         else
-            __ emit(OP_LOAD_S_I64, VarSlot(*hidden_slot));
+            __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
     }
 }
 
@@ -1494,7 +1536,7 @@ void
 CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 {
     Expr* expr = stmt->expr();
-    const auto& v = expr->val();
+    value v = expr->val();
 
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
@@ -1506,7 +1548,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     }
 
     if (expr->lvalue()) {
-        BindLvalue(expr);
+        v = BindLvalue(expr, true);
 
         if (zap && !v.canRematerialize())
             __ emit(OP_DUP);
@@ -1532,14 +1574,29 @@ void CodeGenerator::EmitRvalue(RvalueExpr* expr) {
 
 void CodeGenerator::EmitRvalue(const value& lval) {
     switch (lval.ident) {
-        case iARRAYCELL:
-            if (lval.type()->isInt64())
-                __ emit(OP_LOAD_I_I64);
+        case iARRAYELEM:
+            if (lval.type()->isChar())
+                __ emit(OP_LOAD_ELEM_U8);
+            else if (lval.type()->isInt64())
+                __ emit(OP_LOAD_ELEM_I64);
+            else if (lval.type()->isFloat())
+                __ emit(OP_LOAD_ELEM_F32);
             else if (!lval.type()->isComposite())
-                __ emit(OP_LOAD_I);
+                __ emit(OP_LOAD_ELEM_I32);
+            else if (!lval.type()->isArray())
+                assert(false);
             break;
-        case iARRAYCHAR:
-            __ emit(OP_LODB_I);
+        case iADDRESS:
+            if (lval.type()->isChar())
+                __ emit(OP_LOAD_I_U8);
+            else if (lval.type()->isInt64())
+                __ emit(OP_LOAD_I_I64);
+            else if (lval.type()->isFloat())
+                __ emit(OP_LOAD_I_F32);
+            else if (!lval.type()->isComposite())
+                __ emit(OP_LOAD_I_I32);
+            else
+                assert(false);
             break;
         case iACCESSOR:
             InvokeGetter(lval.accessor());
@@ -1548,13 +1605,12 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             if (lval.type()->isReference()) {
                 auto var = lval.sym->as<VarDeclBase>();
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-                if (lval.type()->inner()->isInt64()) {
+                __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                if (lval.type()->inner()->isInt64())
                     // int64 arguments are passed by-ref for compatibility.
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
                     __ emit(OP_LOAD_I_I64);
-                } else {
-                    __ emit(OP_LREF_S, VarSlot(var->addr()));
-                }
+                else
+                    __ emit(OP_LOAD_I_I32);
                 break;
             }
             [[fallthrough]];
@@ -1562,23 +1618,16 @@ void CodeGenerator::EmitRvalue(const value& lval) {
         default: {
             auto var = lval.sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->type()->isInt64()) {
-                    if (var->vclass() == sLOCAL) {
-                        __ emit(OP_LOAD_S_I64, VarSlot(var->addr()));
-                    } else {
-                        // int64 arguments are passed by-ref for compatibility.
-                        __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                        __ emit(OP_LOAD_I_I64);
-                    }
+                if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
+                    // int64 arguments are passed by-ref for compatibility.
+                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                    __ emit(OP_LOAD_I_I64);
                 } else {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
                 }
             } else {
                 uint16_t slot = AcquireGlobalSlot(var);
-                if (var->type()->isInt64())
-                    __ emit(OP_LOAD_GLB_I64, VarSlot(slot));
-                else
-                    __ emit(OP_LOAD_GLB, VarSlot(slot));
+                __ emit(OP_LOAD_GLB, VarSlot(slot));
             }
             break;
         }
@@ -1587,21 +1636,33 @@ void CodeGenerator::EmitRvalue(const value& lval) {
 
 void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
     switch (lval.ident) {
-        case iARRAYCELL:
-            if (lval.type()->isInt64())
-                __ emit(OP_STOR_I_I64);
+        case iARRAYELEM:
+            if (lval.type()->isChar())
+                __ emit(OP_STOR_ELEM_U8);
+            else if (lval.type()->isInt64())
+                __ emit(OP_STOR_ELEM_I64);
+            else if (lval.type()->isFloat())
+                __ emit(OP_STOR_ELEM_F32);
             else
-                __ emit(OP_STOR_I);
+                __ emit(OP_STOR_ELEM_I32);
             assert(!lval.type()->isComposite());
             break;
-        case iARRAYCHAR:
-            __ emit(OP_STRB_I);
+        case iADDRESS:
+            if (lval.type()->isChar())
+                __ emit(OP_STOR_I_U8);
+            else if (lval.type()->isInt64())
+                __ emit(OP_STOR_I_I64);
+            else if (lval.type()->isFloat())
+                __ emit(OP_STOR_I_F32);
+            else
+                __ emit(OP_STOR_I_I32);
+            assert(!lval.type()->isComposite());
             break;
         case iACCESSOR:
             if (lval.type()->isInt64()) {
                 // Need to pass the int64 as an address for native compatibility.
                 auto slot = AcquireTempSlot(pn, BuiltinType::Int64);
-                __ emit(OP_STOR_S_I64, VarSlot(slot));
+                __ emit(OP_STOR_S, VarSlot(slot));
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
             // Calls have their arguments in reverse order, so we have to swap
@@ -1614,13 +1675,11 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 auto var = lval.sym->as<VarDeclBase>();
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
 
-                if (lval.type()->inner()->isInt64()) {
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    __ emit(OP_SWAP);
+                __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                if (lval.type()->inner()->isInt64())
                     __ emit(OP_STOR_I_I64);
-                } else {
-                    __ emit(OP_SREF_S, VarSlot(var->addr()));
-                }
+                else
+                    __ emit(OP_STOR_I_I32);
                 break;
             }
             [[fallthrough]];
@@ -1628,23 +1687,16 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
         default: {
             auto var = lval.sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->type()->isInt64()) {
-                    if (var->vclass() == sARGUMENT) {
-                        __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                        __ emit(OP_SWAP);
-                        __ emit(OP_STOR_I_I64);
-                    } else {
-                        __ emit(OP_STOR_S_I64, VarSlot(var->addr()));
-                    }
+                if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
+                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                    __ emit(OP_SWAP);
+                    __ emit(OP_STOR_I_I64);
                 } else {
                     __ emit(OP_STOR_S, VarSlot(var->addr()));
                 }
             } else {
                 uint16_t slot = AcquireGlobalSlot(var);
-                if (var->type()->isInt64())
-                    __ emit(OP_STOR_GLB_I64, VarSlot(slot));
-                else
-                    __ emit(OP_STOR_GLB, VarSlot(slot));
+                __ emit(OP_STOR_GLB, VarSlot(slot));
             }
             break;
         }
@@ -1694,7 +1746,7 @@ void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
     EmitCall(prop->getter(), nargs);
 
     if (hidden_slot)
-        __ emit(OP_LOAD_S_I64, VarSlot(*hidden_slot));
+        __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
 }
 
 void CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt) {
@@ -1859,46 +1911,49 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
     EmitExpr(stmt->expr());
 
     Label exit_label;
-    Label table_label;
-    __ emit(OP_SWITCH, &table_label);
 
     // Note: we use map for ordering so the case table is sorted.
     std::map<cell, Label> case_labels;
 
     for (const auto& case_entry : stmt->cases()) {
-        Stmt* stmt = case_entry.second;
-
-        Label label;
-        __ bind(&label);
         for (const auto& expr : case_entry.first) {
             const auto& v = expr->val();
             assert(v.ident == iCONSTEXPR);
-
-            case_labels.emplace(v.constval(), label);
+            case_labels.emplace(v.constval(), Label());
         }
-
-        EmitStmt(stmt);
-        if (stmt->flow_type() == Flow_None)
-            __ emit(OP_JUMP, &exit_label);
     }
 
     Label default_label;
     Label* defcase = &exit_label;
+    if (stmt->default_case())
+        defcase = &default_label;
+
+    __ emit(OP_SWITCH);
+    __ casetbl((int)case_labels.size(), defcase);
+
+    for (auto& pair : case_labels)
+        __ casetbl_entry(pair.first, &pair.second);
+
+    for (const auto& case_entry : stmt->cases()) {
+        Stmt* stmt_node = case_entry.second;
+
+        for (const auto& expr : case_entry.first) {
+            const auto& v = expr->val();
+            __ bind(&case_labels[v.constval()]);
+        }
+
+        EmitStmt(stmt_node);
+        if (stmt_node->flow_type() == Flow_None)
+            __ emit(OP_JUMP, &exit_label);
+    }
+
     if (stmt->default_case()) {
         __ bind(&default_label);
 
         EmitStmt(stmt->default_case());
         if (stmt->default_case()->flow_type() == Flow_None)
             __ emit(OP_JUMP, &exit_label);
-
-        defcase = &default_label;
     }
-
-    __ bind(&table_label);
-    __ casetbl((int)case_labels.size(), defcase);
-
-    for (auto& pair : case_labels)
-        __ casetbl_entry(pair.first, &pair.second);
 
     __ bind(&exit_label);
 }
@@ -1986,7 +2041,7 @@ void CodeGenerator::Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slot
     __ emit(OP_DUP);
     __ emit(OP_LOAD_S, VarSlot(iter_slot));
     __ emit(OP_IDXADDR);
-    __ emit(OP_LOAD_I);
+    __ emit(OP_LOAD_I_I32);
 
     auto inner = type->inner()->as<ArrayType>();
     if (inner->inner()->isArray()) {
@@ -1996,7 +2051,7 @@ void CodeGenerator::Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slot
         for (const auto& slot : slots) {
             __ emit(OP_LOAD_S, VarSlot(slot));
             __ emit(OP_IDXADDR);
-            __ emit(OP_LOAD_I);
+            __ emit(OP_LOAD_I_I32);
         }
         __ emit(OP_SWAP);
         __ emit(OP_COPYARRAY);
@@ -2061,11 +2116,7 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
 }
 
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
-    Int64CellUnion u(*expr->ToInt64());
-
-    auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
-    __ emit(OP_STOR_S_C_I64, VarSlot(slot), u.cells[0], u.cells[1]);
-    __ emit(OP_LOAD_S_I64, VarSlot(slot));
+    __ emit(OP_PUSH_C_I64, Int64Value(*expr->ToInt64()));
 }
 
 

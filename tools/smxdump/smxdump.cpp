@@ -591,7 +591,6 @@ class DumpTool final {
             case OP_PUSH3:
             case OP_PUSH3_S:
             case OP_PUSH3_ADR:
-            case OP_STOR_S_C_I64:
                 fprintf(stdout, " %d, %d, %d", cip[1], cip[2], cip[3]);
                 break;
 
@@ -653,8 +652,8 @@ class DumpTool final {
 
             DumpOpcodeV2(method_start, cip, op);
 
-            if (op == OP_CASETBL)
-                cip += GetCaseTableSize(cip);
+            if (op == OP_SWITCH)
+                cip += GetSwitchOpcodeSize(cip);
             else if (name)
                 cip += GetOpcodeSize(op);
             else
@@ -707,15 +706,11 @@ class DumpTool final {
 
         switch (op) {
             case OP_PUSH_C:
-            case OP_ADD_C:
-            case OP_SMUL_C:
                 fprintf(stdout, " %d", reader.read<cell_t>());
                 break;
 
             case OP_LOAD_GLB:
-            case OP_LOAD_GLB_I64:
             case OP_STOR_GLB:
-            case OP_STOR_GLB_I64:
             case OP_ADDR_GLB:
             {
                 uint16_t index = reader.read<uint16_t>();
@@ -744,12 +739,6 @@ class DumpTool final {
             case OP_ADDR_S:
             case OP_LOAD_S:
             case OP_STOR_S:
-            case OP_ZERO_S:
-            case OP_ZERO_S_I64:
-            case OP_STOR_S_I64:
-            case OP_LREF_S:
-            case OP_SREF_S:
-            case OP_LOAD_S_I64:
                 fprintf(stdout, " %d", reader.read<int16_t>());
                 break;
 
@@ -760,13 +749,6 @@ class DumpTool final {
                 break;
             }
 
-            case OP_STOR_S_C_I64: {
-                int16_t slot = reader.read<int16_t>();
-                cell_t cell0 = reader.read<cell_t>();
-                cell_t cell1 = reader.read<cell_t>();
-                fprintf(stdout, " %d, %d, %d", slot, cell0, cell1);
-                break;
-            }
 
             case OP_LOAD_FN:
             case OP_CALL:
@@ -817,7 +799,6 @@ class DumpTool final {
             case OP_POP:
             case OP_DUP:
             case OP_SWAP:
-            case OP_DUP_ROTATE:
                 break;
 
             default:

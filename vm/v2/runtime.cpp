@@ -95,11 +95,6 @@ bool Runtime::Initialize() {
         return strcmp(a.name, b.name) < 0;
     });
 
-    pubvars_ = std::make_unique<sp_pubvar_t[]>(image_->NumPubvars());
-    if (!pubvars_)
-        return false;
-    memset(pubvars_.get(), 0, sizeof(sp_pubvar_t) * image_->NumPubvars());
-
     if (data_only_)
         return true;
 
@@ -142,7 +137,30 @@ bool Runtime::InitializeGlobals() {
         if (!ptr)
             return false;
         global_addrs_[i] = ptr;
+
+        if ((global->flags & kRttiGlobal_VisibilityMask) == kRttiGlobal_Public) {
+            PubvarEntry entry;
+            entry.pubvar.name = image_->names() + global->name;
+            entry.global_index = i;
+            if (td->kind() == TypeKind::FixedArray) {
+                uint32_t array_local = *heap_.ToPhysAddr<cell_t*>(ptr);
+                SpArray* array = heap_.ToPhysAddr<SpArray*>(array_local);
+                entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(array->data);
+                entry.local_addr = array_local;
+            } else {
+                entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(ptr);
+                entry.local_addr = ptr;
+            }
+            pubvars_.push_back(entry);
+        }
     }
+
+    std::sort(pubvars_.begin(), pubvars_.end(),
+              [](const PubvarEntry& a, const PubvarEntry& b) -> bool {
+                  return strcmp(a.pubvar.name, b.pubvar.name) < 0;
+              });
+
+    pubvars_.shrink_to_fit();
 
     uint32_t num_strings = 0;
     if (image_->rtti_stringpool())
@@ -330,48 +348,40 @@ uint32_t Runtime::GetPublicsNum() {
 }
 
 int Runtime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out) {
-    if (index >= image_->NumPubvars())
+    if (index >= pubvars_.size())
         return SP_ERROR_INDEX;
 
-    sp_pubvar_t* pubvar = &pubvars_[index];
-    if (!pubvar->name) {
-        uint32_t offset;
-        image_->GetPubvar(index, &offset, &pubvar->name);
-        if (int err = LocalToPhysAddr(offset, &pubvar->offs))
-            return err;
-    }
-
     if (out)
-        *out = pubvar;
+        *out = &pubvars_[index].pubvar;
     return SP_ERROR_NONE;
 }
 
 int Runtime::FindPubvarByName(const char* name, uint32_t* index) {
-    size_t idx;
-    if (!image_->FindPubvar(name, &idx))
+    auto cmp = [](const PubvarEntry& a, const char* target) -> bool {
+        return strcmp(a.pubvar.name, target) < 0;
+    };
+    auto it = std::lower_bound(pubvars_.begin(), pubvars_.end(), name, cmp);
+    if (it == pubvars_.end() || strcmp(it->pubvar.name, name) != 0)
         return SP_ERROR_NOT_FOUND;
 
     if (index)
-        *index = idx;
+        *index = (uint32_t)std::distance(pubvars_.begin(), it);
     return SP_ERROR_NONE;
 }
 
 int Runtime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) {
-    if (index >= image_->NumPubvars())
+    if (index >= pubvars_.size())
         return SP_ERROR_INDEX;
 
-    uint32_t offset;
-    image_->GetPubvar(index, &offset, nullptr);
-
-    if (int err = LocalToPhysAddr(offset, phys_addr))
-        return err;
-    *local_addr = offset;
+    *local_addr = pubvars_[index].local_addr;
+    if (phys_addr)
+        *phys_addr = pubvars_[index].pubvar.offs;
     return SP_ERROR_NONE;
 }
 
 uint32_t
 Runtime::GetPubVarsNum() {
-    return image_->NumPubvars();
+    return (uint32_t)pubvars_.size();
 }
 
 
@@ -1140,6 +1150,11 @@ uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
     }
 
     return heap_.ToLocalAddr(ptr);
+}
+
+const TypeDesc* Runtime::GetTypeOfGlobal(uint16_t index) {
+    auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), index);
+    return LoadTypeFromId(global->type_id);
 }
 
 SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {

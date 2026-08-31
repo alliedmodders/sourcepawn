@@ -61,6 +61,17 @@ MethodInfo::InternalValidate() {
     max_eval_stack_depth_ = verifier.max_eval_stack_depth();
     max_eval_stack_bytes_ = verifier.max_eval_stack_bytes();
     local_types_ = std::move(verifier.local_types());
+    arg_types_ = std::move(verifier.arg_types());
+}
+
+const TypeDesc* MethodInfo::GetTypeOfLocal(cell_t offset) const {
+    if (offset < 0) {
+        uint32_t arg_slot = -offset - 1;
+        assert(arg_slot < arg_types_.size());
+        return arg_types_[arg_slot];
+    }
+    assert((uint32_t)offset < local_types_.size());
+    return local_types_[offset];
 }
 
 } // namespace sp::v2
