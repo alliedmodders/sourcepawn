@@ -1192,7 +1192,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     }
 
     Expr* left = first;
-    bool all_const = (left->val().ident == iCONSTEXPR);
+    bool all_const = (left->val().ident == iCONSTEXPR && left->val().type()->isInt());
     bool constval = true;
 
     auto& val = chain->val();
@@ -1229,7 +1229,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         if (is_first && !binop->left.IsNop())
             first = chain->set_first(BuildConversion(first, binop->left));
 
-        if (right->val().ident != iCONSTEXPR)
+        if (right->val().ident != iCONSTEXPR || !right->val().type()->isInt())
             all_const = false;
 
         // Fold constants as we go.
