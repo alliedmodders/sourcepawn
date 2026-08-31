@@ -299,6 +299,7 @@ void TypeManager::init() {
     type_object_ = defineObject("object");
 
     type_int64_ = defineBuiltin("int64", BuiltinType::Int64);
+    type_intptr_ = defineBuiltin("intptr", BuiltinType::IntPtr);
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {

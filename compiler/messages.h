@@ -328,7 +328,7 @@ static const char* errmsg_ex[] = {
     /*446*/ "enum structs are not allowed in legacy structs\n",
     /*447*/ "invalid use of enum struct in expression\n",
     /*448*/ "invalid enum struct initializer\n",
-    /*449*/ "unused\n",
+    /*449*/ "sizeof cannot be determined on type '%s'\n",
     /*450*/ "no viable conversion from '%s' to '%s'\n",
     /*451*/ "unused\n",
     /*452*/ "multiple command-line source files are no longer supported\n",

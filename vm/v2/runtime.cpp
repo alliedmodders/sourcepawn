@@ -881,6 +881,8 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
         }
         case cb::kInt64:
             return GetPrimitiveType(TypeKind::Int64);
+        case cb::kIntPtr:
+            return GetPrimitiveType(TypeKind::IntPtr);
         case cb::kFixedArray: {
             uint32_t size;
             if (!parser.ReadUint32_Leb128(&size) || !size) {

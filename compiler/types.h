@@ -65,6 +65,7 @@ enum class BuiltinType : uint8_t {
     Any,
     Void,
     Int64,
+    IntPtr,
 };
 
 enum class TypeKind : uint8_t {
@@ -274,6 +275,8 @@ class Type : public PoolObject
     bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
     bool isInt() const { return isBuiltin(BuiltinType::Int); }
     bool isInt64() const { return isBuiltin(BuiltinType::Int64); }
+    bool isIntPtr() const { return isBuiltin(BuiltinType::IntPtr); }
+    bool isWideInt() const { return isInt64() || isIntPtr(); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
@@ -317,6 +320,7 @@ class Type : public PoolObject
                     return {1};
                 case BuiltinType::Bool:
                 case BuiltinType::Int:
+                case BuiltinType::IntPtr:
                 case BuiltinType::Float:
                 case BuiltinType::Null:
                 case BuiltinType::Any:
@@ -591,6 +595,7 @@ class TypeManager
     Type* type_char() const { return type_string_; }
     Type* type_int() const { return type_int_; }
     Type* type_int64() const { return type_int64_; }
+    Type* type_intptr() const { return type_intptr_; }
 
     Type* GetBuiltin(BuiltinType type) const { return builtin_types_[(int)type]; }
 
@@ -616,6 +621,7 @@ class TypeManager
     Type* type_bool_ = nullptr;
     Type* type_string_ = nullptr;
     Type* type_int64_ = nullptr;
+    Type* type_intptr_ = nullptr;
 
     struct ArrayCachePolicy {
         typedef ArrayType* Payload;

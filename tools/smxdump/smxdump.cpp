@@ -375,6 +375,9 @@ std::string DumpTool::DumpType(FastRtti& rtti) {
             case cb::kInt64:
                 type_inner = "int64";
                 break;
+            case cb::kIntPtr:
+                type_inner = "intptr";
+                break;
             case cb::kFloat32:
                 type_inner = "float";
                 break;

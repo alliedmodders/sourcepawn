@@ -71,6 +71,7 @@ bool FastRtti::SkipNextType() {
             case cb::kBool:
             case cb::kInt32:
             case cb::kInt64:
+            case cb::kIntPtr:
             case cb::kFloat32:
             case cb::kChar8:
             case cb::kAny:
@@ -275,6 +276,7 @@ RttiParser::decode() {
         case cb::kBool:
         case cb::kInt32:
         case cb::kInt64:
+        case cb::kIntPtr:
         case cb::kFloat32:
         case cb::kChar8:
         case cb::kAny:
@@ -371,6 +373,7 @@ RttiParser::validate() {
         case cb::kBool:
         case cb::kInt32:
         case cb::kInt64:
+        case cb::kIntPtr:
         case cb::kFloat32:
         case cb::kChar8:
         case cb::kAny:

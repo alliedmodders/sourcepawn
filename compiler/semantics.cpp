@@ -1312,6 +1312,12 @@ static inline bool IsValidIntWidthChange(Type* from, Type* to) {
         return true;
     if ((from->isInt() || from->isAny()) && to->isInt64())
         return true;
+    if (from->isWideInt() && to->isInt())
+        return true;
+    if ((from->isInt() || from->isAny()) && to->isWideInt())
+        return true;
+    if (from->isWideInt() && to->isWideInt())
+        return true;
     return false;
 }
 
@@ -1410,7 +1416,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         if (inner->lvalue())
             expr->set_expr(new RvalueExpr(inner));
         out_val.ident = iEXPRESSION;
-    } else if (out_val.type()->isInt64() || to_type->isInt64()) {
+    } else if (out_val.type()->isWideInt() || to_type->isWideInt()) {
         if (!IsValidIntWidthChange(out_val.type(), to_type)) {
             report(expr, 460) << out_val.type() << to_type;
             return false;
@@ -2071,6 +2077,10 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(child, 72);
                 return false;
             } else {
+                if (cv.type()->isIntPtr()) {
+                    report(expr, 449) << cv.type();
+                    return false;
+                }
                 val.set_constval(1);
                 report(expr, 252);
             }
@@ -2117,9 +2127,9 @@ DefaultArgExpr::DefaultArgExpr(const token_pos_t& pos, ArgDecl* arg)
 }
 
 static inline bool IsValidInt64RefArg(Type* param) {
-    if (param->isInt64())
+    if (param->isWideInt())
         return true;
-    if (param->isReference() && param->inner()->isInt64())
+    if (param->isReference() && param->inner()->isWideInt())
         return true;
     return false;
 }
@@ -2431,7 +2441,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
             return nullptr;
         }
 
-        if (formal->inner()->isInt64()) {
+        if (formal->inner()->isWideInt()) {
             if (!IsValidInt64RefArg(val->type())) {
                 report(param, 134) << *formal << val->type();
                 return nullptr;
@@ -3438,7 +3448,8 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     if (from->lvalue())
         from = new RvalueExpr(from);
 
-    // Half-assed constant folding for int->int64 casts for global assignment to work.
+    // Half-assed constant folding for int->int64 casts. We don't do this for
+    // intptr since the width is not known at compile time.
     Expr* to;
     if (from->val().ident == iCONSTEXPR && from->val().type()->isInt() &&
         type == BuiltinType::Int64)

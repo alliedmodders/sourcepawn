@@ -25,6 +25,7 @@ enum class TypeKind : uint8_t {
     Bool,
     Int32,
     Int64,
+    IntPtr,
     Float32,
     Char8,
     Any,
@@ -132,6 +133,8 @@ class TypeDesc final {
         switch (kind_) {
             case TypeKind::Int64:
                 return sizeof(int64_t);
+            case TypeKind::IntPtr:
+                return sizeof(intptr_t);
             case TypeKind::FlatArray:
                 return (array.size * array.elt->element_size() + 3) & ~3;
             case TypeKind::EnumStruct:
@@ -159,6 +162,9 @@ class TypeDesc final {
             case TypeKind::Int64:
                 return sizeof(int64_t);
 
+            case TypeKind::IntPtr:
+                return sizeof(intptr_t);
+
             case TypeKind::Char8:
                 return sizeof(char);
 
@@ -182,6 +188,11 @@ class TypeDesc final {
     uint32_t field_size() const { return slot_size(); }
 
     bool IsInt64() const { return kind_ == TypeKind::Int64; }
+    bool IsIntPtr() const { return kind_ == TypeKind::IntPtr; }
+
+    bool IsWideInt() const {
+        return IsInt64() || (IsIntPtr() && sizeof(void*) == 8);
+    }
 
     TypeKind kind() const { return kind_; }
     bool can_global_cache() const { return can_global_cache_; }

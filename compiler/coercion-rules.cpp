@@ -65,6 +65,8 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
                 return ConversionKind::TagMismatch;
             if (to->isFloat() || to->isInt64())
                 return ConversionKind::Numeric;
+            if (to->isIntPtr())
+                return ConversionKind::Numeric;
             break;
 
         case BuiltinType::Null:
@@ -79,6 +81,8 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
         case BuiltinType::Any:
             if (to->isInt64())
                 return ConversionKind::Numeric;
+            if (to->isIntPtr())
+                return ConversionKind::Numeric;
             if (to->coercesFromInt() || to->isFloat() || to->isFunction() || to->as<FunctionType>())
                 return ConversionKind::Trivial;
             break;
@@ -86,6 +90,14 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
         case BuiltinType::Float:
             if (to->isAny())
                 return ConversionKind::Trivial;
+            break;
+
+        case BuiltinType::IntPtr:
+            // intptr to int64 is always lossless.
+            if (to->isInt64())
+                return ConversionKind::Numeric;
+
+            // intptr to int/any are potentially truncating, so they're illegal.
             break;
 
         default:

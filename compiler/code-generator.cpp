@@ -1657,10 +1657,12 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                  EmitAddress(val);
          }
 
-        // Always pass int64s by reference, as a hack for backward compatibility
-        // with natives and GetLocalParams.
-        if (val.type()->isInt64() && !needs_temp && !expr->lvalue()) {
-            auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
+        // Always pass wide integers by reference, as a hack for backward
+        // compatibility with natives and GetLocalParams.
+        if (val.type()->isWideInt() && !needs_temp && !expr->lvalue()) {
+            auto temp_type = val.type()->isInt64() ? BuiltinType::Int64
+                                                   : BuiltinType::IntPtr;
+            auto slot = AcquireTempSlot(expr, temp_type);
             __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
@@ -1908,6 +1910,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_ELEM_U8);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_ELEM_I64);
+            else if (lval.type()->isIntPtr())
+                __ emit(OP_LOAD_ELEM_INTPTR);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_ELEM_F32);
             else if (!lval.type()->isComposite())
@@ -1926,6 +1930,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_I_U8);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_I_I64);
+            else if (lval.type()->isIntPtr())
+                __ emit(OP_LOAD_I_INTPTR);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_I_F32);
             else
@@ -1967,6 +1973,9 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 if (lval.type()->inner()->isInt64())
                     // int64 arguments are passed by-ref for compatibility.
                     __ emit(OP_LOAD_I_I64);
+                else if (lval.type()->inner()->isIntPtr())
+                    // intptr arguments are passed by-ref for compatibility.
+                    __ emit(OP_LOAD_I_INTPTR);
                 else if (lval.type()->inner()->isFloat())
                     __ emit(OP_LOAD_I_F32);
                 else
@@ -1989,6 +1998,10 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                     // int64 arguments are passed by-ref for compatibility.
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
                     __ emit(OP_LOAD_I_I64);
+                } else if (var->type()->isIntPtr() && var->vclass() == sARGUMENT) {
+                    // intptr arguments are passed by-ref for compatibility.
+                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                    __ emit(OP_LOAD_I_INTPTR);
                 } else if (var->type()->isCompositeValue()) {
                     EmitAddress(var);
                 } else {
@@ -2013,6 +2026,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_ELEM_U8);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_ELEM_I64);
+            else if (lval.type()->isIntPtr())
+                __ emit(OP_STOR_ELEM_INTPTR);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_ELEM_F32);
             else if (lval.type()->isHeapItem())
@@ -2026,6 +2041,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_I_U8);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_I_I64);
+            else if (lval.type()->isIntPtr())
+                __ emit(OP_STOR_I_INTPTR);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_I_F32);
             else if (lval.type()->isHeapItem())
@@ -2072,6 +2089,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_SWAP);
                 if (lval.type()->inner()->isInt64())
                     __ emit(OP_STOR_I_I64);
+                else if (lval.type()->inner()->isIntPtr())
+                    __ emit(OP_STOR_I_INTPTR);
                 else if (lval.type()->inner()->isHeapItem())
                     __ emit(OP_STOR_I_A);
                 else
@@ -2092,6 +2111,10 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
                     __ emit(OP_SWAP);
                     __ emit(OP_STOR_I_I64);
+                } else if (var->type()->isIntPtr() && var->vclass() == sARGUMENT) {
+                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                    __ emit(OP_SWAP);
+                    __ emit(OP_STOR_I_INTPTR);
                 } else {
                     __ emit(OP_STOR_S, VarSlot(var->addr()));
                 }
@@ -2533,8 +2556,11 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     }
 
     if (to_type->isInt64()) {
-        assert(from_type->isInt() || from_type->isAny());
+        assert(from_type->isInt() || from_type->isAny() || from_type->isIntPtr());
         __ emit(OP_CVT_I64);
+    } else if (to_type->isIntPtr()) {
+        assert(from_type->isInt() || from_type->isAny() || from_type->isInt64());
+        __ emit(OP_CVT_INTPTR);
     } else if (to_type->isBool()) {
         if (from_type->isInt64())
             __ emit(OP_TEST);
@@ -2543,10 +2569,6 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     } else {
         __ emit(OP_CVT_F32);
     }
-}
-
-static inline bool CoercesToInt64(Type* type) {
-    return type->isInt() || type->isAny();
 }
 
 void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
@@ -2559,10 +2581,20 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
     } else {
         EmitExpr(from);
 
-        if (CoercesToInt64(expr->val().type()) && from->val().type()->isInt64()) {
-            __ emit(OP_TRUNCATE_I64);
-        } else if (expr->val().type()->isInt64() && CoercesToInt64(from->val().type())) {
+        Type* to = expr->val().type();
+        Type* from_type = from->val().type();
+        // Wide int -> int32: truncate.
+        if ((to->isInt() || to->isAny()) && from_type->isWideInt()) {
+            __ emit(OP_CVT_I32);
+        } else if (to->isInt64() &&
+                   (from_type->isInt() || from_type->isAny() || from_type->isIntPtr()))
+        {
+            // -> int64: from int, any, or intptr.
             __ emit(OP_CVT_I64);
+        } else if (to->isIntPtr() &&
+                   (from_type->isInt() || from_type->isAny() || from_type->isInt64()))
+        {
+            __ emit(OP_CVT_INTPTR);
         }
     }
 }

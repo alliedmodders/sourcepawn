@@ -127,6 +127,19 @@ static cell_t PrintNum64(IPluginContext* cx, const cell_t* params)
   return printf("%" PRIi64 "\n", *reinterpret_cast<int64_t*>(addr));
 }
 
+static cell_t PrintNumPtr(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[1], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  return printf("%" PRIiPTR "\n", *reinterpret_cast<intptr_t*>(addr));
+}
+
+static cell_t SysIntPtrSize(IPluginContext* cx, const cell_t* params)
+{
+  return sizeof(intptr_t);
+}
+
 static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
 {
   cell_t* out;
@@ -637,6 +650,8 @@ static int Execute(const char* file)
   BindNative(rt.get(), "print", Print);
   BindNative(rt.get(), "printnum", PrintNum);
   BindNative(rt.get(), "printnum64", PrintNum64);
+  BindNative(rt.get(), "printnumptr", PrintNumPtr);
+  BindNative(rt.get(), "sys_intptr_size", SysIntPtrSize);
   BindNative(rt.get(), "writenum", WriteNum);
   BindNative(rt.get(), "printnums", PrintNums);
   BindNative(rt.get(), "printnums64", PrintNums64);

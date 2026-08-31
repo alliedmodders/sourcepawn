@@ -96,7 +96,7 @@ namespace v2 {
     FOR_EACH(TEST, 50, "test", 1) \
     FOR_EACH(CVT_F32, 51, "cvt.f32", 1) \
     FOR_EACH(CVT_I64, 52, "cvt.i64", 1) \
-    FOR_EACH(TRUNCATE_I64, 53, "truncate.i64", 1) \
+    FOR_EACH(CVT_I32, 53, "cvt.i32", 1) \
     FOR_EACH(SWAP, 54, "swap", 1) \
     /* Given a table ID to the method table, pushes an SpFunction onto the
      * stack for the given function entry. The function must not have upvars.
@@ -236,6 +236,11 @@ namespace v2 {
      * Operand is uint16 index. Pushes a pointer to the upvar cell.
      */ \
     FOR_EACH(ADDR_UPVAR, 99, "addr.upvar", 3) \
+    FOR_EACH(CVT_INTPTR, 100, "cvt.intptr", 1) \
+    FOR_EACH(LOAD_I_INTPTR, 102, "load.i.intptr", 1) \
+    FOR_EACH(STOR_I_INTPTR, 103, "stor.i.intptr", 1) \
+    FOR_EACH(LOAD_ELEM_INTPTR, 104, "load.elem.intptr", 1) \
+    FOR_EACH(STOR_ELEM_INTPTR, 105, "stor.elem.intptr", 1) \
 
 
  enum OPCODE {
