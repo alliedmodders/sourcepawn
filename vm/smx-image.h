@@ -14,6 +14,7 @@
 #include <optional>
 #include <string_view>
 #include <unordered_map>
+#include <variant>
 
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
@@ -21,6 +22,7 @@
 #include <smx/smx-legacy-debuginfo.h>
 #include <smx/smx-typeinfo.h>
 #include <smx/smx-v1.h>
+#include <smx/smx-v2.h>
 #include <sp_vm_types.h>
 #include "binary-reader.h"
 #include "file-utils.h"
@@ -239,6 +241,25 @@ class SmxImage final :
     const smx_rtti_table_header* rtti_classdefs() const { return rtti_classdefs_; }
     const smx_rtti_table_header* rtti_fields() const { return rtti_fields_; }
 
+    // This API is a workaround to pstructs not being moved over to enum structs
+    // yet, which requires enum structs to be able to hold HeapItems. We expose
+    // this hack to keep SourceMod working.
+    const smx_pstruct_global* pstruct_globals() const { return pstruct_globals_; }
+    uint32_t pstruct_global_count() const {
+        return pstruct_globals_ ? pstruct_global_count_ : 0;
+    }
+    const smx_pstruct_value* pstruct_value(uint32_t index) const {
+        return index < pstruct_value_count_ ? pstruct_values_ + index : nullptr;
+    }
+    const smx_pstruct_value* pstruct_values() const { return pstruct_values_; }
+
+    const smx_pstruct_global* FindPstructGlobal(const char* name) const;
+    uint32_t GetPstructFieldCount(const smx_pstruct_global* entry) const;
+    const smx_pstruct_value* GetPstructValue(const smx_pstruct_global* entry,
+                                             const char* field) const;
+    int GetPstructValue(const smx_pstruct_global* entry, const char* field,
+                        std::variant<std::string, cell_t>* out);
+
     BinaryReader GetDataReader(uint32_t offset) {
         assert(IsValidDataOffset(offset));
         return BinaryReader(data_.blob() + offset, data_.blob() + data_.length());
@@ -266,6 +287,8 @@ class SmxImage final :
     bool validateRttiTypedefs();
     bool validateRttiTypesets();
     bool validateRttiGlobals();
+    bool validatePstructGlobals();
+    bool validatePstructValues();
     bool validateDebugInfo();
     bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
     bool validateDebugMethods();
@@ -338,6 +361,10 @@ class SmxImage final :
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
     const smx_rtti_table_header* rtti_globals_ = nullptr;
     const smx_rtti_table_header* rtti_stringpool_ = nullptr;
+    const smx_pstruct_global* pstruct_globals_ = nullptr;
+    uint32_t pstruct_global_count_ = 0;
+    const smx_pstruct_value* pstruct_values_ = nullptr;
+    uint32_t pstruct_value_count_ = 0;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_method_lines_ = nullptr;

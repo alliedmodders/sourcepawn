@@ -296,7 +296,7 @@ static const char* errmsg_ex[] = {
     /*432*/ "type %s was already declared\n",
     /*433*/ "struct variable must have struct initializer\n",
     /*434*/ "constructor cannot have a return type\n",
-    /*435*/ "unused\n",
+    /*435*/ "struct fields of type \"%s\" are not supported\n",
     /*436*/ "unused\n",
     /*437*/ "functions in global scope must use braces\n",
     /*438*/ "destructors cannot have arguments\n",

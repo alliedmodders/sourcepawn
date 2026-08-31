@@ -775,30 +775,43 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
     auto type = decl->type();
     auto ps = type->asPstruct();
 
-    std::vector<cell> values;
-    values.resize(ps->fields().size());
+    std::vector<RttiBuilder::PstructFieldEntry> field_entries;
 
     auto init = decl->init_rhs()->as<StructExpr>();
     for (const auto& field : init->fields()) {
         auto arg = ps->FindField(field->name);
+        auto field_type = arg->type();
+
+        RttiBuilder::PstructFieldEntry entry;
+        entry.name = arg->name();
         if (auto expr = field->value->as<StringExpr>()) {
-            values[arg->offset()] = data_.dat_address();
-            data_.Add(expr->text()->chars(), expr->text()->length());
+            std::string blob;
+            if (!EncodeCompactUint32(&blob, expr->text()->length())) {
+                report(expr->pos(), 470);
+                return;
+            }
+            blob.append(expr->text()->chars(), expr->text()->length());
+
+            entry.value = data_.dat_address();
+            data_.Add(blob.data(), blob.length());
+
+            Type* type = cc_.types()->defineArray(cc_.types()->type_char(), 0);
+            entry.type_id = rtti_->to_typeid(type);
         } else if (auto expr = field->value->as<NumberExpr>()) {
-            values[arg->offset()] = expr->val().const_cell();
+            entry.value = expr->val().const_cell();
+            entry.type_id = rtti_->to_typeid(field_type);
         } else if (auto expr = field->value->as<SymbolExpr>()) {
             auto var = expr->decl()->as<VarDeclBase>();
             assert(var);
-            values[arg->offset()] = var->addr();
+            entry.value = var->addr();
+            entry.type_id = rtti_->to_typeid(field_type);
         } else {
             assert(false);
         }
+        field_entries.push_back(entry);
     }
 
-    decl->BindAddress(data_.dat_address());
-
-    for (const auto& value : values)
-        data_.Add(value);
+    rtti_->AddPstructGlobal(decl, field_entries);
 }
 
 void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {

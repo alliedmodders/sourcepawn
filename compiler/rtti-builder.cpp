@@ -20,6 +20,8 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     typeid_cache_.init(128);
     string_cache_.init(128);
     rtti_data_ = new SmxBlobSection<void>("rtti.data");
+    pstruct_globals_ = new SmxListSection<smx_pstruct_global>("pstruct_glb");
+    pstruct_values_ = new SmxListSection<smx_pstruct_value>("pstruct_glb.values");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
@@ -55,6 +57,8 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.addIfNotEmpty(fields_);
     builder.addIfNotEmpty(stringpool_);
     builder.addIfNotEmpty(globals_);
+    builder.addIfNotEmpty(pstruct_globals_);
+    builder.addIfNotEmpty(pstruct_values_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -110,6 +114,8 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
     std::optional<cell> addr;
     if (auto var = decl->as<VarDeclBase>()) {
         if (var->is_shared())
+            return;
+        if (var->type()->isPstruct())
             return;
         if (auto cv = var->as<ConstDecl>()) {
             // :TODO: support wide types
@@ -391,6 +397,25 @@ uint32_t RttiBuilder::AddGlobal(VarDeclBase* decl, Atom* name) {
 
     if (decl->is_public())
         global.flags = kRttiGlobal_Public;
+
+    return index;
+}
+
+uint32_t RttiBuilder::AddPstructGlobal(VarDeclBase* decl,
+                                       const std::vector<PstructFieldEntry>& values)
+{
+    uint32_t index = pstruct_globals_->count();
+
+    smx_pstruct_global& global = pstruct_globals_->add();
+    global.name = names_->add(*cc_.atoms(), decl->name());
+    global.first_value = pstruct_values_->count();
+
+    for (const auto& value : values) {
+        smx_pstruct_value& row = pstruct_values_->add();
+        row.field_name = names_->add(*cc_.atoms(), value.name);
+        row.type_id = value.type_id;
+        row.fill_data = value.value;
+    }
 
     return index;
 }

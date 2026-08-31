@@ -1,0 +1,9 @@
+myinfo {
+    name = API Test
+    description = Dumps pstruct fields
+    author = AlliedModders LLC
+    version = 1.2.3
+    url = https://www.alliedmodders.org/
+    games = 7
+    autoload = 1
+}

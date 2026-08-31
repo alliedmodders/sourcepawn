@@ -298,6 +298,16 @@ bool PstructDecl::EnterTypes(SemaContext& sc) {
     return true;
 }
 
+static inline bool IsValidPstructFieldType(QualType type) {
+    if (type->isBool() || type->isInt())
+        return true;
+    if (auto array = type->as<ArrayType>()) {
+        if (array->inner()->isChar() && array->size() == 0)
+            return true;
+    }
+    return false;
+}
+
 bool PstructDecl::EnterNames(SemaContext& sc) {
     if (!type_)
         return false;  // EnterTypes failed; error already reported
@@ -319,11 +329,9 @@ bool PstructDecl::EnterNames(SemaContext& sc) {
         if (!field->type_info().dim_exprs.empty())
             ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(), sGLOBAL);
 
-        if (auto at = field->type()->as<ArrayType>()) {
-            if (at->inner()->isArray() || at->size() != 0) {
-                report(field, 69);
-                return false;
-            }
+        if (!IsValidPstructFieldType(field->type())) {
+            report(field, 435) << field->type();
+            return false;
         }
 
         field->set_offset(position);

@@ -74,3 +74,6 @@ native TestStruct add_test_structs(TestStruct a, TestStruct b);
 
 native int test_local_to_array_ptr(const char[] str, int index);
 
+// Dumps the contents of a pstruct in declaration order.
+native void dump_pstruct(const char[] name);
+

@@ -617,6 +617,37 @@ static cell_t AddTestStructs(IPluginContext* cx, const cell_t* params) {
   return params[1];
 }
 
+// Dumps the fields of a pstruct global, by name, using the SmxImage API.
+static cell_t DumpPstruct(IPluginContext* cx, const cell_t* params) {
+  char* name;
+  cx->LocalToString(params[1], &name);
+
+  SmxImage* image = cx->GetBaseRuntime()->image();
+  const smx_pstruct_global* glb = image->FindPstructGlobal(name);
+  if (!glb)
+    return cx->ThrowNativeErrorEx(SP_ERROR_NOT_FOUND, "%s: not found", name);
+
+  printf("%s {\n", name);
+
+  uint32_t count = image->GetPstructFieldCount(glb);
+  for (uint32_t i = 0; i < count; i++) {
+    auto field = image->pstruct_value(glb->first_value + i);
+    auto field_name = image->names() + field->field_name;
+
+    std::variant<std::string, cell_t> out;
+    int err = image->GetPstructValue(glb, field_name, &out);
+    if (err != SP_ERROR_NONE) {
+      printf("    %s = <error %d>\n", field_name, err);
+    } else if (std::holds_alternative<std::string>(out)) {
+      printf("    %s = %s\n", field_name, std::get<std::string>(out).c_str());
+    } else {
+      printf("    %s = %d\n", field_name, std::get<cell_t>(out));
+    }
+  }
+  printf("}\n");
+  return 0;
+}
+
 class DynamicNative : public INativeCallback
 {
   public:
@@ -698,6 +729,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "printf", Printf);
   BindNative(rt.get(), "print_test_struct", PrintTestStruct);
   BindNative(rt.get(), "add_test_structs", AddTestStructs);
+  BindNative(rt.get(), "dump_pstruct", DumpPstruct);
   BindNative(rt.get(), "add_int64", AddInt64);
   BindNative(rt.get(), "printdouble", PrintDouble);
   BindNative(rt.get(), "add_double", AddDouble);

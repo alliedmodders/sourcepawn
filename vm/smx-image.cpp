@@ -443,6 +443,9 @@ SmxImage::validateRtti() {
 
     rtti_stringpool_ = findRttiSection("rtti.stringpool");
 
+    if (!validatePstructValues() || !validatePstructGlobals())
+        return false;
+
     return true;
 }
 
@@ -638,6 +641,123 @@ bool SmxImage::validateRttiGlobals() {
             return error("invalid global visibility");
     }
     return true;
+}
+
+bool SmxImage::validatePstructGlobals() {
+    const Section* section = findSection("pstruct_glb");
+    if (!section)
+        return true;
+    if (!validateSection(section))
+        return error("invalid pstruct_glb section");
+    if (section->size % sizeof(smx_pstruct_global) != 0)
+        return error("invalid pstruct_glb section size");
+    pstruct_globals_ =
+        reinterpret_cast<const smx_pstruct_global*>(buffer() + section->dataoffs);
+    pstruct_global_count_ = (uint32_t)(section->size / sizeof(smx_pstruct_global));
+
+    for (uint32_t i = 0; i < pstruct_global_count_; i++) {
+        const smx_pstruct_global* entry = pstruct_globals_ + i;
+        if (!validateName(entry->name))
+            return error("invalid pstruct global name");
+        if (entry->first_value > pstruct_value_count_)
+            return error("invalid pstruct global value range");
+        if (i > 0 && entry->first_value < pstruct_globals_[i - 1].first_value)
+            return error("pstruct globals out of order");
+    }
+    return true;
+}
+
+bool SmxImage::validatePstructValues() {
+    const Section* section = findSection("pstruct_glb.values");
+    if (!section)
+        return true;
+    if (!validateSection(section))
+        return error("invalid pstruct_glb.values section");
+    if (section->size % sizeof(smx_pstruct_value) != 0)
+        return error("invalid pstruct_glb.values section size");
+    pstruct_values_ =
+        reinterpret_cast<const smx_pstruct_value*>(buffer() + section->dataoffs);
+    pstruct_value_count_ = (uint32_t)(section->size / sizeof(smx_pstruct_value));
+
+    for (uint32_t i = 0; i < pstruct_value_count_; i++) {
+        const smx_pstruct_value* value = pstruct_values_ + i;
+        if (!validateName(value->field_name))
+            return error("invalid pstruct value name");
+    }
+    return true;
+}
+
+const smx_pstruct_global* SmxImage::FindPstructGlobal(const char* name) const {
+    if (!pstruct_globals_)
+        return nullptr;
+    for (uint32_t i = 0; i < pstruct_global_count_; i++) {
+        if (strcmp(names_ + pstruct_globals_[i].name, name) == 0)
+            return &pstruct_globals_[i];
+    }
+    return nullptr;
+}
+
+uint32_t SmxImage::GetPstructFieldCount(const smx_pstruct_global* entry) const {
+    assert(pstruct_globals_);
+    assert(entry >= pstruct_globals_);
+    assert(entry < pstruct_globals_ + pstruct_global_count_);
+
+    uint32_t index = uint32_t(entry - pstruct_globals_);
+    uint32_t end = pstruct_value_count_;
+    if (index + 1 < pstruct_global_count_ && pstruct_globals_[index + 1].first_value < end)
+        end = pstruct_globals_[index + 1].first_value;
+    if (entry->first_value >= end)
+        return 0;
+    return end - entry->first_value;
+}
+
+const smx_pstruct_value* SmxImage::GetPstructValue(const smx_pstruct_global* entry,
+                                                   const char* field) const
+{
+    uint32_t count = GetPstructFieldCount(entry);
+    for (uint32_t i = 0; i < count; i++) {
+        auto candidate = pstruct_value(entry->first_value + i);
+        if (candidate && strcmp(names_ + candidate->field_name, field) == 0)
+            return candidate;
+    }
+    return nullptr;
+}
+
+int SmxImage::GetPstructValue(const smx_pstruct_global* entry, const char* field,
+                              std::variant<std::string, cell_t>* out)
+{
+    const smx_pstruct_value* value = GetPstructValue(entry, field);
+    if (!value)
+        return SP_ERROR_NOT_FOUND;
+
+    FastRtti rtti = GetTypeIdParser(value->type_id);
+    uint8_t b;
+    if (!rtti.GetNextByte(&b))
+        return SP_ERROR_RTTI;
+    if (b == cb::kConst && !rtti.GetNextByte(&b))
+        return SP_ERROR_RTTI;
+
+    switch (b) {
+        case cb::kArray: {
+            if (!rtti.GetNextByte(&b) || b != cb::kChar8)
+                return SP_ERROR_RTTI;
+
+            auto blob = ReadDataBlob(value->fill_data);
+            if (!blob)
+                return SP_ERROR_RTTI;
+
+            out->emplace<std::string>(blob->data(), blob->size());
+            return SP_ERROR_NONE;
+        }
+        case cb::kBool:
+        case cb::kInt32:
+        case cb::kAny:
+        case cb::kEnum:
+            out->emplace<cell_t>(static_cast<cell_t>(value->fill_data));
+            return SP_ERROR_NONE;
+        default:
+            return SP_ERROR_RTTI;
+    }
 }
 
 bool SmxImage::validateRttiTypesets() {

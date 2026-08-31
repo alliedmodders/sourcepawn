@@ -11,6 +11,7 @@
 
 #include <amtl/am-hashmap.h>
 #include <smx/smx-v1.h>
+#include <smx/smx-v2.h>
 #include <smx/smx-typeinfo.h>
 #include "compile-context.h"
 #include "libsmx/data-pool.h"
@@ -36,6 +37,12 @@ struct LocalSlotSignature {
 class RttiBuilder
 {
   public:
+    struct PstructFieldEntry {
+        Atom* name = nullptr;
+        uint32_t type_id = 0;
+        uint32_t value = 0;
+    };
+
     RttiBuilder(CompileContext& cc, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
@@ -48,6 +55,7 @@ class RttiBuilder
     uint16_t AddString(Atom* atom, DataQueue* data);
     uint32_t AddFieldRef(LayoutFieldDecl* decl);
     std::optional<uint32_t> FindStringDataOffset(Atom* atom);
+    uint32_t AddPstructGlobal(VarDeclBase* decl, const std::vector<PstructFieldEntry>& values);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(uint16_t addr, uint16_t line);
@@ -93,6 +101,8 @@ class RttiBuilder
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> rtti_data_;
+    RefPtr<SmxListSection<smx_pstruct_global>> pstruct_globals_;
+    RefPtr<SmxListSection<smx_pstruct_value>> pstruct_values_;
     RefPtr<SmxRttiTable<smx_rtti_method>> methods_;
     RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
     RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;

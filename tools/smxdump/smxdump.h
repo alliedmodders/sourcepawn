@@ -58,6 +58,7 @@ class DumpTool final {
     void DumpRttiClassdefs();
     void DumpUpvars(sp::FastRtti& rtti, uint16_t count);
     void DumpRttiGlobals();
+    void DumpPstructGlobals();
     void DumpLegacyCode();
     void DumpLoweredCode(uint32_t method_index);
     void DumpJitCode(uint32_t method_index);

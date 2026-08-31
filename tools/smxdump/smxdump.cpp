@@ -76,6 +76,7 @@ void DumpTool::Dump() {
     DumpCode();
     DumpRttiMethods();
     DumpRttiGlobals();
+    DumpPstructGlobals();
 
     if (!smx()->rtti_methods())
         DumpLegacyCode();
@@ -546,6 +547,39 @@ void DumpTool::DumpRttiGlobals() {
         auto rtti = smx()->GetTypeIdParser(global->type_id);
         fprintf(stdout, "%s", DumpType(rtti).c_str());
         fprintf(stdout, "\n");
+    }
+    fprintf(stdout, "}\n");
+}
+
+void DumpTool::DumpPstructGlobals() {
+    if (!smx()->pstruct_globals())
+        return;
+
+    fprintf(stdout, ".pstruct_globals\n");
+    fprintf(stdout, "{\n");
+    for (uint32_t i = 0; i < smx()->pstruct_global_count(); i++) {
+        auto entry = smx()->pstruct_globals() + i;
+        const char* global_name = smx()->names() + entry->name;
+        fprintf(stdout, "    %u: %s {\n", i, global_name);
+
+        uint32_t count = smx()->GetPstructFieldCount(entry);
+        for (uint32_t j = 0; j < count; j++) {
+            auto value = smx()->pstruct_value(entry->first_value + j);
+            const char* field_name = smx()->names() + value->field_name;
+            auto type = smx()->GetTypeIdParser(value->type_id);
+            fprintf(stdout, "        %s : %s = ", field_name, DumpType(type).c_str());
+
+            std::variant<std::string, cell_t> out;
+            int err = smx()->GetPstructValue(entry, field_name, &out);
+            if (err == SP_ERROR_NONE && std::holds_alternative<std::string>(out))
+                fprintf(stdout, "\"%s\"", EscapeString(std::get<std::string>(out)).c_str());
+            else if (err == SP_ERROR_NONE)
+                fprintf(stdout, "%d", std::get<cell_t>(out));
+            else
+                fprintf(stdout, "<error %d>", err);
+            fprintf(stdout, "\n");
+        }
+        fprintf(stdout, "    }\n");
     }
     fprintf(stdout, "}\n");
 }
