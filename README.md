@@ -256,3 +256,6 @@ The legacy VM is still used for older binaries.
  - The interpreter now uses a switch loop for faster execution.
  - Instructions are encoded with 8 bit alignment instead of 32, making the code
    stream much smaller.
+
+Finally, the project has been fully relicensed to BSD 3-clause to resolve
+ambiguities.

@@ -1,11 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2004-2015 AlliedModers LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is licensed under the GNU
-// General Public License, version 3.0 (GPL). If a copy of the GPL was not
-// provided with this file, you can obtain it here:
-//   http://www.gnu.org/licenses/gpl.html
+// Copyright (c) 2004-2026 AlliedModders LLC
 //
 #include <utility>
 

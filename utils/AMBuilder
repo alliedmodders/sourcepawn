@@ -1,4 +1,9 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Copyright (c) 2026 AlliedModders LLC
+
 import os
 
 module = binary.Module(builder, 'utils')
