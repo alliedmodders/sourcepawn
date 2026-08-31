@@ -60,6 +60,16 @@ bool CompilerBase::SupportsPlugin(Runtime* cx) {
 // Every JIT function gets 16 bytes of stack, plus an extra 12 for alignment on CCC.
 static constexpr int kNativeStackAllowance = (3 + 4) * sizeof(intptr_t);
 
+// On Windows, |this| is passed in ECX rather than in an argument slot on the
+// stack. To help set up function frames in a consistent way, we use a helper.
+static constexpr int RtArgSlot(int n) {
+#if defined(_WIN32)
+    return 4 * n;
+#else
+    return 4 * (n + 1);
+#endif
+}
+
 // Handle<> storage is placed at the top of the pre-allocated stack area
 // (ebp-16 = esp+24). On SysV this leaves 6 slots (esp+0..esp+20) for the
 // hidden return pointer, |this|, and up to 4 method arguments.
@@ -1663,6 +1673,26 @@ void Compiler::CallRtForHandle(void* method_addr, uint16_t dest_reg) {
     __ movl(RegAddr(dest_reg), eax);
 }
 
+void Compiler::CallRtForBool(void* method_addr) {
+#if defined(_WIN32)
+    // |this|
+    __ movl(ecx, reinterpret_cast<intptr_t>(rt_));
+#else
+    // |this|
+    __ movl(Operand(esp, 0), reinterpret_cast<intptr_t>(rt_));
+#endif
+
+    // Clear exit_fp_ so DispatchReport defers the error.
+    __ movl(Operand(ExternalAddress(env_->addressOfExit())), 0);
+
+    __ call(ExternalAddress(method_addr));
+    EmitCipMapping(op_cip_);
+
+    auto& thunk = AddDeferredErrorThunk();
+    __ testb(r8_al, r8_al);
+    __ j(zero, &thunk.label);
+}
+
 void Compiler::EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) {
     __ movl(ecx, RegAddr(base_reg));
     __ testl(ecx, ecx);
@@ -1756,6 +1786,23 @@ void Compiler::EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint3
     }
 
     __ movl(edi, Operand(esp, 0));
+}
+
+void Compiler::EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t count) {
+    __ movl(eax, RegAddr(src_reg));
+    __ movl(Operand(esp, RtArgSlot(0)), eax);
+    __ movl(eax, RegAddr(dest_reg));
+    __ movl(Operand(esp, RtArgSlot(1)), eax);
+    __ movl(Operand(esp, RtArgSlot(2)), count);
+    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayFlatA));
+}
+
+void Compiler::EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(eax, RegAddr(src_reg));
+    __ movl(Operand(esp, RtArgSlot(0)), eax);
+    __ movl(eax, RegAddr(dest_reg));
+    __ movl(Operand(esp, RtArgSlot(1)), eax);
+    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayOfObjects));
 }
 
 void Compiler::EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) {

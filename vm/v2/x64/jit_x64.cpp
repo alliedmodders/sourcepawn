@@ -1467,6 +1467,19 @@ void Compiler::EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint3
     }
 }
 
+void Compiler::EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t count) {
+    __ movl(ArgReg3, count);
+    __ movl(ArgReg2, RegAddr(dest_reg));
+    __ movl(ArgReg1, RegAddr(src_reg));
+    CallRtForBool(&Runtime::CopyArrayFlatA, 3);
+}
+
+void Compiler::EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(ArgReg2, RegAddr(dest_reg));
+    __ movl(ArgReg1, RegAddr(src_reg));
+    CallRtForBool(&Runtime::CopyArrayOfObjects, 2);
+}
+
 void Compiler::EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) {
     assert(bytes % 4 == 0);
 
@@ -1621,6 +1634,23 @@ void Compiler::CallRtForHandleImpl(void* method_addr, uint32_t nargs, uint16_t d
 
     __ subq(rax, dat_reg);
     __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::CallRtForBoolImpl(void* method_addr, uint32_t nargs) {
+    assert(nargs <= 3);
+
+    __ movq(ArgReg0, context_reg);
+
+    // Clear exit_fp_ so DispatchReport defers the error.
+    __ xorq(rax, rax);
+    __ movq(Operand(env_reg, Environment::offsetOfExit()), rax);
+
+    __ callWithABI(ExternalAddress(method_addr));
+    EmitCipMapping(op_cip_);
+
+    auto& thunk = AddDeferredErrorThunk();
+    __ testb(r8_al, r8_al);
+    __ j(zero, &thunk.label);
 }
 
 void Compiler::EmitDeallocThunk(DeallocThunk* thunk) {

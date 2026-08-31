@@ -766,6 +766,9 @@ class Assembler : public AssemblerBase
         emit1_64(0xf7, 0, left);
         writeInt32(imm);
     }
+    void testb(Register op1, Register op2) {
+        emit1(0x84, op2, op1);
+    }
 
     template <typename T>
     void cmpq(const T& left, int32_t imm) {

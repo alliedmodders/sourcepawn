@@ -736,6 +736,21 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitCopyArray(op, src_reg, dest_reg, bytes);
                 break;
             }
+            case LL_COPYARRAY_FLAT_A:
+            {
+                uint32_t count = reader.read<uint32_t>();
+                uint16_t src_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitCopyArrayFlatA(src_reg, dest_reg, count);
+                break;
+            }
+            case LL_COPYARRAY_A:
+            {
+                uint16_t src_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitCopyArrayA(src_reg, dest_reg);
+                break;
+            }
             case LL_ARRAY_TO_FLAT: {
                 uint16_t src_reg = reader.read<uint16_t>();
                 uint16_t dest_reg = reader.read<uint16_t>();

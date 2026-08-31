@@ -143,6 +143,8 @@ class CompilerBase
     virtual void EmitSliceFlat(const SliceFlatArgs& op) = 0;
     virtual void EmitIdxAddr(const IdxAddrArgs& args) = 0;
     virtual void EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) = 0;
+    virtual void EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t count) = 0;
+    virtual void EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) = 0;
     virtual void EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) = 0;

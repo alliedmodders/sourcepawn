@@ -593,6 +593,9 @@ class Assembler : public AssemblerBase
         emit1(0xf6, 0, Operand(left));
         *pos_++ = imm;
     }
+    void testb(Register op1, Register op2) {
+        emit1(0x84, op2.code, op1.code);
+    }
     void set(ConditionCode cc, const Operand& dest) {
         emit2(0x0f, 0x90 + uint8_t(cc), 0, dest);
     }

@@ -1298,5 +1298,62 @@ Handle<SpArray> Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uin
     return slice;
 }
 
+bool Runtime::CopyArrayFlatA(cell_t src_addr, cell_t dest_addr, uint32_t count) {
+    Heap& heap = heap_;
+    cell_t* src = heap.ToPhysAddr<cell_t*>(src_addr);
+    cell_t* dest = heap.ToPhysAddr<cell_t*>(dest_addr);
+
+    for (uint32_t i = 0; i < count; i++) {
+        auto new_item = heap.ToPhysAddr<HeapItem*>(src[i]);
+        if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+            ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+            return false;
+        }
+
+        if (auto old_item = heap.ToPhysAddr<HeapItem*>(dest[i]))
+            old_item->Release();
+
+        dest[i] = src[i];
+
+        if (new_item)
+            new_item->AddRef();
+    }
+    return true;
+}
+
+bool Runtime::CopyArrayOfObjects(cell_t src_addr, cell_t dest_addr) {
+    Heap& heap = heap_;
+    SpArray* src = heap.ToPhysAddr<SpArray*>(src_addr);
+    SpArray* dest = heap.ToPhysAddr<SpArray*>(dest_addr);
+    if (!src) {
+        ReportErrorNumber(SP_ERROR_NULL_DEREF);
+        return false;
+    }
+
+    auto src_data = heap.ToPhysAddr<cell_t*>(src->data);
+    auto dest_data = heap.ToPhysAddr<cell_t*>(dest->data);
+
+    if (src_data == dest_data)
+        return true;
+
+    uint32_t count = dest->length;
+    for (uint32_t i = 0; i < count; i++) {
+        auto new_item = heap.ToPhysAddr<HeapItem*>(src_data[i]);
+        if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+            ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+            return false;
+        }
+
+        if (auto old_item = heap.ToPhysAddr<HeapItem*>(dest_data[i]))
+            old_item->Release();
+
+        dest_data[i] = src_data[i];
+
+        if (new_item)
+            new_item->AddRef();
+    }
+    return true;
+}
+
 } // namespace v2
 } // namespace sp

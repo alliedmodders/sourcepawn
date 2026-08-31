@@ -141,6 +141,8 @@ class Runtime final : public BaseRuntime,
     Handle<SpObject> NewObject(const TypeDesc* td);
     Handle<SpArray> NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
     void FillArray(SpArray* array, uint32_t data_offset);
+    bool CopyArrayFlatA(cell_t src_addr, cell_t dest_addr, uint32_t count);
+    bool CopyArrayOfObjects(cell_t src_addr, cell_t dest_addr);
     void FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset);
     void* GetArrayElem(SpArray* array, uint32_t index);
     Handle<SpArray> NewSlice(SpArray* array, uint32_t index);

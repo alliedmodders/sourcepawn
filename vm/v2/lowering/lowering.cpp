@@ -901,8 +901,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             const TypeDesc* src = src_node->type;
             const TypeDesc* dest = dest_node->type;
-            uint32_t bytes = src->array_size() * dest->array_elt()->element_size();
             bool heap_item = dest->array_elt()->IsHeapItem();
+            uint32_t bytes = src->array_size() * dest->array_elt()->element_size();
 
             if (dest->IsFlatArray() || src->IsFlatArray()) {
                 VReg flat_src_reg = src_reg;
@@ -917,16 +917,14 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 }
 
                 if (heap_item)
-                    emit(LL_COPYARRAY_FLAT_A, bytes / sizeof(cell_t), flat_src_reg, flat_dest_reg);
+                    emit(LL_COPYARRAY_FLAT_A, src->array_size(), flat_src_reg, flat_dest_reg);
                 else
                     emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
 
-                if (!src->IsFlatArray()) {
+                if (!src->IsFlatArray())
                     FreeReg(flat_src_reg);
-                }
-                if (!dest->IsFlatArray()) {
+                if (!dest->IsFlatArray())
                     FreeReg(flat_dest_reg);
-                }
             } else {
                 if (heap_item)
                     emit(LL_COPYARRAY_A, src_reg, dest_reg);

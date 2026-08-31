@@ -104,6 +104,8 @@ class Compiler : public CompilerBase
     void EmitSliceFlat(const SliceFlatArgs& op) override;
     void EmitIdxAddr(const IdxAddrArgs& op) override;
     void EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
+    void EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t count) override;
+    void EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
     void EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) override;
@@ -139,6 +141,7 @@ class Compiler : public CompilerBase
     // Emits a call to a Handle<>-returning Runtime method with deferred error
     // reporting. The caller pre-places method-specific arguments on the stack.
     void CallRtForHandle(void* method_addr, uint16_t dest_reg);
+    void CallRtForBool(void* method_addr);
 };
 
 } // namespace sp::v2

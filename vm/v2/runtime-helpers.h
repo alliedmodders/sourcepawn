@@ -18,10 +18,6 @@
 
 #include <sp_vm_types.h>
 
-namespace sp {
-struct HeapItem;
-} // namespace sp
-
 namespace sp::v2 {
 
 class Runtime;

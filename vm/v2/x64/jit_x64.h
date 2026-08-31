@@ -104,6 +104,8 @@ class Compiler : public CompilerBase
     void EmitSliceFlat(const SliceFlatArgs& op) override;
     void EmitIdxAddr(const IdxAddrArgs& args) override;
     void EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
+    void EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t count) override;
+    void EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
     void EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) override;
@@ -123,6 +125,7 @@ class Compiler : public CompilerBase
     void EmitDecRef(Register obj_reg, std::optional<Register> save_reg,
                     const std::optional<Operand>& zero_loc = {});
     void CallRtForHandleImpl(void* method_addr, uint32_t nargs, uint16_t dest_reg);
+    void CallRtForBoolImpl(void* method_addr, uint32_t nargs);
 
     void JumpOnError(ConditionCode cc, int err);
     void JumpOnReportedError(ConditionCode cc);
@@ -131,6 +134,12 @@ class Compiler : public CompilerBase
     void CallRtForHandle(T method, uint32_t nargs, uint16_t dest_reg) {
         assert(sp::MemberFunctionArgCount<T>::value == nargs);
         CallRtForHandleImpl(ke::PmfCast<void*>(method), nargs, dest_reg);
+    }
+
+    template <typename T>
+    void CallRtForBool(T method, uint32_t nargs) {
+        assert(sp::MemberFunctionArgCount<T>::value == nargs);
+        CallRtForBoolImpl(ke::PmfCast<void*>(method), nargs);
     }
 
     Operand RegAddr(uint32_t reg) {
