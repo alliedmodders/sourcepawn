@@ -57,7 +57,7 @@ module.sources += [
   'v2/method-info.cpp',
   'v2/method-verifier.cpp',
   'v2/opcodes.cpp',
-  'v2/plugin-runtime.cpp',
+  'v2/runtime.cpp',
   'v2/runtime-helpers.cpp',
   'v2/scripted-invoker.cpp',
 ]
