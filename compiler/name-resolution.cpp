@@ -251,12 +251,16 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         AutoErrorPos error_pos(field->pos());
 
         if (field->value() && field->value()->Bind(sc)) {
-            Type* field_type = nullptr;
-            if (sc.sema()->AnalyzeForConst(field->value(), &value, &field_type)) {
-                if (!field_type->isInt()) {
-                    sc.sema()->CheckCoercion(field->pos(), type_, QualType(field_type),
+            if (ExprVal* val = sc.sema()->AnalyzeForConst(field->value())) {
+                if (val->type()->isWideType()) {
+                    report(field->pos(), 459) << val->type();
+                    return false;
+                }
+                if (!val->type()->isInt()) {
+                    sc.sema()->CheckCoercion(field->pos(), type_, val->qualified(),
                                              CvtContext::Assignment);
                 }
+                value = val->const_cell();
             }
         }
 
@@ -462,11 +466,13 @@ ConstDecl::Bind(SemaContext& sc)
     if (!expr_->Bind(sc))
         return false;
 
-    Type* type;
-    if (!sc.sema()->AnalyzeForConst(expr_, &value_, &type))
+    ExprVal* val = sc.sema()->AnalyzeForConst(expr_);
+    if (!val)
         return false;
 
-    sc.sema()->CheckCoercion(expr_, type_.type, QualType(type), CvtContext::Assignment);
+    sc.sema()->CheckCoercion(expr_, type_.type, val->qualified(), CvtContext::Assignment);
+
+    value_ = *val;
 
     already_bound_ = true;
     return true;

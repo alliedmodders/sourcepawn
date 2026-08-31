@@ -789,21 +789,17 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     return expr;
 }
 
-bool Semantics::AnalyzeForConst(Expr* expr, cell* value, Type** type) {
+ExprVal* Semantics::AnalyzeForConst(Expr* expr) {
     if (!CheckExpr(expr))
-        return false;
+        return nullptr;
 
     auto& val = expr->val();
     if (val.ident != iCONSTEXPR) {
         report(expr, 8);
-        return false;
+        return nullptr;
     }
 
-    if (value)
-        *value = val.const_cell();
-    if (type)
-        *type = val.type();
-    return true;
+    return &val;
 }
 
 RvalueExpr::RvalueExpr(Expr* lval)
@@ -1601,7 +1597,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return true;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
-            val.set_constval(decl->ConstVal());
+            val = decl->ConstVal();
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
@@ -2667,12 +2663,18 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
     if (!CheckExpr(expr))
         return false;
 
-    // :TODO: insert coercion to bool.
-    cell value;
-    if (!AnalyzeForConst(expr, &value))
+    auto ck = FindConversion(expr->val().type(), types_->type_bool(), CvtContext::Argument);
+    if (!HasImplicitConversion(ck)) {
+        ReportConversionDiagnostic(expr, types_->type_bool(), expr->val().qualified());
+        return false;
+    }
+    expr = BuildConversion(expr, ck, types_->type_bool());
+
+    ExprVal* val = AnalyzeForConst(expr);
+    if (!val)
         return false;
 
-    if (value)
+    if (val->const_cell())
         return true;
 
     std::string message;
@@ -3162,13 +3164,13 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             if (!CheckRvalue(expr))
                 continue;
 
-            cell value;
-            Type* type;
-            if (!AnalyzeForConst(expr, &value, &type))
+            ExprVal* val = AnalyzeForConst(expr);
+            if (!val)
                 continue;
             if (tag_ok)
-                CheckSwitchCaseType(expr, v.type(), type);
+                CheckSwitchCaseType(expr, v.type(), val->type());
 
+            cell value = val->const_cell();
             if (!case_values.count(value))
                 case_values.emplace(value);
             else

@@ -294,7 +294,7 @@ class Decl : public Stmt
         name_(name)
     {}
 
-    cell ConstVal();
+    ExprVal ConstVal();
 
     char vclass();
     bool is_const();
@@ -441,11 +441,11 @@ class ConstDecl : public VarDecl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ConstDecl; }
 
-    cell const_val() const { return value_; }
+    const ExprVal& value() const { return value_; }
 
   private:
     Expr* expr_;
-    cell value_;
+    ExprVal value_;
     bool already_bound_ : 1;
 };
 

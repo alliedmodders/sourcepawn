@@ -303,14 +303,17 @@ Type* PropertyDecl::property_type() const {
     return *valp->type();
 }
 
-cell Decl::ConstVal() {
-    if (auto cv = as<ConstDecl>())
-        return cv->const_val();
-    else if (auto efd = as<EnumFieldDecl>())
-        return efd->const_val();
+ExprVal Decl::ConstVal() {
+    if (auto cv = as<ConstDecl>()) {
+        return cv->value();
+    } else if (auto efd = as<EnumFieldDecl>()) {
+        ExprVal v;
+        v.set_constval(efd->type(), efd->const_val());
+        return v;
+    }
 
     assert(false);
-    return 0;
+    return ExprVal::ErrorValue();
 }
 
 QualType Decl::type() {

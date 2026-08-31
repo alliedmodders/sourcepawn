@@ -215,7 +215,17 @@ void AstPrinter::PrintArgDecl(ArgDecl* node, bool is_last) {
 void AstPrinter::PrintConstDecl(ConstDecl* node, bool is_last) {
     fprintf(out_, "ConstDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
-    fprintf(out_, ") value: %d\n", (int)node->const_val());
+    const ExprVal& cv = node->value();
+    fprintf(out_, ") value: ");
+    if (cv.type()->isFloat()) {
+        fprintf(out_, "%f\n", cv.const_float());
+    } else if (cv.type()->isDouble()) {
+        fprintf(out_, "%f\n", cv.const_double());
+    } else if (cv.type()->isInt64()) {
+        fprintf(out_, "%" PRId64 "\n", (int64_t)cv.const_int64());
+    } else {
+        fprintf(out_, "%d\n", (int)cv.const_cell());
+    }
 }
 
 void AstPrinter::PrintEnumDecl(EnumDecl* node, bool is_last) {
