@@ -1489,6 +1489,11 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         report(expr, 477) << to_type;
     } else if (from_type->isFunctionLike() != to_type->isFunctionLike()) {
         // Warn: unsupported cast.
+        Type* func_type = to_type->isFunctionLike() ? to_type : from_type;
+        if (!func_type->isLegacyFunction()) {
+            report(expr, 460) << from_type << to_type;
+            return false;
+        }
         report(expr, 237);
     } else if (from_type->isFunctionLike() && to_type->isFunctionLike()) {
         inner = TryConversion(inner, to_type, CvtContext::Assignment);

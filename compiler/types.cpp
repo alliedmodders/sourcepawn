@@ -94,6 +94,14 @@ bool Type::isCharArray() const {
     return isArray() && inner()->isChar();
 }
 
+bool Type::isLegacyFunction() const {
+    if (auto ft = as<FunctionType>())
+        return ft->conv() == FunctionType::Convention::Legacy;
+    if (kind_ == TypeKind::Function)
+        return true;
+    return false;
+}
+
 bool Type::isNonHeapNullable() const {
     auto map = asMethodmap();
     return map && map->nullable();

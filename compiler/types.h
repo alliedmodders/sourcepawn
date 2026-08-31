@@ -90,6 +90,7 @@ struct funcenum_t;
 class EnumStructDecl;
 class ClassDecl;
 class Expr;
+class FunctionType;
 class MethodmapDecl;
 class PstructDecl;
 class Type;
@@ -421,6 +422,7 @@ class Type : public PoolObject
     bool isCanonicalFunction() const {
         return isFunction() && !funcenum_ptr_;
     }
+    bool isLegacyFunction() const;
     funcenum_t* asFunction() const {
         if (!isFunction())
             return nullptr;
