@@ -709,7 +709,7 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         } else if (!ctor && rhs.type()->isDouble()) {
             __ emit(OP_PUSH_C_F64, DoubleValue(0));
         } else if (rhs.ident == iCONSTEXPR) {
-            if (rhs.type()->isNull())
+            if (rhs.type()->isNull() && val.type()->isHeapItem())
                 __ emit(OP_LOAD_NULL);
             else
                 __ PUSH_C(rhs.constval());

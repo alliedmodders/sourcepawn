@@ -267,6 +267,7 @@ class Semantics final
     SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
     Expr* AnalyzeForTest(Expr* expr);
+    bool AnalyzeForConst(Expr* expr, cell* value, Type** type = nullptr);
 
     void DeduceLiveness();
     void DeduceMaybeUsed();

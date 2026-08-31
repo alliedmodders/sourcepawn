@@ -249,7 +249,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     auto vclass = decl->vclass();
     auto init_rhs = decl->init_rhs();
     if (decl->init() && init_rhs && vclass != sLOCAL && !decl->type()->isComposite()) {
-        if (!init_rhs->EvalConst(nullptr, nullptr)) {
+        if (!CheckExpr(init_rhs) || init_rhs->val().ident != iCONSTEXPR) {
             if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
                 return true;
 
@@ -738,6 +738,23 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
         return new RvalueExpr(expr);
 
     return expr;
+}
+
+bool Semantics::AnalyzeForConst(Expr* expr, cell* value, Type** type) {
+    if (!CheckExpr(expr))
+        return false;
+
+    auto& val = expr->val();
+    if (val.ident != iCONSTEXPR) {
+        report(expr, 8);
+        return false;
+    }
+
+    if (value)
+        *value = val.constval();
+    if (type)
+        *type = val.type();
+    return true;
 }
 
 RvalueExpr::RvalueExpr(Expr* lval)
@@ -2592,11 +2609,8 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
 
     // :TODO: insert coercion to bool.
     cell value;
-    Type* type;
-    if (!expr->EvalConst(&value, &type)) {
-        report(expr, 8);
+    if (!AnalyzeForConst(expr, &value))
         return false;
-    }
 
     if (value)
         return true;
@@ -3090,10 +3104,8 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 
             cell value;
             Type* type;
-            if (!expr->EvalConst(&value, &type)) {
-                report(expr, 8);
+            if (!AnalyzeForConst(expr, &value, &type))
                 continue;
-            }
             if (tag_ok)
                 CheckSwitchCaseType(expr, v.type(), type);
 
