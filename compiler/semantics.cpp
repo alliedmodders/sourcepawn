@@ -380,9 +380,9 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
         return true;
 
     // Handle array literal initializer — validate against enum struct fields.
-    if (auto array = init->as<ArrayExpr>()) {
+    if (init->as<ArrayExpr>()) {
         AutoErrorPos aep(init->pos());
-        return ValidateEnumStructInitializer(decl->type()->asEnumStruct(), array);
+        return ValidateEnumStructInitializer(decl->type()->asEnumStruct(), init);
     }
 
     // Non-literal initialization (e.g. from a function result).
@@ -403,11 +403,18 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     return true;
 }
 
-bool Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array) {
+bool Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init) {
+    ArrayExpr* array = init->as<ArrayExpr>();
+    if (!array) {
+        report(init->pos(), 47);
+        return false;
+    }
+
     const auto& field_list = es->fields();
     auto field_iter = field_list.begin();
 
-    for (const auto& expr : array->exprs()) {
+    for (size_t i = 0; i < array->exprs().size(); i++) {
+        Expr* expr = array->exprs().at(i);
         if (field_iter == field_list.end()) {
             report(expr->pos(), 91);
             return false;
@@ -432,7 +439,17 @@ bool Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* arr
                 continue;
             }
 
-            CheckCoercion(expr, type.type, v.type(), CvtContext::Assignment);
+            ConversionKind ck = FindConversion(v.type(), type.type, CvtContext::Assignment);
+            if (!HasImplicitConversion(ck)) {
+                ReportConversionDiagnostic(expr->pos(), type.type, v.type());
+                continue;
+            }
+            if (!IsNopConversion(ck)) {
+                Expr* converted = BuildConversion(expr, ck, type.type);
+                assert(converted);
+
+                array->exprs()[i] = converted;
+            }
         }
     }
 

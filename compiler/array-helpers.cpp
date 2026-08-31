@@ -739,51 +739,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
 }
 
 bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
-    ArrayExpr* array = init->as<ArrayExpr>();
-    if (!array) {
-        report(init->pos(), 47);
-        return false;
-    }
-
-    const auto& field_list = es->fields();
-    auto field_iter = field_list.begin();
-
-    for (const auto& expr : array->exprs()) {
-        if (field_iter == field_list.end()) {
-            report(expr->pos(), 91);
-            return false;
-        }
-
-        auto field = (*field_iter);
-
-        // Advance early so we can use |continue|.
-        field_iter++;
-
-        const auto& type = field->type_info();
-        if (type.type->isArray()) {
-            if (!CheckArrayInitialization(sema_, type, expr))
-                continue;
-        } else {
-            AutoErrorPos pos(expr->pos());
-
-            if (!sema_->CheckExpr(expr))
-                continue;
-
-            const auto& v = expr->val();
-            if (v.ident != iCONSTEXPR) {
-                report(8);
-                continue;
-            }
-
-            sema_->CheckCoercion(expr, type.type, v.type(), CvtContext::Assignment);
-        }
-    }
-
-    if (array->ellipses()) {
-        report(array->pos(), 80);
-        return false;
-    }
-    return true;
+    return sema_->ValidateEnumStructInitializer(es, init);
 }
 
 bool ArrayValidator::AddCells(size_t ncells) {

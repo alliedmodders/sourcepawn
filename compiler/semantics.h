@@ -173,7 +173,7 @@ class Semantics final
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
     bool CheckEnumStructVarDecl(VarDeclBase* decl);
-    bool ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array);
+    bool ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init);
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
