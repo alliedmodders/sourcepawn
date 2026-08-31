@@ -1284,14 +1284,10 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
             return false;
     }
 
-    if (first->lvalue()) {
-        first = expr->set_first(new RvalueExpr(first));
-    } else if (first->val().ident == iCONSTEXPR) {
-        report(first, first->val().const_i32() ? 206 : 205);
-    }
-
-    if (first->val().type()->isWideType())
-        first = expr->set_first(BuildSimpleCast(first, BuiltinType::Bool));
+    Expr* new_first = AnalyzeForTest(first);
+    if (!new_first)
+        return false;
+    first = expr->set_first(new_first);
 
     if (second->lvalue())
         second = expr->set_second(new RvalueExpr(second));
