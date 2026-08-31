@@ -21,9 +21,10 @@ namespace sp::v2 {
 using namespace ke;
 
 GraphBuilder::GraphBuilder(PluginRuntime* rt, uint32_t start_offset)
- : rt_(rt)
- , start_offset_(start_offset)
- , error_code_(0) {
+ : rt_(rt),
+   start_offset_(start_offset),
+   error_code_(0)
+{
     start_at_ = rt_->code().bytes + start_offset_;
     stop_at_ = rt_->code().bytes + rt_->code().length;
 }
@@ -60,7 +61,7 @@ GraphBuilder::scan() {
     // Set cip, start past the mandatory OP_PROC.
     cip_ = start_at_;
     assert(peekOp() == OP_PROC);
-    cip_ += sizeof(cell_t);
+    cip_++;
 
     // Begin an epoch to track which blocks have been visited.
     graph_->newEpoch();
@@ -123,14 +124,14 @@ GraphBuilder::scanFlow() -> FlowState {
         return FlowState::Error;
     }
 
-    uint32_t cell_number = getCellNumber(cip_);
-    assert(insn_bitmap_.test(cell_number));
+    uint32_t byte_number = getByteNumber(cip_);
+    assert(insn_bitmap_.test(byte_number));
 
     // Does this opcode mark the start of a new block? Note that we skip this if
     // the current block starts at this cip. This could happen, for example, with
     // a JUMP opcode that loops back to itself. While this is totally pointless,
     // it is not illegal.
-    if (jump_targets_.test(cell_number) && current_->start() != cip_) {
+    if (jump_targets_.test(byte_number) && current_->start() != cip_) {
         RefPtr<Block> block = getOrAddBlock(cip_);
         current_->endWithJump(cip_, block);
         current_ = nullptr;
@@ -145,7 +146,7 @@ GraphBuilder::scanFlow() -> FlowState {
 
     // Save a pointer to the start of the instruction.
     const uint8_t* insn = cip_;
-    cip_ += sizeof(cell_t);
+    cip_++;
 
     switch (op) {
         case OP_RETN:
@@ -165,15 +166,15 @@ GraphBuilder::scanFlow() -> FlowState {
         case OP_SWITCH: {
             cell_t target_pos = read();
             const uint8_t* target = rt_->code().bytes + target_pos;
-            uint32_t target_cell_number = getCellNumber(target);
+            uint32_t target_byte_number = getByteNumber(target);
 
             // This will check that (a) we target a valid instruction, and (b) that
             // the instruction is within method bounds.
-            if (!insn_bitmap_.test(target_cell_number)) {
+            if (!insn_bitmap_.test(target_byte_number)) {
                 error(SP_ERROR_INSTRUCTION_PARAM);
                 return FlowState::Error;
             }
-            assert(op == OP_SWITCH || jump_targets_.test(target_cell_number));
+            assert(op == OP_SWITCH || jump_targets_.test(target_byte_number));
 
             // If this is a switch, we need specialized logic.
             if (op == OP_SWITCH) {
@@ -218,7 +219,7 @@ GraphBuilder::scanFlow() -> FlowState {
 
 auto
 GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
-    if (!insn_bitmap_.test(getCellNumber(cip_))) {
+    if (!insn_bitmap_.test(getByteNumber(cip_))) {
         error(SP_ERROR_INSTRUCTION_PARAM);
         return FlowState::Error;
     }
@@ -228,13 +229,14 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
     }
 
     cell_t ncases = read();
+    cell_t default_offset = read();
 
     // Add the default case.
     std::vector<cell_t> cases;
-    cases.push_back(read());
+    cases.push_back(default_offset);
 
-    // Add all cases.
-    for (cell_t i = 0; i < ncases; i++) {
+    for (int i = 0; i < ncases; i++) {
+        // Skip the value.
         read();
         cases.push_back(read());
     }
@@ -242,11 +244,11 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
     // Process each case.
     for (cell_t target_pos : cases) {
         const uint8_t* target = rt_->code().bytes + target_pos;
-        if (!insn_bitmap_.test(getCellNumber(target))) {
+        if (!insn_bitmap_.test(getByteNumber(target))) {
             error(SP_ERROR_INSTRUCTION_PARAM);
             return FlowState::Error;
         }
-        assert(jump_targets_.test(getCellNumber(target)));
+        assert(jump_targets_.test(getByteNumber(target)));
 
         RefPtr<Block> target_block = getOrAddBlock(target);
         current_->addTarget(target_block);
@@ -260,8 +262,8 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
 ke::RefPtr<Block>
 GraphBuilder::getOrAddBlock(const uint8_t* cip) {
     // We use a quick existence test before diving into the hash table.
-    uint32_t cell_number = getCellNumber(cip);
-    if (!block_bitmap_.test(cell_number)) {
+    uint32_t byte_number = getByteNumber(cip);
+    if (!block_bitmap_.test(byte_number)) {
         RefPtr<Block> block = graph_->newBlock(cip);
         enqueueBlock(block);
 
@@ -269,7 +271,7 @@ GraphBuilder::getOrAddBlock(const uint8_t* cip) {
         assert(!p.found());
 
         block_map_.add(p, cip, block);
-        block_bitmap_.set(cell_number);
+        block_bitmap_.set(byte_number);
         return block;
     }
 
@@ -296,20 +298,18 @@ GraphBuilder::enqueueBlock(Block* block) {
 // are cell-aligned. We will harden that verification in the full scan phase.
 bool
 GraphBuilder::prescan() {
-    if (!IsAligned(start_offset_, sizeof(cell_t)))
-        return error(SP_ERROR_INVALID_ADDRESS);
-
     cip_ = start_at_;
-    if (!more() || read() != OP_PROC)
+    if (!more() || readOp() != OP_PROC)
         return error(SP_ERROR_INVALID_INSTRUCTION);
 
     // Allocate the jump bitmap.
-    size_t max_cells = (stop_at_ - start_at_) / sizeof(cell_t);
-    insn_bitmap_ = BitSet(max_cells);
-    jump_targets_ = BitSet(max_cells);
+    size_t max_bytes = (stop_at_ - start_at_);
+    insn_bitmap_ = BitSet(max_bytes);
+    jump_targets_ = BitSet(max_bytes);
 
     while (more()) {
-        OPCODE op = peekOp();
+        const uint8_t* insn = cip_;
+        OPCODE op = readOp();
         if (op == OP_PROC || op == OP_ENDPROC)
             break;
 
@@ -317,47 +317,44 @@ GraphBuilder::prescan() {
             return error(SP_ERROR_INVALID_INSTRUCTION);
 
         // Mark the bitmap.
-        insn_bitmap_.set(getCellNumber(cip_));
-
-        // Skip past the opcode.
-        cip_ += sizeof(cell_t);
+        insn_bitmap_.set(getByteNumber(insn));
 
         // Deduce parameter count.
-        int opcode_params;
+        int opcode_bytes;
         if (op == OP_CASETBL) {
-            if (!more())
+            if (cip_ + sizeof(cell_t) > stop_at_)
                 return error(SP_ERROR_INVALID_INSTRUCTION);
-            cell_t ncases = read();
-            if (ncases > (INT_MAX - 1) / 2)
+            cell_t ncases = *reinterpret_cast<const cell_t*>(cip_);
+            if (ncases > (INT_MAX - 1) / 4)
                 return error(SP_ERROR_INVALID_INSTRUCTION);
-            opcode_params = (ncases * 2) + 1;
+            opcode_bytes = (ncases * (sizeof(cell_t) * 2)) + sizeof(cell_t) * 2;
         } else {
             int opcode_size = GetOpcodeSize(op);
             if (opcode_size == 0) {
                 // This opcode is not generated, and is therefore illegal.
                 return error(SP_ERROR_INVALID_INSTRUCTION);
             }
-            opcode_params = opcode_size - 1;
+            opcode_bytes = opcode_size - 1;
         }
-        assert(opcode_params >= 0);
+        assert(opcode_bytes >= 0);
 
-        // Make sure the opcode can be read.
-        if (cip_ + (opcode_params * sizeof(cell_t)) > stop_at_)
+        // Make sure the parameters can be read.
+        if (cip_ + opcode_bytes > stop_at_)
             return error(SP_ERROR_INVALID_INSTRUCTION);
 
         // If this is a control opcode, we need to markup any jump targets.
         if (IsControlOpcode(op) && op != OP_RETN) {
             // All jump instructions, and SWITCH, have the target as an immediate
             // value.
-            if (!prescan_jump_target(op, peek()))
+            if (!prescan_jump_target(op, *reinterpret_cast<const cell_t*>(cip_)))
                 return false;
         } else if (op == OP_CASETBL) {
-            if (!prescan_casetable(cip_, opcode_params))
+            if (!prescan_casetable(cip_, opcode_bytes))
                 return false;
         }
 
         // Advance to the next instruction.
-        cip_ += opcode_params * sizeof(cell_t);
+        cip_ += opcode_bytes;
     }
 
     // Update the stop-at point.
@@ -368,9 +365,6 @@ GraphBuilder::prescan() {
 bool
 GraphBuilder::prescan_jump_target(OPCODE op, cell_t target) {
     if (target < 0)
-        return error(SP_ERROR_INSTRUCTION_PARAM);
-
-    if (!ke::IsAligned(size_t(target), sizeof(cell_t)))
         return error(SP_ERROR_INSTRUCTION_PARAM);
 
     // Note that stop_at_ is still the end of the code section, so this is a
@@ -389,19 +383,21 @@ GraphBuilder::prescan_jump_target(OPCODE op, cell_t target) {
     // Since OP_SWITCH points to a CASETBL, not an actual jump target, ignore it
     // lest we create a pointless block.
     if (op != OP_SWITCH)
-        jump_targets_.set(getCellNumber(cip));
+        jump_targets_.set(getByteNumber(cip));
     return true;
 }
 
 bool
 GraphBuilder::prescan_casetable(const uint8_t* pos, cell_t size) {
-    const uint8_t* end = pos + (size * sizeof(cell_t));
+    const uint8_t* end = pos + size;
     // OP_CASETBL:
     //   ncases
     //   default_offset
     //   [value, offset]
     //
-    // |pos| is aligned to |default_offset|.
+    // Skip ncases.
+    pos += sizeof(cell_t);
+
     cell_t default_offset = *reinterpret_cast<const cell_t*>(pos);
     if (!prescan_jump_target(OP_JUMP, default_offset))
         return false;

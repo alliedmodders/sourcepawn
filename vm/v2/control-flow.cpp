@@ -262,8 +262,7 @@ ControlFlowGraph::dump(FILE* fp) {
         fprintf(fp, "  ---\n");
         const uint8_t* cip = block->start();
         while (cip < block->end()) {
-            SpewOpcode(fp, rt_, reinterpret_cast<const cell_t*>(block->start()),
-                       reinterpret_cast<const cell_t*>(cip));
+            SpewOpcode(fp, rt_, block->start(), cip);
             cip = NextInstruction(cip);
         }
         fprintf(fp, "\n");

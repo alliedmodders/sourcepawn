@@ -31,42 +31,42 @@ class PcodeReader
 {
   public:
     PcodeReader(PluginRuntime* rt, uint32_t startOffset, T* visitor)
-     : rt_(rt)
-     , visitor_(visitor)
-     , code_(nullptr)
-     , cip_(nullptr)
-     , stop_at_(nullptr) {
-        assert(ke::IsAligned(startOffset, sizeof(cell_t)));
-
+     : rt_(rt),
+       visitor_(visitor),
+       code_(nullptr),
+       cip_(nullptr),
+       stop_at_(nullptr)
+    {
         auto& code = rt->code();
-        code_ = reinterpret_cast<const cell_t*>(code.bytes);
-        cip_ = code_ + (startOffset / sizeof(cell_t));
+        code_ = code.bytes;
+        cip_ = code_ + startOffset;
         insn_begin_ = cip_;
-        stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
+        stop_at_ = code.bytes + code.length;
     }
     PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
-     : rt_(rt)
-     , visitor_(visitor)
-     , code_(nullptr)
-     , cip_(nullptr)
-     , stop_at_(nullptr) {
+     : rt_(rt),
+       visitor_(visitor),
+       code_(nullptr),
+       cip_(nullptr),
+       stop_at_(nullptr)
+    {
         auto& code = rt->code();
-        code_ = reinterpret_cast<const cell_t*>(code.bytes);
-        cip_ = reinterpret_cast<const cell_t*>(block->start());
+        code_ = code.bytes;
+        cip_ = block->start();
         insn_begin_ = cip_;
-        stop_at_ = reinterpret_cast<const cell_t*>(block->end());
+        stop_at_ = block->end();
     }
 
     // We skip the first OP_PROC; it should be handled before parsing bytecode.
     void begin() {
         if (peekOpcode() == OP_PROC)
-            readCell();
+            cip_++;
     }
 
     // Read the next opcode, return true on success, false otherwise.
     bool visitNext() {
         insn_begin_ = cip_;
-        OPCODE op = (OPCODE)readCell();
+        OPCODE op = (OPCODE)*cip_++;
         return visitOp(op);
     }
 
@@ -76,7 +76,7 @@ class PcodeReader
         return (OPCODE)*cip_;
     }
 
-    const cell_t* start() const {
+    const uint8_t* start() const {
         return code_;
     }
 
@@ -86,23 +86,22 @@ class PcodeReader
     }
 
     // Return the current position in the code stream.
-    const cell_t* cip() const {
+    const uint8_t* cip() const {
         return cip_;
     }
 
     // Return the start of the current instruction.
-    const cell_t* const& insn_begin() const {
+    const uint8_t* const& insn_begin() const {
         return insn_begin_;
     }
     cell_t cip_offset() const {
-        return (cip_ - code_) * sizeof(cell_t);
+        return (cell_t)(cip_ - code_);
     }
 
     void jump(cell_t offset) {
         assert(offset >= 0);
-        assert(ke::IsAligned(offset, sizeof(cell_t)));
 
-        cip_ = code_ + (offset / sizeof(cell_t));
+        cip_ = code_ + offset;
         assert(cip_ >= code_ && cip_ < stop_at_);
     }
 
@@ -128,14 +127,14 @@ class PcodeReader
             case OP_LOAD_S_PRI:
             case OP_LOAD_S_ALT: {
                 PawnReg reg = (op == OP_LOAD_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitLOAD_S(reg, offset);
             }
 
             case OP_LREF_S_PRI:
             case OP_LREF_S_ALT: {
                 PawnReg reg = (op == OP_LREF_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitLREF_S(reg, offset);
             }
 
@@ -157,7 +156,7 @@ class PcodeReader
             case OP_ADDR_PRI:
             case OP_ADDR_ALT: {
                 PawnReg reg = (op == OP_ADDR_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitADDR(reg, offset);
             }
 
@@ -171,12 +170,12 @@ class PcodeReader
             case OP_STOR_S_PRI:
             case OP_STOR_S_ALT: {
                 PawnReg reg = (op == OP_STOR_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitSTOR_S(offset, reg);
             }
 
             case OP_STOR_S_C: {
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 cell_t value = readCell();
                 return visitor_->visitSTOR_S_C(offset, value);
             }
@@ -184,7 +183,7 @@ class PcodeReader
             case OP_SREF_S_PRI:
             case OP_SREF_S_ALT: {
                 PawnReg reg = (op == OP_SREF_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitSREF_S(offset, reg);
             }
 
@@ -222,7 +221,7 @@ class PcodeReader
 
             case OP_PUSH_S:
             {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitPUSH_S(slot);
             }
 
@@ -241,7 +240,7 @@ class PcodeReader
             }
 
             case OP_CVT_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitCVT_I64(slot);
             }
             case OP_TRUNCATE_I64:
@@ -250,65 +249,65 @@ class PcodeReader
                 return visitor_->visitTEST_I64();
 
             case OP_INVERT_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitINVERT_I64(slot);
             }
             case OP_NEG_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitNEG_I64(slot);
             }
             case OP_SMUL_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSMUL_I64(slot);
             }
             case OP_SDIV_ALT_I64: {
-                cell_t pri_slot = readCell();
+                cell_t pri_slot = readInt16();
                 return visitor_->visitSDIV_ALT_I64(pri_slot);
             }
             case OP_SMOD_ALT_I64: {
-                cell_t pri_slot = readCell();
+                cell_t pri_slot = readInt16();
                 return visitor_->visitSMOD_ALT_I64(pri_slot);
             }
             case OP_ADD_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitADD_I64(slot);
             }
             case OP_SUB_ALT_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSUB_ALT_I64(slot);
             }
             case OP_SHL_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSHL_I64(slot);
             }
             case OP_SSHR_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSSHR_I64(slot);
             }
             case OP_SHR_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSHR_I64(slot);
             }
             case OP_OR_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitOR_I64(slot);
             }
             case OP_AND_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitAND_I64(slot);
             }
             case OP_XOR_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitXOR_I64(slot);
             }
             case OP_STOR_S_C_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 cell_t cell0 = readCell();
                 cell_t cell1 = readCell();
                 return visitor_->visitSTOR_S_C_I64(slot, cell0, cell1);
             }
             case OP_STOR_S_PRI_I64: {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitSTOR_S_PRI_I64(slot);
             }
 
@@ -400,11 +399,11 @@ class PcodeReader
                 return visitor_->visitZERO(PawnReg::Alt);
 
             case OP_ZERO_S: {
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitZERO_S(offset);
             }
             case OP_ZERO_S_I64: {
-                cell_t offset = readCell();
+                cell_t offset = readInt16();
                 return visitor_->visitZERO_S_I64(offset);
             }
 
@@ -499,7 +498,7 @@ class PcodeReader
 
             case OP_PUSH_ADR:
             {
-                cell_t slot = readCell();
+                cell_t slot = readInt16();
                 return visitor_->visitPUSH_ADR(slot);
             }
 
@@ -521,20 +520,21 @@ class PcodeReader
             case OP_SWITCH: {
                 cell_t tableOffset = readCell();
 
-                const cell_t* casetbl = code_ + (tableOffset / sizeof(cell_t));
+                const uint8_t* casetbl = code_ + tableOffset;
 
-                const cell_t* table;
+                const uint8_t* table;
                 cell_t ncases, defaultOffset;
                 {
-                    ke::SaveAndSet<const cell_t*> saved_pos(&cip_, casetbl);
+                    ke::SaveAndSet<const uint8_t*> saved_pos(&cip_, casetbl);
 
                     assert((OPCODE)*cip_ == OP_CASETBL);
                     cip_++;
 
-                    ncases = *cip_++;
-                    defaultOffset = *cip_++;
+                    ncases = *reinterpret_cast<const cell_t*>(cip_);
+                    cip_ += sizeof(cell_t);
+                    defaultOffset = *reinterpret_cast<const cell_t*>(cip_);
+                    cip_ += sizeof(cell_t);
                     table = cip_;
-                    cip_ += ncases * 2;
                 }
 
                 return visitor_->visitSWITCH(
@@ -544,7 +544,7 @@ class PcodeReader
             case OP_CASETBL: {
                 cell_t ncases = readCell();
 
-                getCells((ncases * 2) + 1);
+                getBytes(((ncases * 2) + 1) * sizeof(cell_t));
 
                 // Nothing to do here. This is handled in OP_SWITCH.
                 return true;
@@ -574,12 +574,20 @@ class PcodeReader
     }
 
     cell_t readCell() {
-        assert(cip_ < stop_at_);
-        return *cip_++;
+        return read<cell_t>();
     }
-    const cell_t* getCells(size_t n) {
+    int16_t readInt16() {
+        return read<int16_t>();
+    }
+    template <typename U> U read() {
+        assert(cip_ + sizeof(U) <= stop_at_);
+        U val = *reinterpret_cast<const U*>(cip_);
+        cip_ += sizeof(U);
+        return val;
+    }
+    const uint8_t* getBytes(size_t n) {
         assert(cip_ + n <= stop_at_);
-        const cell_t* result = cip_;
+        const uint8_t* result = cip_;
         cip_ += n;
         return result;
     }
@@ -587,10 +595,10 @@ class PcodeReader
   private:
     PluginRuntime* rt_;
     T* visitor_;
-    const cell_t* code_;
-    const cell_t* insn_begin_;
-    const cell_t* cip_;
-    const cell_t* stop_at_;
+    const uint8_t* code_;
+    const uint8_t* insn_begin_;
+    const uint8_t* cip_;
+    const uint8_t* stop_at_;
 };
 
 } // namespace sp::v2

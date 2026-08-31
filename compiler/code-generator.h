@@ -194,7 +194,7 @@ class CodeGenerator final
 
     void EnterTempSlotScope();
     void LeaveTempSlotScope();
-    cell_t AcquireTempSlot(BuiltinType type);
+    cell_t AcquireTempSlot(ParseNode* node, BuiltinType type);
 
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;

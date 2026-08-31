@@ -35,6 +35,11 @@ enum regid {
     sALT, /* indicates the secundary register */
 };
 
+struct StackSlot {
+    explicit StackSlot(int16_t offset) : offset(offset) {}
+    int16_t offset;
+};
+
 class SmxAssemblyBuffer : public ByteBuffer
 {
  public:
@@ -42,32 +47,47 @@ class SmxAssemblyBuffer : public ByteBuffer
   {}
 
   void emit(OPCODE op) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
   }
   void emit(OPCODE op, cell_t param) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param);
   }
+  void emit(OPCODE op, StackSlot slot) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
+  }
   void emit(OPCODE op, cell_t param1, cell_t param2) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<cell_t>(param1);
+    write<cell_t>(param2);
+  }
+  void emit(OPCODE op, StackSlot slot, cell_t param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
+    write<cell_t>(param);
+  }
+  void emit(OPCODE op, StackSlot slot, cell_t param1, cell_t param2) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
     write<cell_t>(param1);
     write<cell_t>(param2);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3, cell_t param4) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
     write<cell_t>(param4);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3, cell_t param4, cell_t param5) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
@@ -75,11 +95,11 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<cell_t>(param5);
   }
   void emit(OPCODE op, Label* address) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     encodeAbsoluteAddress(address);
   }
   void emit(OPCODE op, DataLabel* value) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(static_cast<cell_t>(0xb0b0b0b0));
     value->use(pc());
   }
@@ -115,7 +135,7 @@ class SmxAssemblyBuffer : public ByteBuffer
 
   void load_hidden_arg(FunctionDecl* decl) {
     assert(decl->needs_hidden_arg());
-    emit(OP_LOAD_S_ALT, -1);
+    emit(OP_LOAD_S_ALT, StackSlot(-1));
   }
 
   void address(Decl* sym, regid reg) {
@@ -128,9 +148,9 @@ class SmxAssemblyBuffer : public ByteBuffer
                   sym->type()->isEnumStruct();
     if (is_ref && IsLocal(sym->vclass())) {
       if (reg == sPRI)
-        emit(OP_LOAD_S_PRI, sym->addr());
+        emit(OP_LOAD_S_PRI, StackSlot(sym->addr()));
       else
-        emit(OP_LOAD_S_ALT, sym->addr());
+        emit(OP_LOAD_S_ALT, StackSlot(sym->addr()));
     } else {
       if (sym->type()->isArray())
         assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
@@ -138,15 +158,15 @@ class SmxAssemblyBuffer : public ByteBuffer
       if (reg == sPRI) {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
           if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
-            emit(OP_LOAD_S_PRI, sym->addr());
+            emit(OP_LOAD_S_PRI, StackSlot(sym->addr()));
           else
-            emit(OP_ADDR_PRI, sym->addr());
+            emit(OP_ADDR_PRI, StackSlot(sym->addr()));
         } else {
           emit(OP_CONST_PRI, sym->label());
         }
       } else {
         if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
-          emit(OP_ADDR_ALT, sym->addr());
+          emit(OP_ADDR_ALT, StackSlot(sym->addr()));
         else
           emit(OP_CONST_ALT, sym->label());
       }
@@ -156,9 +176,9 @@ class SmxAssemblyBuffer : public ByteBuffer
   void copyarray(VarDeclBase* sym, cell size) {
     if (sym->type()->isArray()) {
       assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
-      emit(OP_LOAD_S_ALT, sym->addr());
+      emit(OP_LOAD_S_ALT, StackSlot(sym->addr()));
     } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-      emit(OP_ADDR_ALT, sym->addr());
+      emit(OP_ADDR_ALT, StackSlot(sym->addr()));
     } else {
       emit(OP_CONST_ALT, sym->addr());
     }
@@ -166,7 +186,7 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void casetbl(cell_t ncases, Label* def) {
-    write<cell_t>(static_cast<cell_t>(OP_CASETBL));
+    write<uint8_t>(static_cast<uint8_t>(OP_CASETBL));
     write<cell_t>(ncases);
     encodeAbsoluteAddress(def);
   }
@@ -176,7 +196,7 @@ class SmxAssemblyBuffer : public ByteBuffer
   }
 
   void sysreq_n(Label* address, uint32_t nparams) {
-    write<cell_t>(static_cast<cell_t>(OP_SYSREQ_N));
+    write<uint8_t>(static_cast<uint8_t>(OP_SYSREQ_N));
     encodeAbsoluteAddress(address);
     write<cell_t>(nparams);
   }
@@ -199,9 +219,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     uint32_t status = target->status();
     while (Label::More(status)) {
       uint32_t offset = Label::ToOffset(status);
-      assert(offset >= 4 && offset <= pc());
+      assert(offset >= sizeof(cell_t) && offset <= pc());
 
-      int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - 4);
+      int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - sizeof(cell_t));
       status = *p;
       *p = value;
     }
@@ -216,9 +236,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
 
     uint32_t offset = DataLabel::ToOffset(target->status());
-    assert(offset >= 4 && offset <= pc());
+    assert(offset >= sizeof(cell_t) && offset <= pc());
 
-    int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - 4);
+    int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - sizeof(cell_t));
     assert(*p == int32_t(0xb0b0b0b0));
     *p = value;
 

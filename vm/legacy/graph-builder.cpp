@@ -21,9 +21,10 @@ namespace sp::v1 {
 using namespace ke;
 
 GraphBuilder::GraphBuilder(PluginRuntime* rt, uint32_t start_offset)
- : rt_(rt)
- , start_offset_(start_offset)
- , error_code_(0) {
+ : rt_(rt),
+   start_offset_(start_offset),
+   error_code_(0)
+{
     start_at_ = rt_->code().bytes + start_offset_;
     stop_at_ = rt_->code().bytes + rt_->code().length;
 }
@@ -328,7 +329,7 @@ GraphBuilder::prescan() {
             if (!more())
                 return error(SP_ERROR_INVALID_INSTRUCTION);
             cell_t ncases = read();
-            if (ncases > (INT_MAX - 1) / 2)
+            if (ncases > (INT_MAX - 1) / 4)
                 return error(SP_ERROR_INVALID_INSTRUCTION);
             opcode_params = (ncases * 2) + 1;
         } else {

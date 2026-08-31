@@ -77,7 +77,7 @@ CompilerBase::emit() {
     }
 
     pcode_start_ = method_info_->pcode_offset();
-    code_start_ = reinterpret_cast<const cell_t*>(rt_->code().bytes + pcode_start_);
+    code_start_ = rt_->code().bytes + pcode_start_;
 
     std::string function_name;
     if (const char* name = rt_->image()->LookupFunction(pcode_start_))
@@ -267,7 +267,7 @@ CompilerBase::reportError(int err) {
 }
 
 int
-CompilerBase::CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc) {
+CompilerBase::CompileFromThunk(PluginContext* cx, uint32_t pcode_offs, void** addrp, uint8_t* pc) {
     // If the watchdog timer has declared a timeout, we must process it now,
     // and possibly refuse to compile, since otherwise we will compile a
     // function that is not patched for timeouts.

@@ -160,12 +160,10 @@ PluginRuntime::AcquireMethod(cell_t pcode_offset) {
     // Do some quick validation to make sure this is a valid offset. The only
     // real reason to do this is so we don't fill the hash set with bogus
     // methods.
-    if (pcode_offset < 0 || size_t(pcode_offset) >= code_.length ||
-        !IsAligned(pcode_offset, sizeof(cell_t))) {
+    if (pcode_offset < 0 || size_t(pcode_offset) >= code_.length)
         return nullptr;
-    }
 
-    const cell_t* address = reinterpret_cast<const cell_t*>(code_.bytes + pcode_offset);
+    auto address = code_.bytes + pcode_offset;
     if (*address != OP_PROC)
         return nullptr;
 

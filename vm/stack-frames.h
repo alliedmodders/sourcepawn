@@ -32,6 +32,7 @@ namespace sp {
 
 using namespace SourcePawn;
 
+class BaseMethodInfo;
 class BaseRuntime;
 class MethodInfo;
 struct FrameLayout;
@@ -111,8 +112,7 @@ class InterpInvokeFrame final : public InvokeFrame
     friend class InterpFrameIterator;
 
   public:
-    InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method, const cell_t* const& cip);
-    InterpInvokeFrame(BaseRuntime* cx, v2::MethodInfo* method, const cell_t* const& cip);
+    InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method, const uint8_t* const* cip);
     ~InterpInvokeFrame();
 
     void enterNativeCall(uint32_t native_index);
@@ -124,7 +124,7 @@ class InterpInvokeFrame final : public InvokeFrame
 
   private:
     cell_t function_cip_;
-    const cell_t* const& cip_;
+    const uint8_t* const* cip_;
     int native_index_;
 };
 

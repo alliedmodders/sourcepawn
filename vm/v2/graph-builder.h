@@ -65,10 +65,10 @@ class GraphBuilder
     bool cleanup();
 
     bool more() {
-        return cip_ + sizeof(cell_t) <= stop_at_;
+        return cip_ < stop_at_;
     }
     cell_t peek() {
-        assert(more());
+        assert(cip_ + sizeof(cell_t) <= stop_at_);
         return *reinterpret_cast<const cell_t*>(cip_);
     }
     cell_t read() {
@@ -77,20 +77,20 @@ class GraphBuilder
         return value;
     }
     OPCODE peekOp() {
-        return (OPCODE)peek();
+        return (OPCODE)*cip_;
     }
     OPCODE readOp() {
-        return (OPCODE)read();
+        OPCODE op = peekOp();
+        cip_++;
+        return op;
     }
 
     // We use bitmaps to efficiently to track true/false information about
     // addresses. To do this, we convert each instruction addresses into
-    // a cell # from the start of the function. This effectively compresses
-    // each address by 4 * 32, so a 256KB method has 65,536 instructions, which
-    // needs only 8,192 bytes to encode a bitmap.
-    uint32_t getCellNumber(const uint8_t* cip) {
+    // a byte # from the start of the function.
+    uint32_t getByteNumber(const uint8_t* cip) {
         assert(cip >= start_at_);
-        return static_cast<uint32_t>((cip - start_at_) / sizeof(cell_t));
+        return static_cast<uint32_t>(cip - start_at_);
     }
 
   private:

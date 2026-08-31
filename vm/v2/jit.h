@@ -40,13 +40,13 @@ struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).
     uint32_t pc;
     // The cip of the jump.
-    const cell_t* cip;
+    const uint8_t* cip;
     // The offset of the timeout thunk. This is filled in at the end.
     uint32_t timeout_offset;
 
     BackwardJump() {
     }
-    BackwardJump(uint32_t pc, const cell_t* cip)
+    BackwardJump(uint32_t pc, const uint8_t* cip)
      : pc(pc)
      , cip(cip) {
     }
@@ -86,7 +86,7 @@ class CompilerBase : public PcodeVisitor
     virtual void emitOutOfBoundsError(OutOfBoundsError* path) = 0;
 
     // Helpers.
-    static int CompileFromThunk(PluginContext* cx, cell_t pcode_offs, void** addrp, uint8_t* pc);
+    static int CompileFromThunk(PluginContext* cx, uint32_t pcode_offs, void** addrp, uint8_t* pc);
     static void* find_entry_fp();
     static void InvokeReportError(int err);
     static void InvokeReportTimeout();
@@ -98,9 +98,9 @@ class CompilerBase : public PcodeVisitor
     // Map a return address (i.e. an exit point from a function) to its source
     // cip. This lets us avoid tracking the cip during runtime. These are
     // sorted by definition since we assemble and emit in forward order.
-    void emitCipMapping(const cell_t* cip) {
+    void emitCipMapping(const uint8_t* cip) {
         CipMapEntry entry;
-        entry.cipoffs = uintptr_t(cip) - uintptr_t(code_start_);
+        entry.cipoffs = (uint32_t)(cip - code_start_);
         entry.pcoffs = masm.pc();
         cip_map_.push_back(entry);
     }
@@ -130,39 +130,39 @@ class CompilerBase : public PcodeVisitor
     ke::RefPtr<Block> block_;
     int error_;
     uint32_t pcode_start_;
-    const cell_t* code_start_;
-    const cell_t* op_cip_;
+    const uint8_t* code_start_;
+    const uint8_t* op_cip_;
 
     MacroAssembler masm;
 
     struct CallThunk {
-        explicit CallThunk(cell_t pcode_offset)
+        explicit CallThunk(uint32_t pcode_offset)
           : pcode_offset(pcode_offset)
         {}
         CallThunk(CallThunk&& other) = default;
         CallThunk& operator =(CallThunk& other) = default;
 
         PatchCodeLabel label;
-        cell_t pcode_offset;
+        uint32_t pcode_offset;
     };
     std::vector<CallThunk> call_thunks_;
 
     struct ErrorThunk {
-        explicit ErrorThunk(const cell_t* cip, int err)
+        explicit ErrorThunk(const uint8_t* cip, int err)
           : cip(cip), err(err)
         {}
         Label label;
-        const cell_t* cip;
+        const uint8_t* cip;
         int err;
     };
     std::vector<ErrorThunk> error_thunks_;
 
     struct OutOfBoundsError {
-        OutOfBoundsError(const cell_t* cip, cell_t bounds)
+        OutOfBoundsError(const uint8_t* cip, cell_t bounds)
           : cip(cip), bounds(bounds)
         {}
         Label label;
-        const cell_t* cip;
+        const uint8_t* cip;
         cell_t bounds;
     };
     std::vector<OutOfBoundsError> bounds_errors_;

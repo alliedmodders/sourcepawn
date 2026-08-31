@@ -37,15 +37,15 @@
 
 namespace sp::v2 {
 
-void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
+void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const uint8_t* cip);
 
-// These count opcodes in # of cells, not bytes.
+// These count opcodes in # of bytes.
 const char* GetOpcodeName(OPCODE op);
 int GetCaseTableSize(const uint8_t* cip);
 
 static inline int GetOpcodeSize(OPCODE op) {
     switch (op) {
-#define FOR_EACH_OPCODE(op, val, text, cells) case OP_##op: return cells;
+#define FOR_EACH_OPCODE(op, val, text, bytes) case OP_##op: return bytes;
         OPCODE_LIST_V2(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
         default:
@@ -56,10 +56,10 @@ static inline int GetOpcodeSize(OPCODE op) {
 
 static inline const uint8_t*
 NextInstruction(const uint8_t* cip) {
-    OPCODE op = (OPCODE) * reinterpret_cast<const cell_t*>(cip);
+    OPCODE op = (OPCODE)*cip;
     if (op == OP_CASETBL)
-        return cip + GetCaseTableSize(cip) * sizeof(cell_t);
-    return cip + GetOpcodeSize(op) * sizeof(cell_t);
+        return cip + GetCaseTableSize(cip);
+    return cip + GetOpcodeSize(op);
 }
 
 } // namespace sp

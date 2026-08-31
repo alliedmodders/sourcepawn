@@ -350,4 +350,5 @@ static const char* errmsg_ex[] = {
     /*464*/ "operator overloads are no longer supported for '%s'\n",
     /*465*/ "type '%s' cannot be used in a typedef\n",
     /*466*/ "void result cannot be used in an expression\n",
+    /*467*/ "too many local slots used\n",
 };

@@ -15,6 +15,7 @@
 #include "vm/environment.h"
 #include "vm/smx-image.h"
 #include "vm/legacy/opcodes.h"
+#include "vm/v2/opcodes.h"
 
 using namespace ke;
 using namespace ke::args;
@@ -185,6 +186,8 @@ class DumpTool final {
         if (!methods)
             return;
 
+        bool is_v2 = smx_->hdr()->version >= SmxConsts::SP_VERSION_2;
+
         for (uint32_t i = 0; i < methods->row_count; i++) {
             auto method = smx_->getRttiRow<smx_rtti_method>(methods, i);
             fprintf(stdout, ".method %s ; index %u", smx_->names() + method->name, i);
@@ -195,7 +198,10 @@ class DumpTool final {
             fprintf(stdout, "    .pcode_start = 0x%x\n", method->pcode_start);
             fprintf(stdout, "    .pcode_end = 0x%x\n", method->pcode_end);
             DumpLocals(method);
-            DumpCodeRangeV1<false>(method->pcode_start, method->pcode_end);
+            if (is_v2)
+                DumpCodeRangeV2<false>(method->pcode_start, method->pcode_end);
+            else
+                DumpCodeRangeV1<false>(method->pcode_start, method->pcode_end);
             fprintf(stdout, "}\n");
         }
     }
@@ -271,10 +277,14 @@ class DumpTool final {
                     if (!rtti.ReadCompactUint32(&size))
                         return {};
                     type_outer += ke::StringPrintf("[%u]", size);
+                    if (!rtti.GetNextByte(&b))
+                        return {};
                     continue;
                 }
                 case cb::kArray:
                     type_outer += "[]";
+                    if (!rtti.GetNextByte(&b))
+                        return {};
                     continue;
                 case cb::kEnum:
                 {
@@ -344,7 +354,10 @@ class DumpTool final {
 
     void DumpLegacyCode() {
         auto code = smx_->DescribeCode();
-        DumpCodeRangeV1<true>(0, code.length);
+        if (smx_->hdr()->version >= SmxConsts::SP_VERSION_2)
+            DumpCodeRangeV2<true>(0, code.length);
+        else
+            DumpCodeRangeV1<true>(0, code.length);
     }
 
     template <bool SearchForMethods>
@@ -362,7 +375,7 @@ class DumpTool final {
 
             if (SearchForMethods && (cip == start || op == OP_PROC)) {
                 std::string method_name;
-                uint32_t offset = (cip - start) * sizeof(cell_t);
+                uint32_t offset = (cip - (const cell_t*)code.bytes) * sizeof(cell_t);
                 if (auto name = smx_->LookupFunction(offset))
                     method_name = name;
                 else
@@ -522,6 +535,206 @@ class DumpTool final {
             case OP_INITARRAY_ALT:
                 fprintf(stdout, " %d %d %d %d %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
                 break;
+
+            default:
+                break;
+        }
+    }
+
+    template <bool SearchForMethods>
+    void DumpCodeRangeV2(uint32_t pcode_start, uint32_t pcode_end) {
+        using namespace sp::v2;
+        auto code = smx_->DescribeCode();
+
+        auto start = code.bytes + pcode_start;
+        auto cip = start;
+        auto code_end = code.bytes + pcode_end;
+        auto method_start = cip;
+
+        while (cip < code_end) {
+            OPCODE op = (OPCODE)*cip;
+
+            if (SearchForMethods && (cip == start || op == OP_PROC)) {
+                std::string method_name;
+                uint32_t offset = (uint32_t)(cip - code.bytes);
+                if (auto name = smx_->LookupFunction(offset))
+                    method_name = name;
+                else
+                    method_name = ke::StringPrintf("unknown_method_%u", offset);
+
+                if (cip != start)
+                    fprintf(stdout, "\n}\n");
+
+                fprintf(stdout, ".method %s\n", method_name.c_str());
+                fprintf(stdout, "{\n");
+                fprintf(stdout, "    .pcode_start = 0x%x\n", offset);
+
+                method_start = cip;
+            }
+
+            const char* name = nullptr;
+            if (op < OPCODES_LAST)
+                name = GetOpcodeName(op);
+
+            // Terminate previous line.
+            if (cip != method_start)
+                fprintf(stdout, "\n");
+
+            fprintf(stdout, "    %04x: ", (uint32_t)(cip - method_start));
+            if (name)
+                fprintf(stdout, "%s", name);
+            else
+                fprintf(stdout, "unknown_op_%u", op);
+
+            DumpOpcodeV2(method_start, cip, op);
+
+            if (op == OP_CASETBL)
+                cip += GetCaseTableSize(cip);
+            else if (name)
+                cip += GetOpcodeSize(op);
+            else
+                cip++;
+        }
+        if (SearchForMethods)
+            fprintf(stdout, "\n}\n");
+        fprintf(stdout, "\n");
+    }
+
+    void DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, v2::OPCODE op) {
+        using namespace sp::v2;
+
+        auto readCell = [&cip]() {
+            cell_t val = *reinterpret_cast<const cell_t*>(cip);
+            cip += sizeof(cell_t);
+            return val;
+        };
+        auto readInt16 = [&cip]() {
+            int16_t val = *reinterpret_cast<const int16_t*>(cip);
+            cip += sizeof(int16_t);
+            return val;
+        };
+
+        cip++; // skip opcode
+
+        switch (op) {
+            case OP_PUSH_C:
+            case OP_SHL_C_PRI:
+            case OP_SHL_C_ALT:
+            case OP_ADD_C:
+            case OP_SMUL_C:
+            case OP_HEAP:
+            case OP_GENARRAY:
+            case OP_GENARRAY_Z:
+            case OP_CONST_PRI:
+            case OP_CONST_ALT:
+            case OP_MOVS:
+            case OP_LOAD_PRI:
+            case OP_LOAD_ALT:
+            case OP_STOR_PRI:
+            case OP_STOR_ALT:
+            case OP_FILL:
+                fprintf(stdout, " %d", readCell());
+                break;
+
+            case OP_PUSH_ADR:
+            case OP_PUSH_S:
+            case OP_LOAD_S_PRI:
+            case OP_LOAD_S_ALT:
+            case OP_STOR_S_PRI:
+            case OP_STOR_S_ALT:
+            case OP_ADDR_PRI:
+            case OP_ADDR_ALT:
+            case OP_CVT_I64:
+            case OP_INVERT_I64:
+            case OP_NEG_I64:
+            case OP_SMUL_I64:
+            case OP_ADD_I64:
+            case OP_SUB_ALT_I64:
+            case OP_SHL_I64:
+            case OP_SSHR_I64:
+            case OP_SHR_I64:
+            case OP_OR_I64:
+            case OP_AND_I64:
+            case OP_XOR_I64:
+            case OP_ZERO_S:
+            case OP_ZERO_S_I64:
+            case OP_STOR_S_PRI_I64:
+            case OP_LREF_S_PRI:
+            case OP_LREF_S_ALT:
+            case OP_SREF_S_PRI:
+            case OP_SREF_S_ALT:
+                fprintf(stdout, " %d", readInt16());
+                break;
+
+            case OP_SDIV_ALT_I64:
+            case OP_SMOD_ALT_I64:
+                fprintf(stdout, " %d", readInt16());
+                break;
+
+            case OP_STOR_S_C: {
+                int16_t offset = readInt16();
+                cell_t value = readCell();
+                fprintf(stdout, " %d, %d", offset, value);
+                break;
+            }
+
+            case OP_STOR_S_C_I64: {
+                int16_t slot = readInt16();
+                cell_t cell0 = readCell();
+                cell_t cell1 = readCell();
+                fprintf(stdout, " %d, %d, %d", slot, cell0, cell1);
+                break;
+            }
+
+            case OP_CALL:
+            {
+                cell_t offset = readCell();
+                const char* name = smx_->LookupFunction(offset);
+                if (name)
+                    fprintf(stdout, " %s", name);
+                else
+                    fprintf(stdout, " unknown_function_%x", offset);
+                break;
+            }
+
+            case OP_JUMP:
+            case OP_JZER:
+            case OP_JNZ:
+            case OP_JEQ:
+            case OP_JNEQ:
+            case OP_JSLESS:
+            case OP_JSGRTR:
+            case OP_JSGEQ:
+            case OP_JSLEQ:
+            {
+                uint32_t target_offs = readCell();
+                uint32_t diff = target_offs - (uint32_t)(method_start - smx_->DescribeCode().bytes);
+                fprintf(stdout, " %04x ; %x", diff, target_offs);
+                break;
+            }
+
+            case OP_SYSREQ_N:
+            {
+                uint32_t index = (uint32_t)readCell();
+                uint32_t nargs = (uint32_t)readCell();
+                if (index < smx_->natives().length())
+                    fprintf(stdout, " %s", smx_->names() + smx_->natives()[index].name);
+                else
+                    fprintf(stdout, " unknown_native_%u", index);
+                fprintf(stdout, " ; (%d args)", nargs);
+                break;
+            }
+
+            case OP_INITARRAY_PRI:
+            case OP_INITARRAY_ALT: {
+                cell_t v0 = readCell();
+                cell_t v1 = readCell();
+                cell_t v2 = readCell();
+                cell_t v3 = readCell();
+                cell_t v4 = readCell();
+                fprintf(stdout, " %d %d %d %d %d", v0, v1, v2, v3, v4);
+                break;
+            }
 
             default:
                 break;

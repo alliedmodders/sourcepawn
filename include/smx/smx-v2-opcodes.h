@@ -34,60 +34,56 @@ namespace v2 {
 
 #define OPCODE_LIST_V2(FOR_EACH) \
     FOR_EACH(NONE, 0, "none", 1) \
-    FOR_EACH(LOAD_PRI, 1, "load.pri", 2) \
-    FOR_EACH(LOAD_ALT, 2, "load.alt", 2) \
-    FOR_EACH(LOAD_S_PRI, 3, "load.s.pri", 2) \
-    FOR_EACH(LOAD_S_ALT, 4, "load.s.alt", 2) \
-    FOR_EACH(LREF_S_PRI, 5, "lref.s.pri", 2) \
-    FOR_EACH(LREF_S_ALT, 6, "lref.s.alt", 2) \
+    FOR_EACH(LOAD_PRI, 1, "load.pri", 5) \
+    FOR_EACH(LOAD_ALT, 2, "load.alt", 5) \
+    FOR_EACH(LOAD_S_PRI, 3, "load.s.pri", 3) \
+    FOR_EACH(LOAD_S_ALT, 4, "load.s.alt", 3) \
+    FOR_EACH(LREF_S_PRI, 5, "lref.s.pri", 3) \
+    FOR_EACH(LREF_S_ALT, 6, "lref.s.alt", 3) \
     FOR_EACH(LOAD_I, 7, "load.i", 1) \
-    FOR_EACH(LODB_I, 8, "lodb.i", 2) \
-    FOR_EACH(CONST_PRI, 9, "const.pri", 2) \
-    FOR_EACH(CONST_ALT, 10, "const.alt", 2) \
-    FOR_EACH(ADDR_PRI, 11, "addr.pri", 2) \
-    FOR_EACH(ADDR_ALT, 12, "addr.alt", 2) \
-    FOR_EACH(STOR_PRI, 13, "stor.pri", 2) \
-    FOR_EACH(STOR_ALT, 14, "stor.alt", 2) \
-    FOR_EACH(STOR_S_PRI, 15, "stor.s.pri", 2) \
-    FOR_EACH(STOR_S_ALT, 16, "stor.s.alt", 2) \
-    FOR_EACH(STOR_S_C, 17, "stor.s.c", 3) \
-    FOR_EACH(SREF_S_PRI, 18, "sref.s.pri", 2) \
-    FOR_EACH(SREF_S_ALT, 19, "sref.s.alt", 2) \
+    FOR_EACH(LODB_I, 8, "lodb.i", 5) \
+    FOR_EACH(CONST_PRI, 9, "const.pri", 5) \
+    FOR_EACH(CONST_ALT, 10, "const.alt", 5) \
+    FOR_EACH(ADDR_PRI, 11, "addr.pri", 3) \
+    FOR_EACH(ADDR_ALT, 12, "addr.alt", 3) \
+    FOR_EACH(STOR_PRI, 13, "stor.pri", 5) \
+    FOR_EACH(STOR_ALT, 14, "stor.alt", 5) \
+    FOR_EACH(STOR_S_PRI, 15, "stor.s.pri", 3) \
+    FOR_EACH(STOR_S_ALT, 16, "stor.s.alt", 3) \
+    FOR_EACH(STOR_S_C, 17, "stor.s.c", 7) \
+    FOR_EACH(SREF_S_PRI, 18, "sref.s.pri", 3) \
+    FOR_EACH(SREF_S_ALT, 19, "sref.s.alt", 3) \
     FOR_EACH(STOR_I, 20, "stor.i", 1) \
-    FOR_EACH(STRB_I, 21, "strb.i", 2) \
+    FOR_EACH(STRB_I, 21, "strb.i", 5) \
     FOR_EACH(IDXADDR, 22, "idxaddr", 1) \
     FOR_EACH(MOVE_PRI, 23, "move.pri", 1) \
     FOR_EACH(MOVE_ALT, 24, "move.alt", 1) \
     FOR_EACH(XCHG, 25, "xchg", 1) \
     FOR_EACH(PUSH_PRI, 26, "push.pri", 1) \
     FOR_EACH(PUSH_ALT, 27, "push.alt", 1) \
-    FOR_EACH(PUSH_C, 28, "push.c", 2) \
-    FOR_EACH(PUSH_S, 29, "push.s", 2) \
+    FOR_EACH(PUSH_C, 28, "push.c", 5) \
+    FOR_EACH(PUSH_S, 29, "push.s", 3) \
     FOR_EACH(POP_PRI, 30, "pop.pri", 1) \
     FOR_EACH(POP_ALT, 31, "pop.alt", 1) \
-    FOR_EACH(HEAP, 32, "heap", 2) \
+    FOR_EACH(HEAP, 32, "heap", 5) \
     FOR_EACH(PROC, 33, "proc", 1) \
     FOR_EACH(RETN, 34, "retn", 1) \
-    FOR_EACH(CALL, 35, "call", 2) \
-    FOR_EACH(JUMP, 36, "jump", 2) \
-    FOR_EACH(JZER, 37, "jzer", 2) \
-    FOR_EACH(JNZ, 38, "jnz", 2) \
-    FOR_EACH(JEQ, 39, "jeq", 2) \
-    FOR_EACH(JNEQ, 40, "jneq", 2) \
-    FOR_EACH(JSLESS, 41, "jsless", 2) \
-    FOR_EACH(JSLEQ, 42, "jsleq", 2) \
-    FOR_EACH(JSGRTR, 43, "jsgrtr", 2) \
-    FOR_EACH(JSGEQ, 44, "jsgeq", 2) \
+    FOR_EACH(CALL, 35, "call", 5) \
+    FOR_EACH(JUMP, 36, "jump", 5) \
+    FOR_EACH(JZER, 37, "jzer", 5) \
+    FOR_EACH(JNZ, 38, "jnz", 5) \
+    FOR_EACH(JEQ, 39, "jeq", 5) \
+    FOR_EACH(JNEQ, 40, "jneq", 5) \
+    FOR_EACH(JSLESS, 41, "jsless", 5) \
+    FOR_EACH(JSLEQ, 42, "jsleq", 5) \
+    FOR_EACH(JSGRTR, 43, "jsgrtr", 5) \
+    FOR_EACH(JSGEQ, 44, "jsgeq", 5) \
     FOR_EACH(SHL, 45, "shl", 1) \
     FOR_EACH(SHR, 46, "shr", 1) \
     FOR_EACH(SSHR, 47, "sshr", 1) \
-    FOR_EACH(SHL_C_PRI, 48, "shl.c.pri", 2) \
-    FOR_EACH(SHL_C_ALT, 49, "shl.c.alt", 2) \
+    FOR_EACH(SHL_C_PRI, 48, "shl.c.pri", 5) \
+    FOR_EACH(SHL_C_ALT, 49, "shl.c.alt", 5) \
     FOR_EACH(SMUL, 50, "smul", 1) \
-    /* SDIV and SMOD clobber ALT, unlike other binary operations. \
-     * This doesn't matter in practice but is noted for implementors. \
-     * SDIV (the PRI variant) is no longer generated. \
-     */ \
     FOR_EACH(SDIV, 51, "sdiv", 1) \
     FOR_EACH(SDIV_ALT, 52, "sdiv.alt", 1) \
     FOR_EACH(SDIV_ALT_I32, 53, "sdiv.i32", 1) \
@@ -100,12 +96,12 @@ namespace v2 {
     FOR_EACH(NOT, 60, "not", 1) \
     FOR_EACH(NEG, 61, "neg", 1) \
     FOR_EACH(INVERT, 62, "invert", 1) \
-    FOR_EACH(ADD_C, 63, "add.c", 2) \
-    FOR_EACH(SMUL_C, 64, "smul.c", 2) \
+    FOR_EACH(ADD_C, 63, "add.c", 5) \
+    FOR_EACH(SMUL_C, 64, "smul.c", 5) \
     FOR_EACH(ZERO_PRI, 65, "zero.pri", 1) \
     FOR_EACH(ZERO_ALT, 66, "zero.alt", 1) \
-    FOR_EACH(ZERO_S, 67, "zero.s", 2) \
-    FOR_EACH(ZERO_S_I64, 68, "zero.s.i64", 2) \
+    FOR_EACH(ZERO_S, 67, "zero.s", 3) \
+    FOR_EACH(ZERO_S_I64, 68, "zero.s.i64", 3) \
     FOR_EACH(EQ, 69, "eq", 1) \
     FOR_EACH(NEQ, 70, "neq", 1) \
     FOR_EACH(SLESS, 71, "sless", 1) \
@@ -116,27 +112,25 @@ namespace v2 {
     FOR_EACH(INC_ALT, 78, "inc.alt", 1) \
     FOR_EACH(DEC_PRI, 79, "dec.pri", 1) \
     FOR_EACH(DEC_ALT, 80, "dec.alt", 1) \
-    FOR_EACH(MOVS, 81, "movs", 2) \
-    FOR_EACH(FILL, 82, "fill", 2) \
-    FOR_EACH(BOUNDS, 83, "bounds", 2) \
-    FOR_EACH(SWITCH, 84, "switch", 2) \
+    FOR_EACH(MOVS, 81, "movs", 5) \
+    FOR_EACH(FILL, 82, "fill", 5) \
+    FOR_EACH(BOUNDS, 83, "bounds", 5) \
+    FOR_EACH(SWITCH, 84, "switch", 5) \
     FOR_EACH(CASETBL, 85, "casetbl", -1) \
     FOR_EACH(SWAP_PRI, 86, "swap.pri", 1) \
     FOR_EACH(SWAP_ALT, 87, "swap.alt", 1) \
-    FOR_EACH(PUSH_ADR, 88, "push.adr", 2) \
+    FOR_EACH(PUSH_ADR, 88, "push.adr", 3) \
     FOR_EACH(NOP, 89, "nop", 1) \
-    FOR_EACH(SYSREQ_N, 90, "sysreq.n", 3) \
+    FOR_EACH(SYSREQ_N, 90, "sysreq.n", 9) \
     FOR_EACH(BREAK, 91, "break", 1) \
-    FOR_EACH(GENARRAY, 92, "genarray", 2) \
-    FOR_EACH(GENARRAY_Z, 93, "genarray.z", 2) \
+    FOR_EACH(GENARRAY, 92, "genarray", 5) \
+    FOR_EACH(GENARRAY_Z, 93, "genarray.z", 5) \
     FOR_EACH(STRADJUST_PRI, 94, "stradjust.pri", 1) \
     FOR_EACH(ENDPROC, 95, "endproc", 1) \
-    FOR_EACH(INITARRAY_PRI, 96, "initarray.pri", 6) \
-    FOR_EACH(INITARRAY_ALT, 97, "initarray.alt", 6) \
+    FOR_EACH(INITARRAY_PRI, 96, "initarray.pri", 21) \
+    FOR_EACH(INITARRAY_ALT, 97, "initarray.alt", 21) \
     FOR_EACH(HEAP_SAVE, 98, "heap.save", 1) \
     FOR_EACH(HEAP_RESTORE, 99, "heap.restore", 1) \
-    /* Identical to 32-bit integer operations, except pri/alt are treated \
-     * as 32-bit IEEE-754 floats. */ \
     FOR_EACH(TEST_F32, 100, "test.f32", 1) \
     FOR_EACH(NEG_F32, 101, "neg.f32", 1) \
     FOR_EACH(MUL_F32, 102, "mul.f32", 1) \
@@ -151,39 +145,32 @@ namespace v2 {
     FOR_EACH(GEQ_F32, 111, "geq.f32", 1) \
     FOR_EACH(CVT_F32, 112, "cvt.f32", 1) \
     FOR_EACH(MOD_ALT_F32, 113, "mod.alt.f32", 1) \
-    /* The _I64 opcodes assume registers are pointers to at least two cells \
-     * of memory representing an int64. Since the stack and registers are \
-     * not designed to accomodate 64-bit temporaries, some of these opcodes \
-     * take a stack slot parameter. This must be a 64-bit entry in the stack. \
-     * As a convenience, these opcodes set PRI to the address of the given \
-     * stack slot (as if ADDR.PRI were used).
-     */ \
     FOR_EACH(MOVE_I64, 114, "move.i64", 1) \
     FOR_EACH(PUSH_I_I64, 115, "push.i.i64", 1) \
-    FOR_EACH(CVT_I64, 116, "cvt.i64", 2) \
+    FOR_EACH(CVT_I64, 116, "cvt.i64", 3) \
     FOR_EACH(TRUNCATE_I64, 117, "truncate.i64", 1) \
     FOR_EACH(TEST_I64, 118, "test.i64", 1) \
-    FOR_EACH(INVERT_I64, 119, "invert.i64", 2) \
-    FOR_EACH(NEG_I64, 120, "neg.i64", 2) \
-    FOR_EACH(SMUL_I64, 121, "smul.i64", 2) \
-    FOR_EACH(SDIV_ALT_I64, 122, "sdiv.alt.i64", 2) \
-    FOR_EACH(ADD_I64, 123, "add.i64", 2) \
-    FOR_EACH(SUB_ALT_I64, 124, "sub_alt.i64", 2) \
-    FOR_EACH(SHL_I64, 125, "shl.i64", 2) \
-    FOR_EACH(SSHR_I64, 126, "sshr.i64", 2) \
-    FOR_EACH(SHR_I64, 127, "shr.i64", 2) \
+    FOR_EACH(INVERT_I64, 119, "invert.i64", 3) \
+    FOR_EACH(NEG_I64, 120, "neg.i64", 3) \
+    FOR_EACH(SMUL_I64, 121, "smul.i64", 3) \
+    FOR_EACH(SDIV_ALT_I64, 122, "sdiv.alt.i64", 3) \
+    FOR_EACH(ADD_I64, 123, "add.i64", 3) \
+    FOR_EACH(SUB_ALT_I64, 124, "sub_alt.i64", 3) \
+    FOR_EACH(SHL_I64, 125, "shl.i64", 3) \
+    FOR_EACH(SSHR_I64, 126, "sshr.i64", 3) \
+    FOR_EACH(SHR_I64, 127, "shr.i64", 3) \
     FOR_EACH(EQ_I64, 128, "eq.i64", 1) \
     FOR_EACH(NEQ_I64, 129, "neq.i64", 1) \
-    FOR_EACH(OR_I64, 130, "or.i64", 2) \
-    FOR_EACH(AND_I64, 131, "and.i64", 2) \
-    FOR_EACH(XOR_I64, 132, "neq.i64", 2) \
-    FOR_EACH(STOR_S_C_I64, 133, "stor.s.c.i64", 4) \
+    FOR_EACH(OR_I64, 130, "or.i64", 3) \
+    FOR_EACH(AND_I64, 131, "and.i64", 3) \
+    FOR_EACH(XOR_I64, 132, "neq.i64", 3) \
+    FOR_EACH(STOR_S_C_I64, 133, "stor.s.c.i64", 11) \
     FOR_EACH(SLESS_I64, 134, "sless.i64", 1) \
     FOR_EACH(SLEQ_I64, 135, "sleq.i64", 1) \
     FOR_EACH(SGRTR_I64, 136, "sgrtr.i64", 1) \
     FOR_EACH(SGEQ_I64, 137, "sgeq.i64", 1) \
-    FOR_EACH(SMOD_ALT_I64, 138, "smod.alt.i64", 2) \
-    FOR_EACH(STOR_S_PRI_I64, 139, "stor.s.pri.i64", 2) \
+    FOR_EACH(SMOD_ALT_I64, 138, "smod.alt.i64", 3) \
+    FOR_EACH(STOR_S_PRI_I64, 139, "stor.s.pri.i64", 3) \
 
 enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,

@@ -29,6 +29,7 @@
  * Version: $Id$
  */
 #include "v2/opcodes.h"
+#include "binary-reader.h"
 
 using namespace sp::v2;
 using namespace SourcePawn;
@@ -37,49 +38,59 @@ namespace sp::v2 {
 
 const char* GetOpcodeName(OPCODE op) {
     static std::vector<const char*> names(OPCODES_LAST, nullptr);
-#define FOR_EACH_OPCODE(op, val, text, cells) names[OP_##op] = text;
+#define FOR_EACH_OPCODE(op, val, text, bytes) names[OP_##op] = text;
     OPCODE_LIST_V2(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
     return names[op];
 }
 
 int GetCaseTableSize(const uint8_t* cip) {
-    assert((OPCODE) * reinterpret_cast<const cell_t*>(cip) == OP_CASETBL);
-    cip += sizeof(cell_t);
-    return (*reinterpret_cast<const cell_t*>(cip) * 2) + 3;
+    assert((OPCODE)*cip == OP_CASETBL);
+    cip++;
+    return (*reinterpret_cast<const cell_t*>(cip) * (sizeof(cell_t) * 2)) + 1 + sizeof(cell_t) * 2;
 }
 
-void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip) {
-    fprintf(fp, "  [%05d:%04d]", int(cip - (cell_t*)runtime->code().bytes), int(cip - start));
+void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const uint8_t* cip) {
+    fprintf(fp, "  [%05d:%04d]", (int)(cip - runtime->code().bytes), (int)(cip - start));
 
     if (*cip >= OPCODES_LAST) {
         fprintf(fp, " unknown-opcode\n");
         return;
     }
 
-    OPCODE op = (OPCODE)*cip;
+    BinaryReader reader(cip);
+
+    OPCODE op = (OPCODE)reader.read<uint8_t>();
     fprintf(fp, " %s ", GetOpcodeName(op));
 
     switch (op) {
         case OP_PUSH_C:
-        case OP_PUSH_ADR:
         case OP_SHL_C_PRI:
         case OP_SHL_C_ALT:
         case OP_ADD_C:
         case OP_SMUL_C:
-        case OP_PUSH_S:
         case OP_HEAP:
         case OP_GENARRAY:
         case OP_GENARRAY_Z:
         case OP_CONST_PRI:
         case OP_CONST_ALT:
+        case OP_MOVS:
+        case OP_LOAD_PRI:
+        case OP_LOAD_ALT:
+        case OP_STOR_PRI:
+        case OP_STOR_ALT:
+        case OP_FILL:
+            fprintf(fp, "%d", reader.read<cell_t>());
+            break;
+
+        case OP_PUSH_ADR:
+        case OP_PUSH_S:
         case OP_LOAD_S_PRI:
         case OP_LOAD_S_ALT:
         case OP_STOR_S_PRI:
         case OP_STOR_S_ALT:
         case OP_ADDR_PRI:
         case OP_ADDR_ALT:
-        case OP_MOVS:
         case OP_CVT_I64:
         case OP_INVERT_I64:
         case OP_NEG_I64:
@@ -89,16 +100,38 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_SHL_I64:
         case OP_SSHR_I64:
         case OP_SHR_I64:
-        case OP_EQ_I64:
-        case OP_NEQ_I64:
         case OP_OR_I64:
         case OP_AND_I64:
         case OP_XOR_I64:
+        case OP_ZERO_S:
         case OP_ZERO_S_I64:
         case OP_STOR_S_PRI_I64:
-        case OP_STOR_S_C:
-            fprintf(fp, "%d", cip[1]);
+        case OP_LREF_S_PRI:
+        case OP_LREF_S_ALT:
+        case OP_SREF_S_PRI:
+        case OP_SREF_S_ALT:
+            fprintf(fp, "%d", reader.read<int16_t>());
             break;
+
+        case OP_SDIV_ALT_I64:
+        case OP_SMOD_ALT_I64:
+            fprintf(fp, "%d", reader.read<int16_t>());
+            break;
+
+        case OP_STOR_S_C: {
+            int16_t offset = reader.read<int16_t>();
+            cell_t value = reader.read<cell_t>();
+            fprintf(fp, "%d, %d", offset, value);
+            break;
+        }
+
+        case OP_STOR_S_C_I64: {
+            int16_t slot = reader.read<int16_t>();
+            cell_t cell0 = reader.read<cell_t>();
+            cell_t cell1 = reader.read<cell_t>();
+            fprintf(fp, "%d, %d, %d", slot, cell0, cell1);
+            break;
+        }
 
         case OP_JUMP:
         case OP_JZER:
@@ -109,30 +142,31 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_JSGRTR:
         case OP_JSGEQ:
         case OP_JSLEQ:
-            fprintf(fp, "%05d:%04d", cip[1] / 4,
-                    int(((cell_t*)runtime->code().bytes + cip[1] / 4) - start));
-            break;
-
-        case OP_SYSREQ_N: {
-            uint32_t index = cip[1];
-            if (index < runtime->image()->NumNatives())
-                fprintf(fp, "%s", runtime->GetNative(index)->name);
-            fprintf(fp, " ; (%d args, index %d)", cip[2], index);
+        {
+            cell_t target_offs = reader.read<cell_t>();
+            fprintf(fp, "%05d:%04d", target_offs, (int)((runtime->code().bytes + target_offs) - start));
             break;
         }
 
-        case OP_SDIV_ALT_I64:
-            fprintf(fp, "%d, %d", cip[1], cip[2]);
+        case OP_SYSREQ_N: {
+            uint32_t index = (uint32_t)reader.read<cell_t>();
+            uint32_t nargs = (uint32_t)reader.read<cell_t>();
+            if (index < runtime->image()->NumNatives())
+                fprintf(fp, "%s", runtime->GetNative(index)->name);
+            fprintf(fp, " ; (%d args, index %d)", nargs, index);
             break;
-
-        case OP_STOR_S_C_I64:
-            fprintf(fp, "%d, %d, %d", cip[1], cip[2], cip[3]);
-            break;
+        }
 
         case OP_INITARRAY_PRI:
-        case OP_INITARRAY_ALT:
-            fprintf(fp, "%d %d %d %d %d", cip[1], cip[2], cip[3], cip[4], cip[5]);
+        case OP_INITARRAY_ALT: {
+            cell_t v0 = reader.read<cell_t>();
+            cell_t v1 = reader.read<cell_t>();
+            cell_t v2 = reader.read<cell_t>();
+            cell_t v3 = reader.read<cell_t>();
+            cell_t v4 = reader.read<cell_t>();
+            fprintf(fp, "%d %d %d %d %d", v0, v1, v2, v3, v4);
             break;
+        }
 
         default:
             break;

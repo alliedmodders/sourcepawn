@@ -56,7 +56,19 @@ class MethodVerifier final
     bool verifyMemAmount(cell_t amount);
     bool verifyCallOffset(cell_t offset);
     void reportError(int err);
-    cell_t readCell();
+
+    cell_t readCell() {
+        return read<cell_t>();
+    }
+    int16_t readInt16() {
+        return read<int16_t>();
+    }
+    template <typename T> T read() {
+        assert(cip_ + sizeof(T) <= stop_at_);
+        T val = *reinterpret_cast<const T*>(cip_);
+        cip_ += sizeof(T);
+        return val;
+    }
 
     struct VerifyData : public IBlockData {
         VerifyData()
@@ -105,11 +117,11 @@ class MethodVerifier final
     size_t datSize_;
     size_t heapSize_;
     uint32_t max_stack_;
-    const cell_t* code_;
-    const cell_t* insn_;
-    const cell_t* cip_;
-    const cell_t* prev_cip_;
-    const cell_t* stop_at_;
+    const uint8_t* code_;
+    const uint8_t* insn_;
+    const uint8_t* cip_;
+    const uint8_t* prev_cip_;
+    const uint8_t* stop_at_;
     ExternalFuncRefCallback collect_func_refs_;
     int error_;
 };

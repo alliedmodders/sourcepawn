@@ -57,7 +57,7 @@ bool
 Interpreter::run() {
     assert(reader_.peekOpcode() == OP_PROC);
 
-    InterpInvokeFrame ivk(cx_, method_, reader_.insn_begin());
+    InterpInvokeFrame ivk(cx_, method_, &reader_.insn_begin());
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
 
     reader_.begin();

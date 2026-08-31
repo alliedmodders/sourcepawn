@@ -330,27 +330,29 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         num_cells = 1;
 
     int32_t slot = rtti_->AddLocalSlot(&locals_, decl->type());
+    if (slot > INT16_MAX)
+        report(decl->pos(), 467);
     decl->BindAddress(slot);
 
     if (!is_array && !is_struct) {
         if (init) {
             const auto& val = init->right()->val();
             if (val.ident == iCONSTEXPR) {
-                __ emit(OP_STOR_S_C, slot, val.constval());
+                __ emit(OP_STOR_S_C, StackSlot(slot), val.constval());
             } else {
                 EmitExpr(init->right());
                 if (num_cells == 1)
-                    __ emit(OP_STOR_S_PRI, slot);
+                    __ emit(OP_STOR_S_PRI, StackSlot(slot));
                 else if (num_cells == 2)
-                    __ emit(OP_STOR_S_PRI_I64, slot);
+                    __ emit(OP_STOR_S_PRI_I64, StackSlot(slot));
                 else
                     assert(false);
             }
         } else if (num_cells == 2) {
-            __ emit(OP_ZERO_S_I64, slot);
+            __ emit(OP_ZERO_S_I64, StackSlot(slot));
         } else if (num_cells == 1) {
             // Note: we no longer honor "decl" for scalars.
-            __ emit(OP_ZERO_S, slot);
+            __ emit(OP_ZERO_S, StackSlot(slot));
         }
     } else {
         // Note that genarray() pushes the address onto the stack, so we don't
@@ -361,7 +363,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         if (init_rhs && init_rhs->as<NewArrayExpr>()) {
             EmitExpr(init_rhs->as<NewArrayExpr>());
             __ emit(OP_POP_PRI);
-            __ emit(OP_STOR_S_PRI, slot);
+            __ emit(OP_STOR_S_PRI, StackSlot(slot));
         } else if (!init_rhs || decl->type()->isArray() || is_struct) {
             ArrayData array;
             BuildCompoundInitializer(decl, &array, 0);
@@ -394,7 +396,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
 
             __ emit(OP_HEAP, total_size * sizeof(cell));
             __ emit(OP_INITARRAY_ALT, iv_addr, iv_size, non_filled, array.zeroes, 0);
-            __ emit(OP_STOR_S_ALT, slot);
+            __ emit(OP_STOR_S_ALT, StackSlot(slot));
         } else if (StringExpr* ctor = init_rhs->as<StringExpr>()) {
             assert(false);
             auto queue_size = data_.size();
@@ -594,8 +596,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
     switch (expr->token()) {
         case '~':
             if (inner->val().type()->isInt64()) {
-                auto slot = AcquireTempSlot(BuiltinType::Int64);
-                __ emit(OP_INVERT_I64, slot);
+                auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
+                __ emit(OP_INVERT_I64, StackSlot(slot));
             } else {
                 __ emit(OP_INVERT);
             }
@@ -609,8 +611,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
             break;
         case '-':
             if (inner->val().type()->isInt64()) {
-                auto slot = AcquireTempSlot(BuiltinType::Int64);
-                __ emit(OP_NEG_I64, slot);
+                auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
+                __ emit(OP_NEG_I64, StackSlot(slot));
             } else if (inner->val().type()->isFloat()) {
                 __ emit(OP_NEG_F32);
             } else {
@@ -649,8 +651,8 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     cell_t inc_int64_slot = -1;
     if (type->isInt64()) {
         Int64CellUnion u(expr->token() == tINC ? 1 : -1);
-        inc_int64_slot = AcquireTempSlot(BuiltinType::Int64);
-        __ emit(OP_STOR_S_C_I64, inc_int64_slot, u.cells[0], u.cells[1]);
+        inc_int64_slot = AcquireTempSlot(expr, BuiltinType::Int64);
+        __ emit(OP_STOR_S_C_I64, StackSlot(inc_int64_slot), u.cells[0], u.cells[1]);
     }
 
     // Save base address if needed.
@@ -662,8 +664,8 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     bool want_pre_value = !(expr->prefix() || expr->discard());
     if (want_pre_value) {
         if (type->isInt64()) {
-            cell_t pre_slot = AcquireTempSlot(BuiltinType::Int64);
-            __ emit(OP_ADDR_ALT, pre_slot);
+            cell_t pre_slot = AcquireTempSlot(expr, BuiltinType::Int64);
+            __ emit(OP_ADDR_ALT, StackSlot(pre_slot));
             __ emit(OP_MOVE_I64);
             __ emit(OP_PUSH_ALT);
         } else {
@@ -674,8 +676,8 @@ CodeGenerator::EmitIncDec(IncDecExpr* expr)
     if (type->isInt64()) {
         // alt is inc_slot, pri is original address.
         // After this, pri = inc_slot.
-        __ emit(OP_ADDR_ALT, inc_int64_slot);
-        __ emit(OP_ADD_I64, inc_int64_slot);
+        __ emit(OP_ADDR_ALT, StackSlot(inc_int64_slot));
+        __ emit(OP_ADD_I64, StackSlot(inc_int64_slot));
     } else if (type->isFloat()) {
         float val = (expr->token() == tINC ? 1.0f : -1.0f);
         __ emit(OP_CONST_ALT, sp_ftoc(val));
@@ -913,8 +915,8 @@ void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
         if (IsCompareOp(oper_tok)) {
             __ emit(op64);
         } else {
-            auto pri_slot = AcquireTempSlot(BuiltinType::Int64);
-            __ emit(op64, pri_slot);
+            auto pri_slot = AcquireTempSlot(expr, BuiltinType::Int64);
+            __ emit(op64, StackSlot(pri_slot));
         }
     } else if (type == BuiltinType::Float) {
         __ emit(GetFloatBinaryOp(oper_tok));
@@ -1232,18 +1234,18 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
         if (call->fun()->is_native() && return_type->isArray()) {
             EmitNativeCallHiddenArg(call);
 
-            hidden_arg = {AcquireTempSlot(BuiltinType::Int)};
-            __ emit(OP_STOR_S_ALT, *hidden_arg);
+            hidden_arg = {AcquireTempSlot(call, BuiltinType::Int)};
+            __ emit(OP_STOR_S_ALT, StackSlot(*hidden_arg));
         } else if (return_type->isArray() || return_type->isEnumStruct()) {
             cell retsize = call->fun()->return_type()->CellStorageSize();
             assert(retsize);
 
-            hidden_arg = {AcquireTempSlot(BuiltinType::Int)};
+            hidden_arg = {AcquireTempSlot(call, BuiltinType::Int)};
             __ emit(OP_HEAP, retsize * sizeof(cell));
-            __ emit(OP_STOR_S_ALT, *hidden_arg);
+            __ emit(OP_STOR_S_ALT, StackSlot(*hidden_arg));
             TrackTempHeapAlloc(call, 1);
         } else {
-            hidden_slot = {AcquireTempSlot(BuiltinType::Int64)};
+            hidden_slot = {AcquireTempSlot(call, BuiltinType::Int64)};
         }
         nargs++;
     }
@@ -1294,14 +1296,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
             }
             if (needs_temp) {
                 if (val.type()->isInt64()) {
-                    auto slot = AcquireTempSlot(BuiltinType::Int64);
-                    __ emit(OP_ADDR_ALT, slot);
+                    auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
+                    __ emit(OP_ADDR_ALT, StackSlot(slot));
                     __ emit(OP_MOVE_I64);
                     __ emit(OP_MOVE_PRI);
                 } else {
-                    auto slot = AcquireTempSlot(BuiltinType::Int);
-                    __ emit(OP_STOR_S_PRI, slot);
-                    __ emit(OP_ADDR_PRI, slot);
+                    auto slot = AcquireTempSlot(expr, BuiltinType::Int);
+                    __ emit(OP_STOR_S_PRI, StackSlot(slot));
+                    __ emit(OP_ADDR_PRI, StackSlot(slot));
                 }
             }
         } else {
@@ -1315,8 +1317,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
                 // we can't tell if this is already a copy :(
                 // Maybe we could use iEXPRESSION as an indicator?
                 if (val.type()->isInt64()) {
-                    int32_t slot = AcquireTempSlot(BuiltinType::Int64);
-                    __ emit(OP_ADDR_ALT, slot);
+                    int32_t slot = AcquireTempSlot(expr, BuiltinType::Int64);
+                    __ emit(OP_ADDR_ALT, StackSlot(slot));
                     __ emit(OP_MOVE_I64);
                     __ emit(OP_MOVE_PRI);
                 }
@@ -1327,16 +1329,16 @@ void CodeGenerator::EmitCallExpr(CallExpr* call) {
     }
 
     if (hidden_arg)
-        __ emit(OP_PUSH_S, *hidden_arg);
+        __ emit(OP_PUSH_S, StackSlot(*hidden_arg));
     else if (hidden_slot)
-        __ emit(OP_PUSH_ADR, *hidden_slot);
+        __ emit(OP_PUSH_ADR, StackSlot(*hidden_slot));
 
     EmitCall(call->fun(), nargs);
 
     if (hidden_arg)
-        __ emit(OP_LOAD_S_PRI, *hidden_arg);
+        __ emit(OP_LOAD_S_PRI, StackSlot(*hidden_arg));
     else if (hidden_slot)
-        __ emit(OP_ADDR_PRI, *hidden_slot);
+        __ emit(OP_ADDR_PRI, StackSlot(*hidden_slot));
 }
 
 void CodeGenerator::EmitNativeCallHiddenArg(CallExpr* call) {
@@ -1596,9 +1598,9 @@ void CodeGenerator::EmitRvalue(const value& lval) {
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
                 // int64 is internally passed by address.
                 if (lval.type()->inner()->isInt64())
-                    __ emit(OP_LOAD_S_PRI, var->addr());
+                    __ emit(OP_LOAD_S_PRI, StackSlot(var->addr()));
                 else
-                    __ emit(OP_LREF_S_PRI, var->addr());
+                    __ emit(OP_LREF_S_PRI, StackSlot(var->addr()));
                 break;
             }
             [[fallthrough]];
@@ -1608,7 +1610,7 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             if (var->type()->isInt64())
                 __ address(var, sPRI);
             else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT)
-                __ emit(OP_LOAD_S_PRI, var->addr());
+                __ emit(OP_LOAD_S_PRI, StackSlot(var->addr()));
             else if (!var->type()->isComposite())
                 __ emit(OP_LOAD_PRI, var->label());
             break;
@@ -1638,10 +1640,10 @@ CodeGenerator::EmitStore(const value& lval, bool save_pri)
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
 
                 if (lval.type()->inner()->isInt64()) {
-                    __ emit(OP_LOAD_S_ALT, var->addr());
+                    __ emit(OP_LOAD_S_ALT, StackSlot(var->addr()));
                     __ emit(OP_MOVE_I64);
                 } else {
-                    __ emit(OP_SREF_S_PRI, var->addr());
+                    __ emit(OP_SREF_S_PRI, StackSlot(var->addr()));
                 }
                 break;
             }
@@ -1651,10 +1653,10 @@ CodeGenerator::EmitStore(const value& lval, bool save_pri)
             auto var = lval.sym->as<VarDeclBase>();
             if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
                 if (var->type()->isInt64()) {
-                    __ emit(OP_ADDR_ALT, var->addr());
+                    __ emit(OP_ADDR_ALT, StackSlot(var->addr()));
                     __ emit(OP_MOVE_I64);
                 } else {
-                    __ emit(OP_STOR_S_PRI, var->addr());
+                    __ emit(OP_STOR_S_PRI, StackSlot(var->addr()));
                 }
             } else {
                 if (var->type()->isInt64()) {
@@ -1675,21 +1677,21 @@ void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
     // :TODO: figure out how to factor this code with EmitCallExpr.
     std::optional<cell_t> hidden_slot;
     if (prop->getter()->return_type()->isInt64())
-        hidden_slot = {AcquireTempSlot(BuiltinType::Int64)};
+        hidden_slot = {AcquireTempSlot(prop, BuiltinType::Int64)};
 
     // |this|
     __ emit(OP_PUSH_PRI);
 
     cell_t nargs = 1;
     if (hidden_slot) {
-        __ emit(OP_PUSH_ADR, *hidden_slot);
+        __ emit(OP_PUSH_ADR, StackSlot(*hidden_slot));
         nargs++;
     }
 
     EmitCall(prop->getter(), nargs);
 
     if (hidden_slot)
-        __ emit(OP_ADDR_PRI, *hidden_slot);
+        __ emit(OP_ADDR_PRI, StackSlot(*hidden_slot));
 }
 
 void CodeGenerator::InvokeSetter(MethodmapPropertyDecl* prop, bool save_pri) {
@@ -1952,7 +1954,10 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
             arg_index++;
 
         for (const auto& fun_arg : info->args()) {
-            fun_arg->BindAddress(-(arg_index + 1));
+            int32_t offset = -(arg_index + 1);
+            if (offset < INT16_MIN)
+                report(fun_arg->pos(), 467);
+            fun_arg->BindAddress(offset);
             EnqueueDebugSymbol(fun_arg, asm_.position());
             arg_index++;
         }
@@ -2078,9 +2083,9 @@ CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
     Int64CellUnion u(*expr->ToInt64());
 
-    auto slot = AcquireTempSlot(BuiltinType::Int64);
-    __ emit(OP_STOR_S_C_I64, slot, u.cells[0], u.cells[1]);
-    __ emit(OP_ADDR_PRI, slot);
+    auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
+    __ emit(OP_STOR_S_C_I64, StackSlot(slot), u.cells[0], u.cells[1]);
+    __ emit(OP_ADDR_PRI, StackSlot(slot));
 }
 
 
@@ -2091,8 +2096,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
 
     if (expr->to()->isInt64()) {
         assert(from_type->isInt() || from_type->isAny());
-        auto slot = AcquireTempSlot(BuiltinType::Int64);
-        __ emit(OP_CVT_I64, slot);
+        __ emit(OP_CVT_I64);
     } else if (expr->to()->isBool()) {
         if (from_type->isInt64())
             __ emit(OP_TEST_I64);
@@ -2110,8 +2114,7 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr) {
     if (expr->val().type()->isInt() && from->val().type()->isInt64()) {
         __ emit(OP_TRUNCATE_I64);
     } else if (expr->val().type()->isInt64() && from->val().type()->isInt()) {
-        auto slot = AcquireTempSlot(BuiltinType::Int64);
-        __ emit(OP_CVT_I64, slot);
+        __ emit(OP_CVT_I64);
     }
 }
 
@@ -2288,7 +2291,7 @@ bool CodeGenerator::ComputeStackUsage() {
     return ComputeStackUsage(callgraph_.begin());
 }
 
-cell_t CodeGenerator::AcquireTempSlot(BuiltinType builtin_type) {
+cell_t CodeGenerator::AcquireTempSlot(ParseNode* node, BuiltinType builtin_type) {
     auto iter = free_temp_slots_.begin();
     while (iter != free_temp_slots_.end()) {
         if ((*iter).second == builtin_type) {
@@ -2300,6 +2303,8 @@ cell_t CodeGenerator::AcquireTempSlot(BuiltinType builtin_type) {
 
     auto type = cc_.types()->GetBuiltin(builtin_type);
     uint32_t slot = rtti_->AddLocalSlot(&locals_, QualType(type));
+    if (slot > INT16_MAX)
+        report(node->pos(), 467);
     used_temp_slots_.emplace_back(slot, builtin_type);
     return slot;
 }

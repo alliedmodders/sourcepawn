@@ -44,17 +44,12 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
     code_features_ = rt_->image()->DescribeCode().features;
 
     auto& code = rt_->code();
-    code_ = reinterpret_cast<const cell_t*>(code.bytes);
-    stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
+    code_ = code.bytes;
+    stop_at_ = code.bytes + code.length;
 }
 
 ke::RefPtr<ControlFlowGraph>
 MethodVerifier::verify() {
-    if (!IsAligned(startOffset_, sizeof(cell_t))) {
-        reportError(SP_ERROR_INVALID_ADDRESS);
-        return nullptr;
-    }
-
     auto image = rt_->image();
     if (image->HasRtti()) {
         method_ = image->GetMethodRttiByOffset(startOffset_);
@@ -83,8 +78,8 @@ MethodVerifier::verify() {
 
         prev_cip_ = nullptr;
 
-        cip_ = reinterpret_cast<const cell_t*>(block_->start());
-        while (cip_ < reinterpret_cast<const cell_t*>(block_->end())) {
+        cip_ = block_->start();
+        while (cip_ < block_->end()) {
             insn_ = cip_;
             OPCODE op = (OPCODE)*cip_++;
             if (!verifyOp(op))
@@ -192,7 +187,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_ADDR_ALT:
         case OP_ADDR_PRI:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             return verifyStackOffset(offset, 0);
         }
 
@@ -206,18 +201,18 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_S_PRI:
         case OP_ZERO_S:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             return verifyStackOffset(offset, sizeof(cell_t));
         }
 
         case OP_ZERO_S_I64:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             return verifyStackOffset(offset, sizeof(int64_t));
         }
 
         case OP_STOR_S_C: {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             readCell();
             return verifyStackOffset(offset, sizeof(cell_t));
         }
@@ -238,12 +233,12 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SMOD_ALT_I64:
         case OP_STOR_S_PRI_I64:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             return verifyStackOffset(offset, sizeof(int64_t));
         }
 
         case OP_STOR_S_C_I64: {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             readCell();
             readCell();
             return verifyStackOffset(offset, sizeof(int64_t));
@@ -274,7 +269,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_PUSH_S:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             if (!verifyStackOffset(offset, sizeof(cell_t)))
                 return false;
             return pushStack(1);
@@ -282,7 +277,7 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_PUSH_ADR:
         {
-            cell_t offset = readCell();
+            cell_t offset = readInt16();
             if (!verifyStackOffset(offset, 0))
                 return false;
             return pushStack(1);
@@ -326,7 +321,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_CONST_ALT:
         case OP_BOUNDS:
         case OP_SWITCH: {
-            cip_++;
+            cip_ += sizeof(cell_t);
             return true;
         }
 
@@ -348,7 +343,7 @@ MethodVerifier::verifyOp(OPCODE op) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return false;
             }
-            if (value <= 0) {
+            if (value < 0) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return false;
             }
@@ -418,7 +413,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_CASETBL:
-            cip_ = insn_ + GetCaseTableSize(reinterpret_cast<const uint8_t*>(insn_));
+            cip_ = insn_ + GetCaseTableSize(insn_);
             return true;
 
         case OP_HEAP_SAVE:
@@ -443,12 +438,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             reportError(SP_ERROR_INVALID_INSTRUCTION);
             return false;
     }
-}
-
-cell_t
-MethodVerifier::readCell() {
-    assert(cip_ < stop_at_);
-    return *cip_++;
 }
 
 bool
@@ -617,17 +606,17 @@ MethodVerifier::verifyParamCount(cell_t nparams) {
 
 bool
 MethodVerifier::verifyCallOffset(cell_t offset) {
-    if (offset < 0 || !IsAligned(offset, sizeof(cell_t))) {
+    if (offset < 0) {
         reportError(SP_ERROR_INSTRUCTION_PARAM);
         return false;
     }
 
-    const cell_t* target = code_ + (offset / sizeof(cell_t));
+    const uint8_t* target = code_ + offset;
     if (target < code_ || target >= stop_at_) {
         reportError(SP_ERROR_INSTRUCTION_PARAM);
         return false;
     }
-    if (target[0] != OP_PROC) {
+    if (*target != OP_PROC) {
         reportError(SP_ERROR_INSTRUCTION_PARAM);
         return false;
     }

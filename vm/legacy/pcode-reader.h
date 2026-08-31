@@ -32,29 +32,31 @@ class PcodeReader
 {
   public:
     PcodeReader(PluginRuntime* rt, uint32_t startOffset, T* visitor)
-     : rt_(rt)
-     , visitor_(visitor)
-     , code_(nullptr)
-     , cip_(nullptr)
-     , stop_at_(nullptr) {
+     : rt_(rt),
+       visitor_(visitor),
+       code_(nullptr),
+       cip_(nullptr),
+       stop_at_(nullptr)
+    {
         assert(ke::IsAligned(startOffset, sizeof(cell_t)));
 
         auto& code = rt->code();
         code_ = reinterpret_cast<const cell_t*>(code.bytes);
         cip_ = code_ + (startOffset / sizeof(cell_t));
-        insn_begin_ = cip_;
+        insn_begin_ = reinterpret_cast<const uint8_t*>(cip_);
         stop_at_ = reinterpret_cast<const cell_t*>(code.bytes + code.length);
     }
     PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
-     : rt_(rt)
-     , visitor_(visitor)
-     , code_(nullptr)
-     , cip_(nullptr)
-     , stop_at_(nullptr) {
+     : rt_(rt),
+       visitor_(visitor),
+       code_(nullptr),
+       cip_(nullptr),
+       stop_at_(nullptr)
+    {
         auto& code = rt->code();
         code_ = reinterpret_cast<const cell_t*>(code.bytes);
         cip_ = reinterpret_cast<const cell_t*>(block->start());
-        insn_begin_ = cip_;
+        insn_begin_ = reinterpret_cast<const uint8_t*>(cip_);
         stop_at_ = reinterpret_cast<const cell_t*>(block->end());
     }
 
@@ -66,7 +68,7 @@ class PcodeReader
 
     // Read the next opcode, return true on success, false otherwise.
     bool visitNext() {
-        insn_begin_ = cip_;
+        insn_begin_ = reinterpret_cast<const uint8_t*>(cip_);
         OPCODE op = (OPCODE)readCell();
         return visitOp(op);
     }
@@ -92,7 +94,7 @@ class PcodeReader
     }
 
     // Return the start of the current instruction.
-    const cell_t* const& insn_begin() const {
+    const uint8_t* const& insn_begin() const {
         return insn_begin_;
     }
     cell_t cip_offset() const {
@@ -769,7 +771,7 @@ class PcodeReader
     PluginRuntime* rt_;
     T* visitor_;
     const cell_t* code_;
-    const cell_t* insn_begin_;
+    const uint8_t* insn_begin_;
     const cell_t* cip_;
     const cell_t* stop_at_;
 };

@@ -41,16 +41,8 @@ InvokeFrame::~InvokeFrame() {
     Environment::get()->leaveInvoke();
 }
 
-InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method,
-                                     const cell_t* const& cip)
- : InvokeFrame(cx, method->pcode_offset()),
-   function_cip_(method->pcode_offset()),
-   cip_(cip),
-   native_index_(-1) {
-}
-
-InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, v2::MethodInfo* method,
-                                     const cell_t* const& cip)
+InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method,
+                                     const uint8_t* const* cip)
  : InvokeFrame(cx, method->pcode_offset()),
    function_cip_(method->pcode_offset()),
    cip_(cip),
@@ -117,10 +109,10 @@ InterpFrameIterator::cip() const {
     assert(current_ == FrameType::Scripted);
     auto& code = ivk_->cx()->GetBaseRuntime()->code();
 
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ivk_->cip_);
+    const uint8_t* ptr = *ivk_->cip_;
     assert(ptr >= code.bytes && ptr < code.bytes + code.length);
 
-    return ptr - code.bytes;
+    return (cell_t)(ptr - code.bytes);
 }
 
 uint32_t
