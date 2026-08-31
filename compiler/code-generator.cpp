@@ -1068,16 +1068,10 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
 
     assert(rank_size == 1 || (rank_size % sizeof(cell_t) == 0));
 
-    const auto& idxval = expr->index()->val();
-    if (idxval.ident == iCONSTEXPR) {
-        if (idxval.constval() != 0)
-            __ emit(OP_ADD_C, idxval.constval() * rank_size);
-    } else {
-        EmitExpr(expr->index());
+    EmitExpr(expr->index());
 
-        uint32_t bounds = array_type->size() ? array_type->size() : INT_MAX;
-        __ idxaddr(rank_size, bounds);
-    }
+    uint32_t bounds = array_type->size() ? array_type->size() : INT_MAX;
+    __ idxaddr(rank_size, bounds);
 
     // The indexed item is another array (multi-dimensional arrays).
     if (array_type->inner()->isArray()) {
