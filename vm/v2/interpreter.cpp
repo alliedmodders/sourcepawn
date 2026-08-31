@@ -870,6 +870,10 @@ bool Interpreter::run_internal() {
                 uint16_t base = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[base]);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 vregs_[dest] = *reinterpret_cast<cell_t*>(base_ptr + offset);
                 break;
             }
@@ -878,6 +882,10 @@ bool Interpreter::run_internal() {
                 uint16_t base = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[base]);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 *reinterpret_cast<int64_t*>(&vregs_[dest]) =
                     *reinterpret_cast<int64_t*>(base_ptr + offset);
                 break;
@@ -887,6 +895,10 @@ bool Interpreter::run_internal() {
                 uint16_t base = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[base]);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 vregs_[dest] = *reinterpret_cast<cell_t*>(base_ptr + offset);
                 if (vregs_[dest])
                     heap_.ToPhysAddr<HeapItem*>(vregs_[dest])->AddRef();
@@ -896,6 +908,10 @@ bool Interpreter::run_internal() {
                 uint32_t offset = reader_.read<uint32_t>();
                 uint16_t base = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
+                if (!vregs_[base]) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 vregs_[dest] = vregs_[base] + offset;
                 break;
             }
@@ -905,6 +921,10 @@ bool Interpreter::run_internal() {
                 uint16_t valreg = reader_.read<uint16_t>();
                 cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 *reinterpret_cast<cell_t*>(base_ptr + offset) = vregs_[valreg];
                 break;
             }
@@ -914,6 +934,10 @@ bool Interpreter::run_internal() {
                 uint16_t valreg = reader_.read<uint16_t>();
                 cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 *reinterpret_cast<int64_t*>(base_ptr + offset) =
                     *reinterpret_cast<int64_t*>(&vregs_[valreg]);
                 break;
@@ -924,6 +948,10 @@ bool Interpreter::run_internal() {
                 uint16_t valreg = reader_.read<uint16_t>();
                 cell_t obj_addr = vregs_[basereg];
                 uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                if (!base_ptr) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 cell_t* ptr = reinterpret_cast<cell_t*>(base_ptr + offset);
                 auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[valreg]);
                 if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {

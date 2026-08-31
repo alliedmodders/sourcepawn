@@ -1,0 +1,2 @@
+Exception thrown: Null object reference
+  [0] null-field-load-x32.sp::main, line 10
