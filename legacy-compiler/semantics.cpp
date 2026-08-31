@@ -795,8 +795,7 @@ bool BinaryExprChecker::CheckOperatorTypes() {
         return true;
     }
 
-    if (!checkval_string(left_val, right_val))
-        matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
+    matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
     return true;
 }
 
@@ -1089,8 +1088,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         }
 
         // For the purposes of tag matching, we consider the order to be irrelevant.
-        if (!checkval_string(&left_val, &right_val))
-            matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
+        matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
 
         if (right_val.ident != iCONSTEXPR)
             all_const = false;
@@ -2097,7 +2095,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         Type* type = val->type();
         if (type->isInt64() || (type->isReference() && type->inner()->isInt64())) {
             // Hack: allow this since we don't have typed varargs right now.
-        } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), type)) {
+        } else if (!checktag(*arg->type(), type)) {
             report(param, 213) << arg->type() << type;
         }
     } else if (arg->type()->isReference()) {

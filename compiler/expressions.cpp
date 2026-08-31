@@ -39,34 +39,7 @@
 namespace sp {
 namespace cc {
 
-bool checktag_string(Type* type, const value* sym1) {
-    if (sym1->type()->isArray())
-        return false;
 
-    if ((sym1->type()->isChar() && type->isInt()) ||
-        (sym1->type()->isInt() && type->isChar()))
-    {
-        return true;
-    }
-    return false;
-}
-
-bool checkval_string(const value* sym1, const value* sym2) {
-    if (sym1->type()->isArray() || sym2->type()->isArray())
-        return false;
-    if ((sym1->type()->isChar() && sym2->type()->isInt()) ||
-        (sym1->type()->isInt() && sym2->type()->isChar()))
-    {
-        return true;
-    }
-    return false;
-}
-
-bool matchtag_string(int ident, Type* type) {
-    if (type->isArray())
-        return false;
-    return type->isChar();
-}
 
 static bool matchobjecttags(Type* formal, Type* actual, int flags) {
     // objects never coerce to non-objects, YET.
