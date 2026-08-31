@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <string>
+
 #include <amtl/am-refcounting.h>
 #include <amtl/am-inlinelist.h>
 #include <sp_vm_api.h>
@@ -27,7 +28,7 @@ class Environment;
 class BaseRuntime : public SourcePawn::IPluginRuntime
 {
   public:
-    explicit BaseRuntime(SmxImage* image);
+    explicit BaseRuntime(std::shared_ptr<SmxImage> image);
     virtual ~BaseRuntime();
 
     SmxImage* image() const { return image_.get(); }
@@ -102,7 +103,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
 
   protected:
     Environment* env_;
-    std::unique_ptr<sp::SmxImage> image_;
+    std::shared_ptr<sp::SmxImage> image_;
     std::string name_;
     std::string full_name_;
     Code code_;

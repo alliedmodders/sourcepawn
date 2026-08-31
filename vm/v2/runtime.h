@@ -49,7 +49,7 @@ class Runtime final : public BaseRuntime,
                       public ke::InlineListNode<Runtime>
 {
   public:
-    Runtime(SmxImage* image, bool data_only = false);
+    Runtime(std::shared_ptr<SmxImage> image, bool data_only = false);
     ~Runtime();
 
     bool Initialize() override;
@@ -197,7 +197,6 @@ class Runtime final : public BaseRuntime,
     std::vector<RefPtr<MethodInfo>> methods_;
     ke::FixedArray<uint32_t> global_addrs_;
     ke::FixedArray<uint32_t> string_addrs_;
-    TypeCache types_;
 
     bool paused_ = false;
     bool data_only_ = false;

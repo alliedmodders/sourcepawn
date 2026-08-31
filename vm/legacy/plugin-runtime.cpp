@@ -37,8 +37,8 @@ using namespace SourcePawn;
 
 #define CELLBOUNDMAX (INT_MAX / sizeof(cell_t))
 
-PluginRuntime::PluginRuntime(SmxImage* image)
- : BaseRuntime(image)
+PluginRuntime::PluginRuntime(std::shared_ptr<SmxImage> image)
+ : BaseRuntime(std::move(image))
  , memory_(nullptr)
  , data_size_(image_->DescribeData().length)
  , mem_size_(image_->HeapSize())

@@ -38,8 +38,8 @@ namespace v2 {
 
 using namespace SourcePawn;
 
-Runtime::Runtime(SmxImage* image, bool data_only)
- : BaseRuntime(image),
+Runtime::Runtime(std::shared_ptr<SmxImage> image, bool data_only)
+ : BaseRuntime(std::move(image)),
    env_(Environment::get()),
    data_only_(data_only)
 {
@@ -1090,9 +1090,7 @@ const TypeDesc* Runtime::LoadTypeFromId(uint32_t type_id) {
 }
 
 const TypeDesc* Runtime::GetReferenceType(const TypeDesc* td) {
-    if (td->can_global_cache())
-        return env_->types()->GetReference(td);
-    return types_.GetReference(td);
+    return env_->types()->GetReference(td);
 }
 
 const TypeDesc* Runtime::GetPrimitiveType(TypeKind kind) {
@@ -1100,27 +1098,19 @@ const TypeDesc* Runtime::GetPrimitiveType(TypeKind kind) {
 }
 
 const TypeDesc* Runtime::GetArrayType(const TypeDesc* elt) {
-    if (elt->can_global_cache())
-        return env_->types()->GetArray(elt);
-    return types_.GetArray(elt);
+    return env_->types()->GetArray(elt);
 }
 
 const TypeDesc* Runtime::GetFixedArrayType(const TypeDesc* elt, uint32_t size) {
-    if (elt->can_global_cache())
-        return env_->types()->GetFixedArray(elt, size);
-    return types_.GetFixedArray(elt, size);
+    return env_->types()->GetFixedArray(elt, size);
 }
 
 const TypeDesc* Runtime::GetFlatArrayType(const TypeDesc* elt, uint32_t size) {
-    if (elt->can_global_cache())
-        return env_->types()->GetFlatArray(elt, size);
-    return types_.GetFlatArray(elt, size);
+    return env_->types()->GetFlatArray(elt, size);
 }
 
 const TypeDesc* Runtime::GetSliceType(const TypeDesc* elt) {
-    if (elt->can_global_cache())
-        return env_->types()->GetSlice(elt);
-    return types_.GetSlice(elt);
+    return env_->types()->GetSlice(elt);
 }
 
 const TypeDesc* Runtime::GetStringLitType(uint16_t index) {
@@ -1140,7 +1130,7 @@ const TypeDesc* Runtime::GetStringLitType(uint16_t index) {
 }
 
 const TypeDesc* Runtime::GetEnumStructType(const smx_rtti_classdef* classdef) {
-    return types_.GetEnumStruct(this, classdef);
+    return env_->types()->GetEnumStruct(this, classdef);
 }
 
 uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {

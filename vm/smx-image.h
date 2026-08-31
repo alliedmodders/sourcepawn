@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <memory>
 
+#include <memory>
 #include <optional>
 #include <string_view>
 #include <unordered_map>
@@ -32,7 +33,9 @@ namespace sp {
 
 using namespace debug;
 
-class SmxImage final : public FileReader
+class SmxImage final :
+    public FileReader,
+    public std::enable_shared_from_this<SmxImage>
 {
   public:
     SmxImage(FILE* fp);

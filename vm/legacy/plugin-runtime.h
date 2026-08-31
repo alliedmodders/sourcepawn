@@ -47,7 +47,7 @@ struct NativeEntry : public sp_native_t {
 class PluginRuntime : public BaseRuntime, public ke::InlineListNode<PluginRuntime>
 {
   public:
-    PluginRuntime(SmxImage* image);
+    PluginRuntime(std::shared_ptr<SmxImage> image);
     ~PluginRuntime();
 
     bool Initialize() override;

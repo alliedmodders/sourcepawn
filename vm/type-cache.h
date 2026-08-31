@@ -14,12 +14,16 @@
 
 #include <assert.h>
 
+#include <memory>
+#include <unordered_set>
+
 #include <amtl/am-hashmap.h>
 
 #include "utils/pool-allocator.h"
 #include "type-desc.h"
 
 namespace sp {
+class SmxImage;
 namespace v2 {
 class Runtime;
 }
@@ -95,6 +99,7 @@ class TypeCache final {
     };
     ke::HashMap<TypeCacheKey, TypeDesc*, CachePolicy> cache_;
     std::vector<TypeDesc*> primitives_;
+    std::unordered_set<std::shared_ptr<SmxImage>> images_;
 };
 
 } // namespace sp

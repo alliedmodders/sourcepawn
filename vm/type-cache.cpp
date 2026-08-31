@@ -12,6 +12,7 @@
 //
 #include "type-cache.h"
 #include "v2/runtime.h"
+#include "smx-image.h"
 
 #include <utility>
 
@@ -117,6 +118,8 @@ const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classde
         return p->value;
 
     auto image = rt->image();
+    images_.insert(image->shared_from_this());
+
     const smx_rtti_classdef* first = image->getClassdef(0);
     uint32_t cls_index = (uint32_t)(classdef - first);
     uint32_t stopat = image->getClassdefFieldsEnd(cls_index);

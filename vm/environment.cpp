@@ -398,7 +398,7 @@ bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, 
     return v2::Interpreter::Run(cx, method, result);
 }
 
-static BaseRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file,
+static BaseRuntime* LoadImage(std::shared_ptr<SmxImage> image, const char* file,
                                     bool data_only)
 {
     if (!image->validate())
@@ -406,9 +406,9 @@ static BaseRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file,
 
     std::unique_ptr<BaseRuntime> pRuntime;
     if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
-        pRuntime = std::make_unique<sp::v1::PluginRuntime>(image.release());
+        pRuntime = std::make_unique<sp::v1::PluginRuntime>(image);
     } else {
-        pRuntime = std::make_unique<sp::v2::Runtime>(image.release(), data_only);
+        pRuntime = std::make_unique<sp::v2::Runtime>(image, data_only);
     }
 
     ExceptionHandler eh(Environment::get());
@@ -451,18 +451,18 @@ Environment::LoadBinaryFromFile(const char* file, bool data_only) {
         return nullptr;
     }
 
-    auto image = std::make_unique<SmxImage>(fp);
+    auto image = std::make_shared<SmxImage>(fp);
     return LoadImage(std::move(image), file, data_only);
 }
 
 BaseRuntime*
 Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
                                   void (*dtor)(uint8_t*), bool data_only) {
-    std::unique_ptr<SmxImage> image;
+    std::shared_ptr<SmxImage> image;
     if (dtor)
-        image = std::make_unique<SmxImage>(addr, size, dtor);
+        image = std::make_shared<SmxImage>(addr, size, dtor);
     else
-        image = std::make_unique<SmxImage>(addr, size);
+        image = std::make_shared<SmxImage>(addr, size);
     return LoadImage(std::move(image), file, data_only);
 }
 

@@ -19,9 +19,9 @@
 using namespace sp;
 using namespace SourcePawn;
 
-BaseRuntime::BaseRuntime(SmxImage* image)
+BaseRuntime::BaseRuntime(std::shared_ptr<SmxImage> image)
  : env_(Environment::get()),
-   image_(image),
+   image_(std::move(image)),
    computed_code_hash_(false),
    computed_data_hash_(false)
 {
