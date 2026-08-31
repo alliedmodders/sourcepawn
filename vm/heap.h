@@ -18,11 +18,17 @@
 
 #include <amtl/am-bits.h>
 
+#include "heap-defaults.h"
+
 namespace sp {
 
-class Heap32 {
+VirtMem& GetVirtMem();
+
+class Heap {
   public:
-    ~Heap32();
+    Heap();
+    ~Heap();
+
     bool Initialize();
 
     struct Chunk {
@@ -53,59 +59,31 @@ class Heap32 {
         return reinterpret_cast<T*>(Allocate(sizeof(T)));
     }
 
-    uint8_t* Allocate(uint32_t requested_size) {
-        size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
-        if (!current_->CanAllocate(aligned_size))
-            return SlowAllocate(aligned_size);
-        return current_->Allocate(aligned_size);
-    }
+    uint8_t* Allocate(uint32_t requested_size);
 
-    union Position {
+    uint32_t ToLocalAddr(void* p) { return GetVirtMem().ToLocalAddr(p); }
+    template <typename T>
+    T ToPhysAddr(uint32_t addr) { return GetVirtMem().ToPhysAddr<T>(addr); }
+
+    struct Position {
         Position() {
-            chunk_info.chunk = nullptr;
-            chunk_info.pos = nullptr;
+            chunk = nullptr;
+            pos = nullptr;
         }
 
-        struct {
-            uint32_t value1;
-            uint32_t value2;
-        } components;
-        struct {
-            void* chunk;
-            uint8_t* pos;
-        } chunk_info;
+        void* chunk;
+        uint8_t* pos;
 
         bool operator ==(const Position& other) const {
-            return chunk_info.chunk == other.chunk_info.chunk &&
-                   chunk_info.pos == other.chunk_info.pos;
+            return chunk == other.chunk && pos == other.pos;
+        }
+        bool operator !=(const Position& other) const {
+            return !(*this == other);
         }
     };
 
-    Position GetPosition() {
-        static_assert(sizeof(uint32_t) == sizeof(uintptr_t));
-        Position hp;
-        hp.chunk_info.chunk = current_;
-        hp.chunk_info.pos = current_->pos;
-        return hp;
-    }
-
-    void RestorePosition(const Position& hp) {
-        auto chunk = reinterpret_cast<Chunk*>(hp.chunk_info.chunk);
-        assert(ValidateRestoreTo(chunk, hp.chunk_info.pos));
-        current_ = chunk;
-        current_->pos = hp.chunk_info.pos;
-    }
-
-    uint32_t ToLocalAddr(void* p) {
-        static_assert(sizeof(uint32_t) == sizeof(uintptr_t));
-        return reinterpret_cast<uint32_t>(p);
-    }
-    template <typename T>
-    T ToPhysAddr(uint32_t addr) {
-        return reinterpret_cast<T>(addr);
-    }
-
-    size_t committed() const { return committed_; }
+    Position GetPosition();
+    void RestorePosition(const Position& hp);
 
   private:
     uint8_t* SlowAllocate(uint32_t size);
@@ -116,7 +94,25 @@ class Heap32 {
   private:
     Chunk* first_ = nullptr;
     Chunk* current_ = nullptr;
-    size_t committed_ = 0;
+};
+
+struct HeapSave final {
+    HeapSave(Heap& heap)
+      : heap(heap),
+        pos(heap.GetPosition())
+    {}
+    HeapSave(HeapSave&& other) = default;
+    HeapSave(const HeapSave& other) = delete;
+
+    ~HeapSave() {
+        heap.RestorePosition(pos);
+    }
+
+    HeapSave& operator =(HeapSave&& other) = delete;
+    HeapSave& operator =(const HeapSave& other) = delete;
+
+    Heap& heap;
+    Heap::Position pos;
 };
 
 } // namespace sp

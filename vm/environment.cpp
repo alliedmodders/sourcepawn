@@ -80,6 +80,9 @@ Environment::Initialize() {
     builtins_ = std::make_unique<v1::BuiltinNatives>();
     code_alloc_ = std::make_unique<CodeAllocator>();
 
+    if (!virt_mem_.Initialize())
+        return false;
+
     if (!builtins_->Initialize())
         return false;
 

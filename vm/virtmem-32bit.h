@@ -12,24 +12,26 @@
 //
 #pragma once
 
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <amtl/am-bits.h>
-#if defined(KE_64BIT)
-# include "virtmem-64bit.h"
-#elif defined(KE_32BIT)
-# include "virtmem-32bit.h"
-#else
-# error "KE_64BIT or KE_32BIT not defined"
-#endif
 
 namespace sp {
 
-static constexpr uint32_t kDefaultStackSize = 1 * ke::kMB;
-static constexpr uint32_t kDefaultHeapChunkSize = 16 * ke::kMB;
+class VirtMem32 {
+  public:
+    bool Initialize();
 
-#ifdef KE_64BIT
-using VirtMem = VirtMem64;
-#else
-using VirtMem = VirtMem32;
-#endif
+    uint32_t ToLocalAddr(void* p) {
+        static_assert(sizeof(uint32_t) == sizeof(uintptr_t));
+        return reinterpret_cast<uint32_t>(p);
+    }
+    template <typename T>
+    T ToPhysAddr(uint32_t addr) {
+        return reinterpret_cast<T>(addr);
+    }
+};
 
 } // namespace sp

@@ -335,6 +335,7 @@ class SourcePawn(object):
         self.spshell = {}
         self.spcomp = []
         self.zlib = None
+        self.mimalloc = None
         self.gtest = {}
         self.libamtl = None
         self.static_libsp = {}
@@ -346,6 +347,7 @@ class SourcePawn(object):
         self.EnsureZlib()
         self.EnsureAmtl()
         self.EnsureGTest()
+        self.EnsureMimalloc()
 
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
@@ -367,6 +369,7 @@ class SourcePawn(object):
             os.path.join(builder.sourcePath, 'include'),
             os.path.join(builder.sourcePath, 'vm'),
             os.path.join(builder.sourcePath, 'third_party'),
+            os.path.join(builder.sourcePath, 'third_party', 'mimalloc', 'include'),
             self.amtl,
         ]
 
@@ -385,8 +388,6 @@ class SourcePawn(object):
         self.BuildSpshell(builder)
         self.BuildVerifier(builder)
         self.BuildSmxDump(builder)
-        self.BuildImplTests(builder)
-
     def BuildStaticCoreLib(self, builder):
         cxx = builder.cxx
         binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
@@ -472,11 +473,6 @@ class SourcePawn(object):
 
         builder.Add(binary)
 
-    def BuildImplTests(self, builder):
-        vars = self.vars.copy()
-        vars['gtest'] = self.gtest[builder.cxx.target.arch]
-        builder.Build('tests/impl_tests/AMBuilder', vars)
-
     def AddStaticLibraries(self, binary):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
@@ -487,6 +483,7 @@ class SourcePawn(object):
         binary.compiler.linkflags += [
             self.zlib[arch],
             self.libamtl[arch],
+            self.mimalloc[arch],
             self.static_libsp[arch],
         ]
 
@@ -558,6 +555,13 @@ class SourcePawn(object):
             return
         for cxx in self.root.targets:
             self.gtest[cxx.target.arch] = self.BuildForArch("third_party/AMBuilder.gtest", cxx)
+
+    def EnsureMimalloc(self):
+        if self.mimalloc is not None:
+            return
+        self.mimalloc = {}
+        for cxx in self.root.targets:
+            self.mimalloc[cxx.target.arch] = self.BuildForArch("third_party/AMBuild.mimalloc", cxx)
 
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)

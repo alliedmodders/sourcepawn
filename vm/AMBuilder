@@ -23,6 +23,7 @@ module.sources += [
   'debug-metadata.cpp',
   'environment.cpp',
   'file-utils.cpp',
+  'heap.cpp',
   'md5/md5.cpp',
   'rtti.cpp',
   'smx-image.cpp',
@@ -32,9 +33,9 @@ module.sources += [
 ]
 
 if '64' in module.compiler.target.arch:
-  module.sources += ['heap-64bit.cpp']
+  module.sources += ['virtmem-64bit.cpp']
 else:
-  module.sources += ['heap-32bit.cpp']
+  module.sources += ['virtmem-32bit.cpp']
 
 # V1 implementation
 module.sources += [

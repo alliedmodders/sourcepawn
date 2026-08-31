@@ -20,6 +20,7 @@
 #include <amtl/am-mutex.h>
 #include <sp_vm_api.h>
 #include "code-allocator.h"
+#include "heap-defaults.h"
 #include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
 #include "type-cache.h"
@@ -219,6 +220,8 @@ class Environment : public ISourcePawnEnvironment
 
     TypeCache* types() { return &types_; }
 
+    VirtMem& virt_mem() { return virt_mem_; }
+
   public:
     static inline size_t offsetOfTopFrame() {
         return offsetof(Environment, top_);
@@ -285,6 +288,8 @@ class Environment : public ISourcePawnEnvironment
 
     // Global type cache.
     TypeCache types_;
+
+    VirtMem virt_mem_;
 };
 
 class EnterProfileScope

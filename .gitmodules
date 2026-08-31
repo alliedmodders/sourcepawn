@@ -4,3 +4,6 @@
 [submodule "third_party/gtest"]
 	path = third_party/gtest
 	url = https://github.com/google/googletest
+[submodule "third_party/mimalloc"]
+	path = third_party/mimalloc
+	url = https://github.com/alliedmodders/mimalloc

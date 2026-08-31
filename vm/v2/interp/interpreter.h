@@ -19,11 +19,12 @@
 
 #include <assert.h>
 
-#include <amtl/am-refcounting.h>
-#include "binary-reader.h"
-#include "heap-defaults.h"
-#include <sp_vm_types.h>
 #include <span>
+
+#include <amtl/am-refcounting.h>
+#include <sp_vm_types.h>
+#include "binary-reader.h"
+#include "heap.h"
 #include "stack-frames.h"
 
 namespace sp {
@@ -46,7 +47,7 @@ struct InterpFrame {
     uint32_t dest_reg;
     uint32_t prev_frame;
     uint32_t hp_scope;
-    sp::HeapImpl::Position heap_pos;
+    Heap::Position heap_pos;
 };
 
 class Interpreter final
@@ -65,7 +66,7 @@ class Interpreter final
     Environment* env_;
     Runtime* rt_;
     SmxImage* smx_;
-    HeapImpl& heap_;
+    Heap& heap_;
     RefPtr<MethodInfo> method_;
     const uint8_t* code_;
     BinaryReader reader_;

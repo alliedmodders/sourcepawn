@@ -21,6 +21,7 @@
 #include <sp_vm_api.h>
 #include "base-runtime.h"
 #include "heap-defaults.h"
+#include "heap.h"
 #include "scripted-invoker.h"
 #include "smx-image.h"
 #include "type-cache.h"
@@ -153,10 +154,10 @@ class Runtime final : public BaseRuntime,
     uint32_t& sp() { return sp_; }
     uint32_t& hp_scope() { return hp_scope_; }
 
-    HeapImpl& heap() { return heap_; }
+    Heap& heap() { return heap_; }
 
     struct HeapScope {
-        HeapImpl::Position pos;
+        Heap::Position pos;
         uint32_t prev_hp_scope;
     };
 
@@ -205,7 +206,7 @@ class Runtime final : public BaseRuntime,
     unsigned char code_hash_[16];
     unsigned char data_hash_[16];
 
-    HeapImpl heap_;
+    Heap heap_;
     cell_t* m_pNullVec = nullptr;
     cell_t* m_pNullString = nullptr;
     uint32_t sp_base_ = 0;
