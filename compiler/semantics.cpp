@@ -2825,15 +2825,14 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
     bool tag_ok = CheckRvalue(expr);
-    const auto& v = expr->val();
-    if (tag_ok && (v.type()->isComposite() || v.type()->isVoid()))
-        report(450) << v.type() << types_->type_int();
-
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
 
-    ke::Maybe<FlowType> flow;
+    const auto& v = expr->val();
+    if (tag_ok && !v.type()->coercesToInt())
+        report(450) << v.type() << types_->type_int();
 
+    ke::Maybe<FlowType> flow;
     auto update_flow = [&](FlowType other) -> void {
         if (flow) {
             if (*flow != other)
@@ -2856,8 +2855,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
                 continue;
             }
             if (tag_ok) {
-                AutoErrorPos aep(expr->pos());
-                matchtag(v.type(), type, MATCHTAG_COERCE);
+                CheckSwitchCaseType(expr, v.type(), type);
             }
 
             if (!case_values.count(value))
@@ -2881,6 +2879,16 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 
     // Return value doesn't really matter for statements.
     return true;
+}
+
+void Semantics::CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual) {
+    if (actual->coercesToInt()) {
+        if (formal != actual)
+            report(expr, 213) << formal << actual;
+    } else {
+        TypeChecker tc(expr, formal, actual, TypeChecker::Assignment);
+        tc.Coerce();
+    }
 }
 
 void ReportFunctionReturnError(FunctionDecl* decl) {

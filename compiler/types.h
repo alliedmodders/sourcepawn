@@ -317,6 +317,10 @@ class Type : public PoolObject
         }
     }
 
+    bool coercesToInt() const {
+        return coercesFromInt() || isAny();
+    }
+
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum || kind_ == TypeKind::Methodmap)
             return true;

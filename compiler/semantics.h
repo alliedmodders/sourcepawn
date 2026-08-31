@@ -155,6 +155,7 @@ class Semantics final
     void CheckFunctionReturnUsage(FunctionDecl* info);
     bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
     bool CheckSwitchStmt(SwitchStmt* stmt);
+    void CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual);
     bool CheckForStmt(ForStmt* stmt);
     bool CheckDoWhileStmt(DoWhileStmt* stmt);
     bool CheckBreakStmt(BreakStmt* stmt);
