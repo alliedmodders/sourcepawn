@@ -24,13 +24,6 @@
 namespace sp {
 namespace cc {
 
-static inline void
-AppendUint16(std::vector<uint8_t>* out, uint16_t value)
-{
-    out->push_back(static_cast<uint8_t>(value & 0xff));
-    out->push_back(static_cast<uint8_t>((value >> 8) & 0xff));
-}
-
 RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
  : cc_(cc),
    names_(names)
@@ -212,7 +205,8 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
 
     if (locals.count) {
         locals.types[0] = cb::kLocalSlots;
-        AppendUint16(&locals.types, locals.count);
+        locals.types[1] = static_cast<uint8_t>(locals.count & 0xff);
+        locals.types[2] = static_cast<uint8_t>((locals.count >> 8) & 0xff);
         method.locals = type_pool_.add(locals.types);
     } else {
         method.locals = 0;
