@@ -697,7 +697,12 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
             return;
         }
 
-        if (!ctor && rhs.type()->isInt64()) {
+        if (!ctor && rhs.type()->isHeapItem()) {
+            // The zero value of a heap item is a null reference; emit a
+            // typed null, since an integer push fails validation when
+            // stored through a reference-typed l-value.
+            __ emit(OP_LOAD_NULL);
+        } else if (!ctor && rhs.type()->isInt64()) {
             // int64 has to be handled separately since we can't represent it
             // in an ExprValue right now.
             __ emit(OP_PUSH_C_I64, Int64Value(0));
