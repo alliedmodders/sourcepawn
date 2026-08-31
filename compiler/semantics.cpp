@@ -1364,7 +1364,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         // Warn: unsupported cast.
         report(expr, 237);
     } else if (from_type->isFunction() && to_type->isFunction()) {
-        matchtag(to_type, out_val.type(), MATCHTAG_COERCE);
+        TypeChecker tc(expr, to_type, out_val.type(), TypeChecker::Assignment);
+        tc.Coerce();
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (to_type->isEnumStruct() || from_type->isEnumStruct()) {
