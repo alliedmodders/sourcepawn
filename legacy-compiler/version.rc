@@ -5,6 +5,10 @@
 #  include <ver.h>
 #endif
 #include <sourcemod_version.h>
+#undef SM_VERSION_FILE
+#define SM_VERSION_FILE 1,13,0,0
+#undef SM_VERSION_STRING
+#define SM_VERSION_STRING "1.13"
 
 AppIcon ICON "pawn.ico"
 

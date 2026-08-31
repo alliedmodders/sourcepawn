@@ -68,6 +68,8 @@
 // Hack to build under SourceMod. This should be cleaned up at some point.
 #undef SM_USE_VERSIONLIB
 #include <sourcemod_version.h>
+#undef SM_VERSION_STRING
+#define SM_VERSION_STRING "1.13"
 
 #ifdef __EMSCRIPTEN__
 #    include <emscripten.h>
