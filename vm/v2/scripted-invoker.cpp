@@ -14,6 +14,9 @@
 
 #include <stdio.h>
 #include <string.h>
+
+#include <vector>
+
 #include "environment.h"
 #include "v2/method-info.h"
 #include "v2/runtime.h"
@@ -117,6 +120,8 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
     std::array<cell_t, SP_MAX_EXEC_PARAMS> params;
     assert(args.argc <= params.size());
 
+    std::vector<Handle<SpArray>> retained_arrays;
+
     std::array<std::pair<void*, uint32_t>, SP_MAX_EXEC_PARAMS> cows;
     uint32_t ncows = 0;
 
@@ -171,8 +176,8 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                     addr = context_->heap().ToPhysAddr<void*>(array->data);
                     memcpy(addr, arg.u.addr, arg.array_size * sizeof(cell_t));
 
-                    // :tODO: resolve leaks
-                    params[i] = context_->heap().ToLocalAddr(array.release());
+                    params[i] = context_->heap().ToLocalAddr(array.get());
+                    retained_arrays.emplace_back(std::move(array));
                 }
                 break;
             }
@@ -203,8 +208,8 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                     max_size = arg.array_size;
                     nbytes = arg.array_size;
 
-                    // :tODO: resolve leaks
-                    params[i] = context_->heap().ToLocalAddr(array.release());
+                    params[i] = context_->heap().ToLocalAddr(array.get());
+                    retained_arrays.emplace_back(std::move(array));
                 }
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
