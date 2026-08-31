@@ -122,6 +122,7 @@ class Runtime final : public BaseRuntime,
     const TypeDesc* GetReferenceType(const TypeDesc* td);
     const TypeDesc* GetArrayType(const TypeDesc* elt);
     const TypeDesc* GetFixedArrayType(const TypeDesc* elt, uint32_t size);
+    const TypeDesc* GetFlatArrayType(const TypeDesc* elt, uint32_t size);
     const TypeDesc* GetSliceType(const TypeDesc* elt);
     const TypeDesc* GetPrimitiveType(TypeKind kind);
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
@@ -130,8 +131,10 @@ class Runtime final : public BaseRuntime,
     SpArray* NewArray(const TypeDesc* td, uint32_t size);
     SpArray* NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
     bool FillArray(SpArray* array, uint32_t data_offset);
+    void FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset);
     void* GetArrayElem(SpArray* array, uint32_t index);
     SpArray* NewSlice(SpArray* array, uint32_t index);
+    SpArray* NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }
     Runtime* context() const { return const_cast<Runtime*>(this); }

@@ -82,6 +82,19 @@ const TypeDesc* TypeCache::GetFixedArray(const TypeDesc* elt, uint32_t size) {
     return td;
 }
 
+const TypeDesc* TypeCache::GetFlatArray(const TypeDesc* elt, uint32_t size) {
+    assert(elt->kind() != TypeKind::FlatArray);
+    TypeCacheKey key(TypeKind::FlatArray, elt, size);
+
+    auto p = cache_.findForAdd(key);
+    if (p.found())
+        return p->value;
+
+    TypeDesc* td = NewTypeDesc(pool_, TypeKind::FlatArray, elt, size);
+    cache_.add(p, key, td);
+    return td;
+}
+
 const TypeDesc* TypeCache::GetReference(const TypeDesc* elt) {
     assert(!elt->IsReference());
     TypeCacheKey key(TypeKind::Reference, elt);

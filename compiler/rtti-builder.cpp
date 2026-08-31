@@ -485,7 +485,10 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, boo
     Type* type = *qt;
     if (auto array = type->as<ArrayType>()) {
         for (;;) {
-            if (array->size()) {
+            if (array->is_flat()) {
+                bytes.emplace_back(cb::kFlatArray);
+                CompactEncodeUint32(bytes, array->size());
+            } else if (array->size()) {
                 bytes.emplace_back(cb::kFixedArray);
                 CompactEncodeUint32(bytes, array->size());
             } else {

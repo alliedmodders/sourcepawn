@@ -109,10 +109,18 @@ bool ArrayTypeResolver::Resolve() {
 
     // Always build a Type, so we don't have a null type lying around.
     auto types = CompileContext::get().types();
-    type_->type = types->defineArray(type_->type, computed_.data(), computed_.size());
+    if (computed_.size() == 1) {
+        if (computed_[0] > 0)
+            type_->type = types->defineFlatArray(type_->type, computed_[0]);
+        else
+            type_->type = types->defineArray(type_->type, computed_[0]);
+    } else {
+        type_->type = types->defineArray(type_->type, computed_.data(), (int)computed_.size());
+    }
     type_->resolved_array = true;
     return resolved_size;
 }
+
 
 bool ArrayTypeResolver::ResolveSize() {
     if (!type_->has_postdims)
@@ -555,6 +563,12 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     TypeChecker tc(expr, type_, var->type(), TypeChecker::Argument);
     if (!tc.Check())
         return false;
+
+    // Since default arguments are not analyzed by standard expression checkers
+    // (such as CheckSymbolExpr), we must explicitly set the variable's semantic
+    // value here. This ensures that the code generator recognizes this SymbolExpr
+    // as an lvalue and correctly emits OP_LOAD_GLB to load the array address/pointer.
+    expr->val().set_variable(var, var->type());
 
     return true;
 }

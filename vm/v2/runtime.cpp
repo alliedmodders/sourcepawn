@@ -1022,6 +1022,17 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
                 return nullptr;
             return GetFixedArrayType(td, size);
         }
+        case cb::kFlatArray: {
+            uint32_t size;
+            if (!parser.ReadUint32_Leb128(&size) || !size) {
+                ReportError("Invalid type data");
+                return nullptr;
+            }
+            auto td = LoadType(parser);
+            if (!td)
+                return nullptr;
+            return GetFlatArrayType(td, size);
+        }
         case cb::kArray: {
             auto td = LoadType(parser);
             if (!td)
@@ -1098,6 +1109,12 @@ const TypeDesc* Runtime::GetFixedArrayType(const TypeDesc* elt, uint32_t size) {
     return types_.GetFixedArray(elt, size);
 }
 
+const TypeDesc* Runtime::GetFlatArrayType(const TypeDesc* elt, uint32_t size) {
+    if (elt->can_global_cache())
+        return env_->types()->GetFlatArray(elt, size);
+    return types_.GetFlatArray(elt, size);
+}
+
 const TypeDesc* Runtime::GetSliceType(const TypeDesc* elt) {
     if (elt->can_global_cache())
         return env_->types()->GetSlice(elt);
@@ -1134,6 +1151,7 @@ uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
         case TypeKind::Any:
         case TypeKind::TopFunction:
         case TypeKind::Array:
+        case TypeKind::FlatArray:
             break;
 
         case TypeKind::FixedArray: {
@@ -1266,6 +1284,21 @@ bool Runtime::FillArray(SpArray* array, uint32_t data_offset) {
     return true;
 }
 
+void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset) {
+    assert(td->IsFlatArray());
+    BinaryReader br = image_->GetDataReader(data_offset);
+    auto data_bytes = br.readCompactUint32();
+    assert(data_bytes);
+
+    auto elt_size = td->array_elt()->element_size();
+    assert(*data_bytes % elt_size == 0);
+    auto elt_count = *data_bytes / elt_size;
+    assert(elt_count <= td->array_size());
+
+    auto data = heap_.ToPhysAddr<uint8_t*>(local_addr);
+    memcpy(data, br.cursor(), *data_bytes);
+}
+
 void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {
     assert(index < array->length);
 
@@ -1294,6 +1327,19 @@ SpArray* Runtime::NewSlice(SpArray* array, uint32_t index) {
     slice->td = td;
     slice->length = array->length - index;
     slice->data = heap_.ToLocalAddr(GetArrayElem(array, index));
+    return slice;
+}
+
+SpArray* Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index) {
+    assert(td->IsFlatArray());
+    assert(index <= td->array_size());
+    const TypeDesc* slice_td = GetSliceType(td->array_elt());
+    SpArray* slice = heap_.AllocTyped<SpArray>();
+    if (!slice)
+        return nullptr;
+    slice->td = slice_td;
+    slice->length = td->array_size() - index;
+    slice->data = local_addr + index * td->array_elt()->element_size();
     return slice;
 }
 

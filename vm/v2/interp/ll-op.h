@@ -136,7 +136,16 @@ namespace sp::v2 {
     FOR_EACH(STOR_ELEM_U8, 112, "stor.elem.i8") \
     FOR_EACH(LOAD_I_F32, 113, "load.i.f32") \
     FOR_EACH(STOR_I_F32, 114, "stor.i.f32") \
-    FOR_EACH(LOAD_ELEM_A, 115, "load.elem.a")
+    FOR_EACH(LOAD_ELEM_A, 115, "load.elem.a") \
+    FOR_EACH(IDXADDR_FLAT, 116, "idxaddr.flat") \
+    FOR_EACH(ARRAY_TO_FLAT, 117, "array2flat") \
+    FOR_EACH(COPYARRAY_FLAT, 118, "copyarray.flat") \
+    FOR_EACH(FILLARRAY_FLAT, 119, "fillarray.flat") \
+    FOR_EACH(SLICE_FLAT, 120, "slice.flat") \
+    FOR_EACH(STOR_ELEM_FLAT_I32, 121, "stor.elem.flat.i32") \
+    FOR_EACH(STOR_ELEM_FLAT_F32, 122, "stor.elem.flat.f32") \
+    FOR_EACH(STOR_ELEM_FLAT_I64, 123, "stor.elem.flat.i64") \
+    FOR_EACH(STOR_ELEM_FLAT_U8, 124, "stor.elem.flat.i8")
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text) LL_##op = val,

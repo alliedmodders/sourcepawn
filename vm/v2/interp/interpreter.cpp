@@ -378,6 +378,78 @@ bool Interpreter::run() {
                 pushCell(rt_->heap().ToLocalAddr(slice));
                 break;
             }
+            case LL_IDXADDR_FLAT: {
+                uint32_t size = reader_.read<uint32_t>();
+                uint32_t elt_size = reader_.read<uint32_t>();
+                cell_t index = popCell();
+                cell_t base = popCell();
+                if (index < 0 || (uint32_t)index >= size) {
+                    ReportOutOfBoundsError(index, size);
+                    return false;
+                }
+                pushCell(base + index * elt_size);
+                break;
+            }
+            case LL_ARRAY_TO_FLAT: {
+                cell_t addr = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(addr);
+                pushCell(array->data);
+                break;
+            }
+            case LL_COPYARRAY_FLAT: {
+                uint32_t bytes = reader_.read<uint32_t>();
+                cell_t src_addr = popCell();
+                cell_t dest_addr = popCell();
+                uint8_t* dest = rt_->heap().ToPhysAddr<uint8_t*>(dest_addr);
+                uint8_t* src = rt_->heap().ToPhysAddr<uint8_t*>(src_addr);
+                memcpy(dest, src, bytes);
+                break;
+            }
+            case LL_FILLARRAY_FLAT: {
+                uint32_t data_offs = reader_.read<uint32_t>();
+                const TypeDesc* td = reader_.read<const TypeDesc*>();
+                cell_t local_addr = popCell();
+                rt_->FillFlatArray(local_addr, td, data_offs);
+                break;
+            }
+            case LL_SLICE_FLAT: {
+                const TypeDesc* td = reader_.read<const TypeDesc*>();
+                uint32_t index = popCell();
+                cell_t base = popCell();
+                auto slice = rt_->NewFlatSlice(base, td, index);
+                if (!slice)
+                    return false;
+                pushCell(rt_->heap().ToLocalAddr(slice));
+                break;
+            }
+
+#define DO_STOR_ELEM(pop_type, val_type) { \
+                uint32_t size = reader_.read<uint32_t>(); \
+                uint32_t elt_size = reader_.read<uint32_t>(); \
+                val_type val = pop##pop_type(); \
+                cell_t index = popCell(); \
+                cell_t base = popCell(); \
+                if (index < 0 || (uint32_t)index >= size) { \
+                    ReportOutOfBoundsError(index, size); \
+                    return false; \
+                } \
+                val_type* addr = rt_->heap().ToPhysAddr<val_type*>(base + index * elt_size); \
+                *addr = val; \
+            }
+
+            case LL_STOR_ELEM_FLAT_I32:
+            case LL_STOR_ELEM_FLAT_F32:
+                DO_STOR_ELEM(Cell, cell_t);
+                break;
+            case LL_STOR_ELEM_FLAT_I64:
+                DO_STOR_ELEM(Int64, int64_t);
+                break;
+            case LL_STOR_ELEM_FLAT_U8:
+                DO_STOR_ELEM(Cell, uint8_t);
+                break;
+
+#undef DO_STOR_ELEM
+
             case LL_POP: {
                 popStack();
                 break;

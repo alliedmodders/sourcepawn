@@ -98,6 +98,10 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         env->ReportError(SP_ERROR_NOT_RUNNABLE);
         return false;
     }
+    if (!AcquireMethod()->Validate()) {
+        env->ReportError(SP_ERROR_NOT_RUNNABLE);
+        return false;
+    }
     if (args.error) {
         env->ReportError(SP_ERROR_PARAMS_MAX);
         return false;
@@ -141,40 +145,68 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 break;
             }
             case CallArgs::ARG_ARRAY: {
-                auto elt_type = env->types()->GetPrimitive(TypeKind::Int32);
-                auto type = env->types()->GetArray(elt_type);
-                auto array = context_->NewArray(type, arg.array_size);
-                if (!array)
-                    return false;
+                const auto& expected_arg_types = method_->arg_types();
+                bool is_flat = (i < expected_arg_types.size() && expected_arg_types[i]->IsFlatArray());
 
-                params[i] = context_->heap().ToLocalAddr(array);
-                addr = context_->heap().ToPhysAddr<void*>(array->data);
-                memcpy(addr, arg.u.addr, arg.array_size * sizeof(cell_t));
+                if (is_flat) {
+                    auto expected_td = expected_arg_types[i];
+                    uint32_t flat_bytes = expected_td->array_size() * sizeof(cell_t);
+                    if ((addr = context_->heapAllocEx(flat_bytes, &params[i])) == nullptr)
+                        return false;
+                    nbytes = std::min<size_t>(arg.array_size * sizeof(cell_t), flat_bytes);
+                } else {
+                    auto elt_type = env->types()->GetPrimitive(TypeKind::Int32);
+                    auto type = env->types()->GetArray(elt_type);
+                    auto array = context_->NewArray(type, arg.array_size);
+                    if (!array)
+                        return false;
+
+                    params[i] = context_->heap().ToLocalAddr(array);
+                    addr = context_->heap().ToPhysAddr<void*>(array->data);
+                    nbytes = arg.array_size * sizeof(cell_t);
+                }
+
+                memcpy(addr, arg.u.addr, nbytes);
                 break;
             }
             case CallArgs::ARG_CHAR_ARRAY: {
-                auto elt_type = env->types()->GetPrimitive(TypeKind::Char8);
-                auto type = env->types()->GetArray(elt_type);
-                auto array = context_->NewArray(type, arg.array_size);
-                if (!array)
-                    return false;
+                const auto& expected_arg_types = method_->arg_types();
+                bool is_flat = (i < expected_arg_types.size() && expected_arg_types[i]->IsFlatArray());
+                uint32_t max_size;
 
-                params[i] = context_->heap().ToLocalAddr(array);
-                addr = context_->heap().ToPhysAddr<void*>(array->data);
+                if (is_flat) {
+                    auto expected_td = expected_arg_types[i];
+                    uint32_t flat_bytes = expected_td->array_size() * sizeof(char);
+                    max_size = expected_td->array_size();
+                    if ((addr = context_->heapAllocEx(flat_bytes, &params[i])) == nullptr)
+                        return false;
+                    nbytes = std::min<size_t>(arg.array_size, flat_bytes);
+                } else {
+                    auto elt_type = env->types()->GetPrimitive(TypeKind::Char8);
+                    auto type = env->types()->GetArray(elt_type);
+                    auto array = context_->NewArray(type, arg.array_size);
+                    if (!array)
+                        return false;
+
+                    params[i] = context_->heap().ToLocalAddr(array);
+                    addr = context_->heap().ToPhysAddr<void*>(array->data);
+                    max_size = arg.array_size;
+                    nbytes = arg.array_size;
+                }
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
-                        context_->StringToLocalUTF8(params[i], arg.array_size,
+                        context_->StringToLocalUTF8(params[i], max_size,
                                                     reinterpret_cast<const char *>(arg.u.addr),
                                                     NULL);
                     } else if (arg.flags & SM_PARAM_STRING_BINARY) {
-                        memcpy(addr, arg.u.addr, arg.array_size);
+                        memcpy(addr, arg.u.addr, nbytes);
                     } else {
-                        context_->StringToLocal(params[i], arg.array_size,
+                        context_->StringToLocal(params[i], max_size,
                                                 reinterpret_cast<const char *>(arg.u.addr));
                     }
                 } else {
-                    *reinterpret_cast<cell_t*>(addr) = 0;
+                    *reinterpret_cast<char*>(addr) = 0;
                 }
                 break;
             }

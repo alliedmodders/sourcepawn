@@ -27,6 +27,7 @@ enum class TypeKind : uint8_t {
     TopFunction,
     Array,
     FixedArray,
+    FlatArray,
     ArraySlice,
     Reference,
 };
@@ -51,14 +52,19 @@ class TypeDesc final {
             array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
     }
 
-    TypeDesc(const TypeDesc* elt, uint32_t array_size)
-      : kind_(TypeKind::FixedArray),
+    TypeDesc(TypeKind kind, const TypeDesc* elt, uint32_t array_size)
+      : kind_(kind),
         can_global_cache_(elt->can_global_cache()),
         elt_(elt),
         array_size_(array_size)
     {
+        assert(kind == TypeKind::FixedArray || kind == TypeKind::FlatArray);
         array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
     }
+
+    TypeDesc(const TypeDesc* elt, uint32_t array_size)
+      : TypeDesc(TypeKind::FixedArray, elt, array_size)
+    {}
 
     // Size needed to store a value of this type into a variable slot.
     uint32_t slot_size() const {
@@ -66,6 +72,8 @@ class TypeDesc final {
         switch (kind_) {
             case TypeKind::Int64:
                 return sizeof(int64_t);
+            case TypeKind::FlatArray:
+                return (array_size_ * elt_->element_size() + 3) & ~3;
             default:
                 return sizeof(int32_t);
         }
@@ -91,6 +99,7 @@ class TypeDesc final {
             case TypeKind::TopFunction:
             case TypeKind::Array:
             case TypeKind::FixedArray:
+            case TypeKind::FlatArray:
                 return sizeof(uint32_t);
 
             default:
@@ -106,7 +115,7 @@ class TypeDesc final {
 
     // For fixed arrays, length of arrays of this type.
     uint32_t array_size() const {
-        assert(kind_ == TypeKind::FixedArray);
+        assert(kind_ == TypeKind::FixedArray || kind_ == TypeKind::FlatArray);
         return array_size_;
     }
     const TypeDesc* array_elt() const {
@@ -119,7 +128,10 @@ class TypeDesc final {
     }
     bool IsArrayish() const {
         return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
-               kind_ == TypeKind::ArraySlice;
+               kind_ == TypeKind::FlatArray || kind_ == TypeKind::ArraySlice;
+    }
+    bool IsFlatArray() const {
+        return kind_ == TypeKind::FlatArray;
     }
     bool IsReference() const {
         return kind_ == TypeKind::Reference;

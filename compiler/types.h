@@ -240,15 +240,18 @@ class Type : public PoolObject
     TypeKind kind() const { return kind_; }
     const char* kindName() const;
     const char* prettyName();
-    int type_index() const {
-        return index_;
-    }
 
     template <class T> T* as() {
         if (T::is_a(this))
             return reinterpret_cast<T*>(this);
         return nullptr;
     }
+    template <class T> const T* as() const {
+        if (T::is_a(this))
+            return reinterpret_cast<const T*>(this);
+        return nullptr;
+    }
+
     template <class T> T* to() {
         assert(T::is_a(this));
         return reinterpret_cast<T*>(this);
@@ -268,6 +271,8 @@ class Type : public PoolObject
     bool isArray() const { return kind_ == TypeKind::Array; }
     bool isTypedef() const { return kind_ == TypeKind::Typedef; }
     bool isCharArray() const;
+    bool isFlatArray() const;
+    bool isCompositeValue() const;
 
     // True if a value representation can be > 1 cell.
     bool isComposite() const { return isArray() || isEnumStruct(); }
@@ -397,9 +402,6 @@ class Type : public PoolObject
         assert(kind_ == TypeKind::Pstruct);
         pstruct_ptr_ = decl;
     }
-    void set_index(int index) {
-        index_ = index;
-    }
 
     void setBuiltinType(BuiltinType type) {
         assert(kind_ == TypeKind::Builtin);
@@ -420,7 +422,6 @@ class Type : public PoolObject
 
   private:
     Atom* name_;
-    int index_;
     TypeKind kind_;
 
   protected:
@@ -458,15 +459,17 @@ class FunctionType : public Type {
 
 class ArrayType : public Type {
   public:
-    ArrayType(Type* inner, int size);
+    ArrayType(Type* inner, int size, bool is_flat);
 
     int size() const { return size_; }
     bool is_fixed() const { return size_ != 0; }
+    bool is_flat() const { return is_flat_; }
 
-    static bool is_a(Type* type) { return type->kind() == TypeKind::Array; }
+    static bool is_a(const Type* type) { return type->kind() == TypeKind::Array; }
 
   private:
     int size_;
+    bool is_flat_;
 };
 
 class TypeManager
@@ -493,6 +496,7 @@ class TypeManager
     ArrayType* defineArray(Type* element_type, int dim);
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
+    ArrayType* defineFlatArray(Type* element_type, int dim);
     ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
     FunctionType* defineFunction(QualType return_type,
                                  const std::vector<QualType>& args,
@@ -541,6 +545,7 @@ class TypeManager
         struct Lookup {
             Type* type;
             int size;
+            bool is_flat;
         };
 
         static bool matches(const Lookup& lookup, ArrayType* type);

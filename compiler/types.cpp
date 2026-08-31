@@ -41,7 +41,6 @@ using namespace ke;
 
 Type::Type(Atom* name, TypeKind kind)
  : name_(name),
-   index_(-1),
    kind_(kind)
 {
 }
@@ -103,11 +102,22 @@ bool Type::isCharArray() const {
     return isArray() && inner()->isChar();
 }
 
-ArrayType::ArrayType(Type* inner, int size)
+bool Type::isFlatArray() const {
+    if (auto array = as<ArrayType>())
+        return array->is_flat();
+    return false;
+}
+
+bool Type::isCompositeValue() const {
+    return isEnumStruct() || isFlatArray();
+}
+
+ArrayType::ArrayType(Type* inner, int size, bool is_flat)
   : Type(nullptr, TypeKind::Array)
 {
     inner_type_ = inner;
     size_ = size;
+    is_flat_ = is_flat;
 }
 
 TypeManager::TypeManager(CompileContext& cc)
@@ -139,9 +149,6 @@ Type* TypeManager::add(Atom* name, TypeKind kind) {
 }
 
 void TypeManager::RegisterType(Type* type, bool unique_name) {
-    type->set_index((int)by_index_.size());
-    by_index_.emplace_back(type);
-
     if (unique_name) {
         assert(types_.find(type->declName()) == types_.end());
         types_.emplace(type->declName(), type);
@@ -161,7 +168,16 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
 }
 
 ArrayType* TypeManager::defineArray(Type* element_type, int dim) {
-    return defineArray(element_type, &dim, 1);
+    assert(!element_type->isArray());
+    auto lookup = ArrayCachePolicy::Lookup{element_type, dim, false};
+    auto p = array_cache_.findForAdd(lookup);
+    if (!p.found()) {
+        auto at = new ArrayType(element_type, dim, false);
+        RegisterType(at, false);
+
+        array_cache_.add(p, at);
+    }
+    return (*p)->to<ArrayType>();
 }
 
 ArrayType* TypeManager::defineArray(Type* element_type, const PoolArray<int>& dim_vec) {
@@ -175,10 +191,10 @@ ArrayType* TypeManager::defineArray(Type* element_type, const int* dim_vec, int 
     size_t depth = numdim - 1;
     Type* iter = element_type;
     for (;;) {
-        auto lookup = ArrayCachePolicy::Lookup{iter, dim_vec[depth]};
+        auto lookup = ArrayCachePolicy::Lookup{iter, dim_vec[depth], false};
         auto p = array_cache_.findForAdd(lookup);
         if (!p.found()) {
-            auto at = new ArrayType(iter, dim_vec[depth]);
+            auto at = new ArrayType(iter, dim_vec[depth], false);
             RegisterType(at, false);
 
             array_cache_.add(p, at);
@@ -189,13 +205,33 @@ ArrayType* TypeManager::defineArray(Type* element_type, const int* dim_vec, int 
             break;
         depth--;
     }
+
     return iter->to<ArrayType>();
+}
+
+ArrayType* TypeManager::defineFlatArray(Type* element_type, int dim) {
+    assert(!element_type->isArray());
+    auto lookup = ArrayCachePolicy::Lookup{element_type, dim, true};
+    auto p = array_cache_.findForAdd(lookup);
+    if (!p.found()) {
+        auto at = new ArrayType(element_type, dim, true);
+        RegisterType(at, false);
+
+        array_cache_.add(p, at);
+    }
+    return (*p)->to<ArrayType>();
 }
 
 ArrayType* TypeManager::redefineArray(Type* element_type, ArrayType* old_type) {
     std::vector<int> dim_vec;
-    for (auto iter = old_type; iter; iter = iter->inner()->as<ArrayType>())
+    for (auto iter = old_type; iter; iter = iter->inner()->as<ArrayType>()) {
         dim_vec.emplace_back(iter->size());
+    }
+    if (dim_vec.size() == 1) {
+        if (old_type->is_flat())
+            return defineFlatArray(element_type, dim_vec[0]);
+        return defineArray(element_type, dim_vec[0]);
+    }
     return defineArray(element_type, dim_vec.data(), (int)dim_vec.size());
 }
 
@@ -313,17 +349,18 @@ FunctionType* TypeManager::defineFunction(QualType return_type,
 }
 
 bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
-    return lookup.type == type->inner() && lookup.size == type->size();
+    return lookup.type == type->inner() && lookup.size == type->size() && lookup.is_flat == type->is_flat();
 }
 
-static inline uint32_t HashArrayType(Type* type, int size) {
+static inline uint32_t HashArrayType(Type* type, int size, bool is_flat) {
     auto first = ke::HashPointer(type);
     auto second = ke::HashInt32(size);
-    return ke::HashCombine(first, second);
+    auto third = ke::HashInt32(is_flat ? 1 : 0);
+    return ke::HashCombine(ke::HashCombine(first, second), third);
 }
 
 uint32_t TypeManager::ArrayCachePolicy::hash(const Lookup& lookup) {
-    return HashArrayType(lookup.type, lookup.size);
+    return HashArrayType(lookup.type, lookup.size, lookup.is_flat);
 }
 
 TypenameInfo typeinfo_t::ToTypenameInfo() const {

@@ -34,7 +34,7 @@ struct TypeCacheKey {
       : kind(array_kind), elt_kind(elt_kind), size(size)
     {
         assert(kind == TypeKind::Array || kind == TypeKind::FixedArray ||
-               kind == TypeKind::ArraySlice);
+               kind == TypeKind::FlatArray || kind == TypeKind::ArraySlice);
     }
 
     bool operator ==(const TypeCacheKey& other) const {
@@ -42,7 +42,7 @@ struct TypeCacheKey {
             return false;
         if (kind == TypeKind::Array || kind == TypeKind::ArraySlice || kind == TypeKind::Reference)
             return elt_kind == other.elt_kind;
-        if (kind == TypeKind::FixedArray) {
+        if (kind == TypeKind::FixedArray || kind == TypeKind::FlatArray) {
             return elt_kind == other.elt_kind &&
                    size == other.size;
         }
@@ -60,6 +60,7 @@ class TypeCache final {
 
     const TypeDesc* GetPrimitive(TypeKind kind);
     const TypeDesc* GetFixedArray(const TypeDesc* elt, uint32_t size);
+    const TypeDesc* GetFlatArray(const TypeDesc* elt, uint32_t size);
     const TypeDesc* GetArray(const TypeDesc* elt);
     const TypeDesc* GetSlice(const TypeDesc* elt);
     const TypeDesc* GetReference(const TypeDesc* elt);

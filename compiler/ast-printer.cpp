@@ -554,7 +554,9 @@ void AstPrinter::PrintRvalueExpr(RvalueExpr* node, bool is_last) {
 void AstPrinter::PrintSliceExpr(SliceExpr* node, bool is_last) {
     fprintf(out_, "RvalueExpr\n");
     stack_.push_back(is_last);
-    Print(node->expr(), true);
+    Print(node->expr(), node->index() == nullptr);
+    if (node->index())
+        Print(node->index(), true);
     stack_.pop_back();
 }
 

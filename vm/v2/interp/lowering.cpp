@@ -58,7 +58,7 @@ class MethodLowerer
     std::unique_ptr<InterpCode> Lower();
 
   private:
-    void LowerBlock();
+    void LowerBlock(Block* next_block);
     void LowerInstruction(OPCODE op);
     void EmitJumpTarget(Block* target_block);
     void PatchJumps();
@@ -112,7 +112,10 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
 
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
         block_ = *iter;
-        LowerBlock();
+        auto next_iter = iter;
+        next_iter++;
+        Block* next_block = (next_iter != graph_->rpoEnd()) ? *next_iter : nullptr;
+        LowerBlock(next_block);
     }
     block_ = nullptr;
 
@@ -123,7 +126,7 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
     return std::make_unique<InterpCode>(std::move(bytes), masm_.code_size(), std::move(mappings_));
 }
 
-void MethodLowerer::LowerBlock() {
+void MethodLowerer::LowerBlock(Block* next_block) {
     block_->label()->bind(masm_.pc());
 
     const uint8_t* stop_at = block_->end();
@@ -141,6 +144,14 @@ void MethodLowerer::LowerBlock() {
 
         OPCODE op = (OPCODE)reader_.read<uint8_t>();
         LowerInstruction(op);
+    }
+
+    if (block_->endType() == BlockEnd::Jump) {
+        Block* target = block_->successors()[0];
+        if (target != next_block) {
+            emitOp(LL_JUMP);
+            EmitJumpTarget(target);
+        }
     }
 
     // Propagate stack state.
@@ -183,25 +194,37 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_LOAD_ELEM_I64:
         case OP_LOAD_ELEM_U8:
         case OP_LOAD_ELEM_A: {
-            LLOp llop = LL_NOP;
-            switch (op) {
-                case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_I32; break;
-                case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_F32; break;
-                case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_I64; break;
-                case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
-                case OP_LOAD_ELEM_A:   llop = LL_LOAD_ELEM_A; break;
-                default: assert(false); break;
-            }
-            emitOp(llop);
             popStack();
             const TypeDesc* base = popStack();
-            const TypeDesc* elt = base->array_elt();
-            if (op == OP_LOAD_ELEM_I64) {
-                pushStack(int64_type_);
-            } else if (op == OP_LOAD_ELEM_U8) {
-                pushStack(cell_type_);
+            if (base->IsFlatArray()) {
+                assert(op != OP_LOAD_ELEM_A);
+                emitOp(LL_IDXADDR_FLAT);
+                emitVal<uint32_t>(base->array_size());
+                emitVal<uint32_t>(base->array_elt()->element_size());
+                const TypeDesc* elt = base->array_elt();
+                LLOp llop = LL_NOP;
+                switch (op) {
+                    case OP_LOAD_ELEM_I32: llop = LL_LOAD_I_I32; break;
+                    case OP_LOAD_ELEM_F32: llop = LL_LOAD_I_F32; break;
+                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_I_I64; break;
+                    case OP_LOAD_ELEM_U8:  llop = LL_LOAD_I_U8; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
+                pushStack(op == OP_LOAD_ELEM_U8 ? cell_type_ : elt);
             } else {
-                pushStack(elt);
+                LLOp llop = LL_NOP;
+                switch (op) {
+                    case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_I32; break;
+                    case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_F32; break;
+                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_I64; break;
+                    case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
+                    case OP_LOAD_ELEM_A:   llop = LL_LOAD_ELEM_A; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
+                const TypeDesc* elt = base->array_elt();
+                pushStack(op == OP_LOAD_ELEM_U8 ? cell_type_ : elt);
             }
             break;
         }
@@ -228,18 +251,32 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
         case OP_STOR_ELEM_U8: {
-            LLOp llop = LL_NOP;
-            switch (op) {
-                case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_I32; break;
-                case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_F32; break;
-                case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_I64; break;
-                case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
-                default: assert(false); break;
+            popStack();
+            popStack();
+            const TypeDesc* base = popStack();
+            if (base->IsFlatArray()) {
+                LLOp llop = LL_NOP;
+                switch (op) {
+                    case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_FLAT_I32; break;
+                    case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_FLAT_F32; break;
+                    case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_FLAT_I64; break;
+                    case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
+                emitVal<uint32_t>(base->array_size());
+                emitVal<uint32_t>(base->array_elt()->element_size());
+            } else {
+                LLOp llop = LL_NOP;
+                switch (op) {
+                    case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_I32; break;
+                    case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_F32; break;
+                    case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_I64; break;
+                    case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
             }
-            emitOp(llop);
-            popStack();
-            popStack();
-            popStack();
             break;
         }
 
@@ -474,15 +511,40 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_COPYARRAY: {
-            emitOp(LL_COPYARRAY);
-            popStack();
-            popStack();
+            const TypeDesc* src = popStack();
+            const TypeDesc* dest = popStack();
+            if (dest->IsFlatArray() || src->IsFlatArray()) {
+                if (!src->IsFlatArray()) {
+                    emitOp(LL_ARRAY_TO_FLAT);
+                } else if (!dest->IsFlatArray()) {
+                    emitOp(LL_SWAP);
+                    emitOp(LL_ARRAY_TO_FLAT);
+                    emitOp(LL_SWAP);
+                }
+                // If the source has a statically known size, copy that size.
+                // This is safe because the verifier guarantees that the source
+                // size is less than or equal to the destination size.
+                uint32_t elements = dest->array_size();
+                if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray)
+                    elements = src->array_size();
+                uint32_t bytes = elements * dest->array_elt()->element_size();
+                emitOp(LL_COPYARRAY_FLAT);
+                emitVal<uint32_t>(bytes);
+            } else {
+                emitOp(LL_COPYARRAY);
+            }
             break;
         }
 
         case OP_SLICE: {
-            emitOp(LL_SLICE);
             popStack();
+            const TypeDesc* base = stack_.back();
+            if (base->IsFlatArray()) {
+                emitOp(LL_SLICE_FLAT);
+                emitVal<const TypeDesc*>(base);
+            } else {
+                emitOp(LL_SLICE);
+            }
             break;
         }
 
@@ -565,7 +627,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             emitOp(LL_ADDR_GLB);
             uint16_t index = reader_.read<uint16_t>();
             emitVal<uint16_t>(index);
-            pushStack(graph_->rt()->GetReferenceType(graph_->rt()->GetTypeOfGlobal(index)));
+            const TypeDesc* td = graph_->rt()->GetTypeOfGlobal(index);
+            if (td->IsFlatArray())
+                pushStack(td);
+            else
+                pushStack(graph_->rt()->GetReferenceType(td));
             break;
         }
 
@@ -597,7 +663,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             emitOp(LL_ADDR_S);
             int16_t offset = reader_.read<int16_t>();
             emitVal<int16_t>(offset);
-            pushStack(graph_->rt()->GetReferenceType(method_->GetTypeOfLocal(offset)));
+            const TypeDesc* td = method_->GetTypeOfLocal(offset);
+            if (td->IsFlatArray())
+                pushStack(td);
+            else
+                pushStack(graph_->rt()->GetReferenceType(td));
             break;
         }
 
@@ -611,9 +681,15 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_IDXADDR: {
-            emitOp(LL_IDXADDR);
             popStack();
             const TypeDesc* base = popStack();
+            if (base->IsFlatArray()) {
+                emitOp(LL_IDXADDR_FLAT);
+                emitVal<uint32_t>(base->array_size());
+                emitVal<uint32_t>(base->array_elt()->element_size());
+            } else {
+                emitOp(LL_IDXADDR);
+            }
             pushStack(graph_->rt()->GetReferenceType(base->array_elt()));
             break;
         }
@@ -732,10 +808,16 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_FILLARRAY: {
-            emitOp(LL_FILLARRAY);
+            const TypeDesc* base = popStack();
             uint32_t data_offs = reader_.read<uint32_t>();
-            emitVal<uint32_t>(data_offs);
-            popStack();
+            if (base->IsFlatArray()) {
+                emitOp(LL_FILLARRAY_FLAT);
+                emitVal<uint32_t>(data_offs);
+                emitVal<const TypeDesc*>(base);
+            } else {
+                emitOp(LL_FILLARRAY);
+                emitVal<uint32_t>(data_offs);
+            }
             break;
         }
 

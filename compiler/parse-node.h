@@ -1046,14 +1046,16 @@ class RvalueExpr final : public EmitOnlyExpr
 class SliceExpr final : public EmitOnlyExpr
 {
   public:
-    explicit SliceExpr(IndexExpr* expr, Type* type);
+    explicit SliceExpr(Expr* expr, Expr* index, Type* type);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SliceExpr; }
 
-    IndexExpr* expr() const { return expr_; }
+    Expr* expr() const { return expr_; }
+    Expr* index() const { return index_; }
 
   private:
-    IndexExpr* expr_;
+    Expr* expr_;
+    Expr* index_;
 };
 
 class SimpleCastExpr final : public EmitOnlyExpr

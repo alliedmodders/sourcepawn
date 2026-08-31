@@ -76,6 +76,7 @@ bool FastRtti::SkipNextType() {
             case cb::kTopFunction:
                 return true;
 
+            case cb::kFlatArray:
             case cb::kFixedArray:
             {
                 uint32_t size;
@@ -278,6 +279,7 @@ RttiParser::decode() {
             result = new Rtti(type);
             break;
 
+        case cb::kFlatArray:
         case cb::kFixedArray: {
             uint32_t size = decodeUint32();
             Rtti* inner = decode();
@@ -371,6 +373,7 @@ RttiParser::validate() {
         case cb::kTopFunction:
             return true;
 
+        case cb::kFlatArray:
         case cb::kFixedArray: {
             // Skip the size.
             if (!tryDecodeUint32())

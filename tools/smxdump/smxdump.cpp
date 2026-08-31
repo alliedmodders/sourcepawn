@@ -333,6 +333,7 @@ class DumpTool final {
                 case cb::kVoid:
                     type_inner = "void";
                     break;
+                case cb::kFlatArray:
                 case cb::kFixedArray:
                 {
                     uint32_t size;

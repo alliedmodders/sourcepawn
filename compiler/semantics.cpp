@@ -587,9 +587,10 @@ RvalueExpr::RvalueExpr(Expr* lval)
     }
 }
 
-SliceExpr::SliceExpr(IndexExpr* expr, Type* type)
+SliceExpr::SliceExpr(Expr* expr, Expr* index, Type* type)
   : EmitOnlyExpr(ExprKind::SliceExpr, expr->pos()),
-    expr_(expr)
+    expr_(expr),
+    index_(index)
 {
     val_.ident = iEXPRESSION;
     val_.set_type(type);
@@ -1228,6 +1229,21 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
         second = expr->set_second(new RvalueExpr(second));
     if (third->lvalue())
         third = expr->set_third(new RvalueExpr(third));
+
+    if (second->val().type() != third->val().type()) {
+        if (second->val().type()->isFlatArray()) {
+            auto type = types_->defineArray(second->val().type()->inner(), 0);
+            auto slice = new SliceExpr(second, nullptr, type);
+            NeedsHeapAlloc(slice);
+            second = expr->set_second(slice);
+        }
+        if (third->val().type()->isFlatArray()) {
+            auto type = types_->defineArray(third->val().type()->inner(), 0);
+            auto slice = new SliceExpr(third, nullptr, type);
+            NeedsHeapAlloc(slice);
+            third = expr->set_third(slice);
+        }
+    }
 
     const auto& left = second->val();
     const auto& right = third->val();
@@ -2187,6 +2203,13 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         if (!tc.Coerce())
             return nullptr;
 
+        if (auto array = param->as<ArrayExpr>()) {
+            if (to_array->is_flat()) {
+                auto flat_type = types_->defineFlatArray(to_array->inner(), to_array->size());
+                array->val().set_type(flat_type);
+            }
+        }
+
         if (val->sym && val->sym->is_const() && !arg->type_info().is_const) {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
@@ -3092,6 +3115,13 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
 }
 
 static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
+    if (to && to->is_flat())
+        return false;
+    if (val.type()->isFlatArray()) {
+        if (to && (val.type()->inner()->lit_size() != to->inner()->lit_size()))
+            return false;
+        return true;
+    }
     if (to && !(to->inner()->isArray() || to->inner()->isEnumStruct()))
         return false;
     if (val.ident == iARRAYELEM || val.ident == iARRAYELEM) {
@@ -3099,7 +3129,6 @@ static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
             return false;
         if (to && (val.type()->lit_size() != to->inner()->lit_size()))
             return false;
-        return true;
     }
     return false;
 }
@@ -3108,15 +3137,25 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
     if (!CanImplicitSliceArgument(param->val(), to))
         return nullptr;
 
-    assert(param->as<IndexExpr>());
+    Expr* base = nullptr;
+    Expr* index_expr = nullptr;
+    Type* inner_type = nullptr;
 
-    IndexExpr* index = param->as<IndexExpr>();
-    if (!index)
-        return nullptr;
+    if (param->val().type()->isFlatArray()) {
+        base = param;
+        inner_type = param->val().type()->inner();
+    } else {
+        assert(param->as<IndexExpr>());
+        IndexExpr* index = param->as<IndexExpr>();
+        if (!index)
+            return nullptr;
+        base = index->base();
+        index_expr = index->index();
+        inner_type = param->val().type();
+    }
 
-    Type* type = types_->defineArray(param->val().type(), 0);
-
-    auto slice = new SliceExpr(index, type);
+    Type* type = types_->defineArray(inner_type, 0);
+    auto slice = new SliceExpr(base, index_expr, type);
     NeedsHeapAlloc(slice);
     return slice;
 }

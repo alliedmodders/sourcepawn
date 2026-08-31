@@ -272,14 +272,17 @@ static const uint8_t kTopFunction = 0x11;
 
 // This section encodes multi-byte raw types.
 
-// kFixedArray is followed by:
+// kFixedArray or kFlatArray are followed by:
 //    Size          uint32
 //    Type          <type>
 //
 // kArray is followed by:
 //    Type          <type>
+//
+// For a kFlatArray, the inner type cannot be another kFlatArray.
 static const uint8_t kFixedArray = 0x30;
 static const uint8_t kArray = 0x31;
+static const uint8_t kFlatArray = 0x34;
 
 // kFunction is always followed by the same encoding as in
 // smx_rtti_method::signature.

@@ -214,8 +214,11 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!base->IsArrayish())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-            if (op == OP_SLICE)
+            if (op == OP_SLICE) {
+                if (base->IsFlatArray())
+                    return pushStack(rt_->GetSliceType(base->array_elt()));
                 return pushStack(base);
+            }
 
             return pushStack(rt_->GetReferenceType(base->array_elt()));
         }
@@ -349,6 +352,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* td = verifyStackOffset(offset);
             if (!td)
                 return false;
+            if (td->IsFlatArray())
+                return pushStack(td);
             return pushStack(rt_->GetReferenceType(td));
         }
 
@@ -415,6 +420,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto td = verifyGlobalIndex(index);
             if (!td)
                 return false;
+            if (td->IsFlatArray())
+                return pushStack(td);
             return pushStack(rt_->GetReferenceType(td));
         }
 
@@ -476,6 +483,9 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!verifyCallIndex(method_index))
                 return false;
 
+            if (!verifyCallArguments(method, arg_count))
+                return false;
+
             // The interpreter pushes the argument count onto the stack before
             // resolving the call.
             if (!pushStack(cell_type()))
@@ -527,10 +537,12 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc *src, *dest;
             if (!popStack(&src) || !popStack(&dest))
                 return false;
-            if (!src->IsArrayish() || dest->kind() != TypeKind::FixedArray)
+            if (!src->IsArrayish() || (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            if (src->kind() == TypeKind::FixedArray && src->array_size() > dest->array_size())
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (src->kind() == TypeKind::FixedArray || src->kind() == TypeKind::FlatArray) {
+                if (src->array_size() > dest->array_size())
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
             if (src->array_elt()->element_size() != dest->array_elt()->element_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return true;
@@ -679,6 +691,8 @@ bool MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             first->stack[i] = any_type();
+        } else if (t1->IsFlatArray() || t2->IsFlatArray()) {
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         } else if (t1->IsArrayish() && t2->IsArrayish() && t1->array_elt() == t2->array_elt()) {
             first->stack[i] = rt_->GetArrayType(t1->array_elt());
         } else {
@@ -952,6 +966,41 @@ bool MethodVerifier::verifyCallIndex(uint32_t method_index) {
     return true;
 }
 
+bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t arg_count) {
+    auto parser = smx_->GetTypeParser(method->signature);
+    uint32_t expected_argc;
+    if (!parser.ReadFunctionSignatureArgCount(&expected_argc))
+        return reportError(SP_ERROR_INVALID_INSTRUCTION);
+    uint8_t variadic;
+    if (!parser.GetByte(&variadic))
+        return reportError(SP_ERROR_INVALID_INSTRUCTION);
+    if (variadic == cb::kLegacyVariadic)
+        parser.NextByte();
+    uint8_t type_byte;
+    if (!parser.GetByte(&type_byte))
+        return reportError(SP_ERROR_INVALID_INSTRUCTION);
+    if (type_byte == cb::kVoid)
+        parser.NextByte();
+    else if (!rt_->LoadType(parser))
+        return false;
+
+    VerifyData* v = block_->data<VerifyData>();
+    if (v->stack.size() < arg_count)
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+    for (uint32_t i = 0; i < expected_argc; i++) {
+        auto expected_td = rt_->LoadArgType(parser);
+        if (!expected_td)
+            return false;
+        if (i < arg_count) {
+            const TypeDesc* arg_td = v->stack[v->stack.size() - arg_count + i];
+            if (arg_td->kind() == TypeKind::FlatArray && expected_td->kind() == TypeKind::FixedArray)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
+    }
+    return true;
+}
+
 void
 MethodVerifier::collectExternalFuncRefs(const ExternalFuncRefCallback& callback) {
     collect_func_refs_ = callback;
@@ -1029,6 +1078,7 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src) {
     switch (dest->kind()) {
         case TypeKind::Array:
         case TypeKind::FixedArray:
+        case TypeKind::FlatArray:
         case TypeKind::ArraySlice:
         case TypeKind::Reference:
             if (dest != src)
