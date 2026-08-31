@@ -303,6 +303,8 @@ QualType Decl::type() {
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
             return to<FunctionDecl>()->type();
+        case StmtKind::ClassDecl:
+            return to<ClassDecl>()->type();
         case StmtKind::LayoutFieldDecl:
             return to<LayoutFieldDecl>()->type();
         case StmtKind::EnumStructDecl:

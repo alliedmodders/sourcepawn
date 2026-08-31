@@ -1536,6 +1536,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case StmtKind::MemberFunctionDecl:
             val.set_function(decl->as<FunctionDecl>());
             break;
+        case StmtKind::ClassDecl:
         case StmtKind::EnumStructDecl:
         case StmtKind::MethodmapDecl:
             val.set_typename(decl);
