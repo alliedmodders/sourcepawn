@@ -109,6 +109,10 @@ struct ExprVal {
         set_type(type);
         set_constval(val);
     }
+    cell const_intptr() const {
+        assert(ident == iCONSTEXPR && type()->isIntPtr());
+        return const_i32_;
+    }
     cell const_cell() const {
         assert(ident == iCONSTEXPR && !type()->isWideType() && !type()->isHeapItem());
         return const_i32_;
@@ -125,6 +129,22 @@ struct ExprVal {
         set_type(type);
         set_const_float(val);
     }
+    void set_const_intptr(QualType type, cell val) {
+        assert(type->isIntPtr());
+        set_type(type);
+        const_i32_ = val;
+        ident = iCONSTEXPR;
+    }
+    int64_t const_int64() const {
+        assert(ident == iCONSTEXPR && type()->isInt64());
+        return const_int64_;
+    }
+    void set_const_int64(QualType type, int64_t val) {
+        assert(type->isInt64());
+        set_type(type);
+        const_int64_ = val;
+        ident = iCONSTEXPR;
+    }
     void set_slice(IdentifierKind ident, QualType type) {
         assert(ident == iARRAYELEM);
         this->ident = ident;
@@ -133,6 +153,16 @@ struct ExprVal {
     void set_function(FunctionDecl* fun) {
         this->ident = iFUNCTN;
         this->fun_ = fun;
+    }
+    double const_double() const {
+        assert(ident == iCONSTEXPR && type()->isDouble());
+        return const_double_;
+    }
+    void set_const_double(QualType type, double val) {
+        assert(type->isDouble());
+        set_type(type);
+        const_double_ = val;
+        ident = iCONSTEXPR;
     }
     Decl* typename_decl() const {
         assert(ident == iTYPENAME);
@@ -162,6 +192,8 @@ struct ExprVal {
         // when ident == iCONSTEXPR
         float const_float_;
         cell const_i32_;
+        double const_double_;
+        int64_t const_int64_;
         // when ident == iVARIABLE
         VarDeclBase* sym_;
         // when ident == iFUNCTN
