@@ -25,7 +25,7 @@
 using namespace sp::v2;
 using namespace SourcePawn;
 
-ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, uint32_t method_index)
+ScriptedInvoker::ScriptedInvoker(Runtime* runtime, uint32_t method_index)
  : env_(Environment::get()),
    context_(runtime->context()),
    method_index_(method_index)

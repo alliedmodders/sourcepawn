@@ -31,17 +31,15 @@ namespace sp::v2 {
 using namespace ke;
 
 class Runtime;
-using PluginContext = Runtime;
-using PluginRuntime = Runtime;
 class MethodInfo;
 
 class Interpreter final
 {
   public:
-    static bool Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval);
+    static bool Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval);
 
   private:
-    Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);
+    Interpreter(Runtime* cx, RefPtr<MethodInfo> method);
 
     bool run();
 
@@ -77,9 +75,9 @@ class Interpreter final
 
   private:
     Environment* env_;
-    PluginRuntime* rt_;
+    Runtime* rt_;
     SmxImage* smx_;
-    PluginContext* cx_;
+    Runtime* cx_;
     RefPtr<MethodInfo> method_;
     const uint8_t* code_;
     BinaryReader reader_;

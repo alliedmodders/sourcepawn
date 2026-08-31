@@ -35,7 +35,7 @@
 namespace sp::v2 {
 
 bool
-Interpreter::Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval) {
+Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
     Interpreter interpreter(cx, method);
     if (!interpreter.run())
         return false;
@@ -44,7 +44,7 @@ Interpreter::Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval) {
     return true;
 }
 
-Interpreter::Interpreter(PluginContext* cx, RefPtr<MethodInfo> method)
+Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
  : env_(Environment::get()),
    rt_(cx),
    smx_(rt_->image()),

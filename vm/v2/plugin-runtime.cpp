@@ -355,7 +355,7 @@ Runtime::GetPubVarsNum() {
 }
 
 int
-PluginRuntime::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
+Runtime::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
     if (cells > CELLBOUNDMAX)
         return SP_ERROR_ARRAY_TOO_BIG;
 
@@ -373,7 +373,7 @@ PluginRuntime::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_
 }
 
 int
-PluginRuntime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
+Runtime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
     if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
         ((ucell_t)local_addr >= mem_size_)) {
         return SP_ERROR_INVALID_ADDRESS;
@@ -386,7 +386,7 @@ PluginRuntime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
 }
 
 int
-PluginRuntime::LocalToString(cell_t local_addr, char** addr) {
+Runtime::LocalToString(cell_t local_addr, char** addr) {
     if (((local_addr >= hp_) && (local_addr < sp_)) || (local_addr < 0) ||
         ((ucell_t)local_addr >= mem_size_)) {
         return SP_ERROR_INVALID_ADDRESS;
@@ -397,7 +397,7 @@ PluginRuntime::LocalToString(cell_t local_addr, char** addr) {
 }
 
 int
-PluginRuntime::StringToLocal(cell_t local_addr, size_t bytes, const char* source) {
+Runtime::StringToLocal(cell_t local_addr, size_t bytes, const char* source) {
     char* dest;
     size_t len;
 
@@ -452,7 +452,7 @@ __CheckValidChar(char* c) {
 }
 
 int
-PluginRuntime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source,
+Runtime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* source,
                                  size_t* wrtnbytes) {
     char* dest;
     size_t len;
@@ -486,7 +486,7 @@ PluginRuntime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char*
 }
 
 int
-PluginRuntime::LocalToStringNULL(cell_t local_addr, char** addr) {
+Runtime::LocalToStringNULL(cell_t local_addr, char** addr) {
     int err;
     if ((err = LocalToString(local_addr, addr)) != SP_ERROR_NONE)
         return err;
@@ -498,7 +498,7 @@ PluginRuntime::LocalToStringNULL(cell_t local_addr, char** addr) {
 }
 
 cell_t*
-PluginRuntime::GetNullRef(SP_NULL_TYPE type) {
+Runtime::GetNullRef(SP_NULL_TYPE type) {
     if (type == SP_NULL_VECTOR)
         return m_pNullVec;
 
@@ -506,7 +506,7 @@ PluginRuntime::GetNullRef(SP_NULL_TYPE type) {
 }
 
 bool
-PluginRuntime::IsInExec() {
+Runtime::IsInExec() {
     for (InvokeFrame* ivk = env_->top(); ivk; ivk = ivk->prev()) {
         if (ivk->cx() == this)
             return true;
@@ -515,7 +515,7 @@ PluginRuntime::IsInExec() {
 }
 
 bool
-PluginRuntime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
+Runtime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
                       cell_t* result) {
     EnterProfileScope profileScope("SourcePawn", "EnterJIT");
 
@@ -619,7 +619,7 @@ IPluginFunction* Runtime::GetFunctionByName(const char* public_name) {
 }
 
 bool
-PluginRuntime::IsDebugging() {
+Runtime::IsDebugging() {
     return true;
 }
 
@@ -658,7 +658,7 @@ bool Runtime::UsesDirectArrays() {
     return true;
 }
 
-bool PluginRuntime::UsesHeapScopes() {
+bool Runtime::UsesHeapScopes() {
     return (image_->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes) != 0;
 }
 
@@ -731,12 +731,12 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
 }
 
 cell_t*
-PluginRuntime::GetLocalParams() {
+Runtime::GetLocalParams() {
     return (cell_t*)(memory_ + frm_ + (2 * sizeof(cell_t)));
 }
 
 int
-PluginRuntime::popTrackerAndSetHeap() {
+Runtime::popTrackerAndSetHeap() {
     assert(sp_ >= hp_);
     assert(hp_ >= cell_t(data_size_));
 
@@ -754,7 +754,7 @@ PluginRuntime::popTrackerAndSetHeap() {
 }
 
 int
-PluginRuntime::pushTracker(uint32_t amount) {
+Runtime::pushTracker(uint32_t amount) {
     assert(!UsesHeapScopes());
     if (amount > INT_MAX)
         return SP_ERROR_TRACKER_BOUNDS;
@@ -767,7 +767,7 @@ PluginRuntime::pushTracker(uint32_t amount) {
 }
 
 bool
-PluginRuntime::enterHeapScope() {
+Runtime::enterHeapScope() {
     auto old_hp_scope = hp_scope_;
 
     if (!heapAlloc(sizeof(cell_t), &hp_scope_))
@@ -782,7 +782,7 @@ PluginRuntime::enterHeapScope() {
 }
 
 bool
-PluginRuntime::leaveHeapScope() {
+Runtime::leaveHeapScope() {
     cell_t* scope = throwIfBadAddress(hp_scope_);
     if (!scope)
         return false;
@@ -797,12 +797,12 @@ PluginRuntime::leaveHeapScope() {
 }
 
 void
-PluginRuntime::EnterHeapScope() {
+Runtime::EnterHeapScope() {
     enterHeapScope();
 }
 
 void
-PluginRuntime::LeaveHeapScope() {
+Runtime::LeaveHeapScope() {
     leaveHeapScope();
 }
 
@@ -904,7 +904,7 @@ GenerateAbsoluteIndirectionVectors(abs_iv_data_t& info, cell_t dim) {
 }
 
 int
-PluginRuntime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
+Runtime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
     // Calculate how many cells are needed.
     if (argv[0] <= 0)
         return SP_ERROR_ARRAY_TOO_BIG;
@@ -975,7 +975,7 @@ PluginRuntime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
 }
 
 int
-PluginRuntime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
+Runtime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
     if (dims == 1) {
         uint32_t size = *stk;
         if (size <= 0)
@@ -1008,7 +1008,7 @@ PluginRuntime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
 }
 
 bool
-PluginRuntime::pushAmxFrame() {
+Runtime::pushAmxFrame() {
     if (!pushStack(frm_))
         return false;
 
@@ -1029,7 +1029,7 @@ PluginRuntime::pushAmxFrame() {
 }
 
 bool
-PluginRuntime::popAmxFrame() {
+Runtime::popAmxFrame() {
     sp_ = frm_;
 
     cell_t saved_hp_scope;
@@ -1070,7 +1070,7 @@ PluginRuntime::popAmxFrame() {
 }
 
 bool
-PluginRuntime::pushStack(cell_t value) {
+Runtime::pushStack(cell_t value) {
     if (sp_ <= cell_t(hp_ + sizeof(cell_t))) {
         ReportErrorNumber(SP_ERROR_STACKLOW);
         return false;
@@ -1082,7 +1082,7 @@ PluginRuntime::pushStack(cell_t value) {
 }
 
 bool
-PluginRuntime::popStack(cell_t* out) {
+Runtime::popStack(cell_t* out) {
     if (sp_ >= stp_) {
         ReportErrorNumber(SP_ERROR_STACKMIN);
         return false;
@@ -1094,7 +1094,7 @@ PluginRuntime::popStack(cell_t* out) {
 }
 
 bool
-PluginRuntime::getFrameValue(cell_t offset, cell_t* out) {
+Runtime::getFrameValue(cell_t offset, cell_t* out) {
     cell_t* addr = throwIfBadAddress(frm_ + offset);
     if (!addr)
         return false;
@@ -1104,7 +1104,7 @@ PluginRuntime::getFrameValue(cell_t offset, cell_t* out) {
 }
 
 bool
-PluginRuntime::setFrameValue(cell_t offset, cell_t value) {
+Runtime::setFrameValue(cell_t offset, cell_t value) {
     cell_t* addr = throwIfBadAddress(frm_ + offset);
     if (!addr)
         return false;
@@ -1114,7 +1114,7 @@ PluginRuntime::setFrameValue(cell_t offset, cell_t value) {
 }
 
 bool
-PluginRuntime::getCellValue(cell_t address, cell_t* out) {
+Runtime::getCellValue(cell_t address, cell_t* out) {
     assert((uintptr_t)(const void*)out % sizeof(cell_t) == 0);
 
     cell_t* ptr = throwIfBadAddress(address);
@@ -1133,7 +1133,7 @@ PluginRuntime::getCellValue(cell_t address, cell_t* out) {
 }
 
 bool
-PluginRuntime::setCellValue(cell_t address, cell_t value) {
+Runtime::setCellValue(cell_t address, cell_t value) {
     cell_t* ptr = throwIfBadAddress(address);
     if (!ptr)
         return false;
@@ -1143,12 +1143,12 @@ PluginRuntime::setCellValue(cell_t address, cell_t value) {
 }
 
 bool
-PluginRuntime::heapAlloc(cell_t amount, cell_t* out) {
+Runtime::heapAlloc(cell_t amount, cell_t* out) {
     return heapAllocEx(amount, out) != nullptr;
 }
 
 cell_t*
-PluginRuntime::heapAllocEx(cell_t amount, cell_t* out) {
+Runtime::heapAllocEx(cell_t amount, cell_t* out) {
     cell_t new_hp = hp_ + amount;
 
     if (amount < 0) {
@@ -1170,7 +1170,7 @@ PluginRuntime::heapAllocEx(cell_t amount, cell_t* out) {
 }
 
 cell_t*
-PluginRuntime::acquireAddrRange(cell_t address, uint32_t bounds) {
+Runtime::acquireAddrRange(cell_t address, uint32_t bounds) {
     cell_t* addr = throwIfBadAddress(address);
     if (!addr)
         return nullptr;
@@ -1180,7 +1180,7 @@ PluginRuntime::acquireAddrRange(cell_t address, uint32_t bounds) {
 }
 
 cell_t*
-PluginRuntime::throwIfBadAddress(cell_t addr) {
+Runtime::throwIfBadAddress(cell_t addr) {
     if (addr < 0 || (addr >= hp_ && addr < sp_) || addr >= stp_) {
         ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
         return nullptr;
@@ -1189,7 +1189,7 @@ PluginRuntime::throwIfBadAddress(cell_t addr) {
 }
 
 bool
-PluginRuntime::addStack(cell_t amount) {
+Runtime::addStack(cell_t amount) {
     cell_t new_sp = sp_ + amount;
 
     if (amount < 0) {
@@ -1210,7 +1210,7 @@ PluginRuntime::addStack(cell_t amount) {
 }
 
 bool
-PluginRuntime::initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
+Runtime::initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
                          cell_t data_fill_size, cell_t fill_value) {
     int err;
 
@@ -1271,7 +1271,7 @@ PluginRuntime::initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cel
 }
 
 bool
-PluginRuntime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
+Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
                                 const cell_t* init) {
     if (length > INT_MAX || stride > INT_MAX) {
         ReportErrorNumber(SP_ERROR_ARRAY_TOO_BIG);
@@ -1319,7 +1319,7 @@ PluginRuntime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t
 
 
 cell_t
-PluginRuntime::GetNullFunctionValue() {
+Runtime::GetNullFunctionValue() {
     if (image_->DescribeCode().features & SmxConsts::kCodeFeatureNullFunctions) {
         return 0;
     }
@@ -1327,12 +1327,12 @@ PluginRuntime::GetNullFunctionValue() {
 }
 
 bool
-PluginRuntime::IsNullFunctionId(funcid_t func) {
+Runtime::IsNullFunctionId(funcid_t func) {
     return func == GetNullFunctionValue();
 }
 
 bool
-PluginRuntime::GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) {
+Runtime::GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) {
     if (IsNullFunctionId(func)) {
         *out = nullptr;
         return true;
@@ -1347,7 +1347,7 @@ PluginRuntime::GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) {
 }
 
 IPluginFunction*
-PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
+Runtime::GetFunctionByIdOrError(funcid_t func_id) {
     if (auto fn = GetFunctionById(func_id))
         return fn;
     ReportError("Invalid function id: 0x%08x", func_id);
@@ -1355,7 +1355,7 @@ PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
 }
 
 
-int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
+int Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
     cell_t* phys;
     if (int err = LocalToPhysAddr(base, &phys))
         return err;
@@ -1363,7 +1363,7 @@ int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
     return SP_ERROR_NONE;
 }
 
-void* PluginRuntime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
+void* Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
     if (size)
         *size = 0;
     return reinterpret_cast<void*>(handle);

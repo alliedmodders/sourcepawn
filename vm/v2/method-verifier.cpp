@@ -24,7 +24,7 @@ namespace sp::v2 {
 
 using namespace ke;
 
-MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t method_index)
+MethodVerifier::MethodVerifier(Runtime* rt, uint32_t method_index)
  : rt_(rt),
    smx_(rt->image()),
    block_(nullptr),

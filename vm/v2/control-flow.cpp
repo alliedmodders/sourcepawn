@@ -19,7 +19,7 @@ namespace sp::v2 {
 
 using namespace ke;
 
-ControlFlowGraph::ControlFlowGraph(PluginRuntime* rt)
+ControlFlowGraph::ControlFlowGraph(Runtime* rt)
  : rt_(rt),
    epoch_(1)
 {}

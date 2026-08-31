@@ -29,14 +29,12 @@ using namespace ke;
 using namespace SourcePawn;
 
 class Runtime;
-using PluginRuntime = Runtime;
-using PluginContext = Runtime;
 class MethodInfo;
 
 class ScriptedInvoker : public IPluginFunction
 {
   public:
-    ScriptedInvoker(PluginRuntime* pRuntime, uint32_t method_index);
+    ScriptedInvoker(Runtime* pRuntime, uint32_t method_index);
     virtual ~ScriptedInvoker();
 
   public:
@@ -65,7 +63,7 @@ class ScriptedInvoker : public IPluginFunction
 
   private:
     Environment* env_;
-    PluginContext* context_;
+    Runtime* context_;
     uint32_t method_index_;
     CallArgs default_args_;
     std::string debug_name_;

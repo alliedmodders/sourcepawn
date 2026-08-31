@@ -63,7 +63,7 @@ ReportOutOfBoundsError(cell_t index, cell_t bounds) {
     }
 }
 
-cell_t NativeInvokeThunk(PluginContext* ctx, NativeEntry* entry, const cell_t* params) {
+cell_t NativeInvokeThunk(Runtime* ctx, NativeEntry* entry, const cell_t* params) {
     if (entry->status != SP_NATIVE_BOUND)
         return ctx->ThrowNativeErrorEx(SP_ERROR_INVALID_NATIVE, "Native is not bound");
 

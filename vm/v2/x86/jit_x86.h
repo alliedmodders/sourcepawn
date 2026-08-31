@@ -40,7 +40,7 @@ class Compiler : public CompilerBase
     friend class OutOfBoundsErrorPath;
 
   public:
-    Compiler(PluginRuntime* rt, MethodInfo* method);
+    Compiler(Runtime* rt, MethodInfo* method);
     ~Compiler();
 
     bool visitBREAK() override;

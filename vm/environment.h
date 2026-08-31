@@ -34,8 +34,6 @@ class MethodInfo;
 }
 namespace v2 {
 class Runtime;
-using PluginRuntime = Runtime;
-using PluginContext = Runtime;
 class MethodInfo;
 }
 
@@ -131,8 +129,8 @@ class Environment : public ISourcePawnEnvironment
     // Runtime management.
     void RegisterRuntime(v1::PluginRuntime* rt);
     void DeregisterRuntime(v1::PluginRuntime* rt);
-    void RegisterRuntime(v2::PluginRuntime* rt);
-    void DeregisterRuntime(v2::PluginRuntime* rt);
+    void RegisterRuntime(v2::Runtime* rt);
+    void DeregisterRuntime(v2::Runtime* rt);
     void PatchAllJumpsForTimeout();
     void UnpatchAllJumpsFromTimeout();
     ke::Mutex& lock() {
@@ -140,7 +138,7 @@ class Environment : public ISourcePawnEnvironment
     }
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
-    bool Invoke(v2::PluginRuntime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
+    bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
 
     // Loading.
     BaseRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
@@ -274,7 +272,7 @@ class Environment : public ISourcePawnEnvironment
     std::unique_ptr<CodeStubs> code_stubs_;
 
     ke::InlineList<v1::PluginRuntime> v1_runtimes_;
-    ke::InlineList<v2::PluginRuntime> v2_runtimes_;
+    ke::InlineList<v2::Runtime> v2_runtimes_;
 
     uintptr_t frame_id_;
 

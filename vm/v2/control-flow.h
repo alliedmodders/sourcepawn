@@ -202,7 +202,7 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
     friend class MethodVerifier;
 
   public:
-    explicit ControlFlowGraph(PluginRuntime* rt);
+    explicit ControlFlowGraph(Runtime* rt);
     ~ControlFlowGraph();
 
     const ke::RefPtr<Block>& entry() const { return entry_; }
@@ -246,12 +246,12 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
     void dumpDot(FILE* fp);
     void dumpDomTreeDot(FILE* fp);
 
-    PluginRuntime* rt() const {
+    Runtime* rt() const {
         return rt_;
     }
 
   private:
-    PluginRuntime* rt_;
+    Runtime* rt_;
     ke::RefPtr<Block> entry_;
     ke::InlineList<Block> blocks_;
     uint32_t epoch_;

@@ -25,13 +25,11 @@ class SmxImage;
 namespace sp::v2 {
 
 class Runtime;
-using PluginContext = Runtime;
-using PluginRuntime = Runtime;
 
 class MethodInfo final : public BaseMethodInfo
 {
   public:
-    MethodInfo(PluginRuntime* rt, uint32_t method_index);
+    MethodInfo(Runtime* rt, uint32_t method_index);
     ~MethodInfo();
 
     ke::RefPtr<ControlFlowGraph> BuildGraph() {
@@ -74,7 +72,7 @@ class MethodInfo final : public BaseMethodInfo
     void BuildLocalOffsetTable();
 
   private:
-    PluginRuntime* rt_;
+    Runtime* rt_;
     uint32_t method_index_;
     std::unique_ptr<CompiledFunction> jit_;
     ke::RefPtr<ControlFlowGraph> graph_;

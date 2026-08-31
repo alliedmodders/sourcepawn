@@ -26,14 +26,12 @@ class PluginRuntime;
 }
 namespace v2 {
 class Runtime;
-using PluginRuntime = Runtime;
-using PluginContext = Runtime;
 }
 
 class Environment;
 
 typedef int (*InvokeStubV1Fn)(v1::PluginRuntime* cx, void* code, cell_t* rval);
-typedef int (*InvokeStubV2Fn)(v2::PluginRuntime* cx, void* code, cell_t* rval);
+typedef int (*InvokeStubV2Fn)(v2::Runtime* cx, void* code, cell_t* rval);
 
 class CodeStubs
 {

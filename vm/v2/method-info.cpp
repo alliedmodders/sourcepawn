@@ -18,7 +18,7 @@
 
 namespace sp::v2 {
 
-MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t method_index)
+MethodInfo::MethodInfo(Runtime* rt, uint32_t method_index)
  : rt_(rt),
    method_index_(method_index),
    checked_(false),

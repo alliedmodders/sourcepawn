@@ -24,15 +24,13 @@
 namespace sp::v2 {
 
 class Runtime;
-using PluginContext = Runtime;
-using PluginRuntime = Runtime;
 class PcodeVisitor;
 
 template <typename T>
 class PcodeReader
 {
   public:
-    PcodeReader(PluginRuntime* rt, uint32_t startOffset, T* visitor)
+    PcodeReader(Runtime* rt, uint32_t startOffset, T* visitor)
      : rt_(rt),
        visitor_(visitor),
        code_(nullptr),
@@ -45,7 +43,7 @@ class PcodeReader
         insn_begin_ = cip_;
         stop_at_ = code.bytes + code.length;
     }
-    PcodeReader(PluginRuntime* rt, Block* block, T* visitor)
+    PcodeReader(Runtime* rt, Block* block, T* visitor)
      : rt_(rt),
        visitor_(visitor),
        code_(nullptr),
@@ -523,7 +521,7 @@ class PcodeReader
     }
 
   private:
-    PluginRuntime* rt_;
+    Runtime* rt_;
     T* visitor_;
     const uint8_t* code_;
     const uint8_t* insn_begin_;

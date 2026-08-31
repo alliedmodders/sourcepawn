@@ -21,7 +21,7 @@ namespace sp::v2 {
 
 using namespace ke;
 
-GraphBuilder::GraphBuilder(PluginRuntime* rt, const smx_rtti_method* method)
+GraphBuilder::GraphBuilder(Runtime* rt, const smx_rtti_method* method)
  : rt_(rt),
    start_offset_(method->pcode_start),
    error_code_(0)

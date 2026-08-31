@@ -68,7 +68,7 @@ OpToCondition(CompareOp op) {
     }
 }
 
-Compiler::Compiler(PluginRuntime* rt, MethodInfo* method)
+Compiler::Compiler(Runtime* rt, MethodInfo* method)
  : CompilerBase(rt, method) {
 }
 
@@ -77,12 +77,12 @@ Compiler::~Compiler() {
 
 // No exit frame - error code is returned directly.
 static int
-InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero) {
+InvokeGenerateFullArray(Runtime* cx, uint32_t argc, cell_t* argv, int autozero) {
     return cx->generateFullArray(argc, argv, autozero);
 }
 
 static int
-InvokeInitArray(PluginContext* cx, cell_t base_addr, cell_t dat_addr, cell_t iv_size,
+InvokeInitArray(Runtime* cx, cell_t base_addr, cell_t dat_addr, cell_t iv_size,
                 cell_t data_copy_size, cell_t data_fill_size, cell_t fill_value) {
     return cx->initArray(base_addr, dat_addr, iv_size, data_copy_size, data_fill_size, fill_value)
                ? 1
@@ -1668,7 +1668,7 @@ bool CompilerBase::IsSupported() {
     return FeaturesX86::Get().fpu && FeaturesX86::Get().sse && FeaturesX86::Get().sse2;
 }
 
-bool CompilerBase::SupportsPlugin(PluginContext* cx) {
+bool CompilerBase::SupportsPlugin(Runtime* cx) {
     return true;
 }
 

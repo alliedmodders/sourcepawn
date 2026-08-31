@@ -57,8 +57,8 @@ bool CodeStubs::CompileInvokeStubV2() {
     frame_items++;
 
     // Set up runtime registers.
-    __ movq(dat, Operand(ArgReg0, static_cast<int32_t>(PluginContext::offsetOfMemory())));
-    __ movl(stk, Operand(ArgReg0, static_cast<int32_t>(PluginContext::offsetOfSp())));
+    __ movq(dat, Operand(ArgReg0, static_cast<int32_t>(Runtime::offsetOfMemory())));
+    __ movl(stk, Operand(ArgReg0, static_cast<int32_t>(Runtime::offsetOfSp())));
     __ addq(stk, dat);
 
     // We pushed 6 words.
@@ -78,7 +78,7 @@ bool CodeStubs::CompileInvokeStubV2() {
     Label ret;
     __ bind(&ret);
     __ subq(stk, dat);
-    __ movq(Operand(context_reg, static_cast<int32_t>(PluginContext::offsetOfSp())), stk);
+    __ movq(Operand(context_reg, static_cast<int32_t>(Runtime::offsetOfSp())), stk);
 
     // Stack layout:
     //

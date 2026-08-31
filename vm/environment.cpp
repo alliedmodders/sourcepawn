@@ -230,13 +230,13 @@ Environment::DeregisterRuntime(v1::PluginRuntime* rt) {
 }
 
 void
-Environment::RegisterRuntime(v2::PluginRuntime* rt) {
+Environment::RegisterRuntime(v2::Runtime* rt) {
     mutex_.AssertCurrentThreadOwns();
     v2_runtimes_.append(rt);
 }
 
 void
-Environment::DeregisterRuntime(v2::PluginRuntime* rt) {
+Environment::DeregisterRuntime(v2::Runtime* rt) {
     mutex_.AssertCurrentThreadOwns();
     v2_runtimes_.remove(rt);
 }
@@ -349,7 +349,7 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
     return v1::Interpreter::Run(cx, method, result);
 }
 
-bool Environment::Invoke(v2::PluginContext* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result) {
+bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result) {
 #if defined(SP_HAS_JIT)
     if (jit_enabled_) {
         if (!code_stubs_) {
@@ -409,7 +409,7 @@ LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t
     if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
         pRuntime = new sp::v1::PluginRuntime(image.release());
     } else {
-        pRuntime = new sp::v2::PluginRuntime(image.release());
+        pRuntime = new sp::v2::Runtime(image.release());
     }
 
     if (!pRuntime->Initialize()) {

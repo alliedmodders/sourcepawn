@@ -211,8 +211,5 @@ class Runtime final : public BaseRuntime,
     cell_t hp_scope_;
 };
 
-using PluginContext = Runtime;
-using PluginRuntime = Runtime;
-
 } // namespace v2
 } // namespace sp

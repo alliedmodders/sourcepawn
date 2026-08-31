@@ -35,7 +35,7 @@ class Compiler : public CompilerBase
     friend class OutOfBoundsErrorPath;
 
   public:
-    Compiler(PluginRuntime* rt, MethodInfo* method);
+    Compiler(Runtime* rt, MethodInfo* method);
     ~Compiler();
 
     bool beforeVisitOp(OPCODE op) override;
@@ -146,10 +146,10 @@ class Compiler : public CompilerBase
     void emitFloatCmp(ConditionCode cc);
     void jumpOnError(ConditionCode cc, int err = 0);
 
-    Operand hpAddr() { return Operand(context_reg, PluginContext::offsetOfHp()); }
-    Operand frmAddr() { return Operand(context_reg, PluginContext::offsetOfFrm()); }
-    Operand spAddr() { return Operand(context_reg, PluginContext::offsetOfSp()); }
-    Operand hpScopeAddr() { return Operand(context_reg, PluginContext::offsetOfHpScope()); }
+    Operand hpAddr() { return Operand(context_reg, Runtime::offsetOfHp()); }
+    Operand frmAddr() { return Operand(context_reg, Runtime::offsetOfFrm()); }
+    Operand spAddr() { return Operand(context_reg, Runtime::offsetOfSp()); }
+    Operand hpScopeAddr() { return Operand(context_reg, Runtime::offsetOfHpScope()); }
 };
 
 } // namespace sp::v2

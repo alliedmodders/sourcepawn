@@ -33,13 +33,11 @@ struct smx_rtti_method;
 namespace sp::v2 {
 
 class Runtime;
-using PluginRuntime = Runtime;
-using PluginContext = Runtime;
 
 class GraphBuilder
 {
   public:
-    GraphBuilder(PluginRuntime* rt, const smx_rtti_method* method);
+    GraphBuilder(Runtime* rt, const smx_rtti_method* method);
 
     ke::RefPtr<ControlFlowGraph> build();
 
@@ -100,7 +98,7 @@ class GraphBuilder
     }
 
   private:
-    PluginRuntime* rt_;
+    Runtime* rt_;
     uint32_t start_offset_;
     ke::RefPtr<ControlFlowGraph> graph_;
     int error_code_;

@@ -32,7 +32,7 @@
 
 namespace sp::v2 {
 
-Compiler::Compiler(PluginRuntime* rt, MethodInfo* method)
+Compiler::Compiler(Runtime* rt, MethodInfo* method)
  : CompilerBase(rt, method)
 {}
 
@@ -183,7 +183,7 @@ bool CompilerBase::IsSupported() {
     return features.sse4_1;
 }
 
-bool CompilerBase::SupportsPlugin(PluginContext* cx) {
+bool CompilerBase::SupportsPlugin(Runtime* cx) {
     return true;
 }
 
@@ -735,7 +735,7 @@ void Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) 
 }
 
 static int
-InvokeGenerateFullArray(PluginContext* cx, uint32_t argc, cell_t* argv, int autozero) {
+InvokeGenerateFullArray(Runtime* cx, uint32_t argc, cell_t* argv, int autozero) {
     return cx->generateFullArray(argc, argv, autozero);
 }
 
@@ -890,7 +890,7 @@ struct InitArrayArgs {
     cell_t fill_value;
 };
 
-int InvokeInitArray(PluginContext* cx, cell_t base_addr, InitArrayArgs* args) {
+int InvokeInitArray(Runtime* cx, cell_t base_addr, InitArrayArgs* args) {
     return cx->initArray(base_addr, args->dat_addr, args->iv_size, args->data_copy_size,
                          args->data_fill_size, args->fill_value) ? 1 : 0;
 }

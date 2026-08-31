@@ -34,8 +34,6 @@ namespace sp::v2 {
 using namespace SourcePawn;
 
 class Runtime;
-using PluginRuntime = Runtime;
-using PluginContext = Runtime;
 
 struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).
@@ -58,17 +56,17 @@ class CompilerBase : public PcodeVisitor
     friend class ErrorPath;
 
   public:
-    CompilerBase(PluginRuntime* rt, MethodInfo* method);
+    CompilerBase(Runtime* rt, MethodInfo* method);
     virtual ~CompilerBase();
 
-    static CompiledFunction* Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err);
+    static CompiledFunction* Compile(Runtime* cx, RefPtr<MethodInfo> method, int* err);
 
     int error() const {
         return error_;
     }
 
     static bool IsSupported();
-    static bool SupportsPlugin(PluginContext* cx);
+    static bool SupportsPlugin(Runtime* cx);
 
     bool visitJUMP(cell_t offset) override;
 
@@ -87,7 +85,7 @@ class CompilerBase : public PcodeVisitor
     virtual void emitOutOfBoundsError(OutOfBoundsError* path) = 0;
 
     // Helpers.
-    static int CompileFromThunk(PluginContext* cx, uint32_t method_index, void** addrp, uint8_t* pc);
+    static int CompileFromThunk(Runtime* cx, uint32_t method_index, void** addrp, uint8_t* pc);
     static void* find_entry_fp();
     static void InvokeReportError(int err);
     static void InvokeReportTimeout();
@@ -123,8 +121,8 @@ class CompilerBase : public PcodeVisitor
 
   protected:
     Environment* env_;
-    PluginRuntime* rt_;
-    PluginContext* context_;
+    Runtime* rt_;
+    Runtime* context_;
     SmxImage* image_;
     ke::RefPtr<MethodInfo> method_info_;
     ke::RefPtr<ControlFlowGraph> graph_;

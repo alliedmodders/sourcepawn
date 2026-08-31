@@ -24,8 +24,6 @@
 namespace sp::v2 {
 
 class Runtime;
-using PluginContext = Runtime;
-using PluginRuntime = Runtime;
 
 class MethodVerifier final
 {
@@ -35,7 +33,7 @@ class MethodVerifier final
         Int64
     };
 
-    explicit MethodVerifier(PluginRuntime* rt, uint32_t method_index);
+    explicit MethodVerifier(Runtime* rt, uint32_t method_index);
 
     typedef std::function<void(uint32_t)> ExternalFuncRefCallback;
     void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
@@ -117,7 +115,7 @@ class MethodVerifier final
     bool verifyLocalSlots();
 
   private:
-    PluginRuntime* rt_;
+    Runtime* rt_;
     SmxImage* smx_;
     ke::RefPtr<ControlFlowGraph> graph_;
     Block* block_;

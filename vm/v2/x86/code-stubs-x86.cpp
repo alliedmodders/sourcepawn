@@ -43,10 +43,10 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ movl(ecx, Operand(ebp, kCodeOffset));
 
     // eax = cx->memory
-    __ movl(eax, Operand(ebx, PluginContext::offsetOfMemory()));
+    __ movl(eax, Operand(ebx, Runtime::offsetOfMemory()));
 
     // Set up run-time registers.
-    __ movl(edi, Operand(ebx, PluginContext::offsetOfSp()));
+    __ movl(edi, Operand(ebx, Runtime::offsetOfSp()));
     __ addl(edi, eax);
     __ movl(esi, eax);
     __ movl(ebx, edi);
@@ -67,7 +67,7 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ bind(&ret);
     __ subl(stk, dat);
     __ movl(ecx, Operand(ebp, kContextOffset));
-    __ movl(Operand(ecx, PluginContext::offsetOfSp()), stk);
+    __ movl(Operand(ecx, Runtime::offsetOfSp()), stk);
 
     // Restore stack.
     __ lea(esp, Operand(ebp, kFpOffsetToPreAlignedSp));

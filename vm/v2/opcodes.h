@@ -37,7 +37,7 @@
 
 namespace sp::v2 {
 
-void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const uint8_t* cip);
+void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t* cip);
 
 // These count opcodes in # of bytes.
 const char* GetOpcodeName(OPCODE op);

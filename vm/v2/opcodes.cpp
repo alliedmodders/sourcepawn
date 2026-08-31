@@ -51,7 +51,7 @@ int GetCaseTableSize(const uint8_t* cip) {
     return (*reinterpret_cast<const cell_t*>(cip) * (sizeof(cell_t) * 2)) + 1 + sizeof(cell_t) * 2;
 }
 
-void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const uint8_t* cip) {
+void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t* cip) {
     fprintf(fp, "  [%05d:%04d]", (int)(cip - runtime->code().bytes), (int)(cip - start));
 
     if (*cip >= OPCODES_LAST) {

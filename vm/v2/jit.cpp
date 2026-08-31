@@ -37,7 +37,7 @@ using namespace SourcePawn;
 
 #define __ masm.
 
-CompilerBase::CompilerBase(PluginRuntime* rt, MethodInfo* method)
+CompilerBase::CompilerBase(Runtime* rt, MethodInfo* method)
  : env_(Environment::get()),
    rt_(rt),
    context_(rt),
@@ -55,7 +55,7 @@ CompilerBase::~CompilerBase() {
 }
 
 CompiledFunction*
-CompilerBase::Compile(PluginContext* cx, RefPtr<MethodInfo> method, int* err) {
+CompilerBase::Compile(Runtime* cx, RefPtr<MethodInfo> method, int* err) {
     Compiler cc(cx, method);
 
     CompiledFunction* fun = cc.emit();
@@ -267,7 +267,7 @@ CompilerBase::reportError(int err) {
 }
 
 int
-CompilerBase::CompileFromThunk(PluginContext* cx, uint32_t method_index, void** addrp, uint8_t* pc) {
+CompilerBase::CompileFromThunk(Runtime* cx, uint32_t method_index, void** addrp, uint8_t* pc) {
     // If the watchdog timer has declared a timeout, we must process it now,
     // and possibly refuse to compile, since otherwise we will compile a
     // function that is not patched for timeouts.
