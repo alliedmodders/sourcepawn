@@ -59,8 +59,8 @@ class Parser
     Decl* parse_typeset();
     Decl* parse_enumstruct();
     Decl* parse_methodmap();
-    MemberFunctionDecl* parse_methodmap_method(MethodmapDecl* map);
-    PropertyDecl* parse_methodmap_property(MethodmapDecl* map);
+    MethodmapMethodDecl* parse_methodmap_method(MethodmapDecl* map);
+    MethodmapPropertyDecl* parse_methodmap_property(MethodmapDecl* map);
     bool parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name, const typeinfo_t& type,
                                            MemberFunctionDecl** out_getter,
                                            MemberFunctionDecl** out_setter);
@@ -144,7 +144,6 @@ class Parser
     tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
-    Atom* property_atom_ = nullptr;
 };
 
 } // namespace cc

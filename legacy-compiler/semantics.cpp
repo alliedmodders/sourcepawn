@@ -127,6 +127,7 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             return CheckSwitchStmt(stmt->to<SwitchStmt>());
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
         case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
@@ -794,7 +795,8 @@ bool BinaryExprChecker::CheckOperatorTypes() {
         return true;
     }
 
-    matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
+    if (!checkval_string(left_val, right_val))
+        matchtag_commutative(left_type, right_type, MATCHTAG_DEDUCE);
     return true;
 }
 
@@ -1087,7 +1089,8 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         }
 
         // For the purposes of tag matching, we consider the order to be irrelevant.
-        matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
+        if (!checkval_string(&left_val, &right_val))
+            matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
 
         if (right_val.ident != iCONSTEXPR)
             all_const = false;
@@ -1205,6 +1208,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     expr->set_lvalue(inner->lvalue());
 
     Type* ltype = out_val.type();
+    if (atype == ltype)
+        return true;
 
     auto actual_array =  ltype->as<ArrayType>();
     if (actual_array) {
@@ -1288,6 +1293,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
             val.ident = iFUNCTN;
             break;
         case StmtKind::EnumStructDecl:
@@ -1559,11 +1565,11 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     if (base_val.ident == iTYPENAME) {
         auto map = MethodmapDecl::LookupMethodmap(base_val.sym);
         auto member = map ? map->FindMember(expr->name()) : nullptr;
-        if (!member || !member->as<MemberFunctionDecl>()) {
+        if (!member || !member->as<MethodmapMethodDecl>()) {
             report(expr, 444) << base_val.sym->name() << expr->name();
             return false;
         }
-        auto method = member->as<MemberFunctionDecl>();
+        auto method = member->as<MethodmapMethodDecl>();
         if (!method->is_static()) {
             report(expr, 176) << method->decl_name() << map->name();
             return false;
@@ -1593,7 +1599,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return false;
     }
 
-    if (auto prop = member->as<PropertyDecl>()) {
+    if (auto prop = member->as<MethodmapPropertyDecl>()) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())
@@ -1604,7 +1610,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return true;
     }
 
-    auto method = member->as<MemberFunctionDecl>();
+    auto method = member->as<MethodmapMethodDecl>();
     if (method->is_static()) {
         report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
         return false;
@@ -1641,12 +1647,11 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             assert(expr->token() == '.');
 
             auto resolved = expr->resolved();
-            if (auto method = resolved->as<MemberFunctionDecl>()) {
-                if (auto map = method->parent()->as<MethodmapDecl>()) {
-                    if (map->ctor() == method) {
-                        report(call, 84) << method->parent()->name();
-                        return nullptr;
-                    }
+            if (auto method = resolved->as<MethodmapMethodDecl>()) {
+                auto map = method->parent()->as<MethodmapDecl>();
+                if (map->ctor() == method) {
+                    report(call, 84) << method->parent()->name();
+                    return nullptr;
                 }
             }
 
@@ -2094,7 +2099,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         Type* type = val->type();
         if (type->isInt64() || (type->isReference() && type->inner()->isInt64())) {
             // Hack: allow this since we don't have typed varargs right now.
-        } else if (!checktag(*arg->type(), type)) {
+        } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), type)) {
             report(param, 213) << arg->type() << type;
         }
     } else if (arg->type()->isReference()) {

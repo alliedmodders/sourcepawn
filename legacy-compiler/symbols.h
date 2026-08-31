@@ -38,7 +38,7 @@ namespace cc {
 class CompileContext;
 class Decl;
 class FunctionDecl;
-class PropertyDecl;
+class MethodmapPropertyDecl;
 class SemaContext;
 struct token_pos_t;
 
@@ -66,12 +66,12 @@ struct value {
     // information, or whether it is the result of an expression.
     bool canRematerialize() const;
 
-    PropertyDecl* accessor() const {
+    MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
             return nullptr;
         return accessor_;
     }
-    void set_accessor(PropertyDecl* accessor) {
+    void set_accessor(MethodmapPropertyDecl* accessor) {
         ident = iACCESSOR;
         accessor_ = accessor;
     }
@@ -91,7 +91,7 @@ struct value {
 
     union {
         // when ident == iACCESSOR
-        PropertyDecl* accessor_;
+        MethodmapPropertyDecl* accessor_;
         // when ident == iCONSTEXPR
         cell constval_;
     };

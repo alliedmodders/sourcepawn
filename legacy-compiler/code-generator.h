@@ -108,8 +108,8 @@ class CodeGenerator final
 
     void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitCall(FunctionDecl* fun, cell nargs);
-    void InvokeGetter(PropertyDecl* method);
-    void InvokeSetter(PropertyDecl* method, bool save);
+    void InvokeGetter(MethodmapPropertyDecl* method);
+    void InvokeSetter(MethodmapPropertyDecl* method, bool save);
     void EmitRvalue(const value& lval);
     void EmitStore(const value& lval, bool save_pri = true);
     void EmitBreak();

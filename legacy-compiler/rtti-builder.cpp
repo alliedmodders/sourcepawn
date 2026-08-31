@@ -204,9 +204,14 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
     method.pcode_end = fun->cg()->pcode_end;
 
     if (locals.count) {
+        union {
+            int16_t value;
+            uint8_t bytes[2];
+        } u;
+        u.value = locals.count;
         locals.types[0] = cb::kLocalSlots;
-        locals.types[1] = static_cast<uint8_t>(locals.count & 0xff);
-        locals.types[2] = static_cast<uint8_t>((locals.count >> 8) & 0xff);
+        locals.types[1] = u.bytes[0];
+        locals.types[2] = u.bytes[1];
         method.locals = type_pool_.add(locals.types);
     } else {
         method.locals = 0;

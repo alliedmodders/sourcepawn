@@ -51,7 +51,8 @@
     FOR_EACH(LayoutFieldDecl) \
     FOR_EACH(MethodmapDecl) \
     FOR_EACH(ChangeScopeNode) \
-    FOR_EACH(PropertyDecl) \
+    FOR_EACH(MethodmapPropertyDecl) \
+    FOR_EACH(MethodmapMethodDecl)
 
 #define AST_EXPR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(UnaryExpr) \

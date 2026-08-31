@@ -55,9 +55,8 @@ typedef void (*OpFunc)();
 
 class Expr;
 class LayoutFieldDecl;
-class MemberFunctionDecl;
 class MethodmapDecl;
-class PropertyDecl;
+class MethodmapMethodDecl;
 class SemaContext;
 class SymbolScope;
 struct StructInitField;
@@ -1519,7 +1518,8 @@ class FunctionDecl : public Decl
 
     static bool is_a(Stmt* node) {
         return node->kind() == StmtKind::FunctionDecl ||
-               node->kind() == StmtKind::MemberFunctionDecl;
+               node->kind() == StmtKind::MemberFunctionDecl ||
+               node->kind() == StmtKind::MethodmapMethodDecl;
     }
 
     bool IsVariadic() const;
@@ -1706,44 +1706,30 @@ class LayoutDecl : public Decl
         return node->kind() == StmtKind::MethodmapDecl ||
                node->kind() == StmtKind::EnumStructDecl;
     }
-
-    PoolArray<PropertyDecl*>& properties() { return properties_; }
-    const PoolArray<PropertyDecl*>& properties() const { return properties_; }
-
-    PoolArray<MemberFunctionDecl*>& methods() { return methods_; }
-    const PoolArray<MemberFunctionDecl*>& methods() const { return methods_; }
-
-    PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
-    const PoolArray<LayoutFieldDecl*>& fields() const { return fields_; }
-
-  protected:
-    PoolArray<PropertyDecl*> properties_;
-    PoolArray<MemberFunctionDecl*> methods_;
-    PoolArray<LayoutFieldDecl*> fields_;
 };
 
 class MemberFunctionDecl : public FunctionDecl
 {
   public:
-    MemberFunctionDecl(const token_pos_t& pos, LayoutDecl* parent, const declinfo_t& decl,
-                       bool is_ctor = false, bool is_dtor = false)
+    MemberFunctionDecl(const token_pos_t& pos, LayoutDecl* parent, const declinfo_t& decl)
       : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl),
-        parent_(parent),
-        is_ctor_(is_ctor),
-        is_dtor_(is_dtor)
+        parent_(parent)
+    {}
+    MemberFunctionDecl(StmtKind kind, const token_pos_t& pos, LayoutDecl* parent,
+                       const declinfo_t& decl)
+      : FunctionDecl(kind, pos, decl),
+        parent_(parent)
     {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MemberFunctionDecl; }
+    static bool is_a(Stmt* node) {
+        return node->kind() == StmtKind::MemberFunctionDecl ||
+               node->kind() == StmtKind::MethodmapMethodDecl;
+    }
 
     LayoutDecl* parent() const { return parent_; }
 
-    bool is_ctor() const { return is_ctor_; }
-    bool is_dtor() const { return is_dtor_; }
-
   private:
     LayoutDecl* parent_;
-    bool is_ctor_ : 1;
-    bool is_dtor_ : 1;
 };
 
 class LayoutFieldDecl : public Decl
@@ -1780,25 +1766,30 @@ class EnumStructDecl : public LayoutDecl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructDecl; }
 
+    PoolArray<FunctionDecl*>& methods() { return methods_; }
+    PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
+
     cell_t array_size() const { return array_size_; }
     QualType type() const override { return QualType(type_); }
 
   private:
+    PoolArray<FunctionDecl*> methods_;
+    PoolArray<LayoutFieldDecl*> fields_;
     Type* type_ = nullptr;
     cell_t array_size_ = 0;
 };
 
-class PropertyDecl : public Decl {
+class MethodmapPropertyDecl : public Decl {
   public:
-    PropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
-                 MemberFunctionDecl* getter, MemberFunctionDecl* setter)
-      : Decl(StmtKind::PropertyDecl, pos, name),
+    MethodmapPropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
+                          MemberFunctionDecl* getter, MemberFunctionDecl* setter)
+      : Decl(StmtKind::MethodmapPropertyDecl, pos, name),
         type_(type),
         getter_(getter),
         setter_(setter)
     {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::PropertyDecl; }
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapPropertyDecl; }
 
     Type* property_type() const;
 
@@ -1836,27 +1827,49 @@ class MethodmapDecl : public LayoutDecl
 
     Decl* FindMember(Atom* name) const;
 
+    PoolArray<MethodmapMethodDecl*>& methods() { return methods_; }
+    PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
     QualType type() const override { return QualType(type_); }
-    MemberFunctionDecl* ctor() const { return ctor_; }
-    MemberFunctionDecl* dtor() const { return dtor_; }
+    MethodmapMethodDecl* ctor() const { return ctor_; }
+    MethodmapMethodDecl* dtor() const { return dtor_; }
     Atom* extends() const { return extends_; }
 
   private:
-    bool BindGetter(SemaContext& sc, PropertyDecl* prop);
-    bool BindSetter(SemaContext& sc, PropertyDecl* prop);
+    bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);
+    bool BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop);
 
   private:
     bool nullable_ : 1;
     bool is_bound_ : 1;
     Atom* extends_;
+    PoolArray<MethodmapPropertyDecl*> properties_;
+    PoolArray<MethodmapMethodDecl*> methods_;
     MethodmapDecl* parent_ = nullptr;
-    MemberFunctionDecl* ctor_ = nullptr;
-    MemberFunctionDecl* dtor_ = nullptr;
+    MethodmapMethodDecl* ctor_ = nullptr;
+    MethodmapMethodDecl* dtor_ = nullptr;
     Type* type_ = nullptr;
 };
 
+class MethodmapMethodDecl : public MemberFunctionDecl {
+  public:
+    MethodmapMethodDecl(const token_pos_t& pos, const declinfo_t& decl, MethodmapDecl* parent,
+                        bool is_ctor, bool is_dtor)
+      : MemberFunctionDecl(StmtKind::MethodmapMethodDecl, pos, parent, decl),
+        is_ctor_(is_ctor),
+        is_dtor_(is_dtor)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapMethodDecl; }
+
+    bool is_ctor() const { return is_ctor_; }
+    bool is_dtor() const { return is_dtor_; }
+
+  private:
+    bool is_ctor_ : 1;
+    bool is_dtor_ : 1;
+};
 } // namespace cc
 } // namespace sp
