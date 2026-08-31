@@ -578,6 +578,15 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitLoadElemFlat(op, args);
                 break;
             }
+            case LL_LOAD_ELEM_FLAT_I_I32:
+            case LL_LOAD_ELEM_FLAT_I_F32:
+            case LL_LOAD_ELEM_FLAT_I_I64:
+            case LL_LOAD_ELEM_FLAT_I_U8:
+            {
+                auto args = reader.read<LoadElemFlatArgs>();
+                EmitLoadElemFlatI(op, args);
+                break;
+            }
             case LL_STOR_ELEM_FLAT_I32:
             case LL_STOR_ELEM_FLAT_F32:
             case LL_STOR_ELEM_FLAT_I64:
@@ -585,6 +594,15 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             {
                 auto args = reader.read<StorElemFlatArgs>();
                 EmitStorElemFlat(op, args);
+                break;
+            }
+            case LL_STOR_ELEM_FLAT_I_I32:
+            case LL_STOR_ELEM_FLAT_I_F32:
+            case LL_STOR_ELEM_FLAT_I_I64:
+            case LL_STOR_ELEM_FLAT_I_U8:
+            {
+                auto args = reader.read<StorElemFlatArgs>();
+                EmitStorElemFlatI(op, args);
                 break;
             }
             case LL_IDXADDR_FLAT: {

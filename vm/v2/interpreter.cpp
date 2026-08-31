@@ -577,13 +577,12 @@ bool Interpreter::run_internal() {
 
 #define LOAD_ELEM_FLAT(c_type) \
                 auto args = reader_.read<LoadElemFlatArgs>(); \
-                uint32_t base = vregs_[args.base_reg]; \
                 uint32_t index = vregs_[args.index_reg]; \
                 if (index >= args.array_size) { \
                     ReportOutOfBoundsError(index, args.array_size); \
                     return false; \
                 } \
-                auto elt = rt_->heap().ToPhysAddr<c_type*>(base) + index
+                auto elt = reinterpret_cast<c_type*>(&vregs_[args.base_reg]) + index
 
             case LL_LOAD_ELEM_FLAT_U8: {
                 LOAD_ELEM_FLAT(uint8_t);
@@ -603,8 +602,8 @@ bool Interpreter::run_internal() {
             }
 #undef LOAD_ELEM_FLAT
 
-#define STOR_ELEM_FLAT(c_type) \
-                auto args = reader_.read<StorElemFlatArgs>(); \
+#define LOAD_ELEM_FLAT_I(c_type) \
+                auto args = reader_.read<LoadElemFlatArgs>(); \
                 uint32_t base = vregs_[args.base_reg]; \
                 uint32_t index = vregs_[args.index_reg]; \
                 if (index >= args.array_size) { \
@@ -612,6 +611,33 @@ bool Interpreter::run_internal() {
                     return false; \
                 } \
                 auto elt = rt_->heap().ToPhysAddr<c_type*>(base) + index
+
+            case LL_LOAD_ELEM_FLAT_I_U8: {
+                LOAD_ELEM_FLAT_I(uint8_t);
+                vregs_[args.dest_reg] = *elt;
+                break;
+            }
+            case LL_LOAD_ELEM_FLAT_I_I32:
+            case LL_LOAD_ELEM_FLAT_I_F32: {
+                LOAD_ELEM_FLAT_I(cell_t);
+                vregs_[args.dest_reg] = *elt;
+                break;
+            }
+            case LL_LOAD_ELEM_FLAT_I_I64: {
+                LOAD_ELEM_FLAT_I(int64_t);
+                *reinterpret_cast<int64_t*>(&vregs_[args.dest_reg]) = *elt;
+                break;
+            }
+#undef LOAD_ELEM_FLAT_I
+
+#define STOR_ELEM_FLAT(c_type) \
+                auto args = reader_.read<StorElemFlatArgs>(); \
+                uint32_t index = vregs_[args.index_reg]; \
+                if (index >= args.array_size) { \
+                    ReportOutOfBoundsError(index, args.array_size); \
+                    return false; \
+                } \
+                auto elt = reinterpret_cast<c_type*>(&vregs_[args.base_reg]) + index
 
             case LL_STOR_ELEM_FLAT_I32:
             case LL_STOR_ELEM_FLAT_F32: {
@@ -630,6 +656,34 @@ bool Interpreter::run_internal() {
                 break;
             }
 #undef STOR_ELEM_FLAT
+
+#define STOR_ELEM_FLAT_I(c_type) \
+                auto args = reader_.read<StorElemFlatArgs>(); \
+                uint32_t base = vregs_[args.base_reg]; \
+                uint32_t index = vregs_[args.index_reg]; \
+                if (index >= args.array_size) { \
+                    ReportOutOfBoundsError(index, args.array_size); \
+                    return false; \
+                } \
+                auto elt = rt_->heap().ToPhysAddr<c_type*>(base) + index
+
+            case LL_STOR_ELEM_FLAT_I_I32:
+            case LL_STOR_ELEM_FLAT_I_F32: {
+                STOR_ELEM_FLAT_I(cell_t);
+                *elt = vregs_[args.val_reg];
+                break;
+            }
+            case LL_STOR_ELEM_FLAT_I_U8: {
+                STOR_ELEM_FLAT_I(uint8_t);
+                *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
+                break;
+            }
+            case LL_STOR_ELEM_FLAT_I_I64: {
+                STOR_ELEM_FLAT_I(int64_t);
+                *elt = *reinterpret_cast<int64_t*>(&vregs_[args.val_reg]);
+                break;
+            }
+#undef STOR_ELEM_FLAT_I
 
             BINARY_OP_I64(LL_SMUL_I64, *)
             BINARY_OP_I64(LL_ADD_I64, +)

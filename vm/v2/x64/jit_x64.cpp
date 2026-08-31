@@ -938,19 +938,48 @@ void Compiler::EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) {
     thunk.limit = args.array_size;
     __ j(above_equal, &thunk.label);
 
-    __ movl(rdx, RegAddr(args.base_reg));
-    __ lea(rdx, HeapAddr(rdx));
+    int32_t base_offset = args.base_reg * sizeof(cell_t);
     switch (op) {
         case LL_LOAD_ELEM_FLAT_I32:
         case LL_LOAD_ELEM_FLAT_F32:
-            __ movl(rax, Operand(rdx, rcx, ScaleFour));
+            __ movl(rax, Operand(frm, rcx, ScaleFour, base_offset));
             __ movl(RegAddr(args.dest_reg), rax);
             break;
         case LL_LOAD_ELEM_FLAT_U8:
-            __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movzxb(rax, Operand(frm, rcx, NoScale, base_offset));
             __ movl(RegAddr(args.dest_reg), rax);
             break;
         case LL_LOAD_ELEM_FLAT_I64:
+            __ movq(rax, Operand(frm, rcx, ScaleEight, base_offset));
+            __ movq(RegAddr(args.dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) {
+    __ movl(rcx, RegAddr(args.index_reg));
+    __ cmpl(rcx, args.array_size);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = args.array_size;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, RegAddr(args.base_reg));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_LOAD_ELEM_FLAT_I_I32:
+        case LL_LOAD_ELEM_FLAT_I_F32:
+            __ movl(rax, Operand(rdx, rcx, ScaleFour));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_FLAT_I_U8:
+            __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_FLAT_I_I64:
             __ movq(rax, Operand(rdx, rcx, ScaleEight));
             __ movq(RegAddr(args.dest_reg), rax);
             break;
@@ -968,19 +997,48 @@ void Compiler::EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) {
     thunk.limit = args.array_size;
     __ j(above_equal, &thunk.label);
 
-    __ movl(rdx, RegAddr(args.base_reg));
-    __ lea(rdx, HeapAddr(rdx));
+    int32_t base_offset = args.base_reg * sizeof(cell_t);
     switch (op) {
         case LL_STOR_ELEM_FLAT_I32:
         case LL_STOR_ELEM_FLAT_F32:
             __ movl(rax, RegAddr(args.val_reg));
-            __ movl(Operand(rdx, rcx, ScaleFour), rax);
+            __ movl(Operand(frm, rcx, ScaleFour, base_offset), rax);
             break;
         case LL_STOR_ELEM_FLAT_U8:
             __ movl(rax, RegAddr(args.val_reg));
-            __ movb(Operand(rdx, rcx, NoScale), rax);
+            __ movb(Operand(frm, rcx, NoScale, base_offset), rax);
             break;
         case LL_STOR_ELEM_FLAT_I64:
+            __ movq(rax, RegAddr(args.val_reg));
+            __ movq(Operand(frm, rcx, ScaleEight, base_offset), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) {
+    __ movl(rcx, RegAddr(args.index_reg));
+    __ cmpl(rcx, args.array_size);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = args.array_size;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, RegAddr(args.base_reg));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_STOR_ELEM_FLAT_I_I32:
+        case LL_STOR_ELEM_FLAT_I_F32:
+            __ movl(rax, RegAddr(args.val_reg));
+            __ movl(Operand(rdx, rcx, ScaleFour), rax);
+            break;
+        case LL_STOR_ELEM_FLAT_I_U8:
+            __ movl(rax, RegAddr(args.val_reg));
+            __ movb(Operand(rdx, rcx, NoScale), rax);
+            break;
+        case LL_STOR_ELEM_FLAT_I_I64:
             __ movq(rax, RegAddr(args.val_reg));
             __ movq(Operand(rdx, rcx, ScaleEight), rax);
             break;

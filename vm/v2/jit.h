@@ -122,7 +122,9 @@ class CompilerBase
     virtual void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) = 0;
     virtual void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) = 0;
     virtual void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) = 0;
+    virtual void EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) = 0;
     virtual void EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) = 0;
+    virtual void EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) = 0;
     virtual void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;
     virtual void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) = 0;
     virtual void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;

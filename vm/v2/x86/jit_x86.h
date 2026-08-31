@@ -85,7 +85,9 @@ class Compiler : public CompilerBase
     void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) override;
     void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) override;
     void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) override;
+    void EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) override;
     void EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) override;
+    void EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) override;
     void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;
     void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) override;
     void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;

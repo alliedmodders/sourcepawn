@@ -60,6 +60,7 @@ struct ExprNode {
         kReg,
         kConstant,
         kSimpleOp,
+        kSlotOp,
         kLoadElem,
         kCall
     };
@@ -108,6 +109,10 @@ struct ExprNode {
             ExprNode* base;
             ExprNode* index;
         } load_elem;
+        struct {
+            LLOp opcode;
+            VReg reg;
+        } slot_op;
         struct {
             uint32_t method_index;
             std::span<VReg> argv;
@@ -211,6 +216,15 @@ class MethodLowerer
         node->load_elem.opcode = opcode;
         node->load_elem.base = base;
         node->load_elem.index = index;
+        return node;
+    }
+
+    ExprNode* CreateSlotOpNode(const TypeDesc* type, LLOp opcode, VReg reg) {
+        ExprNode* node = pool_.make<ExprNode>();
+        node->kind = ExprNode::kSlotOp;
+        node->type = type;
+        node->slot_op.opcode = opcode;
+        node->slot_op.reg = reg;
         return node;
     }
 
@@ -539,7 +553,6 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg val_reg = EmitNode(val);
             VReg index_reg = EmitNode(index);
-            VReg base_reg = EmitNode(base_node);
 
             if (base->IsFlatArray()) {
                 LLOp llop = LL_NOP;
@@ -550,13 +563,35 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
                     default: assert(false); break;
                 }
-                emit(llop, StorElemFlatArgs{
-                    .array_size = (uint32_t)base->array_size(),
-                    .base_reg = base_reg.index,
-                    .index_reg = index_reg.index,
-                    .val_reg = val_reg.index
-                });
+                if (base_node->kind == ExprNode::kSlotOp &&
+                    base_node->slot_op.opcode == LL_ADDR_S)
+                {
+                    emit(llop, StorElemFlatArgs{
+                        .array_size = (uint32_t)base->array_size(),
+                        .base_reg = base_node->slot_op.reg.index,
+                        .index_reg = index_reg.index,
+                        .val_reg = val_reg.index
+                    });
+                } else {
+                    VReg base_reg = EmitNode(base_node);
+                    LLOp iop = LL_NOP;
+                    switch (llop) {
+                        case LL_STOR_ELEM_FLAT_I32: iop = LL_STOR_ELEM_FLAT_I_I32; break;
+                        case LL_STOR_ELEM_FLAT_F32: iop = LL_STOR_ELEM_FLAT_I_F32; break;
+                        case LL_STOR_ELEM_FLAT_I64: iop = LL_STOR_ELEM_FLAT_I_I64; break;
+                        case LL_STOR_ELEM_FLAT_U8:  iop = LL_STOR_ELEM_FLAT_I_U8; break;
+                        default: assert(false); break;
+                    }
+                    emit(iop, StorElemFlatArgs{
+                        .array_size = (uint32_t)base->array_size(),
+                        .base_reg = base_reg.index,
+                        .index_reg = index_reg.index,
+                        .val_reg = val_reg.index
+                    });
+                    FreeReg(base_reg);
+                }
             } else {
+                VReg base_reg = EmitNode(base_node);
                 LLOp llop = LL_NOP;
                 switch (op) {
                     case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_I32; break;
@@ -567,11 +602,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     default: assert(false); break;
                 }
                 emit(llop, base_reg, index_reg, val_reg);
+                FreeReg(base_reg);
             }
 
             FreeReg(val_reg);
             FreeReg(index_reg);
-            FreeReg(base_reg);
             break;
         }
 
@@ -890,9 +925,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             int16_t offset = reader_.read<int16_t>();
             const TypeDesc* td = method_->GetTypeOfLocal(offset);
             const TypeDesc* ptr_type = td->IsCompositeValue() ? td : graph_->rt()->GetReferenceType(td);
-            VReg dest = AllocateTemp(ptr_type);
-            emit(LL_ADDR_S, OffsetToVReg(offset), dest);
-            pushStack(CreateTempNode(ptr_type, dest));
+            pushStack(CreateSlotOpNode(ptr_type, LL_ADDR_S, OffsetToVReg(offset)));
             break;
         }
 
@@ -1688,30 +1721,58 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             return dest;
         }
 
+        case ExprNode::kSlotOp: {
+            VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
+            emit(node->slot_op.opcode, node->slot_op.reg, dest);
+            return dest;
+        }
+
         case ExprNode::kLoadElem: {
             VReg index_reg = EmitNode(node->load_elem.index);
-            VReg base_reg = EmitNode(node->load_elem.base);
 
             if (target_reg.valid() && node->type->IsHeapItem())
                 emit(LL_RELEASE, target_reg);
 
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            const TypeDesc* base = node->load_elem.base->type;
+            ExprNode* base_expr = node->load_elem.base;
+            const TypeDesc* base = base_expr->type;
             LLOp op = node->load_elem.opcode;
 
             if (base->IsFlatArray()) {
-                emit(op, LoadElemFlatArgs{
-                    .array_size = (uint32_t)base->array_size(),
-                    .base_reg = base_reg.index,
-                    .index_reg = index_reg.index,
-                    .dest_reg = dest.index
-                });
+                if (base_expr->kind == ExprNode::kSlotOp &&
+                    base_expr->slot_op.opcode == LL_ADDR_S)
+                {
+                    emit(op, LoadElemFlatArgs{
+                        .array_size = (uint32_t)base->array_size(),
+                        .base_reg = base_expr->slot_op.reg.index,
+                        .index_reg = index_reg.index,
+                        .dest_reg = dest.index
+                    });
+                } else {
+                    VReg base_reg = EmitNode(base_expr);
+                    LLOp iop = LL_NOP;
+                    switch (op) {
+                        case LL_LOAD_ELEM_FLAT_I32: iop = LL_LOAD_ELEM_FLAT_I_I32; break;
+                        case LL_LOAD_ELEM_FLAT_F32: iop = LL_LOAD_ELEM_FLAT_I_F32; break;
+                        case LL_LOAD_ELEM_FLAT_I64: iop = LL_LOAD_ELEM_FLAT_I_I64; break;
+                        case LL_LOAD_ELEM_FLAT_U8:  iop = LL_LOAD_ELEM_FLAT_I_U8; break;
+                        default: assert(false); break;
+                    }
+                    emit(iop, LoadElemFlatArgs{
+                        .array_size = (uint32_t)base->array_size(),
+                        .base_reg = base_reg.index,
+                        .index_reg = index_reg.index,
+                        .dest_reg = dest.index
+                    });
+                    FreeReg(base_reg);
+                }
             } else {
+                VReg base_reg = EmitNode(base_expr);
                 emit(op, base_reg, index_reg, dest);
+                FreeReg(base_reg);
             }
 
             FreeReg(index_reg);
-            FreeReg(base_reg);
             return dest;
         }
 
