@@ -45,7 +45,8 @@ Environment::Environment()
    profiler_(nullptr),
    profiling_enabled_(false),
    code_stubs_(nullptr),
-   top_(nullptr)
+   top_(nullptr),
+   heap_(virt_mem_)
 {
     jit_enabled_ = IsJitAvailable();
 }
@@ -83,6 +84,17 @@ Environment::Initialize() {
     if (!virt_mem_.Initialize())
         return false;
 
+    if (!heap_.Initialize())
+        return false;
+
+    stack_ = heap_.MakeRawPtr<uint8_t[]>(kDefaultStackSize);
+    if (!stack_)
+        return false;
+
+    sp_base_ = heap_.ToLocalAddr(stack_.get());
+    sp_top_ = sp_base_ + kDefaultStackSize;
+    sp_ = sp_top_;
+
     if (!builtins_->Initialize())
         return false;
 
@@ -95,6 +107,10 @@ Environment::Shutdown() {
     builtins_ = nullptr;
     code_stubs_ = nullptr;
     code_alloc_ = nullptr;
+    stack_.reset();
+    sp_base_ = 0;
+    sp_top_ = 0;
+    sp_ = 0;
 
     assert(sEnvironment == this);
     sEnvironment = nullptr;
@@ -733,4 +749,17 @@ const char* Environment::GetVersionString() {
 
 void Environment::SetProfilingTool(IProfilingTool* tool) {
     SetProfiler(tool);
+}
+
+bool Environment::addStack(cell_t amount) {
+    assert(ke::IsAligned(amount, sizeof(cell_t)));
+
+    uint32_t new_sp = sp_ + amount;
+    if (new_sp >= sp_top_) {
+        ReportError(amount < 0 ? SP_ERROR_STACKLOW : SP_ERROR_STACKMIN);
+        return false;
+    }
+
+    sp_ = new_sp;
+    return true;
 }

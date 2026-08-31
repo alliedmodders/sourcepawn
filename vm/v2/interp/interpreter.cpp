@@ -147,7 +147,7 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
    reader_(method_->interp()->bytes(), method_->interp()->bytes() + method_->interp()->size()),
    has_returned_(false),
    return_value_(0),
-   frm_(cx->sp()),
+   frm_(env_->sp()),
    phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_))
 {}
 
@@ -173,7 +173,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
         }
     });
 
-    ke::SaveRestore<uint32_t> saveSp(rt_->sp());
+    ke::SaveRestore<uint32_t> saveSp(env_->sp());
 
     const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
     bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
@@ -188,9 +188,9 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
     uint32_t num_regs = method_->interp()->num_regs();
     if (num_regs > 0) {
         uint32_t bytes = num_regs * sizeof(cell_t);
-        if (!rt_->addStack(-(cell_t)bytes))
+        if (!env_->addStack(-(cell_t)bytes))
             return false;
-        vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(rt_->sp()), num_regs);
+        vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(env_->sp()), num_regs);
     }
 
     uint32_t current_reg = 0;
@@ -632,8 +632,8 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 ll_code = caller_code;
 
                 size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                cell_t stack_amount = (cell_t)(frm_ + frame_size - rt_->sp());
-                if (!rt_->addStack(stack_amount))
+                cell_t stack_amount = (cell_t)(frm_ + frame_size - env_->sp());
+                if (!env_->addStack(stack_amount))
                     return false;
                 frm_ = frame->prev_frame;
 
@@ -643,7 +643,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 }
 
                 uint32_t num_caller_regs = method_->interp()->num_regs();
-                vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(rt_->sp()), num_caller_regs);
+                vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(env_->sp()), num_caller_regs);
 
                 if (frame->dest_reg != 0xFFFF)
                     vregs_[frame->dest_reg] = result;
@@ -725,7 +725,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     ivk_->enterNativeCall(native_index);
                     if (native->status == SP_NATIVE_BOUND) {
                         HeapSave save_hp(rt_->heap());
-                        ke::SaveRestore<uint32_t> save_sp(rt_->sp());
+                        ke::SaveRestore<uint32_t> save_sp(env_->sp());
 
                         if (native->legacy_fn)
                             result = native->legacy_fn(rt_, params);
@@ -752,12 +752,12 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
                     uint32_t num_callee_regs = target->interp()->num_regs();
                     cell_t stack_amount = -(cell_t)(frame_size + num_callee_regs * sizeof(cell_t));
-                    if (!rt_->addStack(stack_amount))
+                    if (!env_->addStack(stack_amount))
                         return false;
 
-                    uint32_t frame_addr = rt_->sp() + num_callee_regs * sizeof(cell_t);
+                    uint32_t frame_addr = env_->sp() + num_callee_regs * sizeof(cell_t);
 
-                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(rt_->sp());
+                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(env_->sp());
                     for (uint8_t i = 0; i < nargs; i++) {
                         uint16_t arg_reg = reader_.read<uint16_t>();
                         new_vregs[i] = vregs_[arg_reg];

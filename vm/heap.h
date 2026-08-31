@@ -12,6 +12,10 @@
 //
 #pragma once
 
+#include <new>
+#include <utility>
+#include <type_traits>
+
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -20,13 +24,17 @@
 
 #include "heap-defaults.h"
 
+struct mi_heap_s;
+typedef struct mi_heap_s mi_heap_t;
+
 namespace sp {
 
-VirtMem& GetVirtMem();
+template <typename T>
+class RawHeapPtr;
 
 class Heap {
   public:
-    Heap();
+    Heap(VirtMem& virt_mem);
     ~Heap();
 
     bool Initialize();
@@ -61,9 +69,9 @@ class Heap {
 
     uint8_t* Allocate(uint32_t requested_size);
 
-    uint32_t ToLocalAddr(void* p) { return GetVirtMem().ToLocalAddr(p); }
+    uint32_t ToLocalAddr(void* p) { return virt_mem_.ToLocalAddr(p); }
     template <typename T>
-    T ToPhysAddr(uint32_t addr) { return GetVirtMem().ToPhysAddr<T>(addr); }
+    T ToPhysAddr(uint32_t addr) { return virt_mem_.ToPhysAddr<T>(addr); }
 
     struct Position {
         Position() {
@@ -85,6 +93,15 @@ class Heap {
     Position GetPosition();
     void RestorePosition(const Position& hp);
 
+    void* AllocRaw(size_t bytes);
+    void FreeRaw(void* ptr);
+
+    template <typename T, typename... Args>
+    typename std::enable_if<!std::is_array<T>::value, RawHeapPtr<T>>::type MakeRawPtr(Args&&... args);
+
+    template <typename T>
+    typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type MakeRawPtr(size_t n);
+
   private:
     uint8_t* SlowAllocate(uint32_t size);
 
@@ -92,6 +109,8 @@ class Heap {
     bool ValidateRestoreTo(Chunk* chunk, uint8_t* pos);
 
   private:
+    VirtMem& virt_mem_;
+    mi_heap_t* mi_heap_ = nullptr;
     Chunk* first_ = nullptr;
     Chunk* current_ = nullptr;
 };
@@ -114,5 +133,167 @@ struct HeapSave final {
     Heap& heap;
     Heap::Position pos;
 };
+
+template <typename T>
+class RawHeapPtr {
+  public:
+    RawHeapPtr() : heap_(nullptr), ptr_(nullptr) {}
+    RawHeapPtr(Heap& heap, T* ptr) : heap_(&heap), ptr_(ptr) {}
+    ~RawHeapPtr() {
+        reset();
+    }
+
+    RawHeapPtr(const RawHeapPtr&) = delete;
+    RawHeapPtr& operator=(const RawHeapPtr&) = delete;
+
+    RawHeapPtr(RawHeapPtr&& other) noexcept
+      : heap_(other.heap_),
+        ptr_(other.ptr_)
+    {
+        other.heap_ = nullptr;
+        other.ptr_ = nullptr;
+    }
+
+    RawHeapPtr& operator=(RawHeapPtr&& other) noexcept {
+        if (this != &other) {
+            reset();
+            heap_ = other.heap_;
+            ptr_ = other.ptr_;
+            other.heap_ = nullptr;
+            other.ptr_ = nullptr;
+        }
+        return *this;
+    }
+
+    explicit operator bool() const { return ptr_ != nullptr; }
+
+    T* get() const { return ptr_; }
+    T* operator->() const { return ptr_; }
+    T& operator*() const { return *ptr_; }
+
+    T* release() {
+        T* p = ptr_;
+        ptr_ = nullptr;
+        heap_ = nullptr;
+        return p;
+    }
+
+    void reset(T* ptr = nullptr) {
+        if (ptr_ == ptr) {
+            return;
+        }
+        if (ptr_) {
+            ptr_->~T();
+            heap_->FreeRaw(ptr_);
+        }
+        ptr_ = ptr;
+        if (!ptr_) {
+            heap_ = nullptr;
+        }
+    }
+
+  private:
+    Heap* heap_;
+    T* ptr_;
+};
+
+template <typename T>
+class RawHeapPtr<T[]> {
+  public:
+    using element_type = typename std::remove_extent<T>::type;
+
+    RawHeapPtr() : heap_(nullptr), ptr_(nullptr), size_(0) {}
+    RawHeapPtr(Heap& heap, element_type* ptr, size_t size) : heap_(&heap), ptr_(ptr), size_(size) {}
+    ~RawHeapPtr() {
+        reset();
+    }
+
+    RawHeapPtr(const RawHeapPtr&) = delete;
+    RawHeapPtr& operator=(const RawHeapPtr&) = delete;
+
+    RawHeapPtr(RawHeapPtr&& other) noexcept
+      : heap_(other.heap_),
+        ptr_(other.ptr_),
+        size_(other.size_)
+    {
+        other.heap_ = nullptr;
+        other.ptr_ = nullptr;
+        other.size_ = 0;
+    }
+
+    RawHeapPtr& operator=(RawHeapPtr&& other) noexcept {
+        if (this != &other) {
+            reset();
+            heap_ = other.heap_;
+            ptr_ = other.ptr_;
+            size_ = other.size_;
+            other.heap_ = nullptr;
+            other.ptr_ = nullptr;
+            other.size_ = 0;
+        }
+        return *this;
+    }
+
+    explicit operator bool() const { return ptr_ != nullptr; }
+
+    element_type* get() const { return ptr_; }
+    element_type& operator[](size_t index) const { return ptr_[index]; }
+
+    element_type* release() {
+        element_type* p = ptr_;
+        ptr_ = nullptr;
+        heap_ = nullptr;
+        size_ = 0;
+        return p;
+    }
+
+    void reset(element_type* ptr = nullptr, size_t size = 0) {
+        if (ptr_ == ptr) {
+            return;
+        }
+        if (ptr_) {
+            for (size_t i = 0; i < size_; ++i) {
+                ptr_[i].~element_type();
+            }
+            heap_->FreeRaw(ptr_);
+        }
+        ptr_ = ptr;
+        size_ = size;
+        if (!ptr_) {
+            heap_ = nullptr;
+        }
+    }
+
+  private:
+    Heap* heap_;
+    element_type* ptr_;
+    size_t size_;
+};
+
+template <typename T, typename... Args>
+inline typename std::enable_if<!std::is_array<T>::value, RawHeapPtr<T>>::type
+Heap::MakeRawPtr(Args&&... args) {
+    void* mem = AllocRaw(sizeof(T));
+    if (!mem) {
+        return RawHeapPtr<T>();
+    }
+    T* ptr = ::new (mem) T(std::forward<Args>(args)...);
+    return RawHeapPtr<T>(*this, ptr);
+}
+
+template <typename T>
+inline typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type
+Heap::MakeRawPtr(size_t n) {
+    using ElementType = typename std::remove_extent<T>::type;
+    void* mem = AllocRaw(sizeof(ElementType) * n);
+    if (!mem) {
+        return RawHeapPtr<T>();
+    }
+    ElementType* ptr = static_cast<ElementType*>(mem);
+    for (size_t i = 0; i < n; ++i) {
+        ::new (&ptr[i]) ElementType();
+    }
+    return RawHeapPtr<T>(*this, ptr, n);
+}
 
 } // namespace sp

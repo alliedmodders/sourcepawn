@@ -41,7 +41,8 @@ using namespace SourcePawn;
 Runtime::Runtime(std::shared_ptr<SmxImage> image, bool data_only)
  : BaseRuntime(std::move(image)),
    env_(Environment::get()),
-   data_only_(data_only)
+   data_only_(data_only),
+   heap_(env_->virt_mem())
 {
 
     std::lock_guard<ke::Mutex> lock(env_->lock());
@@ -110,13 +111,6 @@ bool Runtime::InitializeContext() {
     if (!heap_.Initialize())
         return false;
 
-    auto sp_base = heap_.Allocate(kDefaultStackSize);
-    if (!sp_base)
-        return false;
-
-    sp_base_ = heap_.ToLocalAddr(sp_base);
-    sp_top_ = sp_base_ + kDefaultStackSize;
-    sp_ = sp_top_;
     return true;
 }
 
@@ -656,7 +650,7 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
     }
 
     /* Save our previous state. */
-    ke::SaveRestore<uint32_t> save_sp(sp_);
+    ke::SaveRestore<uint32_t> save_sp(env_->sp());
 #ifndef NDEBUG
     const smx_rtti_method* rtti = image_->GetMethod(method_index);
     bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
@@ -665,9 +659,9 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
 #endif
 
     /* Push parameters */
-    if (!addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
+    if (!env_->addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
         return false;
-    cell_t* sp = heap_.ToPhysAddr<cell_t*>(sp_);
+    cell_t* sp = env_->heap().ToPhysAddr<cell_t*>(env_->sp());
 
     sp[0] = num_params;
     for (unsigned int i = 0; i < num_params; i++)
@@ -713,138 +707,6 @@ void Runtime::leaveHeapScope() {
     hp_scope_ = node.prev_hp_scope;
 }
 
-// We divide multi-dimensional arrays into two regions: the IV (indirection
-// vector) region, and the data region. The IV region contains all the
-// intermediate links to access the final dimension. The data region contains
-// every cell in the last dimension.
-//
-// We split things this way because, all the intermediate vectors must be
-// allocated up-front, and it is easier to memset() the data area in one
-// big block.
-//
-// For a 1D array, the IV space is 0.
-// For a 2D array of size [X][Y], the IV space is X cells.
-// For a 3D array of size [X][Y][Z], the IV space is:
-//    (X + (Y * X))
-// For a 4D array of size [X][Y][Z][A], the IV space is:
-//    (X + ((Y + (Z * Y)) * X))
-//
-// This function generates IV vectors recursively. When processing intermediate
-// dimensions, we reserve the indirection vector in |iv_cursor|, then for each
-// slot, recursively ask for the next array it should point to.
-//
-// If the next dimension is also intermediate, it will point into the IV space.
-// If the next dimension is terminal, we will instead allocate the array in the
-// data space, and return its base address.
-struct abs_iv_data_t {
-    cell_t addr;
-    uint8_t* ptr;
-    cell_t iv_cursor;
-    cell_t data_cursor;
-    const cell_t* dims;
-    cell_t dimcount;
-};
-
-static cell_t
-GenerateAbsoluteIndirectionVectors(abs_iv_data_t& info, cell_t dim) {
-    if (dim == 0) {
-        cell_t next_addr = info.data_cursor;
-        info.data_cursor += info.dims[0] * sizeof(cell_t);
-        return next_addr;
-    }
-
-    cell_t iv_base_offset = info.iv_cursor;
-    info.iv_cursor += info.dims[dim] * sizeof(cell_t);
-
-    for (cell_t i = 0; i < info.dims[dim]; i++) {
-        cell_t next_array_offset = GenerateAbsoluteIndirectionVectors(info, dim - 1);
-        cell_t iv_cell = iv_base_offset + i * sizeof(cell_t);
-        cell_t next_array_addr = info.addr + next_array_offset;
-        *reinterpret_cast<cell_t*>(info.ptr + iv_cell) = next_array_addr;
-    }
-    return iv_base_offset;
-}
-
-int Runtime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
-    // Calculate how many cells are needed.
-    if (argv[0] <= 0)
-        return SP_ERROR_ARRAY_TOO_BIG;
-
-    // cells is the total number of cells required.
-    // iv_size is the number of bytes needed to hold indirection vectors,
-    // and is a subset of cells*sizeof(cell).
-    uint32_t cells = argv[0];
-    cell_t iv_size = 0;
-
-    for (uint32_t dim = 1; dim < argc; dim++) {
-        cell_t dimsize = argv[dim];
-        if (dimsize <= 0)
-            return SP_ERROR_ARRAY_TOO_BIG;
-        if (!ke::IsUint32MultiplySafe(cells, dimsize))
-            return SP_ERROR_ARRAY_TOO_BIG;
-        cells *= uint32_t(dimsize);
-        if (!ke::IsUint32AddSafe(cells, dimsize))
-            return SP_ERROR_ARRAY_TOO_BIG;
-        cells += uint32_t(dimsize);
-        iv_size *= dimsize;
-        iv_size += dimsize * sizeof(cell_t);
-    }
-
-    if (!ke::IsUint32MultiplySafe(cells, sizeof(cell_t)))
-        return SP_ERROR_ARRAY_TOO_BIG;
-
-    uint32_t bytes = cells * sizeof(cell_t);
-    auto base = heap_.Allocate(bytes);
-    if (!base)
-        return SP_ERROR_HEAPLOW;
-
-    if (autozero) {
-        memset(base + iv_size, 0, bytes - iv_size);
-    }
-
-    abs_iv_data_t info;
-    info.addr = heap_.ToLocalAddr(base);
-    info.ptr = base;
-    info.iv_cursor = 0;
-    info.data_cursor = iv_size;
-    info.dims = argv;
-    info.dimcount = argc;
-    GenerateAbsoluteIndirectionVectors(info, argc - 1);
-
-    assert(info.iv_cursor == iv_size);
-    assert(info.data_cursor == (cell_t)bytes);
-
-    argv[argc - 1] = heap_.ToLocalAddr(base);
-    return SP_ERROR_NONE;
-}
-
-int Runtime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
-    if (dims == 1) {
-        uint32_t size = *stk;
-        if (size <= 0)
-            return SP_ERROR_INVALID_ARRAY_SIZE;
-        if (!ke::IsUint32MultiplySafe(size, 4))
-            return SP_ERROR_ARRAY_TOO_BIG;
-
-        uint32_t bytes = size * 4;
-        auto base = heap_.Allocate(bytes);
-        if (!base)
-            return SP_ERROR_HEAPLOW;
-
-        *stk = heap_.ToLocalAddr(base);
-
-        if (autozero)
-            memset(base, 0, bytes);
-
-        return SP_ERROR_NONE;
-    }
-
-    if (int err = generateFullArray(dims, stk, autozero))
-        return err;
-
-    return SP_ERROR_NONE;
-}
-
 bool Runtime::heapAlloc(uint32_t amount, cell_t* out) {
     return heapAllocEx(amount, out) != nullptr;
 }
@@ -860,18 +722,6 @@ cell_t* Runtime::heapAllocEx(uint32_t amount, cell_t* out) {
     return reinterpret_cast<cell_t*>(ptr);
 }
 
-bool Runtime::addStack(cell_t amount) {
-    assert(ke::IsAligned(amount, sizeof(cell_t)));
-
-    uint32_t new_sp = sp_ + amount;
-    if (new_sp >= sp_top_) {
-        ReportErrorNumber(amount < 0 ? SP_ERROR_STACKLOW : SP_ERROR_STACKMIN);
-        return false;
-    }
-
-    sp_ = new_sp;
-    return true;
-}
 
 bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
                                 const cell_t* init) {

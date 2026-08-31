@@ -20,11 +20,7 @@
 
 namespace sp {
 
-VirtMem& GetVirtMem() {
-    return Environment::get()->virt_mem();
-}
-
-Heap::Heap() {
+Heap::Heap(VirtMem& virt_mem) : virt_mem_(virt_mem) {
 }
 
 Heap::~Heap() {
@@ -33,29 +29,25 @@ Heap::~Heap() {
         delete first_;
         first_ = next;
     }
+    if (mi_heap_)
+        mi_heap_destroy(mi_heap_);
 }
 
 bool Heap::Initialize() {
-    size_t initial_size = kDefaultStackSize + kDefaultHeapChunkSize;
-    first_ = NewChunk(initial_size);
-    if (!first_)
-        return false;
-
-    current_ = first_;
-    return true;
+    mi_heap_ = mi_heap_new();
+    return mi_heap_ != nullptr;
 }
 
 Heap::Chunk::~Chunk() {
-    if (base) {
+    if (base)
         mi_free(base);
-    }
 }
 
 Heap::Chunk* Heap::NewChunk(size_t size) {
     auto chunk = std::make_unique<Chunk>();
     
     // Allocate the large chunk using mimalloc
-    chunk->base = (uint8_t*)mi_malloc(size);
+    chunk->base = (uint8_t*)mi_heap_malloc(mi_heap_, size);
     if (!chunk->base) {
         Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
@@ -68,6 +60,15 @@ Heap::Chunk* Heap::NewChunk(size_t size) {
 }
 
 uint8_t* Heap::SlowAllocate(uint32_t size) {
+    if (!current_) {
+        size_t sized_up = std::max((size_t)size, (size_t)kDefaultHeapChunkSize);
+        first_ = NewChunk(sized_up);
+        if (!first_)
+            return nullptr;
+        current_ = first_;
+        return current_->Allocate(size);
+    }
+
     if (current_->next && current_->next->size >= size) {
         current_ = current_->next;
         current_->pos = current_->base;
@@ -89,7 +90,7 @@ uint8_t* Heap::SlowAllocate(uint32_t size) {
 
 uint8_t* Heap::Allocate(uint32_t requested_size) {
     size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
-    if (!current_->CanAllocate(aligned_size))
+    if (!current_ || !current_->CanAllocate(aligned_size))
         return SlowAllocate(aligned_size);
     return current_->Allocate(aligned_size);
 }
@@ -97,12 +98,16 @@ uint8_t* Heap::Allocate(uint32_t requested_size) {
 Heap::Position Heap::GetPosition() {
     Position hp;
     hp.chunk = current_;
-    hp.pos = current_->pos;
+    hp.pos = current_ ? current_->pos : nullptr;
     return hp;
 }
 
 void Heap::RestorePosition(const Position& hp) {
     auto chunk = reinterpret_cast<Chunk*>(hp.chunk);
+    if (!chunk) {
+        current_ = nullptr;
+        return;
+    }
     assert(ValidateRestoreTo(chunk, hp.pos));
     current_ = chunk;
     current_->pos = hp.pos;
@@ -123,6 +128,18 @@ bool Heap::ValidateRestoreTo(Chunk* chunk, uint8_t* pos) {
             return false;
     }
     return false;
+}
+
+void* Heap::AllocRaw(size_t bytes) {
+    void* p = mi_heap_malloc(mi_heap_, bytes);
+    if (!p) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
+    }
+    return p;
+}
+
+void Heap::FreeRaw(void* ptr) {
+    mi_free(ptr);
 }
 
 } // namespace sp

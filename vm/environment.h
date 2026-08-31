@@ -21,6 +21,7 @@
 #include <sp_vm_api.h>
 #include "code-allocator.h"
 #include "heap-defaults.h"
+#include "heap.h"
 #include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
 #include "type-cache.h"
@@ -139,6 +140,16 @@ class Environment : public ISourcePawnEnvironment
     ke::Mutex& lock() {
         return mutex_;
     }
+
+    Heap& heap() { return heap_; }
+    const RawHeapPtr<uint8_t[]>& stack() const { return stack_; }
+
+    uint32_t& sp() { return sp_; }
+    uint32_t sp_base() const { return sp_base_; }
+    uint32_t sp_top() const { return sp_top_; }
+    uint32_t* addressOfSp() { return &sp_; }
+    static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
+    bool addStack(cell_t amount);
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
     bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
@@ -290,6 +301,11 @@ class Environment : public ISourcePawnEnvironment
     TypeCache types_;
 
     VirtMem virt_mem_;
+    Heap heap_;
+    RawHeapPtr<uint8_t[]> stack_;
+    uint32_t sp_base_ = 0;
+    uint32_t sp_top_ = 0;
+    uint32_t sp_ = 0;
 };
 
 class EnterProfileScope
