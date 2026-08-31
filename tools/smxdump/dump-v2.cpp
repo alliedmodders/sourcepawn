@@ -153,6 +153,9 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         case OP_PUSH_C_F32:
             fprintf(stdout, " %f", reader.read<float>());
             break;
+        case OP_PUSH_C_F64:
+            fprintf(stdout, " %g", reader.read<double>());
+            break;
 
         case OP_ADDR_S:
         case OP_LOAD_S:

@@ -249,6 +249,12 @@ namespace v2 {
     FOR_EACH(LOAD_I_I8, 111, "load.i.i8", 1) \
     FOR_EACH(LOAD_ELEM_I8, 112, "load.elem.i8", 1) \
     FOR_EACH(CVT_I8, 113, "cvt.i8", 1) \
+    FOR_EACH(PUSH_C_F64, 114, "push.c.f64", 9) \
+    FOR_EACH(LOAD_I_F64, 115, "load.i.f64", 1) \
+    FOR_EACH(STOR_I_F64, 116, "stor.i.f64", 1) \
+    FOR_EACH(LOAD_ELEM_F64, 117, "load.elem.f64", 1) \
+    FOR_EACH(STOR_ELEM_F64, 118, "stor.elem.f64", 1) \
+    FOR_EACH(CVT_F64, 119, "cvt.f64", 1) \
 
 
  enum OPCODE {

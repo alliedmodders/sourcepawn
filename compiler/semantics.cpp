@@ -253,9 +253,13 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
             if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
                 return true;
 
-            // Make a special exception for int64 lits.
-            if (!((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>()))
+            // Make a special exception for int64 / double lits (they can't
+            // be folded by FoldToConstant).
+            if (!((vclass == sGLOBAL || vclass == sSTATIC) &&
+                  (init_rhs->as<Number64Expr>() || init_rhs->as<DoubleExpr>())))
+            {
                 report(init_rhs->pos(), 8);
+            }
         }
     }
 
@@ -551,6 +555,8 @@ bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
             return CheckTaggedValueExpr(expr->to<TaggedValueExpr>());
         case ExprKind::Number64Expr:
             return CheckNumber64Expr(expr->to<Number64Expr>());
+        case ExprKind::DoubleExpr:
+            return CheckDoubleExpr(expr->to<DoubleExpr>());
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
@@ -705,7 +711,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
         return nullptr;
 
     auto& val = expr->val();
-    if (val.type()->isInt64())
+    if (val.type()->isWideType())
         return BuildSimpleCast(expr, BuiltinType::Bool);
     if (val.type()->isVoid()) {
         report(expr, 466);
@@ -1331,6 +1337,11 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
 
 
 static inline bool IsValidIntWidthChange(Type* from, Type* to) {
+    // allow double to/from int64, but not intptr, which is not guaranteed
+    // to be 64-bit.
+    if ((from->isInt64() && to->isDouble()) || (from->isDouble() && to->isInt64()))
+        return true;
+
     if (from->isWideInt()) {
         return to->isInt() ||
                to->isInt16() ||
@@ -1462,6 +1473,15 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
             report(expr, 460) << out_val.type() << to_type;
             return false;
         }
+    }
+
+    // Reject any view_as involving double except int64 <-> double (which is
+    // already allowed by the isWideInt check above).
+    if (to_type->isDouble() != out_val.type()->isDouble() &&
+        !to_type->isInt64() && !out_val.type()->isInt64())
+    {
+        report(expr, 460) << out_val.type() << to_type;
+        return false;
     }
 
     if (CastNeedsRvalue(out_val, to_type)) {
@@ -1724,6 +1744,13 @@ bool Semantics::CheckNumber64Expr(Number64Expr* expr) {
     auto& val = expr->val();
     val.ident = iEXPRESSION;
     val.set_type(types_->type_int64());
+    return true;
+}
+
+bool Semantics::CheckDoubleExpr(DoubleExpr* expr) {
+    auto& val = expr->val();
+    val.ident = iEXPRESSION;
+    val.set_type(types_->type_double());
     return true;
 }
 

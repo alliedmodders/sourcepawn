@@ -717,6 +717,9 @@ class Assembler : public AssemblerBase
     void fstp32(const Operand& dest) {
         emit1(0xd9, 3, dest);
     }
+    void fstp64(const Operand& dest) {
+        emit1(0xdd, 3, dest);
+    }
     void fstp(FpuRegister src) {
         emit2(0xdd, 0xd8 + src.code);
     }
@@ -974,6 +977,65 @@ class Assembler : public AssemblerBase
     void movd(FloatRegister dest, const Operand& src) {
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x6e, dest.code, src);
+    }
+
+    void movsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x10, dest.code, src);
+    }
+    void movsd(const Operand& dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x11, src.code, dest);
+    }
+    void addsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x58, dest.code, src);
+    }
+    void subsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5c, dest.code, src);
+    }
+    void mulsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x59, dest.code, src);
+    }
+    void divsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5e, dest.code, src);
+    }
+    void ucomisd(FloatRegister left, FloatRegister right) {
+        emit3(0x66, 0x0f, 0x2e, right.code, left.code);
+    }
+    void ucomisd(const Operand& left, FloatRegister right) {
+        emit3(0x66, 0x0f, 0x2e, right.code, left);
+    }
+    void cvtsi2sd(FloatRegister dest, Register src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2a, dest.code, src.code);
+    }
+    void cvtsi2sd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2a, dest.code, src);
+    }
+    void cvtsd2si(Register dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2d, dest.code, src.code);
+    }
+    void cvtsd2si(Register dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2d, dest.code, src);
+    }
+    void cvtss2sd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf3, 0x0f, 0x5a, dest.code, src);
+    }
+    void cvtss2sd(FloatRegister dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf3, 0x0f, 0x5a, dest.code, src.code);
+    }
+    void cvtsd2ss(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5a, dest.code, src);
     }
 
     static void PatchRel32Absolute(uint8_t* ip, void* ptr) {

@@ -63,6 +63,7 @@ enum class BuiltinType : uint8_t {
     Int16,
     Int,
     Float,
+    Double,
     Null,
     Any,
     Void,
@@ -282,11 +283,14 @@ class Type : public PoolObject
     bool isIntPtr() const { return isBuiltin(BuiltinType::IntPtr); }
     bool isWideInt() const { return isInt64() || isIntPtr(); }
     bool isIntN() const { return isInt() || isInt64() || isIntPtr() || isInt16() || isInt8(); }
+    bool isWideType() const { return isWideInt() || isDouble(); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
     bool isVoid() const { return isBuiltin(BuiltinType::Void); }
     bool isFloat() const { return isBuiltin(BuiltinType::Float); }
+    bool isDouble() const { return isBuiltin(BuiltinType::Double); }
+    bool isReal() const { return isFloat() || isDouble(); }
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
@@ -332,6 +336,7 @@ class Type : public PoolObject
                 case BuiltinType::Any:
                     return {4};
                 case BuiltinType::Int64:
+                case BuiltinType::Double:
                     return {8};
                 default:
                     return {};
@@ -362,6 +367,8 @@ class Type : public PoolObject
             case BuiltinType::Any:
             case BuiltinType::Bool:
                 return 4;
+            case BuiltinType::Double:
+                return 8;
             default:
                 return -1;
         }
@@ -619,6 +626,7 @@ class TypeManager
     Type* type_any() const { return type_any_; }
     Type* type_void() const { return type_void_; }
     Type* type_float() const { return type_float_; }
+    Type* type_double() const { return type_double_; }
     Type* type_bool() const { return type_bool_; }
     Type* type_string() const { return type_string_; }
     Type* type_char() const { return type_string_; }
@@ -649,6 +657,7 @@ class TypeManager
     Type* type_any_ = nullptr;
     Type* type_void_ = nullptr;
     Type* type_float_ = nullptr;
+    Type* type_double_ = nullptr;
     Type* type_bool_ = nullptr;
     Type* type_string_ = nullptr;
     Type* type_int64_ = nullptr;

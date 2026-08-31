@@ -510,16 +510,22 @@ void Compiler::EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
 ConditionCode ToFloatConditionCode(LLOp op) {
     switch (op) {
         case LL_GRTR_F32:
+        case LL_GRTR_F64:
             return above;
         case LL_GEQ_F32:
+        case LL_GEQ_F64:
             return above_equal;
         case LL_LEQ_F32:
+        case LL_LEQ_F64:
             return below_equal;
         case LL_LESS_F32:
+        case LL_LESS_F64:
             return below;
         case LL_EQ_F32:
+        case LL_EQ_F64:
             return equal;
         case LL_NEQ_F32:
+        case LL_NEQ_F64:
             return not_equal;
         default:
             assert(false);
@@ -527,13 +533,20 @@ ConditionCode ToFloatConditionCode(LLOp op) {
     }
 }
 
-void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
-    __ movss(xmm0, RegAddr(lhs));
-    __ movss(xmm1, RegAddr(rhs));
+void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest,
+                                TypeKind kind) {
+    if (kind == TypeKind::Float32) {
+        __ movss(xmm0, RegAddr(lhs));
+        __ movss(xmm1, RegAddr(rhs));
+    } else {
+        assert(kind == TypeKind::Float64);
+        __ movsd(xmm0, RegAddr(lhs));
+        __ movsd(xmm1, RegAddr(rhs));
+    }
 
     auto cc = ToFloatConditionCode(op);
     if (cc == below || cc == below_equal) {
-        // NaN results in ZF=1 PF=1 CF=1
+        // NaN results in ZF=1 PF=1 CF=1.
         //
         // ja/jae check for ZF,CF=0 and CF=0. If we make all relational compares
         // look like ja/jae, we'll guarantee all NaN comparisons will fail (which
@@ -543,9 +556,15 @@ void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t de
         else
             cc = above_equal;
 
-        __ ucomiss(xmm0, xmm1);
+        if (kind == TypeKind::Float32)
+            __ ucomiss(xmm0, xmm1);
+        else
+            __ ucomisd(xmm0, xmm1);
     } else {
-        __ ucomiss(xmm1, xmm0);
+        if (kind == TypeKind::Float32)
+            __ ucomiss(xmm1, xmm0);
+        else
+            __ ucomisd(xmm1, xmm0);
     }
 
     // An equal or not-equal needs special handling for the parity bit.
@@ -604,6 +623,42 @@ void Compiler::EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t d
     }
 }
 
+void Compiler::EmitBinaryDoubleOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
+    switch (op) {
+        case LL_ADD_F64:
+            __ movsd(xmm0, RegAddr(lhs));
+            __ addsd(xmm0, RegAddr(rhs));
+            __ movsd(RegAddr(dest), xmm0);
+            break;
+        case LL_SUB_F64:
+            __ movsd(xmm0, RegAddr(lhs));
+            __ subsd(xmm0, RegAddr(rhs));
+            __ movsd(RegAddr(dest), xmm0);
+            break;
+        case LL_MUL_F64:
+            __ movsd(xmm0, RegAddr(lhs));
+            __ mulsd(xmm0, RegAddr(rhs));
+            __ movsd(RegAddr(dest), xmm0);
+            break;
+        case LL_DIV_F64:
+            __ movsd(xmm0, RegAddr(lhs));
+            __ divsd(xmm0, RegAddr(rhs));
+            __ movsd(RegAddr(dest), xmm0);
+            break;
+        case LL_MOD_F64:
+            __ movsd(xmm0, RegAddr(rhs));
+            __ movsd(Operand(esp, 8), xmm0);
+            __ movsd(xmm0, RegAddr(lhs));
+            __ movsd(Operand(esp, 0), xmm0);
+            __ callWithABI(ExternalAddress((void*)DoubleMod));
+            __ fstp64(RegAddr(dest));
+            break;
+        default:
+            assert(false);
+            break;
+    }
+}
+
 void Compiler::EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
     switch (op) {
         case LL_CVT_F32:
@@ -631,13 +686,50 @@ void Compiler::EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
     }
 }
 
+void Compiler::EmitUnaryDoubleOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
+    switch (op) {
+        case LL_CVT_F64:
+            __ cvtsi2sd(xmm0, RegAddr(src_reg));
+            __ movsd(RegAddr(dest_reg), xmm0);
+            break;
+        case LL_CVT_F32_F64:
+            __ movss(xmm0, RegAddr(src_reg));
+            __ cvtss2sd(xmm0, xmm0);
+            __ movsd(RegAddr(dest_reg), xmm0);
+            break;
+        case LL_TEST_F64: {
+            __ movsd(xmm0, RegAddr(src_reg));
+            __ pxor(xmm1, xmm1);
+            __ ucomisd(xmm0, xmm1);
+
+            // NaN sets ZF, and so does a successful comparison to 0.0, so we only
+            // need a ZF check.
+            __ set(not_zero, r8_al);
+            __ movl(RegAddr(dest_reg), eax);
+            break;
+        }
+        case LL_NEG_F64: {
+            // Flip the sign bit (top bit of high cell).
+            __ movl(eax, RegAddr(src_reg + 1));
+            __ movl(ecx, 0x80000000);
+            __ xorl(eax, ecx);
+            __ movl(RegAddr(dest_reg + 1), eax);
+            __ movl(eax, RegAddr(src_reg));
+            __ movl(RegAddr(dest_reg), eax);
+            break;
+        }
+        default:
+            assert(false);
+    }
+}
+
 void Compiler::EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
     switch (op) {
         case LL_MOVE:
             __ movl(eax, RegAddr(src_reg));
             __ movl(RegAddr(dest_reg), eax);
             break;
-        case LL_MOVE_I64:
+        case LL_MOVE64:
             __ movq(xmm0, RegAddr(src_reg));
             __ movq(RegAddr(dest_reg), xmm0);
             break;
@@ -1007,8 +1099,7 @@ void Compiler::EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) {
 void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
     __ movl(eax, RegAddr(src_reg));
     switch (op) {
-        case LL_LOAD_I_I32:
-        case LL_LOAD_I_F32:
+        case LL_LOAD_I_X32:
             __ movl(edx, Operand(eax, 0));
             __ movl(RegAddr(dest_reg), edx);
             break;
@@ -1024,7 +1115,7 @@ void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
             __ movsxw(eax, Operand(eax, 0));
             __ movl(RegAddr(dest_reg), eax);
             break;
-        case LL_LOAD_I_I64:
+        case LL_LOAD_I_X64:
             __ movq(xmm0, Operand(eax, 0));
             __ movq(RegAddr(dest_reg), xmm0);
             break;
@@ -1036,8 +1127,7 @@ void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
 void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
     __ movl(edx, RegAddr(addr_reg));
     switch (op) {
-        case LL_STOR_I_I32:
-        case LL_STOR_I_F32:
+        case LL_STOR_I_X32:
             __ movl(eax, RegAddr(val_reg));
             __ movl(Operand(edx, 0), eax);
             break;
@@ -1049,7 +1139,7 @@ void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
             __ movl(eax, RegAddr(val_reg));
             __ movw(Operand(edx, 0), eax);
             break;
-        case LL_STOR_I_I64:
+        case LL_STOR_I_X64:
             __ movq(xmm0, RegAddr(val_reg));
             __ movq(Operand(edx, 0), xmm0);
             break;
@@ -1263,7 +1353,7 @@ void Compiler::EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) {
             __ movsxw(eax, Operand(frm, ecx, ScaleTwo, base_offset));
             __ movl(RegAddr(args.dest_reg), eax);
             break;
-        case LL_LOAD_ELEM_FLAT_I64:
+        case LL_LOAD_ELEM_FLAT_X64:
             __ movq(xmm0, Operand(frm, ecx, ScaleEight, base_offset));
             __ movq(RegAddr(args.dest_reg), xmm0);
             break;
@@ -1300,7 +1390,7 @@ void Compiler::EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) {
             __ movsxw(eax, Operand(edx, ecx, ScaleTwo));
             __ movl(RegAddr(args.dest_reg), eax);
             break;
-        case LL_LOAD_ELEM_FLAT_I_I64:
+        case LL_LOAD_ELEM_FLAT_I_X64:
             __ movq(xmm0, Operand(edx, ecx, ScaleEight));
             __ movq(RegAddr(args.dest_reg), xmm0);
             break;
@@ -1333,7 +1423,7 @@ void Compiler::EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) {
             __ movl(eax, RegAddr(args.val_reg));
             __ movw(Operand(frm, ecx, ScaleTwo, base_offset), eax);
             break;
-        case LL_STOR_ELEM_FLAT_I64:
+        case LL_STOR_ELEM_FLAT_X64:
             __ movq(xmm0, RegAddr(args.val_reg));
             __ movq(Operand(frm, ecx, ScaleEight, base_offset), xmm0);
             break;
@@ -1366,7 +1456,7 @@ void Compiler::EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) {
             __ movl(eax, RegAddr(args.val_reg));
             __ movw(Operand(edx, ecx, ScaleTwo), eax);
             break;
-        case LL_STOR_ELEM_FLAT_I_I64:
+        case LL_STOR_ELEM_FLAT_I_X64:
             __ movq(xmm0, RegAddr(args.val_reg));
             __ movq(Operand(edx, ecx, ScaleEight), xmm0);
             break;
@@ -1408,7 +1498,7 @@ void Compiler::EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             __ movsxw(eax, Operand(edx, ecx, ScaleTwo));
             __ movl(RegAddr(dest_reg), eax);
             break;
-        case LL_LOAD_ELEM_I64:
+        case LL_LOAD_ELEM_X64:
             __ movq(xmm0, Operand(edx, ecx, ScaleEight));
             __ movq(RegAddr(dest_reg), xmm0);
             break;
@@ -1451,7 +1541,7 @@ void Compiler::EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             __ movl(eax, RegAddr(val_reg));
             __ movw(Operand(edx, ecx, ScaleTwo), eax);
             break;
-        case LL_STOR_ELEM_I64:
+        case LL_STOR_ELEM_X64:
             __ movq(xmm0, RegAddr(val_reg));
             __ movq(Operand(edx, ecx, ScaleEight), xmm0);
             break;

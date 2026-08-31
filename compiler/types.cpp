@@ -128,7 +128,7 @@ bool Type::isCompositeValue() const {
 }
 
 bool Type::isPassByRef() const {
-    return isReference() || isArray() || isInt64() || isCompositeValue();
+    return isReference() || isArray() || isWideType() || isCompositeValue();
 }
 
 bool Type::isAddressType() const {
@@ -161,7 +161,7 @@ ArrayType::ArrayType(Type* inner, int size, bool is_flat)
 bool FunctionType::needs_hidden_arg() const {
     return return_type_->isFlatArray() ||
            return_type_->isEnumStruct() ||
-           return_type_->isInt64();
+           return_type_->isWideType();
 }
 
 TypeManager::TypeManager(CompileContext& cc)
@@ -288,6 +288,7 @@ void TypeManager::init() {
 
     type_float_ = defineBuiltin("float", BuiltinType::Float);
     types_.emplace(cc_.atom("Float"), type_float_);
+    type_double_ = defineBuiltin("double", BuiltinType::Double);
 
     type_void_ = defineBuiltin("void", BuiltinType::Void);
     type_null_ = defineBuiltin("null_t", BuiltinType::Null);

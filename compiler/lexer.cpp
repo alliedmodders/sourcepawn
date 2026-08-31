@@ -27,6 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <bit>
 #include <filesystem>
 #include <string>
 #include <unordered_set>
@@ -291,10 +292,14 @@ void Lexer::lex_float(full_token_t* tok, double whole) {
         fnum *= fmult;
     }
 
-    /* floating point */
-    float value = (float)fnum;
-    tok->numeric_value = FloatCellUnion(value).cell;
-    tok->id = tRATIONAL;
+    if (match_char('d')) {
+        tok->atom = cc_.atom(std::to_string(std::bit_cast<uint64_t>(fnum)));
+        tok->id = tDOUBLE_LITERAL;
+    } else {
+        float value = (float)fnum;
+        tok->numeric_value = FloatCellUnion(value).cell;
+        tok->id = tRATIONAL;
+    }
 }
 
 int Lexer::preproc_expr(cell* val, Type** type) {
@@ -1408,6 +1413,7 @@ const char* sc_tokens[] = {"*=",
                            "-integer value-",
                            "-number value-",
                            "-float value-",
+                           "-double value-",
                            "-identifier-",
                            "-label-",
                            "-string-",
@@ -1485,7 +1491,6 @@ IsUnimplementedKeyword(int token)
         case tAS:
         case tCATCH:
         case tCAST_TO:
-        case tDOUBLE:
         case tEXPLICIT:
         case tFINALLY:
         case tFOREACH:

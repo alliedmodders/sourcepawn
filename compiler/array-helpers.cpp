@@ -673,18 +673,12 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
 
         const auto& v = expr->val();
-        if (v.ident != iCONSTEXPR && !expr->as<Number64Expr>()) {
+        if (v.ident != iCONSTEXPR && !expr->as<Number64Expr>() && !expr->as<DoubleExpr>()) {
             report(expr, 8);
             continue;
         }
 
-        // We manually run int64 checks until the feature has had time to settle.
-        if (rank->inner()->isInt64()) {
-            if (!v.type()->isInt() && !v.type()->isInt64())
-                report(expr, 450) << v.type() << rank->inner();
-        } else {
-            sema_->CheckCoercion(expr, rank->inner(), v.type(), CvtContext::Assignment);
-        }
+        sema_->CheckCoercion(expr, rank->inner(), v.type(), CvtContext::Assignment);
 
         prev2 = prev1;
         if (v.ident == iCONSTEXPR)

@@ -548,6 +548,9 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
         if (auto n64 = item->as<Number64Expr>()) {
             AddValue<int64_t>(&data, *n64->ToInt64());
             prev1 = {};
+        } else if (auto dbl = item->as<DoubleExpr>()) {
+            AddValue<double>(&data, dbl->value());
+            prev1 = {};
         } else {
             assert(item->val().ident == iCONSTEXPR);
             cell_t cv = item->val().constval();
@@ -698,6 +701,8 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
             // int64 has to be handled separately since we can't represent it
             // in an ExprValue right now.
             __ emit(OP_PUSH_C_I64, Int64Value(0));
+        } else if (!ctor && rhs.type()->isDouble()) {
+            __ emit(OP_PUSH_C_F64, DoubleValue(0));
         } else if (rhs.ident == iCONSTEXPR) {
             if (rhs.type()->isNull())
                 __ emit(OP_LOAD_NULL);
@@ -842,6 +847,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
             break;
         case ExprKind::Number64Expr:
             EmitNumber64Expr(expr->to<Number64Expr>());
+            break;
+        case ExprKind::DoubleExpr:
+            EmitDoubleExpr(expr->to<DoubleExpr>());
             break;
         case ExprKind::SimpleCastExpr:
             EmitSimpleCastExpr(expr->to<SimpleCastExpr>());
@@ -1176,56 +1184,14 @@ void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* r
         type = BuiltinType::Int64;
     else if (effective->isFloat())
         type = BuiltinType::Float;
+    else if (effective->isDouble())
+        type = BuiltinType::Double;
 
     if (oper_tok)
         EmitBinaryOp(expr, type, oper_tok);
 }
 
-OPCODE GetFloatBinaryOp(int oper_tok) {
-    switch (oper_tok) {
-        case '*': return OP_SMUL;
-        case '/': return OP_SDIV;
-        case '%': return OP_SMOD;
-        case '+': return OP_ADD;
-        case '-': return OP_SUB;
-        case tlEQ: return OP_EQ;
-        case tlNE: return OP_NEQ;
-        case '>': return OP_SGRTR;
-        case tlGE: return OP_SGEQ;
-        case '<': return OP_SLESS;
-        case tlLE: return OP_SLEQ;
-        default:
-            assert(false);
-            return OP_NOP;
-    }
-}
-
-OPCODE GetInt32BinaryOp(int oper_tok) {
-    switch (oper_tok) {
-        case '*': return OP_SMUL;
-        case '/': return OP_SDIV;
-        case '%': return OP_SMOD;
-        case '+': return OP_ADD;
-        case '-': return OP_SUB;
-        case tSHL: return OP_SHL;
-        case tSHR: return OP_SSHR;
-        case tSHRU: return OP_SHR;
-        case '&': return OP_AND;
-        case '^': return OP_XOR;
-        case '|': return OP_OR;
-        case tlEQ: return OP_EQ;
-        case tlNE: return OP_NEQ;
-        case '>': return OP_SGRTR;
-        case tlGE: return OP_SGEQ;
-        case '<': return OP_SLESS;
-        case tlLE: return OP_SLEQ;
-        default:
-            assert(false);
-            return OP_NOP;
-    }
-}
-
-OPCODE GetInt64BinaryOp(int oper_tok) {
+OPCODE GetBinaryOp(int oper_tok) {
     switch (oper_tok) {
         case '*': return OP_SMUL;
         case '/': return OP_SDIV;
@@ -1251,13 +1217,7 @@ OPCODE GetInt64BinaryOp(int oper_tok) {
 }
 
 void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
-    if (type == BuiltinType::Int64) {
-        __ emit(GetInt64BinaryOp(oper_tok));
-    } else if (type == BuiltinType::Float) {
-        __ emit(GetFloatBinaryOp(oper_tok));
-    } else {
-        __ emit(GetInt32BinaryOp(oper_tok));
-    }
+    __ emit(GetBinaryOp(oper_tok));
 
     if (type == BuiltinType::Int16 && !IsCompare(oper_tok))
         __ emit(OP_CVT_I16);
@@ -1680,10 +1640,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
         // Always pass wide integers by reference, as a hack for backward
         // compatibility with natives and GetLocalParams.
-        if (val.type()->isWideInt() && !needs_temp && !expr->lvalue()) {
-            auto temp_type = val.type()->isInt64() ? BuiltinType::Int64
-                                                   : BuiltinType::IntPtr;
-            auto slot = AcquireTempSlot(expr, temp_type);
+        if (val.type()->isWideType() && !needs_temp && !expr->lvalue()) {
+            auto slot = AcquireTempSlot(expr, val.type()->builtin_type());
             __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
@@ -1704,9 +1662,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_STOR_S, VarSlot(slot));
             hidden_slot = {slot};
         } else {
-            assert(return_type->isInt64());
-
-            hidden_slot = {AcquireTempSlot(call, BuiltinType::Int64)};
+            assert(return_type->isWideType());
+            hidden_slot = {AcquireTempSlot(call, return_type->builtin_type())};
             __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
         }
         nargs++;
@@ -1744,7 +1701,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
 void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     const auto& arg = expr->arg();
-    assert(!arg->type()->isInt64());
+    assert(!arg->type()->isInt64() && !arg->type()->isDouble());
 
     auto init = arg->init_rhs();
 
@@ -1856,11 +1813,16 @@ void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
         if (fun_->signature()->needs_hidden_arg()) {
             if (v.type()->isEnumStruct() || v.type()->isArray()) {
                 EmitReturnArrayStmt(stmt);
-            } else if (v.type()->isInt64()) {
+            } else if (v.type()->isWideType()) {
                 // Must copy to the hidden arg.
                 __ load_hidden_arg(fun_);
                 EmitExpr(stmt->expr());
-                __ emit(OP_STOR_I_I64);
+                if (v.type()->isInt64())
+                    __ emit(OP_STOR_I_I64);
+                else if (v.type()->isIntPtr())
+                    __ emit(OP_STOR_I_INTPTR);
+                else
+                    __ emit(OP_STOR_I_F64);
                 __ emit(OP_RETV);
             } else {
                 assert(false);
@@ -1937,6 +1899,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_ELEM_I64);
             else if (lval.type()->isIntPtr())
                 __ emit(OP_LOAD_ELEM_INTPTR);
+            else if (lval.type()->isDouble())
+                __ emit(OP_LOAD_ELEM_F64);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_ELEM_F32);
             else if (!lval.type()->isComposite())
@@ -1961,6 +1925,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_I_I64);
             else if (lval.type()->isIntPtr())
                 __ emit(OP_LOAD_I_INTPTR);
+            else if (lval.type()->isDouble())
+                __ emit(OP_LOAD_I_F64);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_I_F32);
             else
@@ -2000,11 +1966,11 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
                 __ emit(OP_LOAD_S, VarSlot(var->addr()));
                 if (lval.type()->inner()->isInt64())
-                    // int64 arguments are passed by-ref for compatibility.
                     __ emit(OP_LOAD_I_I64);
                 else if (lval.type()->inner()->isIntPtr())
-                    // intptr arguments are passed by-ref for compatibility.
                     __ emit(OP_LOAD_I_INTPTR);
+                else if (lval.type()->inner()->isDouble())
+                    __ emit(OP_LOAD_I_F64);
                 else if (lval.type()->inner()->isFloat())
                     __ emit(OP_LOAD_I_F32);
                 else
@@ -2023,14 +1989,14 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 else
                     EmitLoadField(field);
             } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
-                    // int64 arguments are passed by-ref for compatibility.
+                if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    __ emit(OP_LOAD_I_I64);
-                } else if (var->type()->isIntPtr() && var->vclass() == sARGUMENT) {
-                    // intptr arguments are passed by-ref for compatibility.
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    __ emit(OP_LOAD_I_INTPTR);
+                    if (var->type()->isInt64())
+                        __ emit(OP_LOAD_I_I64);
+                    else if (var->type()->isIntPtr())
+                        __ emit(OP_LOAD_I_INTPTR);
+                    else
+                        __ emit(OP_LOAD_I_F64);
                 } else if (var->type()->isCompositeValue()) {
                     EmitAddress(var);
                 } else {
@@ -2061,6 +2027,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_ELEM_I64);
             else if (lval.type()->isIntPtr())
                 __ emit(OP_STOR_ELEM_INTPTR);
+            else if (lval.type()->isDouble())
+                __ emit(OP_STOR_ELEM_F64);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_ELEM_F32);
             else if (lval.type()->isHeapItem())
@@ -2080,6 +2048,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_I_I64);
             else if (lval.type()->isIntPtr())
                 __ emit(OP_STOR_I_INTPTR);
+            else if (lval.type()->isDouble())
+                __ emit(OP_STOR_I_F64);
             else if (lval.type()->isFloat())
                 __ emit(OP_STOR_I_F32);
             else if (lval.type()->isHeapItem())
@@ -2094,9 +2064,9 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
             break;
         }
         case iACCESSOR:
-            if (lval.type()->isInt64()) {
-                // Need to pass the int64 as an address for native compatibility.
-                auto slot = AcquireTempSlot(pn, BuiltinType::Int64);
+            if (lval.type()->isWideType()) {
+                // Need to pass the value as an address for native compatibility.
+                auto slot = AcquireTempSlot(pn, lval.type()->builtin_type());
                 __ emit(OP_STOR_S, VarSlot(slot));
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
@@ -2128,6 +2098,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                     __ emit(OP_STOR_I_I64);
                 else if (lval.type()->inner()->isIntPtr())
                     __ emit(OP_STOR_I_INTPTR);
+                else if (lval.type()->inner()->isDouble())
+                    __ emit(OP_STOR_I_F64);
                 else if (lval.type()->inner()->isHeapItem())
                     __ emit(OP_STOR_I_A);
                 else
@@ -2144,14 +2116,15 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 auto field = fun_->GetSharedVarField(var);
                 EmitStoreField(field);
             } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
+                if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
                     __ emit(OP_SWAP);
-                    __ emit(OP_STOR_I_I64);
-                } else if (var->type()->isIntPtr() && var->vclass() == sARGUMENT) {
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    __ emit(OP_SWAP);
-                    __ emit(OP_STOR_I_INTPTR);
+                    if (var->type()->isInt64())
+                        __ emit(OP_STOR_I_I64);
+                    else if (var->type()->isIntPtr())
+                        __ emit(OP_STOR_I_INTPTR);
+                    else
+                        __ emit(OP_STOR_I_F64);
                 } else {
                     __ emit(OP_STOR_S, VarSlot(var->addr()));
                 }
@@ -2249,8 +2222,10 @@ void CodeGenerator::InvokeGetter(PropertyDecl* prop) {
 
     // :TODO: figure out how to factor this code with EmitCallExpr.
     std::optional<cell_t> hidden_slot;
-    if (prop->getter()->return_type()->isInt64())
-        hidden_slot = {AcquireTempSlot(prop, BuiltinType::Int64)};
+    if (prop->getter()->return_type()->isWideType()) {
+        auto return_type = prop->getter()->return_type();
+        hidden_slot = {AcquireTempSlot(prop, return_type->builtin_type())};
+    }
 
     cell_t nargs = 1;
     if (hidden_slot) {
@@ -2575,6 +2550,10 @@ void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
     __ emit(OP_PUSH_C_I64, Int64Value(*expr->ToInt64()));
 }
 
+void CodeGenerator::EmitDoubleExpr(DoubleExpr* expr) {
+    __ emit(OP_PUSH_C_F64, DoubleValue(expr->as_bits()));
+}
+
 void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     EmitExpr(expr->from());
 
@@ -2598,6 +2577,8 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     } else if (to_type->isIntPtr()) {
         assert(from_type->isInt() || from_type->isAny() || from_type->isInt64());
         __ emit(OP_CVT_INTPTR);
+    } else if (to_type->isDouble()) {
+        __ emit(OP_CVT_F64);
     } else if (to_type->isInt16()) {
         // int16 is sign-extended on the stack, so no conversion needed.
         // promotion to int64/intptr is handled via EmitCastExpr.
@@ -2606,7 +2587,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
         // similar to int16, this is sign-extended on the stack.
         assert(from_type->isInt() || from_type->isInt16());
     } else if (to_type->isBool()) {
-        if (from_type->isInt64())
+        if (from_type->isWideType())
             __ emit(OP_TEST);
         else
             assert(false);

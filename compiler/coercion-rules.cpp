@@ -75,6 +75,8 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
         case BuiltinType::Int:
             if (to->isAny() || to->isChar())
                 return ConversionKind::Trivial;
+            if (to->isDouble())
+                return ConversionKind::Numeric;
 
             // Rule for legacy compatibility.
             if (IsReturnOrAssign(why) && to->isInt())
@@ -111,6 +113,13 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
         case BuiltinType::Float:
             if (to->isAny())
                 return ConversionKind::Trivial;
+            if (to->isDouble())
+                return ConversionKind::Numeric;
+            break;
+
+        case BuiltinType::Double:
+            if (to->isDouble())
+                return ConversionKind::None;
             break;
 
         case BuiltinType::IntPtr:

@@ -26,6 +26,7 @@
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "macro-assembler.h"
+#include "type-desc.h"
 #include "v2/control-flow.h"
 #include "v2/lowering/ll-op.h"
 #include "v2/opcodes.h"
@@ -99,7 +100,8 @@ class CompilerBase
     virtual void EmitBasicAlu(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
     virtual void EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
-    virtual void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest,
+                                  TypeKind kind) = 0;
     virtual void EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
     virtual void EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
@@ -116,6 +118,8 @@ class CompilerBase
     virtual void EmitBinaryI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
     virtual void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitBinaryDoubleOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
+    virtual void EmitUnaryDoubleOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) = 0;
     virtual void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) = 0;
     virtual void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) = 0;

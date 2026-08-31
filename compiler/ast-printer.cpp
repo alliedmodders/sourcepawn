@@ -90,6 +90,10 @@ void AstPrinter::PrintExprInline(Expr* expr) {
                 fprintf(out_, "%lld", (long long)node->ToInt64().value_or(0));
             break;
         }
+        case ExprKind::DoubleExpr: {
+            fprintf(out_, "%g", expr->to<DoubleExpr>()->value());
+            break;
+        }
         case ExprKind::SymbolExpr:
             fprintf(out_, "%s", expr->to<SymbolExpr>()->name()->chars());
             break;
@@ -611,6 +615,10 @@ void AstPrinter::PrintNumber64Expr(Number64Expr* node, bool is_last) {
         fprintf(out_, "Number64Expr: %s\n", node->atom()->chars());
     else
         fprintf(out_, "Number64Expr: %lld\n", (long long)node->ToInt64().value_or(0));
+}
+
+void AstPrinter::PrintDoubleExpr(DoubleExpr* node, bool is_last) {
+    fprintf(out_, "DoubleExpr: %g\n", node->value());
 }
 
 void AstPrinter::PrintEscapedString(const char* s) {

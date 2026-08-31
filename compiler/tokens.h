@@ -169,6 +169,7 @@ enum TokenKind {
     tNUMBER,   /* integer number */
     tNUMBER64,
     tRATIONAL, /* rational number */
+    tDOUBLE_LITERAL, /* double-precision floating literal (e.g. 3.14d) */
     tSYMBOL,
     tLABEL,
     tSTRING,

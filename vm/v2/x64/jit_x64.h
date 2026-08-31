@@ -63,7 +63,8 @@ class Compiler : public CompilerBase
     void EmitBasicAlu(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
     void EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
     void EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
-    void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest,
+                          sp::TypeKind kind) override;
     void EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
     void EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
     void EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
@@ -78,6 +79,8 @@ class Compiler : public CompilerBase
     void EmitBinaryI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
     void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
     void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitBinaryDoubleOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitUnaryDoubleOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
     void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) override;
     void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) override;
     void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) override;

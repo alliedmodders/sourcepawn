@@ -484,10 +484,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     encode_type_into(bytes, return_type);
 
     if (hidden_arg)
-        encode_type_into(bytes, hidden_arg, hidden_arg->isWideInt());
+        encode_type_into(bytes, hidden_arg, hidden_arg->isWideType());
     for (size_t i = 0; i < fun->FormalArgc(); i++) {
         const auto& arg = fun->args()[i];
-        encode_type_into(bytes, arg->type(), arg->type()->isWideInt());
+        encode_type_into(bytes, arg->type(), arg->type()->isWideType());
     }
 
     return type_pool_.add(bytes);
@@ -572,6 +572,8 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
         return cb::kInt16;
     if (type->isFloat())
         return cb::kFloat32;
+    if (type->isDouble())
+        return cb::kFloat64;
     if (type->isInt())
         return cb::kInt32;
     if (type->isInt64())
@@ -683,7 +685,7 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionTyp
 
     for (size_t i = 0; i < ft->nargs(); i++) {
         QualType type = ft->arg_type(i);
-        encode_type_into(bytes, type, type->isWideInt());
+        encode_type_into(bytes, type, type->isWideType());
     }
 }
 

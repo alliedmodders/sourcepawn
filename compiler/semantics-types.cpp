@@ -34,7 +34,8 @@ static const std::vector<std::pair<BuiltinType, BuiltinType>> NumericOperands{
     {BuiltinType::Int, BuiltinType::Int},
     {BuiltinType::IntPtr, BuiltinType::IntPtr},
     {BuiltinType::Int64, BuiltinType::Int64},
-    {BuiltinType::Float, BuiltinType::Float}
+    {BuiltinType::Float, BuiltinType::Float},
+    {BuiltinType::Double, BuiltinType::Double}
 };
 static const std::vector<std::pair<BuiltinType, BuiltinType>> BitwiseOperands{
     {BuiltinType::Int, BuiltinType::Int},

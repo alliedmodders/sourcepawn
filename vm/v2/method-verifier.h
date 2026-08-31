@@ -51,6 +51,7 @@ class MethodVerifier final
     const TypeDesc* int64_type() const;
     const TypeDesc* intptr_type() const;
     const TypeDesc* float32_type() const;
+    const TypeDesc* double_type() const;
     const TypeDesc* null_type() const;
 
   private:

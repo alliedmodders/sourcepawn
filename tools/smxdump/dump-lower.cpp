@@ -145,7 +145,7 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
                 size_t nargs = 0;
 
                 switch (op) {
-#define FOR_EACH_OPCODE(op_name, val, text, ...) \
+#define FOR_EACH_OPCODE(op_name, text, ...) \
                 case LL_##op_name: { \
                     static const LLArgFmt fmt[] = __VA_ARGS__; \
                     args = fmt; \

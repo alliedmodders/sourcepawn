@@ -91,6 +91,7 @@ Parser::Parse()
                 // Fallthrough.
             case tINT:
             case tOBJECT:
+            case tDOUBLE:
             case tCHAR:
             case tVOID:
             case tLABEL:
@@ -716,6 +717,7 @@ Stmt* Parser::parse_const(int vclass) {
         switch (lexer_->lex()) {
             case tINT:
             case tOBJECT:
+            case tDOUBLE:
             case tCHAR: {
                 auto tok = *lexer_->current_token();
                 parse_new_typename(&tok, &rt);
@@ -1163,6 +1165,12 @@ Parser::constant()
             return new Number64Expr(pos, lexer_->current_token()->atom);
         case tRATIONAL:
             return new FloatExpr(cc_, pos, lexer_->current_token()->value());
+        case tDOUBLE_LITERAL: {
+            const auto& atom = lexer_->current_token()->atom;
+            char* endptr;
+            uint64_t bits = strtoull(atom->chars(), &endptr, 10);
+            return new DoubleExpr(pos, std::bit_cast<double>(bits));
+        }
         case tSTRING: {
             const auto& atom = lexer_->current_token()->atom;
             return new StringExpr(pos, atom);
@@ -1446,6 +1454,7 @@ Parser::parse_stmt(bool allow_decl)
             /* nothing */
             return nullptr;
         case tINT:
+        case tDOUBLE:
         case tVOID:
         case tCHAR:
         case tOBJECT:
@@ -1761,6 +1770,7 @@ Parser::parse_for()
         switch (tok_id) {
             case tINT:
             case tCHAR:
+            case tDOUBLE:
             case tOBJECT:
             case tVOID:
                 lexer_->lexpush();
@@ -2836,6 +2846,9 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
     switch (tok->id) {
         case tINT:
             *out = TypenameInfo{types_->type_int()};
+            return true;
+        case tDOUBLE:
+            *out = TypenameInfo{types_->type_double()};
             return true;
         case tINT8:
             *out = TypenameInfo{types_->type_int8()};

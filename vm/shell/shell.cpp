@@ -155,6 +155,30 @@ static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
   return 0;
 }
 
+static cell_t PrintDouble(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[1], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  return printf("%g\n", *reinterpret_cast<double*>(addr));
+}
+
+static cell_t AddDouble(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* out;
+  cell_t* num1;
+  cell_t* num2;
+  if (int err = cx->LocalToPhysAddr(params[1], &out); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[2], &num1); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[3], &num2); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  *reinterpret_cast<double*>(out) =
+      *reinterpret_cast<double*>(num1) + *reinterpret_cast<double*>(num2);
+  return 0;
+}
+
 static cell_t DoNothingVarargs(IPluginContext* cx, const cell_t* params)
 {
   return 0;
@@ -679,6 +703,8 @@ static int Execute(const char* file)
   BindNative(rt.get(), "print_test_struct", PrintTestStruct);
   BindNative(rt.get(), "add_test_structs", AddTestStructs);
   BindNative(rt.get(), "add_int64", AddInt64);
+  BindNative(rt.get(), "printdouble", PrintDouble);
+  BindNative(rt.get(), "add_double", AddDouble);
   BindNative(rt.get(), "donothing_varargs", DoNothingVarargs);
 
   // These are hacks, since the legacy VM hardcodes them and the v2 VM does not.

@@ -16,6 +16,8 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #include "v2/runtime-helpers.h"
 
+#include <math.h>
+
 #include "environment.h"
 #include "v2/runtime.h"
 
@@ -47,6 +49,10 @@ Int64Mod(int64_t* pri, int64_t* alt, int64_t* pri_dest) {
 
     *pri_dest = *alt % *pri;
     return SP_ERROR_NONE;
+}
+
+double DoubleMod(double left, double right) {
+    return ::fmod(left, right);
 }
 
 void ReportOutOfBoundsError(cell_t index, cell_t bounds) {

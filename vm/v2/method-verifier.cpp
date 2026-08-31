@@ -63,6 +63,10 @@ const TypeDesc* MethodVerifier::float32_type() const {
     return rt_->GetPrimitiveType(TypeKind::Float32);
 }
 
+const TypeDesc* MethodVerifier::double_type() const {
+    return rt_->GetPrimitiveType(TypeKind::Float64);
+}
+
 const TypeDesc* MethodVerifier::null_type() const {
     return rt_->GetPrimitiveType(TypeKind::Null);
 }
@@ -144,6 +148,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(int64_type());
         }
 
+        case OP_LOAD_I_F64: {
+            const TypeDesc* addr;
+            if (!popStack(&addr))
+                return false;
+            if (!addr->IsReference() || !addr->ref_type()->IsFloat64())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(double_type());
+        }
+
         case OP_LOAD_I_INTPTR: {
             const TypeDesc* addr;
             if (!popStack(&addr))
@@ -156,6 +169,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_ELEM_I32:
         case OP_LOAD_ELEM_F32:
         case OP_LOAD_ELEM_I64:
+        case OP_LOAD_ELEM_F64:
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
         case OP_LOAD_ELEM_I16:
@@ -175,6 +189,11 @@ MethodVerifier::verifyOp(OPCODE op) {
                     return reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return pushStack(int64_type());
             }
+            if (op == OP_LOAD_ELEM_F64) {
+                if (!elt->IsFloat64())
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return pushStack(double_type());
+            }
             if (op == OP_LOAD_ELEM_INTPTR) {
                 if (!elt->IsIntPtr())
                     return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -192,6 +211,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_ELEM_I32:
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
+        case OP_STOR_ELEM_F64:
         case OP_STOR_ELEM_INTPTR:
         case OP_STOR_ELEM_I8:
         case OP_STOR_ELEM_I16:
@@ -251,6 +271,18 @@ MethodVerifier::verifyOp(OPCODE op) {
             return ValidateStore(addr->ref_type(), val);
         }
 
+        case OP_STOR_I_F64: {
+            const TypeDesc* val;
+            if (!popStack(&val))
+                return false;
+            const TypeDesc* addr;
+            if (!popStack(&addr))
+                return false;
+            if (!addr->IsReference() || !addr->ref_type()->IsFloat64())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return ValidateStore(addr->ref_type(), val);
+        }
+
         case OP_IDXADDR:
         case OP_SLICE: {
             // Pops index, pops base address, pushes result.
@@ -287,15 +319,13 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc *b, *a;
             if (!popStack(&b) || !popStack(&a))
                 return false;
-            if (a->IsInt64() && b->IsInt64()) {
+            if (a->IsInt64() && b->IsInt64())
                 return pushStack(int64_type());
-            } else if (a->IsIntPtr() && b->IsIntPtr()) {
+            if (a->IsIntPtr() && b->IsIntPtr())
                 return pushStack(intptr_type());
-            } else if (checkIntOrFloat(a) && checkIntOrFloat(b)) {
+            if (checkIntOrFloat(a) && checkIntOrFloat(b))
                 return pushStack(cell_type());
-            } else {
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
         case OP_SMUL:
@@ -306,17 +336,17 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc *b, *a;
             if (!popStack(&b) || !popStack(&a))
                 return false;
-            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32)
                 return pushStack(float32_type());
-            } else if (a->IsInt64() && b->IsInt64()) {
+            if (a->kind() == TypeKind::Float64 && b->kind() == TypeKind::Float64)
+                return pushStack(double_type());
+            if (a->IsInt64() && b->IsInt64())
                 return pushStack(int64_type());
-            } else if (a->IsIntPtr() && b->IsIntPtr()) {
+            if (a->IsIntPtr() && b->IsIntPtr())
                 return pushStack(intptr_type());
-            } else if (checkIntOrFloat(a) && checkIntOrFloat(b)) {
+            if (checkIntOrFloat(a) && checkIntOrFloat(b))
                 return pushStack(cell_type());
-            } else {
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
         case OP_EQ:
@@ -328,28 +358,34 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc *b, *a;
             if (!popStack(&b) || !popStack(&a))
                 return false;
-            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32)
                 return pushStack(cell_type());
-            } else if ((a->IsInt64() && b->IsInt64()) || (a->IsIntPtr() && b->IsIntPtr())) {
+            if (a->kind() == TypeKind::Float64 && b->kind() == TypeKind::Float64)
                 return pushStack(cell_type());
-            } else if (checkCell(a) && checkCell(b)) {
+            if ((a->IsInt64() && b->IsInt64()) || (a->IsIntPtr() && b->IsIntPtr()))
                 return pushStack(cell_type());
-            } else {
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
+            if (checkCell(a) && checkCell(b))
+                return pushStack(cell_type());
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
-
-
-        case OP_NOT:
-            return popIntOrFloat() && pushStack(cell_type());
+        case OP_NOT: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (a->IsInt64() || a->IsIntPtr() || a->IsFloat64())
+                return pushStack(cell_type());
+            if (checkIntOrFloat(a))
+                return pushStack(cell_type());
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
 
         case OP_INC:
         case OP_DEC: {
             const TypeDesc* a;
             if (!popStack(&a))
                 return false;
-            if (a->IsInt64() || a->IsIntPtr())
+            if (a->IsInt64() || a->IsIntPtr() || a->IsFloat64())
                 return pushStack(a);
             else if (checkIntOrFloat(a))
                 return pushStack(a);
@@ -357,32 +393,49 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
-        case OP_NEG:
+        case OP_NEG: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (a->IsInt64() || a->IsIntPtr() || a->IsFloat64())
+                return pushStack(a);
+            if (checkIntOrFloat(a))
+                return pushStack(a);
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
+
         case OP_INVERT: {
             const TypeDesc* a;
             if (!popStack(&a))
                 return false;
             if (a->IsInt64() || a->IsIntPtr())
                 return pushStack(a);
-            else if (checkIntOrFloat(a))
+            if (checkIntOrFloat(a))
                 return pushStack(a);
-            else
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
         case OP_CVT_F32:
             return popIntOrFloat() && pushStack(float32_type());
 
+        case OP_CVT_F64: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (!checkIntOrFloat(a))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(double_type());
+        }
+
         case OP_TEST: {
             const TypeDesc* a;
             if (!popStack(&a))
                 return false;
-            if (a->IsInt64() || a->IsIntPtr())
+            if (a->IsInt64() || a->IsIntPtr() || a->IsFloat64())
                 return pushStack(cell_type());
-            else if (checkIntOrFloat(a))
+            if (checkIntOrFloat(a))
                 return pushStack(cell_type());
-            else
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
 
         case OP_CVT_I32: {
@@ -491,9 +544,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(intptr_type());
         }
 
-
-
-
         case OP_LOAD_GLB:
         {
             uint16_t index = read<uint16_t>();
@@ -595,6 +645,11 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_PUSH_C_F32: {
             read<float>();
             return pushStack(float32_type());
+        }
+
+        case OP_PUSH_C_F64: {
+            read<double>();
+            return pushStack(double_type());
         }
 
         case OP_LOAD_NULL: {
@@ -1074,6 +1129,7 @@ static inline bool IsPodType(const TypeDesc* type) {
         case TypeKind::Int64:
         case TypeKind::IntPtr:
         case TypeKind::Float32:
+        case TypeKind::Float64:
         case TypeKind::Char8:
         case TypeKind::Int8:
         case TypeKind::Int16:

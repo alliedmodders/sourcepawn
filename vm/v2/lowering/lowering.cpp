@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include <bit>
 #include <list>
 #include <memory>
 #include <span>
@@ -164,6 +165,7 @@ class MethodLowerer
        int64_type_(graph->rt()->GetPrimitiveType(TypeKind::Int64)),
        intptr_type_(graph->rt()->GetPrimitiveType(TypeKind::IntPtr)),
        float32_type_(graph->rt()->GetPrimitiveType(TypeKind::Float32)),
+       float64_type_(graph->rt()->GetPrimitiveType(TypeKind::Float64)),
        null_type_(graph->rt()->GetPrimitiveType(TypeKind::Null)),
        reader_(nullptr, nullptr)
     {}
@@ -343,10 +345,10 @@ class MethodLowerer
 
     void LowerCall(uint32_t method_index, std::optional<uint8_t> argc, const TypeDesc* sig = nullptr,
                    VReg fn_reg = VReg(), VReg spread_reg = VReg());
-    void LowerBinary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
+    void LowerBinary(LLOp op_i32,
                      const TypeDesc* force_result_type = nullptr);
+    void LowerBitwise(LLOp op_i32, LLOp op_i64);
     void LowerUnary(LLOp op_i32, const TypeDesc* force_result_type = nullptr);
-    void LowerUnary(LLOp op_i32, LLOp op_f32, LLOp op_i64, const TypeDesc* force_result_type = nullptr);
     void LowerUpvarCopy(const TypeDesc* closure_td, const TypeDesc* upvar_td,
                         const VReg& closure_reg, const VReg& val_reg, uint32_t offset);
 
@@ -363,6 +365,7 @@ class MethodLowerer
     const TypeDesc* int64_type_ = nullptr;
     const TypeDesc* intptr_type_ = nullptr;
     const TypeDesc* float32_type_ = nullptr;
+    const TypeDesc* float64_type_ = nullptr;
     const TypeDesc* null_type_ = nullptr;
     BinaryReader reader_;
 
@@ -537,18 +540,23 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
         case OP_LOAD_I_I32:
         case OP_LOAD_I_F32: {
-            LowerUnary(op == OP_LOAD_I_I32 ? LL_LOAD_I_I32 : LL_LOAD_I_F32,
+            LowerUnary(LL_LOAD_I_X32,
                        op == OP_LOAD_I_I32 ? cell_type_ : float32_type_);
             break;
         }
 
         case OP_LOAD_I_I64: {
-            LowerUnary(LL_LOAD_I_I64, int64_type_);
+            LowerUnary(LL_LOAD_I_X64, int64_type_);
+            break;
+        }
+
+        case OP_LOAD_I_F64: {
+            LowerUnary(LL_LOAD_I_X64, float64_type_);
             break;
         }
 
         case OP_LOAD_I_INTPTR: {
-            LLOp llop = intptr_type_->IsWideInt() ? LL_LOAD_I_I64 : LL_LOAD_I_I32;
+            LLOp llop = intptr_type_->IsWideInt() ? LL_LOAD_I_X64 : LL_LOAD_I_X32;
             LowerUnary(llop, intptr_type_);
             break;
         }
@@ -566,6 +574,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_LOAD_ELEM_I32:
         case OP_LOAD_ELEM_F32:
         case OP_LOAD_ELEM_I64:
+        case OP_LOAD_ELEM_F64:
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
         case OP_LOAD_ELEM_I16:
@@ -584,10 +593,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 switch (op) {
                     case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_FLAT_I32; break;
                     case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_FLAT_F32; break;
-                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_FLAT_I64; break;
+                    case OP_LOAD_ELEM_I64:
+                    case OP_LOAD_ELEM_F64: llop = LL_LOAD_ELEM_FLAT_X64; break;
                     case OP_LOAD_ELEM_INTPTR:
                         llop = intptr_type_->IsWideInt() ?
-                               LL_LOAD_ELEM_FLAT_I64 : LL_LOAD_ELEM_FLAT_I32;
+                               LL_LOAD_ELEM_FLAT_X64 : LL_LOAD_ELEM_FLAT_I32;
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_FLAT_U8; break;
                     case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_FLAT_I16; break;
@@ -598,10 +608,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 switch (op) {
                     case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_I32; break;
                     case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_F32; break;
-                    case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_I64; break;
+                    case OP_LOAD_ELEM_I64:
+                    case OP_LOAD_ELEM_F64: llop = LL_LOAD_ELEM_X64; break;
                     case OP_LOAD_ELEM_INTPTR:
                         llop = intptr_type_->IsWideInt() ?
-                               LL_LOAD_ELEM_I64 : LL_LOAD_ELEM_I32;
+                               LL_LOAD_ELEM_X64 : LL_LOAD_ELEM_I32;
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
                     case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_I16; break;
@@ -618,17 +629,19 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_I_I32:
         case OP_STOR_I_F32:
         case OP_STOR_I_I64:
+        case OP_STOR_I_F64:
         case OP_STOR_I_INTPTR:
         case OP_STOR_I_I8:
         case OP_STOR_I_I16:
         case OP_STOR_I_A: {
             LLOp llop = LL_NOP;
             switch (op) {
-                case OP_STOR_I_I32: llop = LL_STOR_I_I32; break;
-                case OP_STOR_I_F32: llop = LL_STOR_I_F32; break;
-                case OP_STOR_I_I64: llop = LL_STOR_I_I64; break;
+                case OP_STOR_I_I32:
+                case OP_STOR_I_F32: llop = LL_STOR_I_X32; break;
+                case OP_STOR_I_I64: llop = LL_STOR_I_X64; break;
+                case OP_STOR_I_F64: llop = LL_STOR_I_X64; break;
                 case OP_STOR_I_INTPTR:
-                    llop = intptr_type_->IsWideInt() ? LL_STOR_I_I64 : LL_STOR_I_I32;
+                    llop = intptr_type_->IsWideInt() ? LL_STOR_I_X64 : LL_STOR_I_X32;
                     break;
                 case OP_STOR_I_I8:  llop = LL_STOR_I_I8; break;
                 case OP_STOR_I_I16: llop = LL_STOR_I_I16; break;
@@ -653,6 +666,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_ELEM_I32:
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
+        case OP_STOR_ELEM_F64:
         case OP_STOR_ELEM_INTPTR:
         case OP_STOR_ELEM_I8:
         case OP_STOR_ELEM_I16:
@@ -672,10 +686,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 switch (op) {
                     case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_FLAT_I32; break;
                     case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_FLAT_F32; break;
-                    case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_FLAT_I64; break;
+                    case OP_STOR_ELEM_I64:
+                    case OP_STOR_ELEM_F64: llop = LL_STOR_ELEM_FLAT_X64; break;
                     case OP_STOR_ELEM_INTPTR:
                         llop = intptr_type_->IsWideInt() ?
-                               LL_STOR_ELEM_FLAT_I64 : LL_STOR_ELEM_FLAT_I32;
+                               LL_STOR_ELEM_FLAT_X64 : LL_STOR_ELEM_FLAT_I32;
                         break;
                     case OP_STOR_ELEM_I8:  llop = LL_STOR_ELEM_FLAT_I8; break;
                     case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_FLAT_I16; break;
@@ -696,7 +711,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     switch (llop) {
                         case LL_STOR_ELEM_FLAT_I32: iop = LL_STOR_ELEM_FLAT_I_I32; break;
                         case LL_STOR_ELEM_FLAT_F32: iop = LL_STOR_ELEM_FLAT_I_F32; break;
-                        case LL_STOR_ELEM_FLAT_I64: iop = LL_STOR_ELEM_FLAT_I_I64; break;
+                        case LL_STOR_ELEM_FLAT_X64: iop = LL_STOR_ELEM_FLAT_I_X64; break;
                         case LL_STOR_ELEM_FLAT_I8:  iop = LL_STOR_ELEM_FLAT_I_I8; break;
                         case LL_STOR_ELEM_FLAT_I16: iop = LL_STOR_ELEM_FLAT_I_I16; break;
                         default: assert(false); break;
@@ -715,10 +730,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 switch (op) {
                     case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_I32; break;
                     case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_F32; break;
-                    case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_I64; break;
+                    case OP_STOR_ELEM_I64:
+                    case OP_STOR_ELEM_F64: llop = LL_STOR_ELEM_X64; break;
                     case OP_STOR_ELEM_INTPTR:
                         llop = intptr_type_->IsWideInt() ?
-                               LL_STOR_ELEM_I64 : LL_STOR_ELEM_I32;
+                               LL_STOR_ELEM_X64 : LL_STOR_ELEM_I32;
                         break;
                     case OP_STOR_ELEM_I8:  llop = LL_STOR_ELEM_I8; break;
                     case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_I16; break;
@@ -791,37 +807,37 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_SHL:
-            LowerBinary(LL_SHL_I32,  LL_NOP, LL_SHL_I64);
+            LowerBitwise(LL_SHL_I32, LL_SHL_I64);
             break;
         case OP_SHR:
-            LowerBinary(LL_SHR_I32,  LL_NOP, LL_SHR_I64);
+            LowerBitwise(LL_SHR_I32, LL_SHR_I64);
             break;
         case OP_SSHR:
-            LowerBinary(LL_SSHR_I32, LL_NOP, LL_SSHR_I64);
+            LowerBitwise(LL_SSHR_I32, LL_SSHR_I64);
             break;
         case OP_AND:
-            LowerBinary(LL_AND_I32,  LL_NOP, LL_AND_I64);
+            LowerBitwise(LL_AND_I32, LL_AND_I64);
             break;
         case OP_OR:
-            LowerBinary(LL_OR_I32,   LL_NOP, LL_OR_I64);
+            LowerBitwise(LL_OR_I32, LL_OR_I64);
             break;
         case OP_XOR:
-            LowerBinary(LL_XOR_I32,  LL_NOP, LL_XOR_I64);
+            LowerBitwise(LL_XOR_I32, LL_XOR_I64);
             break;
         case OP_SUB:
-            LowerBinary(LL_SUB_I32, LL_SUB_F32, LL_SUB_I64);
+            LowerBinary(LL_SUB_I32);
             break;
         case OP_SMUL:
-            LowerBinary(LL_SMUL_I32, LL_MUL_F32, LL_SMUL_I64);
+            LowerBinary(LL_SMUL_I32);
             break;
         case OP_SDIV:
-            LowerBinary(LL_SDIV_I32, LL_DIV_F32, LL_SDIV_I64);
+            LowerBinary(LL_SDIV_I32);
             break;
         case OP_SMOD:
-            LowerBinary(LL_SMOD_I32, LL_MOD_F32, LL_SMOD_I64);
+            LowerBinary(LL_SMOD_I32);
             break;
         case OP_ADD:
-            LowerBinary(LL_ADD_I32, LL_ADD_F32, LL_ADD_I64);
+            LowerBinary(LL_ADD_I32);
             break;
         case OP_NOT:
             LowerUnary(LL_NOT_I32, cell_type_);
@@ -833,29 +849,46 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             pushStack(a);
             if (a->type->kind() == TypeKind::Float32) {
                 pushStack(CreateConstNode(float32_type_, sp_ftoc(op == OP_INC ? 1.0f : -1.0f)));
-                LowerBinary(LL_ADD_I32, LL_ADD_F32, LL_ADD_I64, float32_type_);
+                LowerBinary(LL_ADD_I32, float32_type_);
+            } else if (a->type->kind() == TypeKind::Float64) {
+                double val = (op == OP_INC ? 1.0 : -1.0);
+                pushStack(CreateConstNode64(float64_type_, std::bit_cast<int64_t>(val)));
+                LowerBinary(LL_ADD_I32, float64_type_);
             } else if (a->type->IsWideInt()) {
                 pushStack(CreateConstNode64(a->type, op == OP_INC ? 1 : -1));
-                LowerBinary(LL_ADD_I32, LL_ADD_F32, LL_ADD_I64, a->type);
+                LowerBinary(LL_ADD_I32, a->type);
             } else {
                 pushStack(CreateConstNode(cell_type_, op == OP_INC ? 1 : -1));
-                LowerBinary(LL_ADD_I32, LL_ADD_F32, LL_ADD_I64, cell_type_);
+                LowerBinary(LL_ADD_I32, cell_type_);
             }
             break;
         }
 
         case OP_NEG:
-            LowerUnary(LL_NEG_I32, LL_NEG_F32, LL_NEG_I64);
+            LowerUnary(LL_NEG_I32);
             break;
-        case OP_INVERT:
-            LowerUnary(LL_INVERT_I32, LL_NOP, LL_INVERT_I64);
+        case OP_INVERT: {
+            ExprNode* a = popStack();
+            if (a->type->IsWideInt())
+                pushStack(CreateOpNode(int64_type_, LL_INVERT_I64, a, nullptr));
+            else
+                pushStack(CreateOpNode(cell_type_, LL_INVERT_I32, a, nullptr));
             break;
+        }
         case OP_TEST:
-            LowerUnary(LL_TEST_I32, LL_TEST_F32, LL_TEST_I64, cell_type_);
+            LowerUnary(LL_TEST_I32, cell_type_);
             break;
         case OP_CVT_F32:
             LowerUnary(LL_CVT_F32, float32_type_);
             break;
+        case OP_CVT_F64: {
+            const TypeDesc* src_type = stack_.back()->type;
+            if (src_type->kind() == TypeKind::Float32)
+                LowerUnary(LL_CVT_F32_F64, float64_type_);
+            else
+                LowerUnary(LL_CVT_F64, float64_type_);
+            break;
+        }
 
         case OP_COPYARRAY: {
             ExprNode* src_node = popStack();
@@ -993,22 +1026,22 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_EQ:
-            LowerBinary(LL_EQ_I32, LL_EQ_F32, LL_EQ_I64, cell_type_);
+            LowerBinary(LL_EQ_I32, cell_type_);
             break;
         case OP_NEQ:
-            LowerBinary(LL_NEQ_I32, LL_NEQ_F32, LL_NEQ_I64, cell_type_);
+            LowerBinary(LL_NEQ_I32, cell_type_);
             break;
         case OP_SLESS:
-            LowerBinary(LL_SLESS_I32, LL_LESS_F32, LL_SLESS_I64, cell_type_);
+            LowerBinary(LL_SLESS_I32, cell_type_);
             break;
         case OP_SLEQ:
-            LowerBinary(LL_SLEQ_I32, LL_LEQ_F32, LL_SLEQ_I64, cell_type_);
+            LowerBinary(LL_SLEQ_I32, cell_type_);
             break;
         case OP_SGRTR:
-            LowerBinary(LL_SGRTR_I32, LL_GRTR_F32, LL_SGRTR_I64, cell_type_);
+            LowerBinary(LL_SGRTR_I32, cell_type_);
             break;
         case OP_SGEQ:
-            LowerBinary(LL_SGEQ_I32, LL_GEQ_F32, LL_SGEQ_I64, cell_type_);
+            LowerBinary(LL_SGEQ_I32, cell_type_);
             break;
 
         case OP_LOAD_GLB: {
@@ -1019,6 +1052,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (type->IsHeapItem())
                 llop = LL_LOAD_GLB_A;
             else if (type->IsWideInt())
+                llop = LL_LOAD_GLB_X64;
+            else if (type->IsFloat64())
                 llop = LL_LOAD_GLB_X64;
             emit(llop, index, dest);
             pushStack(CreateTempNode(type, dest));
@@ -1035,6 +1070,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (val->type->IsHeapItem())
                 llop = LL_STOR_GLB_A;
             else if (val->type->IsWideInt())
+                llop = LL_STOR_GLB_X64;
+            else if (val->type->IsFloat64())
                 llop = LL_STOR_GLB_X64;
 
             emit(llop, index, val_reg);
@@ -1168,6 +1205,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_PUSH_C_F64: {
+            int64_t value = reader_.read<int64_t>();
+            pushStack(CreateConstNode64(float64_type_, value));
+            break;
+        }
+
         case OP_LOAD_NULL: {
             pushStack(CreateConstNode(null_type_, 0));
             break;
@@ -1284,6 +1327,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (field_td->IsHeapItem())
                 llop = LL_STOR_FLD_A;
             else if (field_td->IsWideInt())
+                llop = LL_STOR_FLD_X64;
+            else if (field_td->IsFloat64())
                 llop = LL_STOR_FLD_X64;
 
             emit(llop, offset, base_reg, val_reg);
@@ -1484,6 +1529,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (val->type->IsHeapItem())
                 llop = LL_STOR_UPVAR_A;
             else if (val->type->IsWideInt())
+                llop = LL_STOR_UPVAR_X64;
+            else if (val->type->IsFloat64())
                 llop = LL_STOR_UPVAR_X64;
             else
                 llop = LL_STOR_UPVAR_X32;
@@ -1703,8 +1750,8 @@ void MethodLowerer::EmitMove(VReg src, VReg dest, const TypeDesc* type) {
         }
         emit(LL_MOVE, src, dest);
     } else {
-        if (type->IsWideInt())
-            emit(LL_MOVE_I64, src, dest);
+        if (type->IsWideInt() || type->IsFloat64())
+            emit(LL_MOVE64, src, dest);
         else
             emit(LL_MOVE, src, dest);
     }
@@ -1797,26 +1844,26 @@ void MethodLowerer::PatchJumps() {
     }
 }
 
-void MethodLowerer::LowerBinary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
-                                const TypeDesc* force_result_type)
-{
+void MethodLowerer::LowerBinary(LLOp op_i32, const TypeDesc* force_result_type) {
     ExprNode* right = popStack();
     ExprNode* left = popStack();
     LLOp llop;
     const TypeDesc* type;
 
-    if (op_f32 != LL_NOP && left->type->kind() == TypeKind::Float32 && right->type->kind() == TypeKind::Float32) {
-        llop = op_f32;
+    if (left->type->kind() == TypeKind::Float32 && right->type->kind() == TypeKind::Float32) {
+        llop = (LLOp)(op_i32 + LL_ADD_F32 - LL_ADD_I32);
         type = force_result_type ? force_result_type : float32_type_;
-    } else if (op_i64 != LL_NOP && left->type->IsWideInt() && right->type->IsWideInt()) {
-        llop = op_i64;
-        if (force_result_type) {
+    } else if (left->type->kind() == TypeKind::Float64 && right->type->kind() == TypeKind::Float64) {
+        llop = (LLOp)(op_i32 + LL_ADD_F64 - LL_ADD_I32);
+        type = force_result_type ? force_result_type : float64_type_;
+    } else if (left->type->IsWideInt() && right->type->IsWideInt()) {
+        llop = (LLOp)(op_i32 + LL_ADD_I64 - LL_ADD_I32);
+        if (force_result_type)
             type = force_result_type;
-        } else if (left->type->IsIntPtr() || right->type->IsIntPtr()) {
+        else if (left->type->IsIntPtr() || right->type->IsIntPtr())
             type = intptr_type_;
-        } else {
+        else
             type = int64_type_;
-        }
     } else {
         llop = op_i32;
         type = force_result_type ? force_result_type : cell_type_;
@@ -1824,26 +1871,39 @@ void MethodLowerer::LowerBinary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
     pushStack(CreateOpNode(type, llop, left, right));
 }
 
-void MethodLowerer::LowerUnary(LLOp op_i32, const TypeDesc* force_result_type) {
-    ExprNode* val = popStack();
-    const TypeDesc* type = force_result_type ? force_result_type : val->type;
-    pushStack(CreateOpNode(type, op_i32, val, nullptr));
+void MethodLowerer::LowerBitwise(LLOp op_i32, LLOp op_i64) {
+    ExprNode* right = popStack();
+    ExprNode* left = popStack();
+    LLOp llop;
+    const TypeDesc* type;
+    if (left->type->IsWideInt() && right->type->IsWideInt()) {
+        llop = op_i64;
+        type = int64_type_;
+    } else {
+        llop = op_i32;
+        type = cell_type_;
+    }
+    pushStack(CreateOpNode(type, llop, left, right));
 }
 
-void MethodLowerer::LowerUnary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
-                               const TypeDesc* force_result_type)
-{
-    ExprNode* a = popStack();
+void MethodLowerer::LowerUnary(LLOp op_i32, const TypeDesc* force_result_type) {
+    ExprNode* val = popStack();
     LLOp op = LL_NOP;
-    if (a->type->kind() == TypeKind::Float32) {
-        op = op_f32;
-    } else if (a->type->IsWideInt()) {
-        op = op_i64;
+    const TypeDesc* type;
+    if (val->type->kind() == TypeKind::Float32) {
+        op = (LLOp)(op_i32 + LL_NEG_F32 - LL_NEG_I32);
+        type = force_result_type ? force_result_type : float32_type_;
+    } else if (val->type->kind() == TypeKind::Float64) {
+        op = (LLOp)(op_i32 + LL_NEG_F64 - LL_NEG_I32);
+        type = force_result_type ? force_result_type : float64_type_;
+    } else if (val->type->IsWideInt()) {
+        op = (LLOp)(op_i32 + LL_NEG_I64 - LL_NEG_I32);
+        type = force_result_type ? force_result_type : val->type;
     } else {
         op = op_i32;
+        type = force_result_type ? force_result_type : val->type;
     }
-    const TypeDesc* type = force_result_type ? force_result_type : a->type;
-    pushStack(CreateOpNode(type, op, a, nullptr));
+    pushStack(CreateOpNode(type, op, val, nullptr));
 }
 
 void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc,
@@ -2040,10 +2100,10 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
 
         case ExprNode::kConstant: {
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            if (!node->type->IsWideInt())
-                emit(LL_LOAD_CONST, node->constval.value, dest);
+            if (node->type->IsFloat64() || node->type->IsWideInt())
+                emit(LL_LOAD_CONST64, node->constval.value64, dest);
             else
-                emit(LL_LOAD_CONST_I64, node->constval.value64, dest);
+                emit(LL_LOAD_CONST, node->constval.value, dest);
             return dest;
         }
 
@@ -2091,6 +2151,8 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 llop = LL_LOAD_UPVAR_A;
             else if (node->type->IsWideInt())
                 llop = LL_LOAD_UPVAR_X64;
+            else if (node->type->IsFloat64())
+                llop = LL_LOAD_UPVAR_X64;
             else
                 llop = LL_LOAD_UPVAR_X32;
             emit(LL_CALLEE, callee_reg);
@@ -2108,6 +2170,8 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             if (node->type->IsHeapItem())
                 llop = LL_LOAD_FLD_A;
             else if (node->type->IsWideInt())
+                llop = LL_LOAD_FLD_X64;
+            else if (node->type->IsFloat64())
                 llop = LL_LOAD_FLD_X64;
             else
                 llop = LL_LOAD_FLD_X32;
@@ -2144,7 +2208,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                     switch (op) {
                         case LL_LOAD_ELEM_FLAT_I32: iop = LL_LOAD_ELEM_FLAT_I_I32; break;
                         case LL_LOAD_ELEM_FLAT_F32: iop = LL_LOAD_ELEM_FLAT_I_F32; break;
-                        case LL_LOAD_ELEM_FLAT_I64: iop = LL_LOAD_ELEM_FLAT_I_I64; break;
+                        case LL_LOAD_ELEM_FLAT_X64: iop = LL_LOAD_ELEM_FLAT_I_X64; break;
                         case LL_LOAD_ELEM_FLAT_U8:  iop = LL_LOAD_ELEM_FLAT_I_U8; break;
                         case LL_LOAD_ELEM_FLAT_I16: iop = LL_LOAD_ELEM_FLAT_I_I16; break;
                         case LL_LOAD_ELEM_FLAT_I8:  iop = LL_LOAD_ELEM_FLAT_I_I8; break;
@@ -2205,6 +2269,8 @@ void MethodLowerer::LowerUpvarCopy(const TypeDesc* closure_td, const TypeDesc* u
             llop = LL_STOR_UPVAR_A;
         else if (upvar_td->IsWideInt())
             llop = LL_STOR_UPVAR_X64;
+        else if (upvar_td->IsFloat64())
+            llop = LL_STOR_UPVAR_X64;
         else
             llop = LL_STOR_UPVAR_X32;
         emit(llop, UpvarArgs{offset, closure_reg.index, val_reg.index});
@@ -2213,12 +2279,12 @@ void MethodLowerer::LowerUpvarCopy(const TypeDesc* closure_td, const TypeDesc* u
 
 VReg MethodLowerer::AllocateTemp(const TypeDesc* type) {
     // Temporaries are used for the operand stack, and the operand stack only
-    // ever has cells, addresses (also cells), or int64s.
+    // ever has cells, addresses (also cells), or int64s/doubles.
     //
     // Enum structs and flat arrays are only ever pushed to the stack as
     // addresses as well.
     uint32_t cells = 1;
-    if (type->IsWideInt())
+    if (type->IsWideInt() || type->IsFloat64())
         cells = 2;
 
     return AllocateTempCells(cells, type->IsHeapItem());

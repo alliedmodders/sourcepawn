@@ -23,6 +23,7 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 
+#include <bit>
 #include <optional>
 #include <tuple>
 #include <variant>
@@ -1224,6 +1225,23 @@ class Number64Expr final : public Expr
   private:
     sp::Atom* atom_;
     std::optional<int64_t> value_;
+};
+
+class DoubleExpr final : public Expr
+{
+  public:
+    DoubleExpr(const token_pos_t& pos, double value)
+      : Expr(ExprKind::DoubleExpr, pos),
+        value_(value)
+    {}
+
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::DoubleExpr; }
+
+    double value() const { return value_; }
+    int64_t as_bits() const { return std::bit_cast<int64_t>(value_); }
+
+  private:
+    double value_;
 };
 
 class StringExpr final : public Expr

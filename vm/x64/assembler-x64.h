@@ -949,6 +949,9 @@ class Assembler : public AssemblerBase
     void xorps(FloatRegister dest, FloatRegister src) {
         emit2(0x0f, 0x57, src, dest);
     }
+    void xorpd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0x66, 0x0f, 0x57, src, dest);
+    }
 
     template <typename LeftType>
     void ucomiss(const LeftType& left, FloatRegister right) {
@@ -974,6 +977,62 @@ class Assembler : public AssemblerBase
     void roundss_ceil(FloatRegister dest, const Operand& src) {
         emit4_sse(0x66, 0x0f, 0x3a, 0x0a, dest, src);
         *pos_++ = 0x2;
+    }
+
+    template <typename SrcType>
+    void movsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x10, dest, src);
+    }
+    template <typename DestType>
+    void movsd(const DestType& dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x11, src, dest);
+    }
+    void addsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x58, dest, src);
+    }
+    template <typename SrcType>
+    void addsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x58, dest, src);
+    }
+    void subsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x5c, dest, src);
+    }
+    template <typename SrcType>
+    void subsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5c, dest, src);
+    }
+    void mulsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x59, dest, src);
+    }
+    template <typename SrcType>
+    void mulsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x59, dest, src);
+    }
+    void divsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x5e, dest, src);
+    }
+    template <typename SrcType>
+    void divsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5e, dest, src);
+    }
+    template <typename LeftType>
+    void ucomisd(const LeftType& left, FloatRegister right) {
+        emit3_sse(0x66, 0x0f, 0x2e, right, left);
+    }
+    template <typename SrcType>
+    void cvtsi2sd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x2a, dest, src);
+    }
+    void cvtsd2si(Register dest, const Operand& src) {
+        emit3_sse(0xf2, 0x0f, 0x2d, dest, src);
+    }
+    template <typename SrcType>
+    void cvtss2sd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf3, 0x0f, 0x5a, dest, src);
+    }
+    template <typename SrcType>
+    void cvtsd2ss(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5a, dest, src);
     }
 
   protected:

@@ -119,6 +119,7 @@ class CodeGenerator final
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
     void EmitNumber64Expr(Number64Expr* expr);
+    void EmitDoubleExpr(DoubleExpr* expr);
     void EmitSimpleCastExpr(SimpleCastExpr* expr);
     void EmitCastExpr(CastExpr* expr, unsigned int flags);
     void EmitRvalue(RvalueExpr* expr);

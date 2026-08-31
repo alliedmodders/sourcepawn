@@ -43,6 +43,11 @@ struct Int64Value {
     int64_t value;
 };
 
+struct DoubleValue {
+    explicit DoubleValue(int64_t value) : value(value) {}
+    int64_t value;
+};
+
 struct UpvarIndex {
     explicit UpvarIndex(uint16_t index) : index(index) {}
     uint16_t index;
@@ -62,6 +67,10 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<cell_t>(param);
   }
   void emit(OPCODE op, Int64Value param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int64_t>(param.value);
+  }
+  void emit(OPCODE op, DoubleValue param) {
     write<uint8_t>(static_cast<uint8_t>(op));
     write<int64_t>(param.value);
   }

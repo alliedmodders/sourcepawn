@@ -40,51 +40,26 @@
 #include "objects.h"
 
 
-#define BINARY_OP_I32(op, oper) \
+#define BINARY_OP(op, oper, T) \
             case op: { \
                 uint16_t a = reader_.read<uint16_t>(); \
                 uint16_t b = reader_.read<uint16_t>(); \
                 uint16_t dest = reader_.read<uint16_t>(); \
-                vregs_[dest] = vregs_[a] oper vregs_[b]; \
+                *reinterpret_cast<T*>(&vregs_[dest]) = \
+                    *reinterpret_cast<T*>(&vregs_[a]) oper *reinterpret_cast<T*>(&vregs_[b]); \
                 break; \
             }
 
-#define BINARY_OP_F32(op, oper) \
+#define COMPARE_OP(op, oper, T) \
             case op: { \
                 uint16_t a = reader_.read<uint16_t>(); \
                 uint16_t b = reader_.read<uint16_t>(); \
                 uint16_t dest = reader_.read<uint16_t>(); \
-                vregs_[dest] = sp_ftoc(sp_ctof(vregs_[a]) oper sp_ctof(vregs_[b])); \
+                vregs_[dest] = (*reinterpret_cast<T*>(&vregs_[a]) oper \
+                                *reinterpret_cast<T*>(&vregs_[b])) ? 1 : 0; \
                 break; \
             }
 
-#define COMPARE_OP_F32(op, oper) \
-            case op: { \
-                uint16_t a = reader_.read<uint16_t>(); \
-                uint16_t b = reader_.read<uint16_t>(); \
-                uint16_t dest = reader_.read<uint16_t>(); \
-                vregs_[dest] = (sp_ctof(vregs_[a]) oper sp_ctof(vregs_[b])) ? 1 : 0; \
-                break; \
-            }
-
-#define BINARY_OP_I64(op, oper) \
-            case op: { \
-                uint16_t a = reader_.read<uint16_t>(); \
-                uint16_t b = reader_.read<uint16_t>(); \
-                uint16_t dest = reader_.read<uint16_t>(); \
-                *reinterpret_cast<int64_t*>(&vregs_[dest]) = \
-                    *reinterpret_cast<int64_t*>(&vregs_[a]) oper *reinterpret_cast<int64_t*>(&vregs_[b]); \
-                break; \
-            }
-
-#define COMPARE_OP_I64(op, oper) \
-            case op: { \
-                uint16_t a = reader_.read<uint16_t>(); \
-                uint16_t b = reader_.read<uint16_t>(); \
-                uint16_t dest = reader_.read<uint16_t>(); \
-                vregs_[dest] = (*reinterpret_cast<int64_t*>(&vregs_[a]) oper *reinterpret_cast<int64_t*>(&vregs_[b])) ? 1 : 0; \
-                break; \
-            }
 
 #define UNARY_JUMP_OP(op, oper) \
             case op: { \
@@ -241,14 +216,13 @@ bool Interpreter::run_internal() {
                     heap_.ToPhysAddr<HeapItem*>(vregs_[dest])->AddRef();
                 break;
             }
-            case LL_LOAD_I_I32:
-            case LL_LOAD_I_F32: {
+            case LL_LOAD_I_X32: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = *heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
                 break;
             }
-            case LL_LOAD_I_I64: {
+            case LL_LOAD_I_X64: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 *reinterpret_cast<int64_t*>(&vregs_[dest]) = *heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
@@ -275,7 +249,7 @@ bool Interpreter::run_internal() {
             case LL_LOAD_ELEM_A:
             case LL_LOAD_ELEM_I32:
             case LL_LOAD_ELEM_F32:
-            case LL_LOAD_ELEM_I64:
+            case LL_LOAD_ELEM_X64:
             case LL_LOAD_ELEM_I8:
             case LL_LOAD_ELEM_U8:
             case LL_LOAD_ELEM_I16: {
@@ -300,7 +274,7 @@ bool Interpreter::run_internal() {
                     vregs_[dest_reg] = obj;
                     if (obj)
                         heap_.ToPhysAddr<HeapItem*>(obj)->AddRef();
-                } else if (op == LL_LOAD_ELEM_I64) {
+                } else if (op == LL_LOAD_ELEM_X64) {
                     *reinterpret_cast<int64_t*>(&vregs_[dest_reg]) = *reinterpret_cast<int64_t*>(elt);
                 } else if (op == LL_LOAD_ELEM_I8) {
                     vregs_[dest_reg] = *reinterpret_cast<int8_t*>(elt);
@@ -352,15 +326,14 @@ bool Interpreter::run_internal() {
                 *ptr = vregs_[val_reg];
                 break;
             }
-            case LL_STOR_I_I32:
-            case LL_STOR_I_F32: {
+            case LL_STOR_I_X32: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
                 *ptr = vregs_[val];
                 break;
             }
-            case LL_STOR_I_I64: {
+            case LL_STOR_I_X64: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 int64_t* ptr = heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
@@ -403,7 +376,7 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = vregs_[src];
                 break;
             }
-            case LL_MOVE_I64: {
+            case LL_MOVE64: {
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 *reinterpret_cast<int64_t*>(&vregs_[dest]) = *reinterpret_cast<int64_t*>(&vregs_[src]);
@@ -415,7 +388,7 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = val;
                 break;
             }
-            case LL_LOAD_CONST_I64: {
+            case LL_LOAD_CONST64: {
                 int64_t val = reader_.read<int64_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 *reinterpret_cast<int64_t*>(&vregs_[dest]) = val;
@@ -423,7 +396,7 @@ bool Interpreter::run_internal() {
             }
             case LL_STOR_ELEM_I32:
             case LL_STOR_ELEM_F32:
-            case LL_STOR_ELEM_I64:
+            case LL_STOR_ELEM_X64:
             case LL_STOR_ELEM_I8:
             case LL_STOR_ELEM_I16:
             case LL_STOR_ELEM_A: {
@@ -443,7 +416,7 @@ bool Interpreter::run_internal() {
                     return false;
                 }
                 void* elt = rt_->GetArrayElem(array, index);
-                if (op == LL_STOR_ELEM_I64) {
+                if (op == LL_STOR_ELEM_X64) {
                     *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
                 } else if (op == LL_STOR_ELEM_I8) {
                     *reinterpret_cast<int8_t*>(elt) = int8_t(vregs_[val_reg]);
@@ -602,9 +575,9 @@ bool Interpreter::run_internal() {
                 vregs_[args.dest_reg] = *elt;
                 break;
             }
-            case LL_LOAD_ELEM_FLAT_I64: {
-                LOAD_ELEM_FLAT(int64_t);
-                *reinterpret_cast<int64_t*>(&vregs_[args.dest_reg]) = *elt;
+            case LL_LOAD_ELEM_FLAT_X64: {
+                LOAD_ELEM_FLAT(double);
+                *reinterpret_cast<double*>(&vregs_[args.dest_reg]) = *elt;
                 break;
             }
 #undef LOAD_ELEM_FLAT
@@ -640,9 +613,9 @@ bool Interpreter::run_internal() {
                 vregs_[args.dest_reg] = *elt;
                 break;
             }
-            case LL_LOAD_ELEM_FLAT_I_I64: {
-                LOAD_ELEM_FLAT_I(int64_t);
-                *reinterpret_cast<int64_t*>(&vregs_[args.dest_reg]) = *elt;
+            case LL_LOAD_ELEM_FLAT_I_X64: {
+                LOAD_ELEM_FLAT_I(double);
+                *reinterpret_cast<double*>(&vregs_[args.dest_reg]) = *elt;
                 break;
             }
 #undef LOAD_ELEM_FLAT_I
@@ -672,9 +645,9 @@ bool Interpreter::run_internal() {
                 *elt = static_cast<int16_t>(vregs_[args.val_reg]);
                 break;
             }
-            case LL_STOR_ELEM_FLAT_I64: {
-                STOR_ELEM_FLAT(int64_t);
-                *elt = *reinterpret_cast<int64_t*>(&vregs_[args.val_reg]);
+            case LL_STOR_ELEM_FLAT_X64: {
+                STOR_ELEM_FLAT(double);
+                *elt = *reinterpret_cast<double*>(&vregs_[args.val_reg]);
                 break;
             }
 #undef STOR_ELEM_FLAT
@@ -705,27 +678,27 @@ bool Interpreter::run_internal() {
                 *elt = static_cast<int16_t>(vregs_[args.val_reg]);
                 break;
             }
-            case LL_STOR_ELEM_FLAT_I_I64: {
-                STOR_ELEM_FLAT_I(int64_t);
-                *elt = *reinterpret_cast<int64_t*>(&vregs_[args.val_reg]);
+            case LL_STOR_ELEM_FLAT_I_X64: {
+                STOR_ELEM_FLAT_I(double);
+                *elt = *reinterpret_cast<double*>(&vregs_[args.val_reg]);
                 break;
             }
 #undef STOR_ELEM_FLAT_I
 
-            BINARY_OP_I64(LL_SMUL_I64, *)
-            BINARY_OP_I64(LL_ADD_I64, +)
-            BINARY_OP_I64(LL_SUB_I64, -)
-            BINARY_OP_I64(LL_SHL_I64, <<)
-            BINARY_OP_I64(LL_SSHR_I64, >>)
-            BINARY_OP_I64(LL_OR_I64, |)
-            BINARY_OP_I64(LL_AND_I64, &)
-            BINARY_OP_I64(LL_XOR_I64, ^)
-            COMPARE_OP_I64(LL_EQ_I64, ==)
-            COMPARE_OP_I64(LL_NEQ_I64, !=)
-            COMPARE_OP_I64(LL_SLESS_I64, <)
-            COMPARE_OP_I64(LL_SLEQ_I64, <=)
-            COMPARE_OP_I64(LL_SGRTR_I64, >)
-            COMPARE_OP_I64(LL_SGEQ_I64, >=)
+            BINARY_OP(LL_SMUL_I64, *, int64_t)
+            BINARY_OP(LL_ADD_I64, +, int64_t)
+            BINARY_OP(LL_SUB_I64, -, int64_t)
+            BINARY_OP(LL_SHL_I64, <<, int64_t)
+            BINARY_OP(LL_SSHR_I64, >>, int64_t)
+            BINARY_OP(LL_OR_I64, |, int64_t)
+            BINARY_OP(LL_AND_I64, &, int64_t)
+            BINARY_OP(LL_XOR_I64, ^, int64_t)
+            COMPARE_OP(LL_EQ_I64, ==, int64_t)
+            COMPARE_OP(LL_NEQ_I64, !=, int64_t)
+            COMPARE_OP(LL_SLESS_I64, <, int64_t)
+            COMPARE_OP(LL_SLEQ_I64, <=, int64_t)
+            COMPARE_OP(LL_SGRTR_I64, >, int64_t)
+            COMPARE_OP(LL_SGEQ_I64, >=, int64_t)
 
             case LL_SDIV_I64: {
                 uint16_t a = reader_.read<uint16_t>();
@@ -1119,8 +1092,8 @@ bool Interpreter::run_internal() {
                 reader_.set_cursor(ll_code + jump_offset);
                 break;
             }
-            BINARY_OP_I32(LL_SHL_I32, <<)
-            BINARY_OP_I32(LL_SSHR_I32, >>)
+            BINARY_OP(LL_SHL_I32, <<, cell_t)
+            BINARY_OP(LL_SSHR_I32, >>, cell_t)
             case LL_SHR_I32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t b = reader_.read<uint16_t>();
@@ -1128,7 +1101,7 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = uint32_t(vregs_[a]) >> uint32_t(vregs_[b]);
                 break;
             }
-            BINARY_OP_I32(LL_SMUL_I32, *)
+            BINARY_OP(LL_SMUL_I32, *, cell_t)
             case LL_SDIV_I32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t b = reader_.read<uint16_t>();
@@ -1159,17 +1132,17 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = vregs_[a] % vregs_[b];
                 break;
             }
-            BINARY_OP_I32(LL_ADD_I32, +)
-            BINARY_OP_I32(LL_SUB_I32, -)
-            BINARY_OP_I32(LL_AND_I32, &)
-            BINARY_OP_I32(LL_OR_I32, |)
-            BINARY_OP_I32(LL_XOR_I32, ^)
-            BINARY_OP_I32(LL_EQ_I32, ==)
-            BINARY_OP_I32(LL_NEQ_I32, !=)
-            BINARY_OP_I32(LL_SLESS_I32, <)
-            BINARY_OP_I32(LL_SLEQ_I32, <=)
-            BINARY_OP_I32(LL_SGRTR_I32, >)
-            BINARY_OP_I32(LL_SGEQ_I32, >=)
+            BINARY_OP(LL_ADD_I32, +, cell_t)
+            BINARY_OP(LL_SUB_I32, -, cell_t)
+            BINARY_OP(LL_AND_I32, &, cell_t)
+            BINARY_OP(LL_OR_I32, |, cell_t)
+            BINARY_OP(LL_XOR_I32, ^, cell_t)
+            BINARY_OP(LL_EQ_I32, ==, cell_t)
+            BINARY_OP(LL_NEQ_I32, !=, cell_t)
+            BINARY_OP(LL_SLESS_I32, <, cell_t)
+            BINARY_OP(LL_SLEQ_I32, <=, cell_t)
+            BINARY_OP(LL_SGRTR_I32, >, cell_t)
+            BINARY_OP(LL_SGEQ_I32, >=, cell_t)
             case LL_NOT_I32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
@@ -1207,8 +1180,8 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = sp_ftoc(-sp_ctof(vregs_[src]));
                 break;
             }
-            BINARY_OP_F32(LL_MUL_F32, *)
-            BINARY_OP_F32(LL_DIV_F32, /)
+            BINARY_OP(LL_MUL_F32, *, float)
+            BINARY_OP(LL_DIV_F32, /, float)
             case LL_MOD_F32: {
                 uint16_t a = reader_.read<uint16_t>();
                 uint16_t b = reader_.read<uint16_t>();
@@ -1216,18 +1189,63 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = sp_ftoc(fmodf(sp_ctof(vregs_[a]), sp_ctof(vregs_[b])));
                 break;
             }
-            BINARY_OP_F32(LL_ADD_F32, +)
-            BINARY_OP_F32(LL_SUB_F32, -)
-            COMPARE_OP_F32(LL_EQ_F32, ==)
-            COMPARE_OP_F32(LL_NEQ_F32, !=)
-            COMPARE_OP_F32(LL_LESS_F32, <)
-            COMPARE_OP_F32(LL_LEQ_F32, <=)
-            COMPARE_OP_F32(LL_GRTR_F32, >)
-            COMPARE_OP_F32(LL_GEQ_F32, >=)
+            BINARY_OP(LL_ADD_F32, +, float)
+            BINARY_OP(LL_SUB_F32, -, float)
+            COMPARE_OP(LL_EQ_F32, ==, float)
+            COMPARE_OP(LL_NEQ_F32, !=, float)
+            COMPARE_OP(LL_LESS_F32, <, float)
+            COMPARE_OP(LL_LEQ_F32, <=, float)
+            COMPARE_OP(LL_GRTR_F32, >, float)
+            COMPARE_OP(LL_GEQ_F32, >=, float)
             case LL_CVT_F32: {
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = sp_ftoc((float)vregs_[src]);
+                break;
+            }
+            case LL_TEST_F64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                double d = *reinterpret_cast<double*>(&vregs_[src]);
+                vregs_[dest] = (d != 0.0 && !ke::IsNaN(d)) ? 1 : 0;
+                break;
+            }
+            case LL_NEG_F64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                double d = *reinterpret_cast<double*>(&vregs_[src]);
+                *reinterpret_cast<double*>(&vregs_[dest]) = -d;
+                break;
+            }
+            BINARY_OP(LL_MUL_F64, *, double)
+            BINARY_OP(LL_DIV_F64, /, double)
+            case LL_MOD_F64: {
+                uint16_t lhs_reg  = reader_.read<uint16_t>();
+                uint16_t rhs_reg = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                auto lhs = *reinterpret_cast<double*>(&vregs_[lhs_reg]);
+                auto rhs = *reinterpret_cast<double*>(&vregs_[rhs_reg]);
+                *reinterpret_cast<double*>(&vregs_[dest]) = ::fmod(lhs, rhs);
+                break;
+            }
+            BINARY_OP(LL_ADD_F64, +, double)
+            BINARY_OP(LL_SUB_F64, -, double)
+            COMPARE_OP(LL_EQ_F64, ==, double)
+            COMPARE_OP(LL_NEQ_F64, !=, double)
+            COMPARE_OP(LL_LESS_F64, <, double)
+            COMPARE_OP(LL_LEQ_F64, <=, double)
+            COMPARE_OP(LL_GRTR_F64, >, double)
+            COMPARE_OP(LL_GEQ_F64, >=, double)
+            case LL_CVT_F64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<double*>(&vregs_[dest]) = (double)vregs_[src];
+                break;
+            }
+            case LL_CVT_F32_F64: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                *reinterpret_cast<double*>(&vregs_[dest]) = sp_ctof(vregs_[src]);
                 break;
             }
             case LL_CVT_I64: {

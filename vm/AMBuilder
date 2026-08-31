@@ -58,6 +58,7 @@ module.sources += [
   'v2/graph-builder.cpp',
   'v2/interpreter.cpp',
   'v2/lowering/lowering.cpp',
+  'v2/lowering/ll-op.cpp',
   'v2/method-info.cpp',
   'v2/method-verifier.cpp',
   'v2/opcodes.cpp',

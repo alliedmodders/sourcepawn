@@ -218,7 +218,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitLoadConst(reg, val);
                 break;
             }
-            case LL_LOAD_CONST_I64: {
+            case LL_LOAD_CONST64: {
                 int64_t val = reader.read<int64_t>();
                 uint16_t reg = reader.read<uint16_t>();
                 EmitLoadConst64(reg, val);
@@ -241,7 +241,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitRetn(op, {});
                 break;
             case LL_MOVE:
-            case LL_MOVE_I64:
+            case LL_MOVE64:
             case LL_STOR_S_A:
             {
                 uint16_t src = reader.read<uint16_t>();
@@ -376,7 +376,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 uint16_t reg_a = reader.read<uint16_t>();
                 uint16_t reg_b = reader.read<uint16_t>();
                 uint16_t dest = reader.read<uint16_t>();
-                EmitCompareFloat(op, reg_a, reg_b, dest);
+                EmitCompareFloat(op, reg_a, reg_b, dest, TypeKind::Float32);
                 break;
             }
             case LL_ADD_F32:
@@ -448,6 +448,41 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitSdivI64(op, lhs_reg, rhs_reg, dest_reg);
                 break;
             }
+            case LL_EQ_F64:
+            case LL_NEQ_F64:
+            case LL_LESS_F64:
+            case LL_LEQ_F64:
+            case LL_GRTR_F64:
+            case LL_GEQ_F64:
+            {
+                uint16_t reg_a = reader.read<uint16_t>();
+                uint16_t reg_b = reader.read<uint16_t>();
+                uint16_t dest = reader.read<uint16_t>();
+                EmitCompareFloat(op, reg_a, reg_b, dest, TypeKind::Float64);
+                break;
+            }
+            case LL_ADD_F64:
+            case LL_SUB_F64:
+            case LL_MUL_F64:
+            case LL_DIV_F64:
+            case LL_MOD_F64:
+            {
+                uint16_t lhs_reg = reader.read<uint16_t>();
+                uint16_t rhs_reg = reader.read<uint16_t>();
+                uint16_t dest = reader.read<uint16_t>();
+                EmitBinaryDoubleOp(op, lhs_reg, rhs_reg, dest);
+                break;
+            }
+            case LL_NEG_F64:
+            case LL_TEST_F64:
+            case LL_CVT_F64:
+            case LL_CVT_F32_F64:
+            {
+                uint16_t src_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitUnaryDoubleOp(op, src_reg, dest_reg);
+                break;
+            }
             case LL_NEWARRAY:
             {
                 auto td = reader.read<const TypeDesc*>();
@@ -507,9 +542,8 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 break;
             }
             case LL_LOAD_I_U8:
-            case LL_LOAD_I_I32:
-            case LL_LOAD_I_F32:
-            case LL_LOAD_I_I64:
+            case LL_LOAD_I_X32:
+            case LL_LOAD_I_X64:
             {
                 uint16_t src_reg = reader.read<uint16_t>();
                 uint16_t dest_reg = reader.read<uint16_t>();
@@ -517,9 +551,8 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 break;
             }
             case LL_STOR_I_I8:
-            case LL_STOR_I_I32:
-            case LL_STOR_I_F32:
-            case LL_STOR_I_I64:
+            case LL_STOR_I_X32:
+            case LL_STOR_I_X64:
             case LL_STOR_I_A:
             {
                 uint16_t addr_reg = reader.read<uint16_t>();
@@ -598,7 +631,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_LOAD_ELEM_FLAT_I32:
             case LL_LOAD_ELEM_FLAT_F32:
-            case LL_LOAD_ELEM_FLAT_I64:
+            case LL_LOAD_ELEM_FLAT_X64:
             case LL_LOAD_ELEM_FLAT_U8:
             case LL_LOAD_ELEM_FLAT_I16:
             case LL_LOAD_ELEM_FLAT_I8:
@@ -609,7 +642,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_LOAD_ELEM_FLAT_I_I32:
             case LL_LOAD_ELEM_FLAT_I_F32:
-            case LL_LOAD_ELEM_FLAT_I_I64:
+            case LL_LOAD_ELEM_FLAT_I_X64:
             case LL_LOAD_ELEM_FLAT_I_U8:
             case LL_LOAD_ELEM_FLAT_I_I16:
             case LL_LOAD_ELEM_FLAT_I_I8:
@@ -620,7 +653,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_STOR_ELEM_FLAT_I32:
             case LL_STOR_ELEM_FLAT_F32:
-            case LL_STOR_ELEM_FLAT_I64:
+            case LL_STOR_ELEM_FLAT_X64:
             case LL_STOR_ELEM_FLAT_I8:
             case LL_STOR_ELEM_FLAT_I16:
             {
@@ -630,7 +663,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_STOR_ELEM_FLAT_I_I32:
             case LL_STOR_ELEM_FLAT_I_F32:
-            case LL_STOR_ELEM_FLAT_I_I64:
+            case LL_STOR_ELEM_FLAT_I_X64:
             case LL_STOR_ELEM_FLAT_I_I8:
             case LL_STOR_ELEM_FLAT_I_I16:
             {
@@ -669,7 +702,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_LOAD_ELEM_I32:
             case LL_LOAD_ELEM_F32:
-            case LL_LOAD_ELEM_I64:
+            case LL_LOAD_ELEM_X64:
             case LL_LOAD_ELEM_U8:
             case LL_LOAD_ELEM_I16:
             case LL_LOAD_ELEM_I8:
@@ -683,7 +716,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_STOR_ELEM_I32:
             case LL_STOR_ELEM_F32:
-            case LL_STOR_ELEM_I64:
+            case LL_STOR_ELEM_X64:
             case LL_STOR_ELEM_I8:
             case LL_STOR_ELEM_I16:
             case LL_STOR_ELEM_A:

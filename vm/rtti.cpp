@@ -280,6 +280,7 @@ RttiParser::decode() {
         case cb::kInt64:
         case cb::kIntPtr:
         case cb::kFloat32:
+        case cb::kFloat64:
         case cb::kInt16:
         case cb::kInt8:
         case cb::kChar8:
@@ -379,6 +380,7 @@ RttiParser::validate() {
         case cb::kInt64:
         case cb::kIntPtr:
         case cb::kFloat32:
+        case cb::kFloat64:
         case cb::kInt16:
         case cb::kInt8:
         case cb::kChar8:

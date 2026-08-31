@@ -456,7 +456,7 @@ ConstDecl::Bind(SemaContext& sc)
     if (!sc.BindType(pos_, &type_))
         return false;
 
-    if (type_.type->isInt64()) {
+    if (type_.type->isWideType()) {
         report(this, 459) << type_.type;
         return false;
     }
