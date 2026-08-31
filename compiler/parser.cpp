@@ -650,7 +650,7 @@ Parser::parse_pstruct()
             fields.push_back(new LayoutFieldDecl(pos, decl));
 
         lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
-    } while (!lexer_->peek('}'));
+    } while (lexer_->freading() && !lexer_->peek('}'));
 
     lexer_->need('}');
     lexer_->match(';'); // eat up optional semicolon
