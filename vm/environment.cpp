@@ -28,7 +28,7 @@
 #include "legacy/builtins.h"
 #include "debugging.h"
 #include "legacy/interpreter.h"
-#include "v2/interpreter.h"
+#include "v2/interp/interpreter.h"
 
 using namespace sp;
 using namespace SourcePawn;

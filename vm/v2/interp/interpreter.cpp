@@ -25,8 +25,8 @@
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
-#include "objects.h"
-#include "v2/interpreter.h"
+#include "v2/objects.h"
+#include "v2/interp/interpreter.h"
 #include "v2/method-info.h"
 #include "v2/pcode-reader.h"
 #include "v2/runtime.h"

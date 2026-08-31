@@ -54,7 +54,7 @@ module.sources += [
 module.sources += [
   'v2/control-flow.cpp',
   'v2/graph-builder.cpp',
-  'v2/interpreter.cpp',
+  'v2/interp/interpreter.cpp',
   'v2/method-info.cpp',
   'v2/method-verifier.cpp',
   'v2/opcodes.cpp',
