@@ -368,12 +368,12 @@ class SourcePawn(object):
                 binary.compiler.defines += ['DARWIN']
 
         binary.compiler.includes += [
-            builder.sourcePath,
-            os.path.join(builder.sourcePath, 'include'),
-            os.path.join(builder.sourcePath, 'vm'),
-            os.path.join(builder.sourcePath, 'third_party'),
-            os.path.join(builder.sourcePath, 'third_party', 'mimalloc', 'include'),
-            os.path.join(builder.sourcePath, 'third_party', 'capstone', 'include'),
+            builder.currentSourcePath,
+            os.path.join(builder.currentSourcePath, 'include'),
+            os.path.join(builder.currentSourcePath, 'vm'),
+            os.path.join(builder.currentSourcePath, 'third_party'),
+            os.path.join(builder.currentSourcePath, 'third_party', 'mimalloc', 'include'),
+            os.path.join(builder.currentSourcePath, 'third_party', 'capstone', 'include'),
             self.amtl,
         ]
 
