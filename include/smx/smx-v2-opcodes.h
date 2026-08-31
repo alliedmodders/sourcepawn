@@ -97,7 +97,7 @@ namespace v2 {
     FOR_EACH(CVT_I64, 52, "cvt.i64", 1) \
     FOR_EACH(TRUNCATE_I64, 53, "truncate.i64", 1) \
     FOR_EACH(SWAP, 54, "swap", 1) \
-    FOR_EACH(LOADFN, 55, "loadfn", 5) \
+    FOR_EACH(LOAD_FN, 55, "load.fn", 5) \
     FOR_EACH(LOAD_I_I64, 56, "load.i.i64", 1) \
     FOR_EACH(STOR_I_I64, 57, "stor.i.i64", 1) \
     FOR_EACH(RETV, 58, "retv", 1) \

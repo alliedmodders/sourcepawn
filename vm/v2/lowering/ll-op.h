@@ -177,7 +177,7 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(SGRTR_I64, 75, "sgrtr.i64", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(SGEQ_I64, 76, "sgeq.i64", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(SMOD_I64, 77, "smod.i64", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(LOADFN, 78, "loadfn", {LL_FMT_METHOD_ID, LL_FMT_REG}) \
+    FOR_EACH(LOAD_FN, 78, "load.fn", {LL_FMT_METHOD_ID, LL_FMT_REG}) \
     FOR_EACH(LOAD_I_I64, 79, "load.i.i64", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_I_I64, 80, "stor.i.i64", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(RETV, 81, "retv", {}) \

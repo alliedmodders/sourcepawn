@@ -77,7 +77,7 @@ class MethodInfo final : public BaseMethodInfo
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
-        return jit_.get();
+        return jit_;
     }
 
     void set_llcode(std::unique_ptr<LLCode> code);
@@ -94,13 +94,16 @@ class MethodInfo final : public BaseMethodInfo
         local_types_ = {};
     }
 
+    static size_t offsetOfCompiledFunction() { return offsetof(MethodInfo, jit_); }
+    static size_t offsetOfMethodIndex() { return offsetof(MethodInfo, method_index_); }
+
   private:
     void InternalValidate();
 
   private:
     Runtime* rt_;
     uint32_t method_index_;
-    std::unique_ptr<CompiledFunction> jit_;
+    CompiledFunction* jit_ = nullptr;
     std::unique_ptr<LLCode> llcode_;
     ke::RefPtr<ControlFlowGraph> graph_;
 

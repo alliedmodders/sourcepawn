@@ -50,7 +50,7 @@ void CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
 }
 
 bool CompilerBase::IsSupported() {
-    return false && FeaturesX86::Get().fpu && FeaturesX86::Get().sse && FeaturesX86::Get().sse2;
+    return FeaturesX86::Get().fpu && FeaturesX86::Get().sse && FeaturesX86::Get().sse2;
 }
 
 bool CompilerBase::SupportsPlugin(Runtime* cx) {
@@ -118,6 +118,32 @@ void Compiler::EmitCallThunk(CallThunk* thunk) {
     __ j(zero, ExternalAddress(stubs_.return_reported_error));
 
     __ jmp(eax);
+}
+
+void Compiler::EmitIndirectCallThunk(IndirectCallThunk* thunk) {
+    // Grab the SpFunction->method->method_index.
+    __ movl(eax, RegAddr(thunk->fn_reg));
+    __ movl(eax, Operand(eax, offsetof(SpFunction, method)));
+
+    // Enter the exit frame. This aligns the stack.
+    __ enterExitFrame(ExitFrameType::Helper, 0);
+
+    static const size_t kStackNeeded = 2 * sizeof(void*);
+    static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+    __ subl(esp, kStackReserve);
+
+    // Set arguments.
+    __ movl(Operand(esp, 1 * sizeof(void*)), eax);
+    __ movl(Operand(esp, 0 * sizeof(void*)), intptr_t(context_));
+
+    __ callWithABI(ExternalAddress((void*)IndirectCompileThunk));
+    __ leaveExitFrame();
+
+    __ testl(eax, eax);
+    __ j(zero, ExternalAddress(stubs_.return_reported_error));
+
+    __ movl(edx, eax);
+    __ jmp(&thunk->return_to);
 }
 
 void Compiler::JumpOnError(ConditionCode cc, int err) {
@@ -195,6 +221,10 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
         __ cmpl(eax, Operand(ExternalAddress(env_->addressOfSpTop())));
         JumpOnError(above_equal, SP_ERROR_STACKLOW);
 
+        // Bump up the argument count, get the original params vec (stk).
+        __ movl(esi, Operand(esp, 0));
+        __ addl(Operand(esi, 0), ecx);
+
         // Copy arguments. stk (edi) is already positioned to where we need,
         // and ecx already contains the arg count.
         static_assert(stk == edi);
@@ -256,6 +286,38 @@ void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t d
         __ call(ExternalAddress(target->jit()->GetEntryAddress()));
     }
 
+    EmitCipMapping(op_cip_);
+
+    if (dest != 0xFFFF)
+        __ movl(RegAddr(dest), eax);
+}
+
+void Compiler::EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
+                                const std::vector<uint16_t>& args)
+{
+    __ movl(edx, RegAddr(fn_reg));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    // This could happen if a runtime has been unloaded, I guess.
+    __ movl(edx, Operand(edx, offsetof(SpFunction, method)));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    for (uint8_t i = 0; i < nargs; i++) {
+        uint16_t arg_reg = args[i];
+        __ movl(eax, RegAddr(arg_reg));
+        __ movl(Operand(stk, i * sizeof(cell_t)), eax);
+    }
+
+    auto& thunk = AddIndirectCallThunk(fn_reg);
+    __ movl(edx, Operand(edx, MethodInfo::offsetOfCompiledFunction()));
+    __ testl(edx, edx);
+    __ j(zero, &thunk.label);
+
+    __ bind(&thunk.return_to);
+    __ movl(eax, Operand(edx, CompiledFunction::offsetOfEntry()));
+    __ call(eax);
     EmitCipMapping(op_cip_);
 
     if (dest != 0xFFFF)

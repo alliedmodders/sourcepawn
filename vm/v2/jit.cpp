@@ -144,6 +144,11 @@ CompiledFunction* CompilerBase::Emit() {
         EmitCallThunk(&call);
     }
 
+    for (auto& call : indirect_call_thunks_) {
+        __ bind(&call.label);
+        EmitIndirectCallThunk(&call);
+    }
+
     for (auto& error : bounds_errors_) {
         __ bind(&error.label);
         EmitBoundsErrorThunk(&error);
@@ -249,11 +254,25 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 uint8_t nargs = reader.read<uint8_t>();
                 uint16_t dest = reader.read<uint16_t>();
                 uint32_t method_index = method - rt_->image()->GetMethod(0);
+
                 std::vector<uint16_t> args(nargs);
-                for (uint8_t i = 0; i < nargs; i++) {
+                for (uint8_t i = 0; i < nargs; i++)
                     args[i] = reader.read<uint16_t>();
-                }
+
                 EmitScriptedCall(method_index, nargs, dest, args);
+                break;
+            }
+            case LL_CALLI:
+            {
+                uint16_t fn_reg = reader.read<uint16_t>();
+                uint8_t nargs = reader.read<uint8_t>();
+                uint16_t dest = reader.read<uint16_t>();
+
+                std::vector<uint16_t> args(nargs);
+                for (uint8_t i = 0; i < nargs; i++)
+                    args[i] = reader.read<uint16_t>();
+
+                EmitIndirectCall(fn_reg, nargs, dest, args);
                 break;
             }
             case LL_NTVCALL:
@@ -469,8 +488,13 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             case LL_LOAD_FN: {
                 uint32_t method_index = reader.read<uint32_t>();
                 uint16_t dest = reader.read<uint16_t>();
-                funcid_t id = (method_index << 1) | 1;
-                EmitLoadConst(dest, id);
+                auto method = rt_->AcquireMethod(method_index);
+                Handle<SpFunction> fn = method->GetFunction();
+                if (!fn)
+                    return false;
+
+                auto fn_addr = env_->virt_mem().ToLocalAddr(fn.get());
+                EmitLoadInternedObj(fn_addr, dest);
                 break;
             }
             case LL_LOAD_I_U8:
@@ -765,11 +789,16 @@ auto CompilerBase::AddDeferredErrorThunk() -> DeferredErrorThunk& {
     return deferred_errors_.back();
 }
 
+auto CompilerBase::AddIndirectCallThunk(uint16_t fn_reg) -> IndirectCallThunk& {
+    indirect_call_thunks_.emplace_back(op_cip_, fn_reg);
+    return indirect_call_thunks_.back();
+}
+
 void CompilerBase::ReportError(int err) {
     env_->ReportError(err);
 }
 
-void* CompilerBase::LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t* pc) {
+CompiledFunction* CompilerBase::IndirectCompileThunk(Runtime* cx, MethodInfo* method) {
     // If the watchdog timer has declared a timeout, we must process it now,
     // and possibly refuse to compile, since otherwise we will compile a
     // function that is not patched for timeouts.
@@ -779,22 +808,21 @@ void* CompilerBase::LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t
         return nullptr;
     }
 
-    RefPtr<MethodInfo> method = cx->runtime()->AcquireMethod(method_index);
-    if (!method) {
-        // Should be impossible.
-        env->ReportError(SP_ERROR_INVALID_INSTRUCTION);
-        return nullptr;
-    }
-
     if (!method->jit() && !Compile(cx, method))
         return nullptr;
 
-#if defined JIT_SPEW
-    Environment::get()->debugger()->OnDebugSpew("Patching thunk to %s::%s\n", cx->Name(),
-                                                cx->image()->LookupFunction(pcode_offs));
-#endif
+    return method->jit();
+}
 
-    CompiledFunction* fn = method->jit();
+void* CompilerBase::LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t* pc) {
+    RefPtr<MethodInfo> method = cx->runtime()->AcquireMethod(method_index);
+    if (!method) {
+        // Should be impossible.
+        Environment::get()->ReportError(SP_ERROR_INVALID_INSTRUCTION);
+        return nullptr;
+    }
+
+    auto fn = IndirectCompileThunk(cx, method.get());
     assert(fn);
 
     /* Right now, we always keep the code RWE */

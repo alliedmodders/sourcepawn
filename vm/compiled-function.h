@@ -1,6 +1,6 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// Copyright (C) 2006-2026 AlliedModders LLC
 //
 // This file is part of SourcePawn. SourcePawn is free software: you can
 // redistribute it and/or modify it under the terms of the GNU General Public
@@ -10,8 +10,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#ifndef _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
-#define _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
+#pragma once
 
 #include <memory>
 
@@ -68,6 +67,10 @@ class CompiledFunction
 
     ucell_t FindCipByPc(void* pc);
 
+    static size_t offsetOfEntry() {
+        return offsetof(CompiledFunction, code_) + offsetof(LinkedCode, entry);
+    }
+
   private:
     LinkedCode code_;
     std::unique_ptr<FixedArray<LoopEdge>> edges_;
@@ -76,5 +79,3 @@ class CompiledFunction
 };
 
 } // namespace sp
-
-#endif //_INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_

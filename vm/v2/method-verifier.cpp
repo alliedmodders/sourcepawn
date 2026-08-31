@@ -681,7 +681,7 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;
 
-        case OP_LOADFN: {
+        case OP_LOAD_FN: {
             uint32_t method_index = readCell();
             if (!smx_->GetMethod(method_index))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);

@@ -24,6 +24,7 @@
 #include <amtl/am-vector.h>
 
 #include <optional>
+#include <variant>
 
 #include "ast-types.h"
 #include "coercion-rules.h"

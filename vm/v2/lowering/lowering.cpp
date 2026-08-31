@@ -1043,7 +1043,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
-        case OP_LOADFN: {
+        case OP_LOAD_FN: {
             uint32_t fn_id = reader_.read<uint32_t>();
             const TypeDesc* td = rt_->LoadMethodSignature(fn_id);
             pushStack(CreateLoadFnNode(td, fn_id));
@@ -1793,7 +1793,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
 
         case ExprNode::kLoadFn: {
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            emit(LL_LOADFN, node->load_fn.fn_id, dest);
+            emit(LL_LOAD_FN, node->load_fn.fn_id, dest);
             return dest;
         }
 

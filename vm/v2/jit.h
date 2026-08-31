@@ -89,6 +89,8 @@ class CompilerBase
                                 const std::vector<uint16_t>& args, uint16_t spread_reg) = 0;
     virtual void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
                                   const std::vector<uint16_t>& args) = 0;
+    virtual void EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
+                                  const std::vector<uint16_t>& args) = 0;
     virtual void EmitJump(size_t target_idx) = 0;
     virtual void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) = 0;
     virtual void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) = 0;
@@ -152,9 +154,13 @@ class CompilerBase
     struct CallThunk;
     virtual void EmitCallThunk(CallThunk* thunk) = 0;
 
+    struct IndirectCallThunk;
+    virtual void EmitIndirectCallThunk(IndirectCallThunk* thunk) = 0;
+
   protected:
     BoundsErrorThunk& AddBoundsErrorThunk();
     DeferredErrorThunk& AddDeferredErrorThunk();
+    IndirectCallThunk& AddIndirectCallThunk(uint16_t fn_reg);
 
     bool IsBlockEmitted(size_t block_idx) const {
         return block_labels_[block_idx].bound();
@@ -173,6 +179,7 @@ class CompilerBase
   protected:
     // Helpers.
     static void* LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t* pc);
+    static CompiledFunction* IndirectCompileThunk(Runtime* cx, MethodInfo* method);
     static void PatchCallThunk(uint8_t* pc, void* target);
 
   protected:
@@ -222,6 +229,17 @@ class CompilerBase
         uint32_t method_index;
     };
     std::vector<CallThunk> call_thunks_;
+
+    struct IndirectCallThunk {
+        explicit IndirectCallThunk(const uint8_t* cip, uint16_t fn_reg)
+          : cip(cip)
+        {}
+        Label label;
+        Label return_to;
+        const uint8_t* cip;
+        uint16_t fn_reg;
+    };
+    std::vector<IndirectCallThunk> indirect_call_thunks_;
 
     struct ErrorThunk {
         explicit ErrorThunk(const uint8_t* cip, int err)

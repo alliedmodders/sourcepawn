@@ -37,11 +37,15 @@ uint32_t MethodInfo::pcode_offset() const {
 MethodInfo::~MethodInfo() {
     if (fn_obj_)
         fn_obj_->method = nullptr;
+    if (jit_)
+        delete jit_;
 }
 
 void MethodInfo::setCompiledFunction(CompiledFunction* fun) {
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    jit_.reset(fun);
+    if (jit_)
+        delete jit_;
+    jit_ = fun;
 }
 
 void MethodInfo::set_llcode(std::unique_ptr<LLCode> code) {

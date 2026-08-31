@@ -52,6 +52,8 @@ class Compiler : public CompilerBase
                         const std::vector<uint16_t>& args, uint16_t spread_reg) override;
     void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
                           const std::vector<uint16_t>& args) override;
+    void EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
+                          const std::vector<uint16_t>& args) override;
     void EmitJump(size_t target_idx) override;
     void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) override;
     void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) override;
@@ -112,6 +114,7 @@ class Compiler : public CompilerBase
     void EmitDecRef(Register obj_reg, std::optional<Register> save_reg,
                     const std::optional<Operand>& zero_loc = {});
     void EmitCallThunk(CallThunk* thunk) override;
+    void EmitIndirectCallThunk(IndirectCallThunk* thunk) override;
 
     void JumpOnError(ConditionCode cc, int err);
     void JumpOnReportedError(ConditionCode cc);

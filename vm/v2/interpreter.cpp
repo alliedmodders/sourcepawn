@@ -816,7 +816,7 @@ bool Interpreter::run_internal() {
                     vregs_[frame->dest_reg] = result;
                 break;
             }
-            case LL_LOADFN: {
+            case LL_LOAD_FN: {
                 uint32_t method_index = reader_.read<uint32_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 auto method = rt_->AcquireMethod(method_index);

@@ -1417,7 +1417,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
         assert(!fun->is_native());
         assert(fun->is_live());
 
-        __ emit(OP_LOADFN, &fun->cg()->method_id);
+        __ emit(OP_LOAD_FN, &fun->cg()->method_id);
     } else if (auto var = sym->as<VarDeclBase>()) {
         if (sym->type()->isCompositeValue())
             EmitAddress(var);
@@ -2295,7 +2295,7 @@ void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
     auto fun = expr->decl();
     AddFunctionToQueue(fun);
 
-    __ emit(OP_LOADFN, &fun->cg()->method_id);
+    __ emit(OP_LOAD_FN, &fun->cg()->method_id);
 
 }
 
