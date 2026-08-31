@@ -57,11 +57,12 @@ class Heap {
 
     bool Initialize();
 
-
-
     uint32_t ToLocalAddr(void* p) { return virt_mem_.ToLocalAddr(p); }
+
     template <typename T>
-    T ToPhysAddr(uint32_t addr) { return virt_mem_.ToPhysAddr<T>(addr); }
+    T ToPhysAddr(uint32_t addr) {
+        return virt_mem_.ToPhysAddr<T>(addr);
+    }
 
     void* AllocRaw(size_t bytes);
     bool IsEmpty() const;
@@ -86,9 +87,6 @@ class Heap {
         obj->rc = 0;
         return Handle<T>(reinterpret_cast<T*>(obj));
     }
-
-  private:
-
 
   private:
     VirtMem& virt_mem_;

@@ -14,109 +14,31 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
-//
 #include "jit_x64.h"
 
+#include <assert.h>
 #include <math.h>
-
-#define __ masm.
 
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "debugging.h"
 #include "environment.h"
-#include "x64/features-x64.h"
+#include "v2/lowering/ll-op.h"
+#include "v2/lowering/llcode.h"
 #include "v2/method-info.h"
 #include "v2/runtime-helpers.h"
+#include "v2/x64/constants-x64.h"
+#include "x64/features-x64.h"
 
 #define __ masm.
 
 namespace sp::v2 {
 
 Compiler::Compiler(Runtime* rt, MethodInfo* method)
- : CompilerBase(rt, method)
-{}
-
-Compiler::~Compiler()
-{}
-
-void Compiler::emitPrologue() {
-    size_t frame_items = __ enterFrame(JitFrameType::Scripted, method_info_->frame_id()) + 1;
-    (void)frame_items;
-
-    assert(frame_items == 3);
-
-    // The incoming call misaligned the stack, and pushing our frame (two words)
-    // did not change the alignment. Fix it now.
-    __ subq(rsp, 8);
-
-    // Push the old frame onto the stack.
-    __ subq(stk, 8);
-    __ movl(tmp, frmAddr());
-    __ movl(Operand(stk, 4), tmp);
-    __ movl(tmp, hpAddr());
-    __ movl(Operand(stk, 0), tmp);
-
-    // Get and store the new frame.
-    __ movq(tmp, stk);
-    __ movq(frm, stk);
-    __ subq(tmp, dat);
-    __ movl(Operand(frmAddr()), tmp);
-
-    int32_t max_stack = method_info_->max_stack();
-    assert(max_stack >= 0);
-
-    if (max_stack) {
-        __ movl(rax, Operand(hpAddr()));
-        __ lea(rax, Operand(dat, rax, NoScale, STACK_MARGIN));
-        __ lea(rcx, Operand(stk, -max_stack));
-        __ cmpq(rcx, rax);
-        jumpOnError(below, SP_ERROR_STACKLOW);
-    }
-
-    if (cell_t stack_needed = method_info_->StackSizeForLocalSlots())
-        __ addq(stk, stack_needed);
+ : CompilerBase(rt, method) {
 }
 
-void Compiler::emitOutOfBoundsError(OutOfBoundsError* path) {
-    RipCodeLabel return_address;
-    size_t frame_items = __ pushInlineExitFrame(ExitFrameType::Helper, 0, &return_address);
-    __ movl(ArgReg1, path->bounds);
-    __ movl(ArgReg0, rax);
-    size_t alignment = __ callWithABI(frame_items, ExternalAddress((void*)ReportOutOfBoundsError));
-    __ bind(&return_address);
-    emitCipMapping(path->cip);
-    __ popInlineExitFrame(alignment);
-    __ jmp(AddressValue(stubs_.return_reported_error));
-}
-
-bool Compiler::beforeVisitOp(OPCODE op) {
-#ifndef NDEBUG
-    __ movq(rcx, op);
-#endif
-    return true;
-}
-
-void Compiler::emitDebugBreakHandler() {
-    // Common path for invoking debugger.
-    __ bind(&debug_break_);
-
-    // Get and store the current stack pointer.
-    __ movq(tmp, stk);
-    __ subq(tmp, dat);
-    __ movl(Operand(spAddr()), tmp);
-
-    // Enter the exit frame. This aligns the stack.
-    size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-
-    // Get the context pointer and call the debugging break handler.
-    __ xorq(ArgReg1, ArgReg1);
-    __ movq(ArgReg0, context_reg);
-    __ callWithABI(frame_items, ExternalAddress((void*)InvokeDebugger));
-    __ leaveExitFrame();
-    __ testl(rax, rax);
-    jumpOnError(not_zero);
-    __ ret();
+Compiler::~Compiler() {
 }
 
 bool CompilerBase::IsSupported() {
@@ -128,1014 +50,343 @@ bool CompilerBase::SupportsPlugin(Runtime* cx) {
     return true;
 }
 
+// Every JIT function gets 64 bytes of stack. Since x64 passes arguments via
+// registers we don't need as much scratch space as we do on x86. This gives
+// us enough for eight 8-byte locals, and enough for shadow stack space on
+// win64.
+static constexpr int kNativeStackAllowance = 64 * sizeof(intptr_t);
+
+// Handle<> storage is placed at the top of the pre-allocated stack area.
+static constexpr int kHandleOffset = -24;
+
+// Windows only has four argument registers. When we need more, we have our
+// own internal calling convention for helpers. This means less #ifs in our
+// code.
+#if defined _WIN64
+static constexpr Register HelperArgReg4 = r10;
+#else
+static constexpr Register HelperArgReg4 = ArgReg4;
+#endif
+
+void Compiler::EmitPrologue(const FrameInfo& frame) {
+    __ enterFrame(JitFrameType::Scripted, method_info_->frame_id());
+
+    // The first push aligns the stack to 16-bytes.
+    __ push(frm);
+    __ subq(rsp, kNativeStackAllowance);
+    __ assertStackAligned();
+
+    __ lea(frm, Operand(dat_reg, stk, NoScale));
+
+    if (frame.frame_size) {
+        __ lea(rax, Operand(frm, frame.frame_size));
+        __ subq(rax, dat_reg);
+
+        __ movl(rcx, Operand(env_reg, Environment::offsetOfSpTop()));
+        __ cmpl(rax, rcx);
+        JumpOnError(above, SP_ERROR_STACKLOW);
+    }
+
+    if (frame.callee_regs > 0) {
+        __ xorq(rax, rax);
+        __ movq(rcx, frame.callee_regs);
+        __ lea(rdi, Operand(frm, frame.num_params * sizeof(cell_t)));
+        __ rep_stosd();
+    }
+
+    // Set stk = frm + num_regs * 4.
+    __ addl(stk, int32_t(frame.num_regs * sizeof(cell_t)));
+    __ movl(Operand(env_reg, Environment::offsetOfSp()), stk);
+}
+
+Operand Compiler::StkRelAddr(uint32_t reg) {
+    return Operand(stk, -int32_t((ll_->num_regs() - reg) * sizeof(cell_t)));
+}
+
 void CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
     Assembler::PatchCallThunk(pc, reinterpret_cast<uintptr_t>(target));
 }
 
-bool Compiler::visitBREAK() {
-    if (!Environment::get()->IsDebugBreakEnabled())
-        return true;
-
-    __ call(&debug_break_);
-    emitCipMapping(op_cip_);
-    return true;
+void Compiler::EmitLoadConst(uint16_t reg, cell_t val) {
+    __ movl(RegAddr(reg), val);
 }
 
-bool Compiler::visitLOAD_PRI(cell_t srcaddr) {
-    __ movl(pri, Operand(dat, srcaddr));
-    return true;
+void Compiler::EmitLoadConst64(uint16_t reg, int64_t val) {
+    __ movq(rax, val);
+    __ movq(RegAddr(reg), rax);
 }
 
-bool Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(frm, StackOffset(srcoffs)));
-    return true;
+void Compiler::EmitAddr(uint16_t src_reg, uint16_t dest_reg) {
+    __ lea(rax, StkRelAddr(src_reg));
+    __ movl(RegAddr(dest_reg), rax);
 }
 
-bool Compiler::visitLOAD_I() {
-    emitCheckAddress(pri);
-    __ movl(pri, Operand(dat, pri, NoScale));
-    return true;
-}
-
-bool Compiler::visitLODB_I() {
-    emitCheckAddress(pri);
-    __ movl(pri, Operand(dat, pri, NoScale));
-    __ andl(pri, 0xff);
-    return true;
-}
-
-bool Compiler::visitCONST(PawnReg dest, cell_t imm) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, imm);
-    return true;
-}
-
-bool Compiler::visitADDR(PawnReg dest, cell_t offset) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, frmAddr());
-    __ addl(reg, StackOffset(offset));
-    return true;
-}
-
-bool Compiler::visitSTOR_PRI(cell_t offset) {
-    __ movl(Operand(dat, offset), pri);
-    return true;
-}
-
-bool Compiler::visitSTOR_S(cell_t offset, PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(Operand(frm, StackOffset(offset)), reg);
-    return true;
-}
-
-bool Compiler::visitSTOR_I() {
-    emitCheckAddress(alt);
-    __ movl(Operand(dat, alt, NoScale), pri);
-    return true;
-}
-
-bool Compiler::visitSTRB_I() {
-    emitCheckAddress(alt);
-    __ movb(Operand(dat, alt, NoScale), pri);
-    return true;
-}
-
-bool Compiler::visitIDXADDR() {
-    __ movsxd(pri, pri);
-    __ lea(pri, Operand(alt, pri, ScaleFour));
-    return true;
-}
-
-bool Compiler::visitMOVE(PawnReg reg) {
-    if (reg == PawnReg::Pri)
-        __ movq(pri, alt);
+void Compiler::EmitRetn(LLOp op, std::optional<uint16_t> reg) {
+    if (reg)
+        __ movl(rax, RegAddr(*reg));
     else
-        __ movq(alt, pri);
-    return true;
-}
+        __ xorl(rax, rax);
 
-bool Compiler::visitXCHG() {
-    __ xchgq(pri, alt);
-    return true;
-}
+    if (op == LL_RETN_A)
+        EmitIncRefForArrayEscape(rax, rcx);
 
-bool Compiler::visitPUSH(PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(Operand(stk, -4), reg);
-    __ subq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitPUSH_C(cell_t value) {
-    __ movl(Operand(stk, -4), value);
-    __ subq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitPUSH_S(cell_t offset) {
-    __ movl(tmp, Operand(frm, StackOffset(offset)));
-    __ movl(Operand(stk, -4), tmp);
-    __ subq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitPOP(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(stk, 0));
-    __ addq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitHEAP(cell_t amount) {
-    // Note: this must not clobber PRI.
-    __ movl(alt, hpAddr());
-    __ addl(hpAddr(), amount);
-
-    if (amount < 0) {
-        __ cmpl(hpAddr(), context_->DataSize());
-        jumpOnError(below, SP_ERROR_HEAPMIN);
-    } else {
-        __ movl(tmp, hpAddr());
-        __ lea(tmp, Operand(dat, tmp, NoScale, STACK_MARGIN));
-        __ cmpl(tmp, stk);
-        jumpOnError(above, SP_ERROR_HEAPLOW);
-    }
-    return true;
-}
-
-bool Compiler::visitRETN() {
-    for (uint32_t i = 0; i < block_->heap_scope_depth(); i++)
-        visitHEAP_RESTORE();
-
-    // Restore the old stack and frame pointer.
+    // Restore world's view of stk.
     __ movq(stk, frm);
-    __ movl(frm, Operand(stk, 4)); // get the old frm
-    __ movl(tmp, Operand(stk, 0)); // get the old hp
-    __ movl(hpAddr(), tmp);
-    __ addq(stk, 8);                  // pop stack
-    __ movl(frmAddr(), frm); // store back old frm
-    __ addq(frm, dat);                // relocate
+    __ subq(stk, dat_reg);
+    __ movl(Operand(env_reg, Environment::offsetOfSp()), stk);
 
-    // Remove parameters.
-    __ movl(tmp, Operand(stk, 0));
-    __ lea(stk, Operand(stk, tmp, ScaleFour, 4));
+    // Restore the previous |frm|.
+    __ movq(frm, Operand(rbp, -16));
 
-    __ addq(rsp, 8);
     __ leaveFrame();
     __ ret();
-    return true;
 }
 
-bool Compiler::visitCALL(uint32_t method_index) {
-    RefPtr<BaseMethodInfo> method = rt_->GetMethodByIndex(method_index);
-    if (!method->jit()) {
-        // Need to emit a delayed thunk.
-        CallThunk thunk(method_index);
-        __ callWithABI(&thunk.label);
-        call_thunks_.emplace_back(std::move(thunk));
-    } else {
-        // Function is already emitted, we can do a direct call.
-        __ callWithABI(ExternalAddress(method->jit()->GetEntryAddress()));
+void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+    NativeEntry* native = rt_->NativeAt(native_index);
+
+    RipCodeLabel return_address;
+    __ pushInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
+#ifdef _WIN64
+    static constexpr int kStackAlignment = 8 + 32;
+#else
+    static constexpr int kStackAlignment = 8;
+#endif
+    __ subq(rsp, kStackAlignment);
+
+    __ lea(ArgReg2, Operand(dat_reg, stk, NoScale));
+    __ movl(Operand(ArgReg2, 0), nargs);
+    for (uint8_t i = 0; i < nargs; i++) {
+        uint16_t arg_reg = args[i];
+        __ movl(rax, RegAddr(arg_reg));
+        __ movl(Operand(ArgReg2, (i + 1) * sizeof(cell_t)), rax);
+    }
+    __ movq(ArgReg1, reinterpret_cast<intptr_t>(native));
+    __ movq(ArgReg0, context_reg);
+    __ callWithABI(ExternalAddress((void*)NativeInvokeThunk));
+    __ bind(&return_address);
+    EmitCipMapping(op_cip_);
+
+    __ popInlineExitFrame(kStackAlignment);
+
+    // Check for exception.
+    __ cmpl(Operand(env_reg, Environment::offsetOfExceptionCode()), 0);
+    JumpOnReportedError(not_zero);
+
+    if (dest != 0xFFFF)
+        __ movl(RegAddr(dest), rax);
+}
+
+void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+    for (uint8_t i = 0; i < nargs; i++) {
+        uint16_t arg_reg = args[i];
+        __ movl(rax, RegAddr(arg_reg));
+        __ movl(Operand(dat_reg, stk, NoScale, i * sizeof(cell_t)), rax);
     }
 
-    // Map the return address to the cip that started this call.
-    emitCipMapping(op_cip_);
-    return true;
+    RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
+    assert(target);
+
+    if (!target->jit()) {
+        CallThunk thunk(method_index);
+        __ call(&thunk.label);
+        call_thunks_.emplace_back(std::move(thunk));
+    } else {
+        __ call(ExternalAddress(target->jit()->GetEntryAddress()));
+    }
+
+    EmitCipMapping(op_cip_);
+
+    if (dest != 0xFFFF)
+        __ movl(RegAddr(dest), rax);
 }
 
-void Compiler::emitCallThunk(CallThunk* thunk) {
-    size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0);
-
-    // Need one slot on the stack to store the returned code address. Account
-    // for the return addressed pushed by the incoming call.
-    size_t stack_used = AllocatePreCallStack(sizeof(void*), frame_items + 1);
-    __ subq(rsp, stack_used);
-
-    __ movq(ArgReg3, Operand(rsp, stack_used + frame_items * sizeof(void*)));
-    __ lea(ArgReg2, Operand(rsp, kShadowStackSize));
-    __ movq(ArgReg1, thunk->pcode_offset);
-    __ movq(ArgReg0, context_reg);
-    __ callWithABI(ExternalAddress((void*)CompileFromThunk));
-    __ movq(rdx, Operand(rsp, kShadowStackSize));
-    __ addq(rsp, stack_used);
-    __ leaveExitFrame();
-
-    __ testl(rax, rax);
-    jumpOnError(not_zero);
-
-    __ jmp(rdx);
+void Compiler::EmitJump(size_t target_idx) {
+    if (IsBlockEmitted(target_idx)) {
+        __ jmp32(&block_labels_[target_idx]);
+        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
+    } else {
+        __ jmp(&block_labels_[target_idx]);
+    }
 }
 
-static inline ConditionCode OpToCondition(CompareOp op) {
+void Compiler::EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) {
+    __ cmpl(RegAddr(src_reg), 0);
+
+    ConditionCode cc = (op == LL_JZER) ? zero : not_zero;
+
+    if (IsBlockEmitted(target_idx)) {
+        __ j32(cc, &block_labels_[target_idx]);
+        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
+    } else {
+        __ j(cc, &block_labels_[target_idx]);
+    }
+}
+
+static ConditionCode CmpOpToCondition(LLOp op) {
     switch (op) {
-        case CompareOp::Eq:
+        case LL_JEQ:
+        case LL_EQ_I32:
+        case LL_EQ_I64:
             return equal;
-        case CompareOp::Neq:
+        case LL_JNEQ:
+        case LL_NEQ_I32:
+        case LL_NEQ_I64:
             return not_equal;
-        case CompareOp::Sless:
+        case LL_JSLESS:
+        case LL_SLESS_I32:
+        case LL_SLESS_I64:
             return less;
-        case CompareOp::Sleq:
+        case LL_JSLEQ:
+        case LL_SLEQ_I32:
+        case LL_SLEQ_I64:
             return less_equal;
-        case CompareOp::Sgrtr:
+        case LL_JSGRTR:
+        case LL_SGRTR_I32:
+        case LL_SGRTR_I64:
             return greater;
-        case CompareOp::Sgeq:
+        case LL_JSGEQ:
+        case LL_SGEQ_I32:
+        case LL_SGEQ_I64:
             return greater_equal;
         default:
             assert(false);
-            return negative;
+            return equal;
     }
 }
 
-bool Compiler::visitJcmp(CompareOp op, cell_t offset) {
-    ConditionCode cc;
+void Compiler::EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) {
+    ConditionCode cc = CmpOpToCondition(op);
+
+    __ movl(rax, RegAddr(reg_a));
+    __ cmpl(rax, RegAddr(reg_b));
+
+    if (IsBlockEmitted(target_idx)) {
+        __ j32(cc, &block_labels_[target_idx]);
+        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
+    } else {
+        __ j(cc, &block_labels_[target_idx]);
+    }
+}
+
+void Compiler::EmitCmpI32(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) {
+    ConditionCode cc = CmpOpToCondition(op);
+
+    __ xorl(rax, rax);
+    __ movl(rcx, RegAddr(reg_a));
+    __ cmpl(rcx, RegAddr(reg_b));
+    __ set(cc, rax);
+    __ movl(RegAddr(dest), rax);
+}
+
+void Compiler::EmitBasicAlu(LLOp op, uint16_t lhs_reg, uint16_t rhs_reg, uint16_t dest) {
+    __ movl(rax, RegAddr(lhs_reg));
+
     switch (op) {
-        case CompareOp::Zero:
-        case CompareOp::NotZero:
-            cc = (op == CompareOp::Zero) ? zero : not_zero;
-            __ testl(pri, pri);
+        case LL_ADD_I32:
+            __ addl(rax, RegAddr(rhs_reg));
             break;
-        case CompareOp::Eq:
-        case CompareOp::Neq:
-        case CompareOp::Sless:
-        case CompareOp::Sleq:
-        case CompareOp::Sgrtr:
-        case CompareOp::Sgeq:
-            cc = OpToCondition(op);
-            __ cmpl(pri, alt);
+        case LL_SMUL_I32:
+            __ imull(rax, RegAddr(rhs_reg));
+            break;
+        case LL_SUB_I32:
+            __ subl(rax, RegAddr(rhs_reg));
+            break;
+        case LL_XOR_I32:
+            __ xorl(rax, RegAddr(rhs_reg));
+            break;
+        case LL_OR_I32:
+            __ orl(rax, RegAddr(rhs_reg));
+            break;
+        case LL_AND_I32:
+            __ andl(rax, RegAddr(rhs_reg));
+            break;
+        case LL_SHL_I32:
+            __ movl(rcx, RegAddr(rhs_reg));
+            __ shll_cl(rax);
+            break;
+        case LL_SHR_I32:
+            __ movl(rcx, RegAddr(rhs_reg));
+            __ shrl_cl(rax);
+            break;
+        case LL_SSHR_I32:
+            __ movl(rcx, RegAddr(rhs_reg));
+            __ sarl_cl(rax);
             break;
         default:
             assert(false);
-            return false;
     }
 
-    assert(block_->successors().size() == 2);
-    Block* fallthrough = block_->successors()[0];
-    Block* target = block_->successors()[1];
-
-    assert(!isBackedge(fallthrough));
-
-    if (isBackedge(target)) {
-        __ j32(cc, target->label());
-        backward_jumps_.push_back(BackwardJump(masm.pc(), op_cip_));
-
-        if (!isNextBlock(fallthrough))
-            __ jmp(fallthrough->label());
-        return true;
-    }
-
-    if (isNextBlock(target)) {
-        // Invert the condition so we can fallthrough to the target instead.
-        __ j(InvertConditionCode(cc), fallthrough->label());
-    } else {
-        __ j(cc, target->label());
-        if (!isNextBlock(fallthrough))
-            __ jmp(fallthrough->label());
-    }
-    return true;
+    __ movl(RegAddr(dest), rax);
 }
 
-bool Compiler::visitSHL() {
-    __ movl(rcx, alt);
-    __ shll_cl(pri);
-    return true;
-}
+void Compiler::EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(rax, RegAddr(src_reg));
 
-bool Compiler::visitSHR() {
-    __ movl(rcx, alt);
-    __ shrl_cl(pri);
-    return true;
-}
-
-bool Compiler::visitSSHR() {
-    __ movl(rcx, alt);
-    __ sarl_cl(pri);
-    return true;
-}
-
-bool Compiler::visitSMUL() {
-    __ imull(pri, alt);
-    return true;
-}
-
-bool Compiler::visitSDIV_ALT_I32() {
-    Register dividend = alt;
-    Register divisor = pri;
-
-    // Guard against divide-by-zero.
-    __ testl(divisor, divisor);
-    jumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
-
-    // A more subtle case; -INT_MIN / -1 yields an overflow exception.
-    Label ok;
-    __ cmpl(divisor, -1);
-    __ j(not_equal, &ok);
-    __ cmpl(dividend, 0x80000000);
-    jumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
-    __ bind(&ok);
-
-    // Now we can actually perform the divide.
-    __ movl(tmp, divisor);
-    __ movl(rax, dividend);
-    __ sarl(rdx, 31);
-    __ idivl(tmp);
-    return true;
-}
-
-bool Compiler::visitSMOD_ALT_I32() {
-    visitSDIV_ALT_I32();
-    __ movl(pri, rdx);
-    return true;
-}
-
-bool Compiler::visitADD() {
-    __ addl(pri, alt);
-    return true;
-}
-
-bool Compiler::visitSUB_ALT() {
-    __ movl(tmp, alt);
-    __ subl(tmp, pri);
-    __ movl(pri, tmp);
-    return true;
-}
-
-bool Compiler::visitAND() {
-    __ andl(pri, alt);
-    return true;
-}
-
-bool Compiler::visitOR() {
-    __ orl(pri, alt);
-    return true;
-}
-
-bool Compiler::visitXOR() {
-    __ xorl(pri, alt);
-    return true;
-}
-
-bool Compiler::visitNOT() {
-    __ testl(rax, rax);
-    __ movl(rax, 0);
-    __ set(zero, r8_al);
-    return true;
-}
-
-bool Compiler::visitNEG() {
-    __ negl(rax);
-    return true;
-}
-
-bool Compiler::visitINVERT() {
-    __ notl(pri);
-    return true;
-}
-
-
-
-bool Compiler::visitSMUL_C(cell_t value) {
-    __ imull(pri, pri, value);
-    return true;
-}
-
-bool Compiler::visitZERO(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ xorl(reg, reg);
-    return true;
-}
-
-bool Compiler::visitCompareOp(CompareOp op) {
-    ConditionCode cc = OpToCondition(op);
-    __ cmpl(pri, alt);
-    __ movl(pri, 0);
-    __ set(cc, r8_al);
-    return true;
-}
-
-bool Compiler::visitINC_PRI() {
-    __ addl(pri, 1);
-    return true;
-}
-
-bool Compiler::visitDEC_PRI() {
-    __ subl(pri, 1);
-    return true;
-}
-
-bool Compiler::visitMOVS(uint32_t amount) {
-    uint32_t dwords = amount / 4;
-    uint32_t bytes = amount % 4;
-
-    __ cld();
-    __ lea(rdi, Operand(dat, alt, NoScale));
-    __ lea(rsi, Operand(dat, pri, NoScale));
-    if (dwords) {
-        __ movl(rcx, dwords);
-        __ rep_movsd();
-    }
-    if (bytes) {
-        __ movl(rcx, bytes);
-        __ rep_movsb();
-    }
-    return true;
-}
-
-bool Compiler::visitFILL(uint32_t amount) {
-    // eax/pri is used implicitly.
-    unsigned dwords = amount / 4;
-    __ lea(rdi, Operand(dat, alt, NoScale));
-    __ movl(rcx, dwords);
-    __ cld();
-    __ rep_stosd();
-    return true;
-}
-
-bool Compiler::visitBOUNDS(uint32_t limit) {
-    OutOfBoundsError error(op_cip_, limit);
-
-    __ cmpl(rax, limit);
-    __ j(above, &error.label);
-
-    bounds_errors_.emplace_back(std::move(error));
-    return true;
-}
-
-bool Compiler::visitSWAP_ALT() {
-    __ movl(tmp, Operand(stk, 0));
-    __ movl(Operand(stk, 0), alt);
-    __ movl(alt, tmp);
-    return true;
-}
-
-bool Compiler::visitPUSH_ADR(cell_t slot) {
-    // We temporarily relocate FRM to be a local address instead of an
-    // absolute address.
-    __ movl(tmp, frmAddr());
-    __ lea(tmp, Operand(tmp, StackOffset(slot)));
-    __ movl(Operand(stk, -4), tmp);
-    __ subq(stk, 4);
-    return true;
-}
-
-bool Compiler::visitSYSREQ_N(uint32_t native_index, uint32_t nparams) {
-    NativeEntry* native = rt_->NativeAt(native_index);
-
-    // Store the number of parameters on the stack.
-    __ movl(Operand(stk, -4), nparams);
-    __ subq(stk, 4);
-    emitLegacyNativeCall(native_index, native);
-    __ addq(stk, (nparams + 1) * sizeof(cell_t));
-    return true;
-}
-
-void Compiler::emitLegacyNativeCall(uint32_t native_index, NativeEntry* native) {
-    RipCodeLabel return_address;
-    size_t frame_items = __ pushInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
-
-    // Save registers.
-    __ push(rdx);
-    frame_items++;
-
-    // Check whether the native is bound.
-    bool immutable = native->status == SP_NATIVE_BOUND &&
-                     !(native->flags & (SP_NTVFLAG_EPHEMERAL | SP_NTVFLAG_OPTIONAL));
-    bool fast_path = immutable && native->legacy_fn;
-
-    // Save the old heap pointer.
-    __ movl(rax, hpAddr());
-    __ push(rax);
-    frame_items++;
-
-    __ movq(ArgReg0, context_reg);
-    if (fast_path) {
-        __ movq(ArgReg1, stk);
-    } else {
-        __ movq(ArgReg1, reinterpret_cast<intptr_t>(native));
-        __ movq(ArgReg2, stk);
-    }
-
-    // Relocate our absolute stk to be dat-relative, and update the context's
-    // view.
-    __ subq(stk, dat);
-    __ movl(spAddr(), stk);
-
-    size_t alignment;
-    if (fast_path) {
-        // Fast invoke, skip right to the function call.
-        alignment = __ callWithABI(frame_items, ExternalAddress((void*)native->legacy_fn));
-    } else {
-        alignment = __ callWithABI(frame_items, ExternalAddress((void*)NativeInvokeThunk));
-    }
-    __ bind(&return_address);
-    // Map the return address to the cip that initiated this call.
-    emitCipMapping(op_cip_);
-
-    if (alignment)
-        __ addq(rsp, alignment);
-
-    // Restore the heap pointer.
-    __ pop(rdx);
-    __ movl(hpAddr(), rdx);
-
-    // Restore ALT.
-    __ pop(rdx);
-
-    // Restore SP.
-    __ addq(stk, dat);
-
-    // Remove the inline frame, + our four arguments.
-    __ popInlineExitFrame();
-
-    // Check for errors. Note we jump directly to the return stub since the
-    // error has already been reported.
-    ExternalAddress exn_code(Environment::get());
-    __ movq(rcx, exn_code);
-    __ cmpl(Operand(rcx, Environment::offsetOfExceptionCode()), 0);
-    __ j(not_zero, AddressValue(stubs_.return_reported_error));
-}
-
-static int
-InvokeGenerateFullArray(Runtime* cx, uint32_t argc, cell_t* argv, int autozero) {
-    return cx->generateFullArray(argc, argv, autozero);
-}
-
-bool Compiler::visitGENARRAY(uint32_t dims, bool autozero) {
-    if (dims == 1) {
-        // flat array; we can generate this without indirection tables.
-        // Note that we can overwrite ALT because technically STACK should be destroying ALT
-        __ movl(alt, Operand(hpAddr()));
-        __ movl(tmp, Operand(stk, 0));
-        __ cmpl(tmp, 0);
-        jumpOnError(less_equal, SP_ERROR_INVALID_ARRAY_SIZE);
-        __ movl(Operand(stk, 0), alt); // store base of the array into the stack.
-        __ lea(rdi, Operand(dat, alt, NoScale));
-        __ lea(alt, Operand(alt, tmp, ScaleFour));
-        __ lea(r8, Operand(dat, alt, NoScale));
-        __ cmpq(r8, stk);
-        jumpOnError(not_below, SP_ERROR_HEAPLOW);
-        __ movl(Operand(hpAddr()), alt);
-
-        if (autozero) {
-            // Note - tmp is ecx and still intact.
-            __ push(rax);
-            __ xorl(rax, rax);
-            __ cld();
-            __ rep_stosd();
-            __ pop(rax);
-        }
-    } else {
-        // We need to sync |sp| first.
-        __ subq(stk, dat);
-        __ movl(Operand(spAddr()), stk);
-        __ addq(stk, dat);
-
-        // No inline exit frame needed here, the helper doesn't throw exceptions.
-        size_t stack_space = AllocatePreCallStack(sizeof(void*), 0);
-        __ subq(rsp, stack_space);
-        __ movl(Operand(rsp, kShadowStackSize), pri);
-
-        // int GenerateArray(cx, vars[], uint32_t, cell_t*, int, unsigned*);
-        __ movl(ArgReg3, autozero ? 1 : 0);
-        __ movq(ArgReg2, stk);
-        __ movl(ArgReg1, dims);
-        __ movq(ArgReg0, context_reg);
-        __ callWithABI(ExternalAddress((void*)InvokeGenerateFullArray));
-
-        // restore pri to tmp
-        __ movl(tmp, Operand(rsp, kShadowStackSize));
-        __ addq(rsp, stack_space);
-
-        __ testl(rax, rax);
-        jumpOnError(not_zero);
-
-        // Move tmp back to pri, remove pushed args.
-        __ movl(pri, tmp);
-        __ addq(stk, (dims - 1) * 4);
-    }
-    return true;
-}
-
-bool Compiler::visitSTRADJUST_PRI() {
-    __ addl(pri, 4);
-    __ sarl(pri, 2);
-    return true;
-}
-
-bool Compiler::visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) {
-    assert(block_->successors().size() == ncases + 1);
-    Block* defaultCase = block_->successors()[0];
-
-    // Degenerate - 0 cases.
-    if (!ncases) {
-        if (!isNextBlock(defaultCase))
-            __ jmp(defaultCase->label());
-        return true;
-    }
-
-    // Degenerate - 1 case.
-    if (ncases == 1) {
-        Block* maybe = block_->successors()[1];
-        __ cmpl(pri, cases[0].value);
-        __ j(equal, maybe->label());
-        if (!isNextBlock(defaultCase))
-            __ jmp(defaultCase->label());
-        return true;
-    }
-
-    // We have two or more cases, so let's generate a full switch. Decide
-    // whether we'll make an if chain, or a jump table, based on whether
-    // the numbers are strictly sequential.
-    bool sequential = true;
-    {
-        cell_t first = cases[0].value;
-        cell_t last = first;
-        for (size_t i = 1; i < ncases; i++) {
-            if (cases[i].value != ++last) {
-                sequential = false;
-                break;
-            }
-        }
-    }
-
-    cell_t low = cases[0].value;
-    if (low != INT_MIN && sequential) {
-        // First check whether the bounds are correct: if (a < LOW || a > HIGH);
-        if (low != 0) {
-            // negate it so we'll get a lower bound of 0.
-            low = -low;
-            __ lea(tmp, Operand(pri, low));
-        } else {
-            __ movl(tmp, pri);
-        }
-
-        cell_t high = abs(cases[0].value - cases[ncases - 1].value);
-        __ cmpl(tmp, high);
-        __ j(above, defaultCase->label());
-
-        // Optimized table version. The tomfoolery below is because we only have
-        // one free register... it seems unlikely pri or alt will be used given
-        // that we're at the end of a control-flow point, but we'll play it safe.
-        RipDataLabel table;
-        __ lea(rsi, &table);
-        __ movsxd(rcx, rcx);
-        __ movq(rdi, Operand(rsi, rcx, ScaleEight));
-        __ jmp(rdi);
-
-        // We emit absolute addresses in reverse order in the assembler, to
-        // avoid rip-relative fixups during linking. This means we have to
-        // walk the case statements backwards, to make sure the table can
-        // be read in forward order.
-        for (size_t i = ncases - 1; i < ncases; i--) {
-            Block* target = block_->successors()[i + 1];
-            __ emit_absolute_address(target->address_label());
-        }
-        __ bind(&table);
-    } else {
-        // Slower version. Go through each case and generate a check.
-        for (size_t i = 0; i < ncases; i++) {
-            Block* target = block_->successors()[i + 1];
-            __ cmpl(pri, cases[i].value);
-            __ j(equal, target->label());
-        }
-        __ jmp(defaultCase->label());
-    }
-    return true;
-}
-
-bool Compiler::visitMOVE_I64() {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rcx, Operand(dat, pri, NoScale, 0));
-    __ movq(Operand(dat, alt, NoScale, 0), rcx);
-    return true;
-}
-
-bool Compiler::visitCVT_I64(cell_t slot) {
-    __ movsxd(tmp, pri);
-    __ lea(pri, Operand(frm, StackOffset(slot)));
-    __ movq(Operand(pri, 0), tmp);
-    __ subq(pri, dat);
-    return true;
-}
-
-bool Compiler::visitTRUNCATE_I64() {
-    emitCheckAddress(pri, sizeof(int64_t));
-
-    __ movl(pri, Operand(dat, pri, NoScale, 0));
-    return true;
-}
-
-bool Compiler::visitTEST_I64() {
-    emitCheckAddress(pri, sizeof(int64_t));
-
-    __ movq(rcx, Operand(dat, pri, NoScale, 0));
-    __ testq(rcx, rcx);
-    __ set(not_zero, r8_al);
-    __ movzxb(pri, pri);
-    return true;
-}
-
-bool Compiler::visitINVERT_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-
-    __ movq(rcx, Operand(dat, pri, NoScale, 0));
-    __ notq(rcx);
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ movq(Operand(rax, 0), rcx);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitNEG_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-
-    __ movq(rcx, Operand(dat, pri, NoScale, 0));
-    __ negq(rcx);
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ movq(Operand(rax, 0), rcx);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSMUL_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ imulq(rdi, rsi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSDIV_ALT_I64(cell_t pri_slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(pri, Operand(dat, pri, NoScale, 0));
-    __ movq(alt, Operand(dat, alt, NoScale, 0));
-
-    const Register dividend = alt;
-    const Register divisor = pri;
-
-    // Guard against divide-by-zero.
-    __ testq(divisor, divisor);
-    jumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
-
-    // A more subtle case; -INT_MIN / -1 yields an overflow exception.
-    Label ok;
-    __ cmpq(divisor, -1);
-    __ j(not_equal, &ok);
-    __ movq(rcx, std::numeric_limits<int64_t>::min());
-    __ cmpq(dividend, rcx);
-    jumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
-    __ bind(&ok);
-
-    // Now we can actually perform the divide.
-    __ movq(tmp, divisor);
-    __ movq(rax, dividend);
-    __ sarq(rdx, 63);
-    __ idivq(tmp);
-
-    __ movq(rcx, rax);
-    __ lea(rax, Operand(frm, StackOffset(pri_slot)));
-    __ movq(Operand(rax, 0), rcx);
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSMOD_ALT_I64(cell_t pri_slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(pri, Operand(dat, pri, NoScale, 0));
-    __ movq(alt, Operand(dat, alt, NoScale, 0));
-
-    const Register dividend = alt;
-    const Register divisor = pri;
-
-    // Guard against divide-by-zero.
-    __ testq(divisor, divisor);
-    jumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
-
-    // A more subtle case; -INT_MIN / -1 yields an overflow exception.
-    Label ok;
-    __ cmpq(divisor, -1);
-    __ j(not_equal, &ok);
-    __ movq(rcx, std::numeric_limits<int64_t>::min());
-    __ cmpq(dividend, rcx);
-    jumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
-    __ bind(&ok);
-
-    // Now we can actually perform the divide.
-    __ movq(tmp, divisor);
-    __ movq(rax, dividend);
-    __ sarq(rdx, 63);
-    __ idivq(tmp);
-
-    __ lea(rax, Operand(frm, StackOffset(pri_slot)));
-    __ movq(Operand(rax, 0), rdx);
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitADD_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ addq(rdi, rsi);
-
-    __ movq(Operand(rax, 0), rdi);
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSUB_ALT_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ subq(rsi, rdi);
-    __ movq(Operand(rax, 0), rsi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSHL_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ shlq_cl(rdi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSSHR_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ sarq_cl(rdi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitSHR_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rcx, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ shrq_cl(rdi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitOR_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ orq(rdi, rsi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitAND_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ andq(rdi, rsi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-bool Compiler::visitXOR_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-    __ lea(rax, Operand(frm, StackOffset(slot)));
-    __ xorq(rdi, rsi);
-    __ movq(Operand(rax, 0), rdi);
-
-    __ subq(rax, dat);
-    return true;
-}
-
-
-bool Compiler::visitCompareOp64(CompareOp op) {
-    emitCheckAddress(pri, sizeof(int64_t));
-    emitCheckAddress(alt, sizeof(int64_t));
-
-    __ movq(rdi, Operand(dat, pri, NoScale, 0));
-    __ movq(rsi, Operand(dat, alt, NoScale, 0));
-
-    ConditionCode cc = OpToCondition(op);
-    __ cmpq(rdi, rsi);
-    __ set(cc, r8_al);
-    __ movzxb(pri, pri);
-    return true;
-}
-
-bool Compiler::visitTEST_F32() {
-    __ movd(xmm0, pri);
-    __ xorps(xmm1, xmm1);
-    __ ucomiss(xmm0, xmm1);
-
-    // NaN sets ZF, and so does a successful comparison to 0.0, so we only need
-    // a ZF check.
-    __ set(not_zero, r8_al);
-    return true;
-}
-
-bool Compiler::visitNEG_F32() {
-    __ movl(rcx, 0x80000000);
-    __ xorl(pri, rcx);
-    return true;
-}
-
-bool Compiler::visitMUL_F32() {
-    __ movd(xmm0, pri);
-    __ movd(xmm1, alt);
-    __ mulss(xmm0, xmm1);
-    __ movd(pri, xmm0);
-    return true;
-}
-
-bool Compiler::visitDIV_ALT_F32() {
-    __ movd(xmm0, alt);
-    __ movd(xmm1, pri);
-    __ divss(xmm0, xmm1);
-    __ movd(pri, xmm0);
-    return true;
-}
-
-bool Compiler::visitADD_F32() {
-    __ movd(xmm0, pri);
-    __ movd(xmm1, alt);
-    __ addss(xmm0, xmm1);
-    __ movd(pri, xmm0);
-    return true;
-}
-
-bool Compiler::visitSUB_ALT_F32() {
-    __ movd(xmm0, alt);
-    __ movd(xmm1, pri);
-    __ subss(xmm0, xmm1);
-    __ movd(pri, xmm0);
-    return true;
-}
-
-ConditionCode
-ToFloatConditionCode(CompareOp op) {
     switch (op) {
-        case CompareOp::Sgrtr:
+        case LL_INVERT_I32:
+            __ notl(rax);
+            break;
+        case LL_NEG_I32:
+            __ negl(rax);
+            break;
+        case LL_NOT_I32:
+            __ testl(rax, rax);
+            __ movl(rax, 0);
+            __ set(zero, r8_al);
+            break;
+        case LL_TEST_I32:
+            __ testl(rax, rax);
+            __ movl(rax, 0);
+            __ set(not_zero, r8_al);
+            break;
+        default:
+            assert(false);
+    }
+
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
+    __ movl(rax, RegAddr(lhs));
+    __ movl(rcx, RegAddr(rhs));
+
+    __ testl(rcx, rcx);
+    JumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
+
+    // A more subtle case; -INT_MIN / -1 yields an overflow exception.
+    Label ok;
+    __ cmpl(rcx, -1);
+    __ j(not_equal, &ok);
+    __ cmpl(rax, 0x80000000);
+    JumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
+    __ bind(&ok);
+
+    __ movl(rdx, rax);
+    __ sarl(rdx, 31);
+    __ idivl(rcx);
+
+    if (op == LL_SDIV_I32)
+        __ movl(RegAddr(dest), rax);
+    else if (op == LL_SMOD_I32)
+        __ movl(RegAddr(dest), rdx);
+    else
+        assert(false);
+}
+
+ConditionCode ToFloatConditionCode(LLOp op) {
+    switch (op) {
+        case LL_GRTR_F32:
             return above;
-        case CompareOp::Sgeq:
+        case LL_GEQ_F32:
             return above_equal;
-        case CompareOp::Sleq:
+        case LL_LEQ_F32:
             return below_equal;
-        case CompareOp::Sless:
+        case LL_LESS_F32:
             return below;
-        case CompareOp::Eq:
+        case LL_EQ_F32:
             return equal;
-        case CompareOp::Neq:
+        case LL_NEQ_F32:
             return not_equal;
         default:
             assert(false);
@@ -1143,9 +394,9 @@ ToFloatConditionCode(CompareOp op) {
     }
 }
 
-bool Compiler::visitCompareOpF32(CompareOp op) {
-    __ movd(xmm0, pri);
-    __ movd(xmm1, alt);
+void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
+    __ movss(xmm0, RegAddr(lhs));
+    __ movss(xmm1, RegAddr(rhs));
 
     auto cc = ToFloatConditionCode(op);
     if (cc == below || cc == below_equal) {
@@ -1182,57 +433,867 @@ bool Compiler::visitCompareOpF32(CompareOp op) {
         __ movl(rax, 0);
         __ set(cc, r8_al);
     }
-    return true;
+    __ movl(RegAddr(dest), rax);
 }
 
-bool Compiler::visitCVT_F32() {
-    __ cvtsi2ss(xmm0, pri);
-    __ movd(pri, xmm0);
-    return true;
+void Compiler::EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
+    __ movss(xmm0, RegAddr(lhs));
+    __ movss(xmm1, RegAddr(rhs));
+
+    switch (op) {
+        case LL_ADD_F32:
+            __ addss(xmm0, xmm1);
+            __ movd(RegAddr(dest), xmm0);
+            break;
+        case LL_SUB_F32:
+            __ subss(xmm0, xmm1);
+            __ movd(RegAddr(dest), xmm0);
+            break;
+        case LL_MUL_F32:
+            __ mulss(xmm0, xmm1);
+            __ movd(RegAddr(dest), xmm0);
+            break;
+        case LL_DIV_F32:
+            __ divss(xmm0, xmm1);
+            __ movd(RegAddr(dest), xmm0);
+            break;
+        case LL_MOD_F32:
+            __ movss(xmm1, RegAddr(rhs));
+            __ movss(xmm0, RegAddr(lhs));
+            __ callWithABI(ExternalAddress((void*)::fmodf));
+            __ movd(RegAddr(dest), xmm0);
+            break;
+        default:
+            assert(false);
+            break;
+    }
 }
 
-bool Compiler::visitMOD_ALT_F32() {
-    __ movd(xmm1, pri);
-    __ movd(xmm0, alt);
-    if (size_t alignment = __ callWithABI(0, ExternalAddress((void*)::fmodf)))
-        __ addq(rsp, alignment);
-    __ movd(pri, xmm0);
-    return true;
+void Compiler::EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
+    switch (op) {
+        case LL_CVT_F32:
+            __ cvtsi2ss(xmm0, RegAddr(src_reg));
+            __ movd(RegAddr(dest_reg), xmm0);
+            break;
+        case LL_TEST_F32:
+            __ movss(xmm0, RegAddr(src_reg));
+            __ xorps(xmm1, xmm1);
+            __ ucomiss(xmm0, xmm1);
+
+            // NaN sets ZF, and so does a successful comparison to 0.0, so we only need
+            // a ZF check.
+            __ set(not_zero, r8_al);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_NEG_F32:
+            __ movl(rax, RegAddr(src_reg));
+            __ movl(rcx, 0x80000000);
+            __ xorl(rax, rcx);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
 }
 
-bool Compiler::visitSTOR_S_PRI_I64(cell_t slot) {
-    emitCheckAddress(pri, sizeof(int64_t));
-
-    __ movq(tmp, Operand(dat, pri, NoScale, 0));
-    __ movq(Operand(frm, StackOffset(slot)), tmp);
-    return true;
+void Compiler::EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
+    switch (op) {
+        case LL_MOVE:
+            __ movl(rax, RegAddr(src_reg));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_MOVE_I64:
+            __ movq(rax, RegAddr(src_reg));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_STOR_S_A:
+            __ movl(rax, RegAddr(src_reg));
+            EmitIncRefForArrayEscape(rax, rcx);
+            __ movl(rdx, RegAddr(dest_reg));
+            EmitDecRef(rdx, rax);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
 }
 
-bool Compiler::visitSTOR_S_C(cell_t slot, cell_t value) {
-    __ movl(Operand(frm, StackOffset(slot)), value);
-    return true;
+void Compiler::EmitNewArray(const TypeDesc* td, uint16_t size_reg, uint16_t dest_reg) {
+    __ movl(rax, RegAddr(size_reg));
+    __ cmpl(rax, 0);
+    JumpOnError(less, SP_ERROR_ARRAY_BOUNDS);
+
+    __ movq(ArgReg3, rax);
+    __ movq(ArgReg2, reinterpret_cast<intptr_t>(td));
+    CallRtForHandle(&Runtime::NewArray, 2, dest_reg);
 }
 
-void Compiler::emitCheckAddress(Register reg, size_t read_size) {
-    // Check if we're in memory bounds.
-    __ cmpl(reg, context_->HeapSize() - read_size + 1);
-    jumpOnError(above_equal, SP_ERROR_MEMACCESS);
+void Compiler::EmitNewFixedArray(const TypeDesc* td, uint16_t dest_reg, uint32_t size) {
+    __ movl(ArgReg3, size);
+    __ movq(ArgReg2, reinterpret_cast<intptr_t>(td));
+    CallRtForHandle(&Runtime::NewArray, 2, dest_reg);
+}
 
-    // Check if we're in the invalid region between hp and sp.
+void Compiler::EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_reg,
+                                uint16_t dest_reg)
+{
+    __ lea(HelperArgReg4, RegAddr(size_reg));
+    __ movl(ArgReg3, dims);
+    __ movq(ArgReg2, reinterpret_cast<intptr_t>(td));
+    CallRtForHandle(&Runtime::NewBulkArray, 3, dest_reg);
+}
+
+void Compiler::EmitAddRef(uint16_t reg) {
+    __ movl(rax, RegAddr(reg));
+    EmitIncRef(rax);
+}
+
+void Compiler::EmitRelease(uint16_t reg) {
+    __ movl(rax, RegAddr(reg));
+    EmitDecRef(rax, {}, {RegAddr(reg)});
+}
+
+void Compiler::EmitCmpI64(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) {
+    ConditionCode cc = CmpOpToCondition(op);
+
+    __ xorl(rax, rax);
+    __ movq(rcx, RegAddr(reg_a));
+    __ cmpq(rcx, RegAddr(reg_b));
+    __ set(cc, rax);
+    __ movl(RegAddr(dest), rax);
+}
+
+void Compiler::EmitBinaryI64(LLOp op, uint16_t lhs_reg, uint16_t rhs_reg, uint16_t dest) {
+    __ movq(rax, RegAddr(lhs_reg));
+
+    switch (op) {
+        case LL_ADD_I64:
+            __ addq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_SMUL_I64:
+            __ imulq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_SUB_I64:
+            __ subq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_XOR_I64:
+            __ xorq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_OR_I64:
+            __ orq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_AND_I64:
+            __ andq(rax, RegAddr(rhs_reg));
+            break;
+        case LL_SHL_I64:
+            __ movq(rcx, RegAddr(rhs_reg));
+            __ shlq_cl(rax);
+            break;
+        case LL_SHR_I64:
+            __ movq(rcx, RegAddr(rhs_reg));
+            __ shrq_cl(rax);
+            break;
+        case LL_SSHR_I64:
+            __ movq(rcx, RegAddr(rhs_reg));
+            __ sarq_cl(rax);
+            break;
+        default:
+            assert(false);
+    }
+
+    __ movq(RegAddr(dest), rax);
+}
+
+void Compiler::EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
+    switch (op) {
+        case LL_NEG_I64:
+            __ movq(rax, RegAddr(src_reg));
+            __ negq(rax);
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_INVERT_I64:
+            __ movq(rax, RegAddr(src_reg));
+            __ notq(rax);
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_TEST_I64:
+            __ movq(rax, RegAddr(src_reg));
+            __ testq(rax, rax);
+            __ set(not_equal, rax);
+            __ movzxb(rax, rax);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_CVT_I64:
+            __ movsxd(rax, RegAddr(src_reg));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_TRUNCATE_I64:
+            __ movq(rax, RegAddr(src_reg));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
+    __ movq(rax, RegAddr(lhs));
+    __ movq(rcx, RegAddr(rhs));
+
+    __ testl(rcx, rcx);
+    JumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
+
+    // A more subtle case; -INT_MIN / -1 yields an overflow exception.
+    Label ok;
+    __ cmpl(rcx, -1);
+    __ j(not_equal, &ok);
+    __ cmpl(rax, 0x80000000);
+    JumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
+    __ bind(&ok);
+
+    __ movq(rdx, rax);
+    __ sarq(rdx, 63);
+    __ idivq(rcx);
+
+    if (op == LL_SDIV_I64)
+        __ movq(RegAddr(dest), rax);
+    else if (op == LL_SMOD_I64)
+        __ movq(RegAddr(dest), rdx);
+    else
+        assert(false);
+}
+
+void Compiler::EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) {
+    __ movl(rax, addr);
+    __ incq(HeapAddr(rax, offsetof(HeapItem, rc)));
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) {
+    __ movl(rax, RegAddr(src_reg));
+    __ orl(rax, kNativePointerTag);
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
+    __ movl(rax, RegAddr(src_reg));
+    switch (op) {
+        case LL_LOAD_I_I32:
+        case LL_LOAD_I_F32:
+            __ movl(rdx, HeapAddr(rax));
+            __ movl(RegAddr(dest_reg), rdx);
+            break;
+        case LL_LOAD_I_U8:
+            __ movzxb(rax, HeapAddr(rax));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_I_I64:
+            __ movq(rax, HeapAddr(rax));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
+    __ movl(rdx, RegAddr(addr_reg));
+    switch (op) {
+        case LL_STOR_I_I32:
+        case LL_STOR_I_F32:
+            __ movl(rax, RegAddr(val_reg));
+            __ movl(HeapAddr(rdx), rax);
+            break;
+        case LL_STOR_I_U8:
+            __ movl(rax, RegAddr(val_reg));
+            __ movb(HeapAddr(rdx), rax);
+            break;
+        case LL_STOR_I_I64:
+            __ movq(rax, RegAddr(val_reg));
+            __ movq(HeapAddr(rdx), rax);
+            break;
+        case LL_STOR_I_A:
+            __ movl(rax, RegAddr(val_reg));
+            EmitIncRefForArrayEscape(rax, rcx);
+            __ movl(rcx, HeapAddr(rdx));
+            __ movl(HeapAddr(rdx), rax);
+            EmitDecRef(rcx, {});
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) {
+    __ movl(rdx, RegAddr(addr_reg));
+    switch (op) {
+        case LL_LOAD_FLD_X32:
+            __ movl(rax, HeapAddr(rdx, offset));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_FLD_X64:
+            __ movq(rax, HeapAddr(rdx, offset));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_FLD_A:
+            __ movl(rax, HeapAddr(rdx, offset));
+            EmitIncRef(rax);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t val_reg) {
+    __ movl(rdx, RegAddr(addr_reg));
+    switch (op) {
+        case LL_STOR_FLD_X32:
+            __ movl(rax, RegAddr(val_reg));
+            __ movl(HeapAddr(rdx, offset), rax);
+            break;
+        case LL_STOR_FLD_X64:
+            __ movq(rax, RegAddr(val_reg));
+            __ movq(HeapAddr(rdx, offset), rax);
+            break;
+        case LL_STOR_FLD_A:
+            __ movq(rax, RegAddr(val_reg));
+            EmitIncRefForArrayEscape(rax, rcx);
+            __ movl(rcx, HeapAddr(rdx, offset));
+            __ movl(HeapAddr(rdx, offset), rax);
+            EmitDecRef(rcx, {});
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) {
+    if (op == LL_ADDR_GLB) {
+        __ movl(RegAddr(dest_reg), addr);
+        return;
+    }
+
+    __ movl(rdx, addr);
+    switch (op) {
+        case LL_LOAD_GLB_X32:
+            __ movl(rax, HeapAddr(rdx));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_GLB_X64:
+            __ movq(rax, HeapAddr(rdx));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_GLB_A:
+            __ movl(rax, HeapAddr(rdx));
+            EmitIncRef(rax);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorGlb(LLOp op, uint32_t addr, uint16_t val_reg) {
+    __ movl(rdx, addr);
+
+    switch (op) {
+        case LL_STOR_GLB_X32:
+            __ movl(rax, RegAddr(val_reg));
+            __ movl(HeapAddr(rdx), rax);
+            break;
+        case LL_STOR_GLB_X64:
+            __ movq(rax, RegAddr(val_reg));
+            __ movq(HeapAddr(rdx), rax);
+            break;
+        case LL_STOR_GLB_A:
+            __ movl(rax, RegAddr(val_reg));
+            EmitIncRefForArrayEscape(rax, rcx);
+            __ movl(rcx, HeapAddr(rdx));
+            __ movl(HeapAddr(rdx), rax);
+            EmitDecRef(rcx, {});
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size) {
+    __ movl(rdi, RegAddr(addr_reg));
+    __ movl(rdi, HeapAddr(rdi, offsetof(SpArray, data)));
+    __ lea(rdi, HeapAddr(rdi));
+
+    __ movq(rsi, reinterpret_cast<intptr_t>(data));
+    if (data_size >= 8) {
+        __ movl(rcx, data_size / 8);
+        __ rep_movsq();
+    }
+    if (data_size % 8) {
+        __ movl(rcx, data_size % 8);
+        __ rep_movsb();
+    }
+}
+
+void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) {
+    __ movl(rax, RegAddr(addr_reg));
+    __ lea(rdi, HeapAddr(rax));
+    __ movq(rsi, reinterpret_cast<intptr_t>(data_addr));
+    if (data_size >= 8) {
+        __ movl(rcx, data_size / 8);
+        __ rep_movsq();
+    }
+    if (data_size % 8) {
+        __ movl(rcx, data_size % 8);
+        __ rep_movsb();
+    }
+}
+
+static inline std::optional<Scale> EltSizeToScale(uint32_t elt_size) {
+    switch (elt_size) {
+        case 1:
+            return {NoScale};
+        case 2:
+            return {ScaleTwo};
+        case 4:
+            return {ScaleFour};
+        case 8:
+            return {ScaleEight};
+        default:
+            return {};
+    }
+}
+
+void Compiler::EmitIdxAddrFlat(const IdxAddrFlatArgs& op) {
+    __ movl(rax, RegAddr(op.index_reg));
+    __ cmpl(rax, op.size);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rax;
+    thunk.limit = op.size;
+    __ j(above_equal, &thunk.label);
+
+    auto scale = EltSizeToScale(op.elt_size);
+    if (scale) {
+        __ movl(rcx, RegAddr(op.base_reg));
+        __ lea(rdx, Operand(rcx, rax, *scale));
+    } else {
+        // :TODO: strength reduction?
+        __ imull(rdx, rax, op.elt_size);
+        __ addl(rdx, RegAddr(op.base_reg));
+    }
+    __ movl(RegAddr(op.dest_reg), rdx);
+}
+
+void Compiler::EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) {
+    __ movl(rcx, RegAddr(args.index_reg));
+    __ cmpl(rcx, args.array_size);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = args.array_size;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, RegAddr(args.base_reg));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_LOAD_ELEM_FLAT_I32:
+        case LL_LOAD_ELEM_FLAT_F32:
+            __ movl(rax, Operand(rdx, rcx, ScaleFour));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_FLAT_U8:
+            __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_FLAT_I64:
+            __ movq(rax, Operand(rdx, rcx, ScaleEight));
+            __ movq(RegAddr(args.dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) {
+    __ movl(rcx, RegAddr(args.index_reg));
+    __ cmpl(rcx, args.array_size);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = args.array_size;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, RegAddr(args.base_reg));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_STOR_ELEM_FLAT_I32:
+        case LL_STOR_ELEM_FLAT_F32:
+            __ movl(rax, RegAddr(args.val_reg));
+            __ movl(Operand(rdx, rcx, ScaleFour), rax);
+            break;
+        case LL_STOR_ELEM_FLAT_U8:
+            __ movl(rax, RegAddr(args.val_reg));
+            __ movb(Operand(rdx, rcx, NoScale), rax);
+            break;
+        case LL_STOR_ELEM_FLAT_I64:
+            __ movq(rax, RegAddr(args.val_reg));
+            __ movq(Operand(rdx, rcx, ScaleEight), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) {
+    __ movl(rdx, RegAddr(base_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rcx, RegAddr(index_reg));
+    __ movl(rax, HeapAddr(rdx, offsetof(SpArray, length)));
+    __ cmpl(rcx, rax);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = rax;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, HeapAddr(rdx, offsetof(SpArray, data)));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_LOAD_ELEM_I32:
+        case LL_LOAD_ELEM_F32:
+            __ movl(rax, Operand(rdx, rcx, ScaleFour));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_U8:
+            __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_I64:
+            __ movq(rax, Operand(rdx, rcx, ScaleEight));
+            __ movq(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_A:
+            __ movl(rax, Operand(rdx, rcx, ScaleFour));
+            EmitIncRef(rax);
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) {
+    __ movl(rdx, RegAddr(base_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rcx, RegAddr(index_reg));
+    __ movl(rax, HeapAddr(rdx, offsetof(SpArray, length)));
+    __ cmpl(rcx, rax);
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = rax;
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rdx, HeapAddr(rdx, offsetof(SpArray, data)));
+    __ lea(rdx, HeapAddr(rdx));
+    switch (op) {
+        case LL_STOR_ELEM_I32:
+        case LL_STOR_ELEM_F32:
+            __ movl(rax, RegAddr(val_reg));
+            __ movl(Operand(rdx, rcx, ScaleFour), rax);
+            break;
+        case LL_STOR_ELEM_U8:
+            __ movl(rax, RegAddr(val_reg));
+            __ movb(Operand(rdx, rcx, NoScale), rax);
+            break;
+        case LL_STOR_ELEM_I64:
+            __ movq(rax, RegAddr(val_reg));
+            __ movq(Operand(rdx, rcx, ScaleEight), rax);
+            break;
+        case LL_STOR_ELEM_A:
+            __ movl(rax, RegAddr(val_reg));
+            EmitIncRefForArrayEscape(rax, r8);
+            __ lea(rdx, Operand(rdx, rcx, ScaleFour));
+            __ movl(rcx, Operand(rdx, 0));
+            __ movl(Operand(rdx, 0), rax);
+            EmitDecRef(rcx, {});
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) {
+    __ movl(ArgReg2, RegAddr(base_reg));
+    __ testl(ArgReg2, ArgReg2);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(ArgReg3, RegAddr(index_reg));
+    __ lea(ArgReg2, HeapAddr(ArgReg2));
+    CallRtForHandle(&Runtime::NewSlice, 2, dest_reg);
+}
+
+void Compiler::EmitSliceEs(uint16_t src_reg, uint16_t dest_reg, uint32_t cells) {
+    __ movl(ArgReg3, cells);
+    __ movl(ArgReg2, RegAddr(src_reg));
+    CallRtForHandle(&Runtime::NewSliceEs, 2, dest_reg);
+}
+
+void Compiler::EmitSliceFlat(const SliceFlatArgs& op) {
+    __ movq(HelperArgReg4, RegAddr(op.index_reg));
+    __ movq(ArgReg3, reinterpret_cast<intptr_t>(op.td));
+    __ movl(ArgReg2, RegAddr(op.base_reg));
+
+    CallRtForHandle(&Runtime::NewFlatSlice, 3, op.dest_reg);
+}
+
+void Compiler::EmitIdxAddr(const IdxAddrArgs& op) {
+    __ movl(rax, RegAddr(op.base_reg));
+    __ testl(rax, rax);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rcx, RegAddr(op.index_reg));
+    __ movl(rdx, HeapAddr(rax, offsetof(SpArray, length)));
+
+    auto& thunk = AddBoundsErrorThunk();
+    thunk.index = rcx;
+    thunk.limit = rdx;
+    __ cmpl(rcx, rdx);
+    __ j(above_equal, &thunk.label);
+
+    __ movl(rax, HeapAddr(rax, offsetof(SpArray, data)));
+    if (auto scale = EltSizeToScale(op.elt_size)) {
+        __ lea(rax, Operand(rax, rcx, *scale));
+    } else {
+        __ imull(rdx, rcx, op.elt_size);
+        __ addl(rax, rdx);
+    }
+    __ movl(RegAddr(op.dest_reg), rax);
+}
+
+void Compiler::EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) {
+    __ movl(rsi, RegAddr(src_reg));
+    __ movl(rdi, RegAddr(dest_reg));
+
+    if (op == LL_COPYARRAY) {
+        __ testl(rsi, rsi);
+        JumpOnError(zero, SP_ERROR_NULL_DEREF);
+        __ movl(rsi, HeapAddr(rsi, offsetof(SpArray, data)));
+
+        __ testl(rdi, rdi);
+        JumpOnError(zero, SP_ERROR_NULL_DEREF);
+        __ movl(rdi, HeapAddr(rdi, offsetof(SpArray, data)));
+    }
+
+    __ lea(rsi, HeapAddr(rsi));
+    __ lea(rdi, HeapAddr(rdi));
+
+    if (bytes >= 8) {
+        __ movl(rcx, bytes / 8);
+        __ rep_movsq();
+    }
+    if (bytes % 8) {
+        __ movl(rcx, bytes % 8);
+        __ rep_movsb();
+    }
+}
+
+void Compiler::EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) {
+    assert(bytes % 4 == 0);
+
+    __ movl(rdi, RegAddr(dest_reg));
+    __ lea(rdi, HeapAddr(rdi));
+    __ movl(rsi, RegAddr(src_reg));
+    __ lea(rsi, HeapAddr(rsi));
+    if (bytes >= 8) {
+        __ movl(rcx, bytes / 8);
+        __ rep_movsq();
+    }
+    // :TODO: validate
+    if (bytes % 8 == 4) {
+        __ movsd();
+    }
+}
+
+void Compiler::EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(rdx, RegAddr(src_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rax, HeapAddr(rdx, offsetof(SpArray, data)));
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) {
+    __ movl(rax, RegAddr(src_reg));
+    __ lea(rax, Operand(rax, offset));
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitSwitchChain(uint16_t val_reg, uint32_t def_block, const std::span<const SwitchCaseEntry>& cases) {
+    __ movl(rax, RegAddr(val_reg));
+    for (size_t i = 0; i < cases.size(); i++) {
+        const auto& entry = cases[i];
+
+        __ cmpl(rax, entry.value);
+        __ j(equal, &block_labels_[block_->successors[i + 1]]);
+    }
+    __ jmp(&block_labels_[def_block]);
+}
+
+void Compiler::EmitSwitchTable(uint16_t val_reg, uint32_t def_block, const std::span<const SwitchCaseEntry>& cases) {
+    __ movl(rcx, RegAddr(val_reg));
+
+    cell_t low = cases[0].value;
+    if (low != 0) {
+        low = -low;
+        __ lea(rcx, Operand(rcx, low));
+    }
+
+    cell_t high = abs(cases[0].value - cases.back().value);
+    __ cmpl(rcx, high);
+    __ j(above, &block_labels_[def_block]);
+
+    RipDataLabel table;
+    __ lea(rdx, &table);
+    __ movsxd(rcx, rcx);
+    __ jmp(Operand(rdx, rcx, ScaleEight));
+
+    // We emit absolute addresses in reverse order in the assembler, to
+    // avoid rip-relative fixups during linking. This means we have to
+    // walk the case statements backwards, to make sure the table can
+    // be read in forward order.
+    for (size_t i = cases.size() - 1; i < cases.size(); i--) {
+        uint32_t target = block_->successors[i + 1];
+        __ emit_absolute_address(&block_addresses_[target]);
+    }
+    __ bind(&table);
+}
+
+void Compiler::EmitIncRefForArrayEscape(Register obj_reg, Register tmp_reg) {
     Label done;
-    __ cmpl(reg, hpAddr());
-    __ j(below, &done);
-    __ lea(tmp, Operand(dat, reg, NoScale));
-    __ cmpq(tmp, stk);
-    jumpOnError(below, SP_ERROR_MEMACCESS);
+    __ testl(obj_reg, obj_reg);
+    __ j(zero, &done);
+    __ movq(tmp_reg, HeapAddr(obj_reg, offsetof(HeapItem, td)));
+    __ movzxb(tmp_reg, Operand(tmp_reg, TypeDesc::OffsetOfKind()));
+    __ cmpl(tmp_reg, static_cast<uint8_t>(TypeKind::ArraySlice));
+    JumpOnError(equal, SP_ERROR_SLICE_ESCAPE);
+    __ incq(HeapAddr(obj_reg, offsetof(HeapItem, rc)));
     __ bind(&done);
 }
 
-void Compiler::jumpOnError(ConditionCode cc, int err) {
-    ErrorThunk thunk(op_cip_, err);
+void Compiler::EmitIncRef(Register obj_reg) {
+    Label done;
+    __ testl(obj_reg, obj_reg);
+    __ j(zero, &done);
+    __ incq(HeapAddr(obj_reg, offsetof(HeapItem, rc)));
+    __ bind(&done);
+}
 
-    __ j(cc, &thunk.label);
-    error_thunks_.emplace_back(std::move(thunk));
+void Compiler::EmitDecRef(Register obj_reg, std::optional<Register> save_reg,
+                          const std::optional<Operand>& zero_loc)
+{
+    dealloc_thunks_.emplace_back(obj_reg, save_reg, op_cip_);
+    auto& thunk = dealloc_thunks_.back();
+
+    __ testl(obj_reg, obj_reg);
+    __ j(zero, &thunk.return_label);
+    if (zero_loc)
+        __ movl(*zero_loc, 0);
+    __ decq(HeapAddr(obj_reg, offsetof(HeapItem, rc)));
+    __ j(zero, &thunk.label);
+    __ bind(&thunk.return_label);
+}
+
+void Compiler::CallRtForHandleImpl(void* method_addr, uint32_t nargs, uint16_t dest_reg) {
+    assert(nargs <= 3);
+
+#ifdef _WIN64
+    if (nargs >= 3)
+        __ movq(Operand(rsp, 32), HelperArgReg4);
+#endif
+
+    __ movq(ArgReg1, context_reg);
+    __ lea(ArgReg0, Operand(rbp, kHandleOffset));
+
+    // Clear exit_fp_ so DispatchReport defers the error.
+    __ xorq(rax, rax);
+    __ movq(Operand(env_reg, Environment::offsetOfExit()), rax);
+
+    __ callWithABI(ExternalAddress(method_addr));
+    __ movq(rax, Operand(rbp, kHandleOffset));
+
+    auto& thunk = AddDeferredErrorThunk();
+    __ testq(rax, rax);
+    __ j(zero, &thunk.label);
+
+    __ subq(rax, dat_reg);
+    __ movl(RegAddr(dest_reg), rax);
+}
+
+void Compiler::EmitDeallocThunk(DeallocThunk* thunk) {
+    if (thunk->save_reg)
+        __ movq(Operand(rsp, 0), *thunk->save_reg);
+
+    __ lea(ArgReg0, HeapAddr(thunk->obj_reg));
+    __ callWithABI(ExternalAddress(env_->stubs()->DeallocStub()));
+    EmitCipMapping(thunk->cip);
+
+    if (thunk->save_reg)
+        __ movq(*thunk->save_reg, Operand(rsp, 0));
+
+    __ jmp(&thunk->return_label);
+}
+
+void Compiler::EmitBoundsErrorThunk(BoundsErrorThunk* thunk) {
+    if (std::holds_alternative<Register>(thunk->limit))
+        __ movl(Operand(rsp, 4), std::get<Register>(thunk->limit));
+    else
+        __ movl(Operand(rsp, 4), std::get<uint32_t>(thunk->limit));
+
+    if (std::holds_alternative<Register>(thunk->index))
+        __ movl(Operand(rsp, 0), std::get<Register>(thunk->index));
+    else
+        __ movl(Operand(rsp, 0), std::get<uint32_t>(thunk->index));
+
+    __ call(ExternalAddress(env_->stubs()->return_stubs_v2().bounds_error));
+    EmitCipMapping(thunk->cip);
+}
+
+void Compiler::EmitDeferredErrorThunk(DeferredErrorThunk* thunk) {
+    __ call(ExternalAddress(stubs_.deferred_error));
+    EmitCipMapping(thunk->cip);
+}
+
+void Compiler::EmitCallThunk(CallThunk* thunk) {
+    // Get the return address, since that is the call that we need to patch.
+    __ movq(ArgReg2, Operand(rsp, 0));
+
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+
+    __ movq(ArgReg1, thunk->method_index);
+    __ movq(ArgReg0, context_reg);
+    __ callWithABI(ExternalAddress((void*)LazyCompileThunk));
+    __ leaveExitFrame();
+
+    __ testq(rax, rax);
+    JumpOnReportedError(zero);
+
+    __ jmp(rax);
+}
+
+void Compiler::JumpOnError(ConditionCode cc, int err) {
+    error_thunks_.emplace_back(op_cip_, err);
+    __ j(cc, &error_thunks_.back().label);
+}
+
+void Compiler::JumpOnReportedError(ConditionCode cc) {
+    error_thunks_.emplace_back(op_cip_, -1);
+    __ j(cc, &error_thunks_.back().label);
 }
 
 } // namespace sp::v2

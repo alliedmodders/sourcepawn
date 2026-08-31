@@ -17,6 +17,11 @@ public main()
   testScattered(100);
   testScattered(0);
   testScattered(9000000);
+  testDenseNonZero(5);
+  testDenseNonZero(6);
+  testDenseNonZero(7);
+  testDenseNonZero(4);
+  testDenseNonZero(8);
 }
 
 void testEmpty(int n)
@@ -76,6 +81,21 @@ void testScattered(int n)
     print("fourth\n");
   default:
     print("default\n");
+  }
+  print("fallthrough\n");
+}
+
+void testDenseNonZero(int n)
+{
+  switch (n) {
+  case 5:
+    print("five\n");
+  case 6:
+    print("six\n");
+  case 7:
+    print("seven\n");
+  default:
+    print("default dense nonzero\n");
   }
   print("fallthrough\n");
 }

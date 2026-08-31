@@ -65,43 +65,36 @@ static constexpr int kNativeStackAllowance = (3 + 4) * sizeof(intptr_t);
 // hidden return pointer, |this|, and up to 4 method arguments.
 static constexpr int kHandleOffset = -16;
 
-void CompilerBase::EmitPrologue() {
+void Compiler::EmitPrologue(const FrameInfo& frame) {
     __ enterFrame(JitFrameType::Scripted, method_info_->frame_id());
 
     __ push(frm);
     __ subl(esp, kNativeStackAllowance);
     __ movl(frm, stk);
 
-    uint32_t num_regs = method_info_->llcode()->num_regs();
-    uint32_t max_callee_args = method_info_->llcode()->max_callee_args();
-    uint32_t frame_size = (num_regs + max_callee_args) * sizeof(cell_t);
-
-    if (frame_size) {
+    if (frame.frame_size) {
         __ movl(eax, frm);
-        __ addl(eax, frame_size);
+        __ addl(eax, frame.frame_size);
 
         __ movl(ecx, Operand(ExternalAddress(env_->addressOfSpTop())));
         __ cmpl(eax, ecx);
         JumpOnError(above, SP_ERROR_STACKLOW);
     }
 
-    uint32_t num_params = method_info_->arg_types().size();
-    uint32_t callee_regs = num_regs - num_params;
-
-    if (callee_regs > 0) {
+    if (frame.callee_regs > 0) {
         __ push(edi);
         __ xorl(eax, eax);
-        __ movl(ecx, callee_regs);
-        __ lea(edi, Operand(frm, num_params * sizeof(cell_t)));
+        __ movl(ecx, frame.callee_regs);
+        __ lea(edi, Operand(frm, frame.num_params * sizeof(cell_t)));
         __ rep_stosd();
         __ pop(edi);
     }
 
     // Set stk = frm + num_regs * 4.
-    __ lea(stk, Operand(frm, int32_t(num_regs * sizeof(cell_t))));
+    __ lea(stk, Operand(frm, int32_t(frame.num_regs * sizeof(cell_t))));
 }
 
-void CompilerBase::EmitCallThunk(CallThunk* thunk) {
+void Compiler::EmitCallThunk(CallThunk* thunk) {
     // Get the return address, since that is the call that we need to patch.
     __ movl(eax, Operand(esp, 0));
 
@@ -126,13 +119,18 @@ void CompilerBase::EmitCallThunk(CallThunk* thunk) {
     __ jmp(eax);
 }
 
-void CompilerBase::JumpOnError(ConditionCode cc, int err) {
+void Compiler::JumpOnError(ConditionCode cc, int err) {
     error_thunks_.emplace_back(op_cip_, err);
     __ j(cc, &error_thunks_.back().label);
 }
 
-void CompilerBase::JumpAndReportOnError(ConditionCode cc) {
+void Compiler::JumpAndReportOnError(ConditionCode cc) {
     error_thunks_.emplace_back(op_cip_, 0);
+    __ j(cc, &error_thunks_.back().label);
+}
+
+void Compiler::JumpOnReportedError(ConditionCode cc) {
+    error_thunks_.emplace_back(op_cip_, -1);
     __ j(cc, &error_thunks_.back().label);
 }
 
@@ -198,10 +196,7 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
 
     // Check for exception.
     __ cmpl(Operand(ExternalAddress(env_->addressOfExceptionCode())), 0);
-    Label ok;
-    __ j(zero, &ok);
-    __ jmp(ExternalAddress(stubs_.return_reported_error));
-    __ bind(&ok);
+    __ j(not_zero, ExternalAddress(stubs_.return_reported_error));
 
     if (dest != 0xFFFF)
         __ movl(RegAddr(dest), eax);
@@ -419,8 +414,8 @@ ConditionCode ToFloatConditionCode(LLOp op) {
 }
 
 void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
-    __ movd(xmm0, RegAddr(lhs));
-    __ movd(xmm1, RegAddr(rhs));
+    __ movss(xmm0, RegAddr(lhs));
+    __ movss(xmm1, RegAddr(rhs));
 
     auto cc = ToFloatConditionCode(op);
     if (cc == below || cc == below_equal) {
@@ -461,8 +456,8 @@ void Compiler::EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t de
 }
 
 void Compiler::EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
-    __ movd(xmm0, RegAddr(lhs));
-    __ movd(xmm1, RegAddr(rhs));
+    __ movss(xmm0, RegAddr(lhs));
+    __ movss(xmm1, RegAddr(rhs));
 
     switch (op) {
         case LL_ADD_F32:
@@ -502,7 +497,7 @@ void Compiler::EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
             __ movd(RegAddr(dest_reg), xmm0);
             break;
         case LL_TEST_F32:
-            __ movd(xmm0, RegAddr(src_reg));
+            __ movss(xmm0, RegAddr(src_reg));
             __ xorps(xmm1, xmm1);
             __ ucomiss(xmm0, xmm1);
 
@@ -901,7 +896,6 @@ void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
         case LL_STOR_I_A:
             __ movl(eax, RegAddr(val_reg));
             EmitIncRefForArrayEscape(eax, ecx);
-            __ movl(edx, RegAddr(addr_reg));
             __ movl(ecx, Operand(edx, 0));
             __ movl(Operand(edx, 0), eax);
             EmitDecRef(ecx, {});
@@ -956,6 +950,11 @@ void Compiler::EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t
 }
 
 void Compiler::EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) {
+    if (op == LL_ADDR_GLB) {
+        __ movl(RegAddr(dest_reg), addr);
+        return;
+    }
+
     auto src = ExternalAddress(reinterpret_cast<void*>(addr));
     switch (op) {
         case LL_LOAD_GLB_X32:
@@ -970,9 +969,6 @@ void Compiler::EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) {
             __ movl(eax, Operand(src));
             EmitIncRef(eax);
             __ movl(RegAddr(dest_reg), eax);
-            break;
-        case LL_ADDR_GLB:
-            __ movl(RegAddr(dest_reg), addr);
             break;
         default:
             assert(false);
@@ -1328,7 +1324,7 @@ void Compiler::EmitIdxAddr(const IdxAddrArgs& op) {
     if (auto scale = EltSizeToScale(op.elt_size)) {
         __ lea(eax, Operand(eax, ecx, *scale));
     } else {
-        __ imull(edx, eax, op.elt_size);
+        __ imull(edx, ecx, op.elt_size);
         __ addl(eax, edx);
     }
     __ movl(RegAddr(op.dest_reg), eax);
@@ -1373,7 +1369,7 @@ void Compiler::EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) {
 
 void Compiler::EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) {
     __ movl(eax, RegAddr(src_reg));
-    __ addl(eax, offset);
+    __ lea(eax, Operand(eax, offset));
     __ movl(RegAddr(dest_reg), eax);
 }
 
@@ -1398,7 +1394,7 @@ void Compiler::EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
     cell_t low = cases[0].value;
     if (low != 0) {
         low = -low;
-        __ addl(ecx, low);
+        __ lea(ecx, Operand(ecx, low));
     }
 
     cell_t high = abs(cases[0].value - cases.back().value);
@@ -1433,7 +1429,7 @@ void Compiler::EmitDeallocThunk(DeallocThunk* thunk) {
         __ movl(Operand(esp, 4), *thunk->save_reg);
 
     __ movl(Operand(esp, 0), thunk->obj_reg);
-    __ call(ExternalAddress(env_->stubs()->DeallocStub()));
+    __ callWithABI(ExternalAddress(env_->stubs()->DeallocStub()));
     EmitCipMapping(thunk->cip);
 
     if (thunk->save_reg)

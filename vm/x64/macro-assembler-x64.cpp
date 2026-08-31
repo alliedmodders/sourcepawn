@@ -39,6 +39,17 @@ size_t MacroAssembler::enterExitFrame(ExitFrameType type, uintptr_t payload) {
     return items;
 }
 
+void MacroAssembler::setupExitFrame(ExitFrameType type, uintptr_t payload) {
+    enterExitFrame(type, payload);
+#ifdef _WIN64
+    // Need to re-align the stack, and add an extra 32 bytes since the ABI
+    // requires shadow spill space.
+    subq(rsp, 40);
+#else
+    subq(rsp, 8);
+#endif
+}
+
 void
 MacroAssembler::leaveExitFrame() {
     leaveFrame();

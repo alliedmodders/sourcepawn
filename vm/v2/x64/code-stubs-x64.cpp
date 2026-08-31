@@ -1,112 +1,86 @@
-// vim: set sts=4 ts=8 sw=4 tw=99 et:
+// vim: set ts=8 sts=2 sw=2 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// This file is part of SourcePawn.
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
+// SourcePawn is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// SourcePawn is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
 //
+// You should have received a copy of the GNU General Public License
+// along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #include "code-stubs.h"
 
 #include "debug-metadata.h"
+#include "environment.h"
 #include "linking.h"
-#include <sp_vm_api.h>
-#include "v2/jit.h"
-#include "v2/runtime.h"
-#include "x64/constants-x64.h"
+#include "v2/x64/constants-x64.h"
+#include "v2/x64/jit_x64.h"
+#include "v2/runtime-helpers.h"
 #include "x64/macro-assembler-x64.h"
-
-#define __ masm.
 
 namespace sp {
 
 using namespace sp::v2;
 
-// Windows ABI: RCX, RDX, R8, R9
-// Linux ABI: RDI, RSI, RDX, RCX, R8, R9
-//
-// Trash registers common to both ABIs:
-//     RAX, RCX, RDX, R8, R9, R10, R11
-// Callee-saved common to both ABIs:
-//     RBX, RBP, R12, R13, R14, R15
+#define __ masm.
 
 bool CodeStubs::CompileInvokeStubV2() {
     MacroAssembler masm;
+    __ enterFrame(JitFrameType::Entry, 0);
 
-    // Add 1 for the return address that was pushed.
-    size_t frame_items = __ enterFrame(JitFrameType::Entry, 0) + 1;
+    // 8 bytes for re-alignment, and another 48 for temporaries. This is enough
+    // for 7 locals. Since enterFrame pushes one value after setting rbp, our
+    // first local starts at -16, not -8.
+    __ subq(rsp, 8 + 48);
 
-    // Push all the callee-saved regs we clobber.
-    __ push(context_reg);
-    __ push(env_reg);
-    __ push(stk);
-    __ push(dat);
-    __ push(frm);
-    frame_items += 5;
+    // Four locals are used to preserve callee-saved registers.
+    __ movq(Operand(rbp, -16), rbx);
+    __ movq(Operand(rbp, -24), r12);
+    __ movq(Operand(rbp, -32), r13);
+    __ movq(Operand(rbp, -40), r15);
+#ifdef _WIN32
+    __ movq(Operand(rbp, -48), rsi);
+    __ movq(Operand(rbp, -56), rdi);
+#endif
 
-    size_t frame_items_to_restore = frame_items;
+    // Save the return address.
+    __ movq(Operand(rbp, -48), ArgReg2);
 
-    // arg0 = cx
-    // arg1 = code
-    // arg2 = rval
-    __ movq(env_reg, intptr_t(Environment::get()));
+    Environment* env = Environment::get();
+
+    // Set up registers.
     __ movq(context_reg, ArgReg0);
-    __ push(ArgReg2);
-    frame_items++;
+    __ movq(env_reg, intptr_t(env));
+    __ movq(dat_reg, env->virt_mem().map_base());
+    __ movl(stk, Operand(env_reg, Environment::offsetOfSp()));
+    __ lea(frm, Operand(stk, dat_reg, NoScale));
 
-    // Set up runtime registers.
-    __ movq(dat, Operand(ArgReg0, static_cast<int32_t>(Runtime::offsetOfMemory())));
-    __ movl(stk, Operand(ArgReg0, static_cast<int32_t>(Runtime::offsetOfSp())));
-    __ addq(stk, dat);
-
-    // We pushed 6 words.
-    size_t alignment = PreCallStackAlignment(frame_items);
-    if (alignment)
-        __ subq(rsp, alignment);
-
-    // Call into plugin.
+    // Call into compiled code.
     __ call(ArgReg1);
 
     // Store the rval.
-    __ movq(ArgReg2, Operand(rsp, alignment));
-    __ movl(Operand(ArgReg2, 0), pri);
+    __ movq(rdx, Operand(rbp, -48));
+    __ movl(Operand(rdx, 0), rax);
 
-    // Store latest stk. If we have an error code, we'll jump directly to here,
-    // so rax will already be set.
     Label ret;
     __ bind(&ret);
-    __ subq(stk, dat);
-    __ movq(Operand(context_reg, static_cast<int32_t>(Runtime::offsetOfSp())), stk);
 
-    // Stack layout:
-    //
-    //      return_address
-    //      rbp
-    //      rcx
-    //      context_reg
-    //      env_reg
-    //      stk
-    //      dat
-    //      frm <-- restore RSP to here.
-    //      ArgReg2
-    //      alignment
-    //
-    // The delta between rbp to frm is frame_items_to_restore minus the entries
-    // for return_address and rbp.
-    int32_t offset_to_rsp = (frame_items_to_restore - 2) * sizeof(intptr_t);
-    __ lea(rsp, Operand(rbp, -offset_to_rsp));
+    // Restore the stack.
+#ifdef _WIN32
+    __ movq(rdi, Operand(rbp, -56));
+    __ movq(rsi, Operand(rbp, -48));
+#endif
+    __ movq(r15, Operand(rbp, -40));
+    __ movq(r13, Operand(rbp, -32));
+    __ movq(r12, Operand(rbp, -24));
+    __ movq(rbx, Operand(rbp, -16));
 
-    __ pop(frm);
-    __ pop(dat);
-    __ pop(stk);
-    __ pop(env_reg);
-    __ pop(context_reg);
-
-    // Restore registers and leave.
     __ leaveFrame();
     __ ret();
 
@@ -119,32 +93,46 @@ bool CodeStubs::CompileInvokeStubV2() {
     Label throw_timeout;
     Label return_reported_error;
     Label return_to_invoke;
+    Label bounds_error;
     Label throw_error_code[SP_MAX_ERROR_CODES];
 
     __ bind(&report_error);
     {
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
+        __ setupExitFrame(ExitFrameType::Helper, 0);
         __ movl(ArgReg0, rax);
-        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::InvokeReportError));
+        __ callWithABI(ExternalAddress((void*)CompilerBase::InvokeReportError));
         __ leaveExitFrame();
         __ jmp(&return_to_invoke);
     }
 
     __ bind(&throw_timeout);
-    {
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::InvokeReportTimeout));
-        __ leaveExitFrame();
-        __ jmp(&return_to_invoke);
-    }
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+    __ callWithABI(ExternalAddress((void*)CompilerBase::InvokeReportTimeout));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
+
+    __ bind(&bounds_error);
+    __ movl(ArgReg1, Operand(rsp, 12)); // bounds
+    __ movl(ArgReg0, Operand(rsp, 8)); // index
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+    __ callWithABI(ExternalAddress((void*)ReportOutOfBoundsError));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
+
+    Label deferred_error;
+    __ bind(&deferred_error);
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+    __ callWithABI(ExternalAddress((void*)CompilerBase::DispatchDeferredReport));
+    __ leaveExitFrame();
+    __ jmp(&return_reported_error);
 
     __ bind(&return_reported_error);
-    __ call(&return_to_invoke);
+    __ jmp(&return_to_invoke);
 
     __ bind(&return_to_invoke);
     {
-        size_t frame_items = __ enterExitFrame(ExitFrameType::Helper, 0) + 1;
-        __ callWithABI(frame_items, ExternalAddress((void*)CompilerBase::FindEntryFp));
+        __ setupExitFrame(ExitFrameType::Helper, 0);
+        __ callWithABI(ExternalAddress((void*)CompilerBase::FindEntryFp));
         __ leaveExitFrame();
         __ movq(rbp, rax);
         __ jmp(&error);
@@ -161,17 +149,32 @@ bool CodeStubs::CompileInvokeStubV2() {
         return false;
 
     uint8_t* entry = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry);
-    return_stubs_v2_.emergency_return = entry + error.offset();
     return_stubs_v2_.report_error = entry + report_error.offset();
     return_stubs_v2_.throw_timeout = entry + throw_timeout.offset();
     return_stubs_v2_.return_reported_error = entry + return_reported_error.offset();
-    for (int i = 1; i < SP_MAX_ERROR_CODES; i++) {
+    return_stubs_v2_.bounds_error = entry + bounds_error.offset();
+    return_stubs_v2_.deferred_error = entry + deferred_error.offset();
+    for (int i = 1; i < SP_MAX_ERROR_CODES; i++)
         return_stubs_v2_.throw_error_code[i] = entry + throw_error_code[i].offset();
-    }
-    return_stubs_v2_.throw_error_code[0] = return_stubs_v2_.report_error;
 
-    return_stub_ = return_stubs_v2_.emergency_return;
+
     return true;
+}
+
+bool CodeStubs::CompileDeallocStub() {
+    MacroAssembler masm;
+
+    // Push our exit frame. This re-aligns the stack.
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+
+    // ArgReg0 was set by our caller.
+    __ callWithABI(ExternalAddress((void*)HeapItem::Destroy));
+
+    __ leaveExitFrame();
+    __ ret();
+
+    dealloc_stub_ = LinkCode(env_, masm, "<dealloc stub>", {});
+    return !!dealloc_stub_.entry;
 }
 
 } // namespace sp

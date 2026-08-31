@@ -37,6 +37,8 @@ def main():
   parser.add_argument('--no-jit', default=False, action='store_true',
                       help='Disable JIT testing.')
   args = parser.parse_args()
+  if args.coverage:
+    args.coverage = os.path.abspath(args.coverage)
 
   plan = TestPlan(args)
   plan.find_compilers()
@@ -101,7 +103,7 @@ class TestPlan(object):
       env = None
       if self.args.coverage:
         env = self.env_.copy()
-        env['LLVM_PROFILE_FILE'] = '{0}/spshell-%9m'.format(self.args.coverage)
+        env['LLVM_PROFILE_FILE'] = 'spshell-%9m.profraw'
 
       rc, stdout, stderr = testutil.exec_argv([path, '--version'])
       if rc == 0 and '-jit' in stdout and not self.args.no_jit:
@@ -130,7 +132,7 @@ class TestPlan(object):
       env = None
       if self.args.coverage:
         env = self.env_.copy()
-        env['LLVM_PROFILE_FILE'] = '{0}/spcomp-%9m'.format(self.args.coverage)
+        env['LLVM_PROFILE_FILE'] = 'spcomp-%9m.profraw'
 
       spcomp = {
         'path': os.path.abspath(path),
@@ -380,6 +382,8 @@ class TestRunner(object):
     with testutil.TempFolder() as temp_folder:
       with testutil.ChangeFolder(temp_folder):
         self.run_impl()
+        if self.plan.args.coverage:
+          testutil.merge_profiles(temp_folder, self.plan.args.coverage)
 
     if len(self.failures_):
       self.print_failures()

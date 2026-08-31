@@ -212,13 +212,13 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
-                        context_->StringToLocalUTF8(params[i], max_size,
+                        context_->StringToLocalUTF8(params[i] | kNativePointerTag, max_size,
                                                     reinterpret_cast<const char *>(arg.u.addr),
                                                     NULL);
                     } else if (arg.flags & SM_PARAM_STRING_BINARY) {
                         memcpy(addr, arg.u.addr, nbytes);
                     } else {
-                        context_->StringToLocal(params[i], max_size,
+                        context_->StringToLocal(params[i] | kNativePointerTag, max_size,
                                                 reinterpret_cast<const char *>(arg.u.addr));
                     }
                 } else {

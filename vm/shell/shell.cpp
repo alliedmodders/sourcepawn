@@ -299,6 +299,83 @@ static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
+static cell_t CallWithRef(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  cell_t* phys_ptr;
+  if (int err = cx->LocalToPhysAddr(params[2], &phys_ptr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not get reference address");
+
+  CallArgs args;
+  args.PushCellByRef(phys_ptr);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithInt64(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[2], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+
+  int64_t val = *reinterpret_cast<int64_t*>(addr);
+
+  CallArgs args;
+  args.PushInt64(val);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithFlatArray(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  ARRAY_PTR array;
+  int err;
+  if ((err = cx->LocalToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array");
+
+  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  int length = params[3];
+
+  CallArgs args;
+  args.PushArray(flat_array, length);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithFlatString(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  char* buf;
+  cx->LocalToString(params[2], &buf);
+
+  CallArgs args;
+  args.PushString(buf);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
 static cell_t TestLocalToArrayPtr(IPluginContext* cx, const cell_t* params) {
   ARRAY_PTR array;
   if (cx->LocalToArrayPtr(params[1], &array) != SP_ERROR_NONE)
@@ -569,6 +646,10 @@ static int Execute(const char* file)
   BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt.get(), "call_with_string", CallWithString);
   BindNative(rt.get(), "call_with_array", CallWithArray);
+  BindNative(rt.get(), "call_with_ref", CallWithRef);
+  BindNative(rt.get(), "call_with_int64", CallWithInt64);
+  BindNative(rt.get(), "call_with_flat_array", CallWithFlatArray);
+  BindNative(rt.get(), "call_with_flat_string", CallWithFlatString);
   BindNative(rt.get(), "test_local_to_array_ptr", TestLocalToArrayPtr);
 
   BindNative(rt.get(), "assert_eq", AssertEq);

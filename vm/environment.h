@@ -154,6 +154,7 @@ class Environment : public ISourcePawnEnvironment
     bool dropStack(uint32_t amount);
     static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
     static inline size_t offsetOfSpBase() { return offsetof(Environment, sp_base_); }
+    static inline size_t offsetOfSpTop() { return offsetof(Environment, sp_top_); }
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
     bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, uint32_t frm, cell_t* result);
@@ -207,23 +208,15 @@ class Environment : public ISourcePawnEnvironment
     int getPendingExceptionCode() const;
 
     // These are indicators used for the watchdog timer.
-    uintptr_t FrameId() const {
-        return frame_id_;
-    }
-    bool RunningCode() const {
-        return !!top_;
-    }
+    uintptr_t FrameId() const { return frame_id_; }
+    bool RunningCode() const { return !!top_; }
 
     void enterInvoke(InvokeFrame* frame);
     void leaveJitInvoke(JitInvokeFrame* frame);
     void leaveInvoke();
 
-    InvokeFrame* top() const {
-        return top_;
-    }
-    intptr_t* exit_fp() const {
-        return exit_fp_;
-    }
+    InvokeFrame* top() const { return top_; }
+    intptr_t* exit_fp() const { return exit_fp_; }
 
     bool spew_interp_ops() const {
         return spew_interp_ops_;
@@ -233,7 +226,6 @@ class Environment : public ISourcePawnEnvironment
     }
 
     TypeCache* types() { return &types_; }
-
     VirtMem& virt_mem() { return virt_mem_; }
 
   public:

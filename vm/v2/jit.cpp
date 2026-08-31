@@ -50,14 +50,21 @@ CompilerBase::CompilerBase(Runtime* rt, MethodInfo* method)
    context_(rt),
    image_(rt_->image()),
    method_info_(method),
+   ll_(method->llcode()),
    pcode_start_(0),
    code_start_(nullptr),
    op_cip_(nullptr)
-{
-}
+{}
 
 CompilerBase::~CompilerBase() {
     method_info_->ClearCompilerCache();
+}
+
+bool CompilerBase::IsNextBlock(uint32_t block_index) {
+    if (!block_)
+        return false;
+    uint32_t current_index = block_ - method_info_->llcode()->blocks().begin();
+    return current_index + 1 == block_index;
 }
 
 bool CompilerBase::Compile(Runtime* cx, RefPtr<MethodInfo> method) {
@@ -90,14 +97,8 @@ CompiledFunction* CompilerBase::Emit() {
         return nullptr;
     }
 
-    LLCode* ll = method_info_->llcode();
-    if (!ll) {
-        ReportError(SP_ERROR_NOT_RUNNABLE);
-        return nullptr;
-    }
-
     pcode_start_ = method_info_->pcode_offset();
-    code_start_ = ll->bytes();
+    code_start_ = ll_->bytes();
 
     std::string function_name;
     if (const char* name = rt_->image()->LookupFunction(pcode_start_))
@@ -118,12 +119,20 @@ CompiledFunction* CompilerBase::Emit() {
     // of fake source file mappings to frame the actual function body.
     debug_map.push_back({masm.pc(), "<prologue>", 0});
 
-    EmitPrologue();
+    FrameInfo frame;
+    frame.num_regs = ll_->num_regs();
+    frame.frame_size = (frame.num_regs + ll_->max_callee_args()) * sizeof(cell_t);
+    frame.num_params = method_info_->arg_types().size();
+    frame.callee_regs = frame.num_regs - frame.num_params;
 
-    const auto& blocks = ll->blocks();
-    block_labels_ = std::make_unique<Label[]>(blocks.size());
+    EmitPrologue(frame);
+
+    const auto& blocks = ll_->blocks();
+    block_labels_ = ke::FixedArray<Label>(blocks.size());
+    block_addresses_ = ke::FixedArray<PatchCodeLabel>(blocks.size());
     for (size_t i = 0; i < blocks.size(); i++) {
         __ bind(&block_labels_[i]);
+        __ bind(&block_addresses_[i]);
         if (!CompileBlock(blocks[i]))
             return nullptr;
     }
@@ -708,7 +717,7 @@ bool CompilerBase::TryEmitSwitchTable(uint16_t val_reg, uint32_t def_block,
     // Now do the sequential check.
     cell_t iter = first_case.value;
     for (const auto& entry : cases) {
-        if (entry.value != ++iter)
+        if (entry.value != iter++)
             return false;
     }
 
@@ -719,6 +728,8 @@ bool CompilerBase::TryEmitSwitchTable(uint16_t val_reg, uint32_t def_block,
 void CompilerBase::EmitErrorThunk(ErrorThunk* thunk) {
     if (thunk->err == 0) {
         __ call(ExternalAddress(stubs_.report_error));
+    } else if (thunk->err == -1) {
+        __ call(ExternalAddress(stubs_.return_reported_error));
     } else {
         assert(thunk->err < SP_MAX_ERROR_CODES);
         __ call(ExternalAddress(stubs_.throw_error_code[thunk->err]));

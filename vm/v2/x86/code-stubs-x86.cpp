@@ -50,6 +50,7 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ movl(frm, stk);
 
     // Align the stack.
+    __ subl(esp, 16);
     __ andl(esp, 0xfffffff0);
 
     // Call into plugin.

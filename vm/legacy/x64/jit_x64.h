@@ -17,8 +17,8 @@
 #pragma once
 
 #include "legacy/jit.h"
-#include "x64/constants-x64.h"
 #include "legacy/plugin-runtime.h"
+#include "legacy/x64/constants-x64.h"
 
 namespace sp {
 class CompiledFunction;

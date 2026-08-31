@@ -629,7 +629,7 @@ class SourcePawn(object):
         if enable_jit:
             if module.compiler.target.arch in ['x86', 'x86_64']:
                 module.compiler.defines += ['SP_JIT_V1']
-            if module.compiler.target.arch in ['x86']:
+            if module.compiler.target.arch in ['x86', 'x86_64']:
                 module.compiler.defines += ['SP_JIT_V2']
 
 if builder.parent is None:

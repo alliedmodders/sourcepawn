@@ -43,6 +43,7 @@ class Compiler : public CompilerBase
     Compiler(Runtime* rt, MethodInfo* method);
     ~Compiler();
 
+    void EmitPrologue(const FrameInfo& frame) override;
     void EmitLoadConst(uint16_t reg, cell_t val) override;
     void EmitLoadConst64(uint16_t reg, int64_t val) override;
     void EmitAddr(uint16_t src_reg, uint16_t dest_reg) override;
@@ -107,6 +108,11 @@ class Compiler : public CompilerBase
     void EmitIncRefForArrayEscape(Register obj_reg, Register tmp);
     void EmitDecRef(Register obj_reg, std::optional<Register> save_reg,
                     const std::optional<Operand>& zero_loc = {});
+    void EmitCallThunk(CallThunk* thunk) override;
+
+    void JumpOnError(ConditionCode cc, int err);
+    void JumpOnReportedError(ConditionCode cc);
+    void JumpAndReportOnError(ConditionCode cc);
 
     ExternalAddress spAddr() { return ExternalAddress(env_->addressOfSp()); }
     ExternalAddress spBaseAddr() { return ExternalAddress(env_->addressOfSpBase()); }

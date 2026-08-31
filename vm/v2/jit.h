@@ -37,6 +37,7 @@ class SmxImage;
 
 namespace sp::v2 {
 
+class LLCode;
 class Runtime;
 struct LLBlock;
 
@@ -48,8 +49,7 @@ struct BackwardJump {
     // The offset of the timeout thunk. This is filled in at the end.
     uint32_t timeout_offset;
 
-    BackwardJump() {
-    }
+    BackwardJump() {}
     BackwardJump(uint32_t pc, const uint8_t* cip)
      : pc(pc),
        cip(cip)
@@ -71,11 +71,16 @@ class CompilerBase
 
   protected:
     CompiledFunction* Emit();
-
-    void EmitPrologue();
-    void EmitDebugBreakHandler();
     bool CompileBlock(const LLBlock& block);
 
+    struct FrameInfo {
+        uint32_t num_regs;
+        uint32_t frame_size;
+        uint32_t num_params;
+        uint32_t callee_regs;
+    };
+
+    virtual void EmitPrologue(const FrameInfo& frame) = 0;
     virtual void EmitLoadConst(uint16_t reg, cell_t val) = 0;
     virtual void EmitLoadConst64(uint16_t reg, int64_t val) = 0;
     virtual void EmitAddr(uint16_t src_reg, uint16_t dest_reg) = 0;
@@ -141,13 +146,10 @@ class CompilerBase
     struct DeferredErrorThunk;
     virtual void EmitDeferredErrorThunk(DeferredErrorThunk* thunk) = 0;
 
-  protected:
     struct CallThunk;
-    void EmitCallThunk(CallThunk* thunk);
+    virtual void EmitCallThunk(CallThunk* thunk) = 0;
 
-    void JumpOnError(ConditionCode cc, int err);
-    void JumpAndReportOnError(ConditionCode cc);
-
+  protected:
     BoundsErrorThunk& AddBoundsErrorThunk();
     DeferredErrorThunk& AddDeferredErrorThunk();
 
@@ -182,9 +184,7 @@ class CompilerBase
         cip_map_.push_back(entry);
     }
 
-    bool IsNextBlock(uint32_t block_index) {
-        return false;
-    }
+    bool IsNextBlock(uint32_t block_index);
 
   protected:
     struct ErrorThunk;
@@ -199,6 +199,7 @@ class CompilerBase
     Runtime* context_;
     SmxImage* image_;
     ke::RefPtr<MethodInfo> method_info_;
+    LLCode* ll_;
     ke::RefPtr<ControlFlowGraph> graph_;
     uint32_t pcode_start_;
     const uint8_t* code_start_;
@@ -271,7 +272,8 @@ class CompilerBase
 
     std::vector<BackwardJump> backward_jumps_;
     std::vector<CipMapEntry> cip_map_;
-    std::unique_ptr<Label[]> block_labels_;
+    ke::FixedArray<Label> block_labels_;
+    ke::FixedArray<PatchCodeLabel> block_addresses_;
 };
 
 } // namespace sp::v2

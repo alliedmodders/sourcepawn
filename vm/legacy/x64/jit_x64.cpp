@@ -1082,8 +1082,7 @@ bool Compiler::visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, si
         RipDataLabel table;
         __ lea(rsi, &table);
         __ movsxd(rcx, rcx);
-        __ movq(rdi, Operand(rsi, rcx, ScaleEight));
-        __ jmp(rdi);
+        __ jmp(Operand(rsi, rcx, ScaleEight));
 
         // We emit absolute addresses in reverse order in the assembler, to
         // avoid rip-relative fixups during linking. This means we have to

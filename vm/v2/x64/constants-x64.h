@@ -1,4 +1,4 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sw=4 tw=99 sts=4 et:
 //
 // This file is part of SourcePawn.
 //
@@ -14,25 +14,15 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
-#ifndef _include_sourcepawn_vm_constants_x64_h__
-#define _include_sourcepawn_vm_constants_x64_h__
+#pragma once
 
-#include "assembler-x64.h"
+#include "macro-assembler.h"
 
-namespace sp {
+namespace sp::v2 {
 
-// We prioritize rbx for being non-volatile and not needing an REX encoding,
-// and r14/r15 for being non-volatile and not conflicting with mod r/m
-// encoding.
-static const Register pri = rax;
-static const Register alt = rdx;
 static const Register context_reg = r12;
-static const Register env_reg = r13;
 static const Register stk = r14;
-static const Register dat = r15;
+static const Register dat_reg = r15;
 static const Register frm = rbx;
-static const Register tmp = rcx;
 
-} // namespace sp
-
-#endif //_include_sourcepawn_vm_constants_x64_h__
+} // namespace sp::v2

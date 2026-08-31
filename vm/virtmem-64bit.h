@@ -37,6 +37,8 @@ class VirtMem64 {
         return reinterpret_cast<T>(map_base_ + addr);
     }
 
+    intptr_t map_base() const { return reinterpret_cast<intptr_t>(map_base_); }
+
   private:
     uint8_t* map_base_ = nullptr;
     uint8_t* map_end_ = nullptr;

@@ -1,29 +1,37 @@
-// vim: set ts=8 sts=2 sw=2 tw=99 et:
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
 // This file is part of SourcePawn.
-// 
+//
 // SourcePawn is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
-// 
+//
 // SourcePawn is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
-// 
+//
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
+#include <assert.h>
+
+#include <optional>
+#include <span>
+#include <vector>
+
+#include "utils/cxx_helpers.h"
 #include "v2/jit.h"
-#include "x64/constants-x64.h"
 #include "v2/runtime.h"
+#include "v2/x64/constants-x64.h"
 
 namespace sp {
 class CompiledFunction;
 class SmxImage;
 }
+
 namespace sp::v2 {
 
 using namespace SourcePawn;
@@ -32,112 +40,91 @@ class CallThunk;
 
 class Compiler : public CompilerBase
 {
-    friend class OutOfBoundsErrorPath;
-
   public:
     Compiler(Runtime* rt, MethodInfo* method);
     ~Compiler();
 
-    bool beforeVisitOp(OPCODE op) override;
-    bool visitBREAK() override;
-    bool visitLOAD_PRI(cell_t srcaddr) override;
-    bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
-    bool visitLOAD_I() override;
-    bool visitLODB_I() override;
-    bool visitCONST(PawnReg dest, cell_t imm) override;
-    bool visitADDR(PawnReg dest, cell_t offset) override;
-    bool visitSTOR_PRI(cell_t offset) override;
-    bool visitSTOR_S(cell_t offset, PawnReg src) override;
-    bool visitSTOR_I() override;
-    bool visitSTRB_I() override;
-    bool visitIDXADDR() override;
-    bool visitMOVE(PawnReg reg) override;
-    bool visitXCHG() override;
-    bool visitPUSH(PawnReg src) override;
-    bool visitPUSH_C(cell_t value) override;
-    bool visitPUSH_S(cell_t offset) override;
-    bool visitPOP(PawnReg dest) override;
-    bool visitHEAP(cell_t amount) override;
-    bool visitRETN() override;
-    bool visitCALL(uint32_t method_index) override;
-    bool visitJcmp(CompareOp op, cell_t offset) override;
-    bool visitSHL() override;
-    bool visitSHR() override;
-    bool visitSSHR() override;
-    bool visitSMUL() override;
-    bool visitSDIV_ALT_I32() override;
-    bool visitSMOD_ALT_I32() override;
-    bool visitADD() override;
-    bool visitSUB_ALT() override;
-    bool visitAND() override;
-    bool visitOR() override;
-    bool visitXOR() override;
-    bool visitNOT() override;
-    bool visitNEG() override;
-    bool visitINVERT() override;
-    bool visitSMUL_C(cell_t value) override;
-    bool visitZERO(PawnReg dest) override;
-    bool visitCompareOp(CompareOp op) override;
-    bool visitINC_PRI() override;
-    bool visitDEC_PRI() override;
-    bool visitMOVS(uint32_t amount) override;
-    bool visitFILL(uint32_t amount) override;
-    bool visitBOUNDS(uint32_t limit) override;
-    bool visitSWAP_ALT() override;
-    bool visitPUSH_ADR(cell_t slot) override;
-    bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) override;
-    bool visitGENARRAY(uint32_t dims, bool autozero) override;
-    bool visitSTRADJUST_PRI() override;
-    bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override;
-    bool visitMOVE_I64() override;
-    bool visitCVT_I64(cell_t slot) override;
-    bool visitTRUNCATE_I64() override;
-    bool visitTEST_I64() override;
-    bool visitINVERT_I64(cell_t slot) override;
-    bool visitNEG_I64(cell_t slot) override;
-    bool visitSMUL_I64(cell_t slot) override;
-    bool visitSDIV_ALT_I64(cell_t pri_slot) override;
-    bool visitSMOD_ALT_I64(cell_t pri_slot) override;
-    bool visitADD_I64(cell_t slot) override;
-    bool visitSUB_ALT_I64(cell_t slot) override;
-    bool visitSHL_I64(cell_t slot) override;
-    bool visitSSHR_I64(cell_t slot) override;
-    bool visitSHR_I64(cell_t slot) override;
-    bool visitOR_I64(cell_t slot) override;
-    bool visitAND_I64(cell_t slot) override;
-    bool visitXOR_I64(cell_t slot) override;
-    bool visitCompareOp64(CompareOp op) override;
-    bool visitTEST_F32() override;
-    bool visitNEG_F32() override;
-    bool visitMUL_F32() override;
-    bool visitDIV_ALT_F32() override;
-    bool visitADD_F32() override;
-    bool visitSUB_ALT_F32() override;
-    bool visitCompareOpF32(CompareOp op) override;
-    bool visitCVT_F32() override;
-    bool visitMOD_ALT_F32() override;
-    bool visitSTOR_S_PRI_I64(cell_t slot) override;
-    bool visitSTOR_S_C(cell_t slot, cell_t value) override;
+    void EmitPrologue(const FrameInfo& frame) override;
+    void EmitLoadConst(uint16_t reg, cell_t val) override;
+    void EmitLoadConst64(uint16_t reg, int64_t val) override;
+    void EmitAddr(uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitRetn(LLOp op, std::optional<uint16_t> reg) override;
+    void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) override;
+    void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) override;
+    void EmitJump(size_t target_idx) override;
+    void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) override;
+    void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) override;
+    void EmitCmpI32(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) override;
+    void EmitBasicAlu(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitSdivI32(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitCompareFloat(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitBinaryFloatOp(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitNewArray(const TypeDesc* td, uint16_t size_reg, uint16_t dest_reg) override;
+    void EmitNewFixedArray(const TypeDesc* td, uint16_t dest_reg, uint32_t size) override;
+    void EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_reg, uint16_t dest_reg) override;
+    void EmitAddRef(uint16_t reg) override;
+    void EmitRelease(uint16_t reg) override;
+    void EmitCmpI64(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) override;
+    void EmitBinaryI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
+    void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) override;
+    void EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) override;
+    void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) override;
+    void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) override;
+    void EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) override;
+    void EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t val_reg) override;
+    void EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) override;
+    void EmitStorGlb(LLOp op, uint32_t addr, uint16_t val_reg) override;
+    void EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size) override;
+    void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) override;
+    void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) override;
+    void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) override;
+    void EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) override;
+    void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;
+    void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) override;
+    void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;
+    void EmitSliceEs(uint16_t src_reg, uint16_t dest_reg, uint32_t cells) override;
+    void EmitSliceFlat(const SliceFlatArgs& op) override;
+    void EmitIdxAddr(const IdxAddrArgs& args) override;
+    void EmitCopyArray(LLOp op, uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
+    void EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) override;
+    void EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) override;
+    void EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) override;
+    void EmitSwitchChain(uint16_t val_reg, uint32_t def_block, const std::span<const SwitchCaseEntry>& cases) override;
+    void EmitSwitchTable(uint16_t val_reg, uint32_t def_block, const std::span<const SwitchCaseEntry>& cases) override;
+
+    void EmitDeallocThunk(DeallocThunk* thunk) override;
+    void EmitBoundsErrorThunk(BoundsErrorThunk* thunk) override;
+    void EmitDeferredErrorThunk(DeferredErrorThunk* thunk) override;
+    void EmitCallThunk(CallThunk* thunk) override;
 
   private:
-    bool setup(cell_t pcode_offs);
+    void EmitIncRefForArrayEscape(Register obj_reg, Register tmp_reg);
+    void EmitIncRef(Register obj_reg);
+    void EmitDecRef(Register obj_reg, std::optional<Register> save_reg,
+                    const std::optional<Operand>& zero_loc = {});
+    void CallRtForHandleImpl(void* method_addr, uint32_t nargs, uint16_t dest_reg);
 
-  private:
-    void emitPrologue() override;
-    void emitOutOfBoundsError(OutOfBoundsError* path) override;
-    void emitDebugBreakHandler() override;
-    void emitCallThunk(CallThunk* thunk) override;
+    void JumpOnError(ConditionCode cc, int err);
+    void JumpOnReportedError(ConditionCode cc);
 
-    void emitLegacyNativeCall(uint32_t native_index, NativeEntry* native);
-    void emitGenArray(bool autozero);
-    void emitCheckAddress(Register reg, size_t read_size = 4);
-    void emitFloatCmp(ConditionCode cc);
-    void jumpOnError(ConditionCode cc, int err = 0);
+    template <typename T>
+    void CallRtForHandle(T method, uint32_t nargs, uint16_t dest_reg) {
+        assert(sp::MemberFunctionArgCount<T>::value == nargs);
+        CallRtForHandleImpl(ke::PmfCast<void*>(method), nargs, dest_reg);
+    }
 
-    Operand hpAddr() { return Operand(context_reg, Runtime::offsetOfHp()); }
-    Operand frmAddr() { return Operand(context_reg, Runtime::offsetOfFrm()); }
-    Operand spAddr() { return Operand(context_reg, Runtime::offsetOfSp()); }
-    Operand hpScopeAddr() { return Operand(context_reg, Runtime::offsetOfHpScope()); }
+    Operand RegAddr(uint32_t reg) {
+        return Operand(frm, int32_t(reg * sizeof(cell_t)));
+    }
+    Operand StkRelAddr(uint32_t reg);
+    Operand HeapAddr(Register addr_reg, uint32_t offset = 0) {
+        return Operand(dat_reg, addr_reg, NoScale, offset);
+    }
 };
 
 } // namespace sp::v2

@@ -94,3 +94,8 @@ if 'SP_JIT_V2' in module.compiler.defines:
       'v2/x86/code-stubs-x86.cpp',
       'v2/x86/jit_x86.cpp',
     ]
+  elif module.compiler.target.arch == 'x86_64':
+    module.sources += [
+      'v2/x64/code-stubs-x64.cpp',
+      'v2/x64/jit_x64.cpp',
+    ]
