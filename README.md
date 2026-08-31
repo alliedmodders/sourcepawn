@@ -240,3 +240,5 @@ all new binaries. The legacy VM is still used for older binaries.
    sections. References to this RTTI are embedded in the bytecode to enforce
    type safety.
  - The .natives and rtti.natives sections have been merged into smx\_rtti\_method.
+ - The BREAK opcode has been removed in favor of the line number mapping table,
+   which is now per-method rather than global.

@@ -134,6 +134,19 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
             break;
         }
 
+        case OP_LOAD_FN:
+        case OP_CALL:
+        case OP_CALLN:
+        {
+            uint32_t method_index = reader.read<uint32_t>();
+            fprintf(fp, "%u", method_index);
+            if (op == OP_CALLN) {
+                uint8_t nargs = reader.read<uint8_t>();
+                fprintf(fp, ", %u", nargs);
+            }
+            break;
+        }
+
         case OP_JUMP:
         case OP_JZER:
         case OP_JNZ:

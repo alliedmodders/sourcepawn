@@ -55,6 +55,7 @@ class PcodeVisitor
     virtual bool visitHEAP(cell_t amount) = 0;
     virtual bool visitRETN() = 0;
     virtual bool visitCALL(uint32_t method_index) = 0;
+    virtual bool visitCALLN(uint32_t method_index, uint8_t nargs) = 0;
     virtual bool visitJUMP(cell_t offset) = 0;
     virtual bool visitJcmp(CompareOp op, cell_t offset) = 0;
     virtual bool visitSHL() = 0;

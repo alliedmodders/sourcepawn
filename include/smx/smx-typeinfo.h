@@ -301,6 +301,21 @@ struct smx_rtti_debug_method {
     //   (1) The next method's first_local value, or
     //   (2) The end of the .locals table if this is the last method.
     uint32_t first_local;
+
+    // Index into .dbg.lines of the first line in this method.
+    uint32_t first_line;
+
+    // The source line number where this method begins in the source file.
+    uint32_t line_start;
+};
+
+// The ".dbg.lines" table rows are of the following type:
+struct smx_rtti_debug_line {
+    // Byte offset relative to the start of the method's pcode (pcode_start).
+    uint16_t addr;
+
+    // Line number relative to the method's start line (line_start).
+    uint16_t line;
 };
 
 // The ".dbg.locals" and ".dbg.globals" table rows are of the following type:

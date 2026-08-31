@@ -108,8 +108,16 @@ void CodeGenerator::FinishSmx() {
 }
 
 void CodeGenerator::AddDebugLine(const token_pos_t& pos) {
+    if (!fun_)
+        return;
+		
     auto line = cc_.sources()->GetLineAndCol(pos, nullptr);
-    rtti_->AddDebugLine(asm_.position(), line);
+    auto method = rtti_->GetMethod(debug_info_.method_index);
+    uint32_t rel_addr = asm_.position() - method.pcode_start;
+    uint32_t rel_line = (uint32_t)line - debug_info_.line_start;
+
+    if (rel_addr < UINT16_MAX && rel_line < UINT16_MAX)
+        rtti_->AddDebugLine((uint16_t)rel_addr, (uint16_t)rel_line);
 }
 
 void CodeGenerator::AddDebugSymbol(Decl* decl, uint32_t pc) {
@@ -139,7 +147,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
 
     if (fun_) {
         AddDebugLine(stmt->pos());
-        EmitBreak();
 
         std::swap(prev_used_temp_slots, used_temp_slots_);
     }
@@ -1801,10 +1808,9 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
 
     // Do this before we start crawling the body, since we need the method entry
     // to exist before we start emitting arg/local info.
-    auto debug_method = AddFunctionEntry(info, asm_.pc());
+    debug_info_ = AddFunctionEntry(info, asm_.pc());
 
     AddDebugLine(info->pos());
-    EmitBreak();
     locals_ = {};
     free_temp_slots_ = {};
     used_temp_slots_ = {};
@@ -1843,16 +1849,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
 
     uint32_t pcode_end = asm_.pc();
 
-    rtti_->finish_method(info, debug_method, std::move(locals_), pcode_end);
-}
-
-void
-CodeGenerator::EmitBreak()
-{
-    if (last_break_op_ && *last_break_op_ == asm_.position())
-        return;
-    __ emit(OP_BREAK);
-    last_break_op_.init(asm_.position());
+    rtti_->finish_method(info, debug_info_, std::move(locals_), pcode_end);
 }
 
 void
@@ -1893,8 +1890,11 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
             node->second.emplace_back(fun);
     }
 
-    __ PUSH_C(nargs);
-    __ emit(OP_CALL, &fun->cg()->method_id);
+    if (fun->IsVariadic()) {
+        __ emit(OP_CALLN, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
+    } else {
+        __ emit(OP_CALL, &fun->cg()->method_id);
+    }
 }
 
 void

@@ -596,8 +596,7 @@ SmxImage::validateRttiTypesets() {
     return true;
 }
 
-bool
-SmxImage::validateDebugInfo() {
+bool SmxImage::validateDebugInfo() {
     const Section* dbginfo = findSection(".dbg.info");
     if (!dbginfo)
         return true;
@@ -635,16 +634,18 @@ SmxImage::validateDebugInfo() {
         List<sp_fdbg_file_t>(reinterpret_cast<const sp_fdbg_file_t*>(buffer() + files->dataoffs),
                              debug_info_->num_files);
 
-    const Section* lines = findSection(".dbg.lines");
-    if (!lines)
-        return error("no debug lines table");
-    if (!validateSection(lines))
-        return error("invalid debug lines table");
-    if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
-        return error("invalid debug lines table size");
-    debug_lines_ =
-        List<sp_fdbg_line_t>(reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
-                             debug_info_->num_lines);
+    if (hdr_->version != SmxConsts::SP_VERSION_2) {
+        const Section* lines = findSection(".dbg.lines");
+        if (!lines)
+            return error("no debug lines table");
+        if (!validateSection(lines))
+            return error("invalid debug lines table");
+        if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
+            return error("invalid debug lines table size");
+        debug_lines_ =
+            List<sp_fdbg_line_t>(reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
+                                 debug_info_->num_lines);
+    }
 
     debug_symbols_section_ = findSection(".dbg.symbols");
     if (debug_symbols_section_) {
@@ -673,6 +674,13 @@ SmxImage::validateDebugInfo() {
             if (!validateRttiHeader(methods))
                 return error("invalid debug methods table");
             rtti_dbg_methods_ = toRttiTable(methods);
+
+            if (const Section* method_lines = findSection(".dbg.method_lines")) {
+                if (!validateRttiHeader(method_lines))
+                    return error("invalid debug method lines table");
+                rtti_dbg_method_lines_ = toRttiTable(method_lines);
+            }
+
             if (Environment::get()->IsDebugBreakEnabled() && !validateDebugMethods())
                 return false;
         }
@@ -754,8 +762,10 @@ SmxImage::validateDebugMethods() {
             getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, i);
         if (debug_method->method_index >= rtti_methods_->row_count)
             return error("invalid debug method index");
-        if (rtti_dbg_locals_ && debug_method->first_local >= rtti_dbg_locals_->row_count)
+        if (rtti_dbg_locals_ && debug_method->first_local > rtti_dbg_locals_->row_count)
             return error("invalid first local index");
+        if (rtti_dbg_method_lines_ && debug_method->first_line > rtti_dbg_method_lines_->row_count)
+            return error("invalid first line index");
     }
     return true;
 }
@@ -986,8 +996,77 @@ SmxImage::GetMethodRttiByOffset(uint32_t pcode_offset) const {
     return nullptr;
 }
 
-bool
-SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
+std::optional<uint32_t> SmxImage::GetDebugMethodRow(uint32_t pcode_offset) const {
+    if (!rtti_dbg_methods_)
+        return {};
+
+    int low = 0;
+    int high = (int)rtti_dbg_methods_->row_count - 1;
+    while (low <= high) {
+        int mid = (low + high) / 2;
+        const smx_rtti_debug_method* dm = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, mid);
+        const smx_rtti_method* m = getRttiRow<smx_rtti_method>(rtti_methods_, dm->method_index);
+
+        if (pcode_offset >= m->pcode_start && pcode_offset < m->pcode_end)
+            return {uint32_t(mid)};
+
+        if (pcode_offset < m->pcode_start)
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return {};
+}
+
+std::optional<uint32_t> SmxImage::GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const {
+    if (!rtti_dbg_method_lines_)
+        return {};
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, dbg_method_row);
+    uint32_t stopat = rtti_dbg_method_lines_->row_count;
+    if (dbg_method_row + 1 < rtti_dbg_methods_->row_count)
+        stopat = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, dbg_method_row + 1)->first_line;
+
+    int low = (int)dbg_method->first_line - 1;
+    int high = (int)stopat;
+
+    while (high - low > 1) {
+        int mid = (low + high) / 2;
+        auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, mid);
+        if (row->addr <= rel_addr)
+            low = mid;
+        else
+            high = mid;
+    }
+
+    if (low < (int)dbg_method->first_line)
+        return {};
+    return (uint32_t)low;
+}
+
+bool SmxImage::LookupLineV2(uint32_t addr, uint32_t* line) const {
+    auto dbg_method_row = GetDebugMethodRow(addr);
+    if (!dbg_method_row)
+        return false;
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, *dbg_method_row);
+    auto method = getRttiRow<smx_rtti_method>(rtti_methods_, dbg_method->method_index);
+
+    auto line_row = GetDebugMethodLineRow(*dbg_method_row, addr - method->pcode_start);
+    if (!line_row)
+        return false;
+
+    auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, *line_row);
+    *line = dbg_method->line_start + row->line;
+    return true;
+}
+
+bool SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
+    if (rtti_dbg_method_lines_)
+        return LookupLineV2(addr, line);
+    if (!debug_lines_.exists())
+        return false;
+
     int high = debug_lines_.length();
     int low = -1;
 
@@ -1005,6 +1084,25 @@ SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
     // Lines are zero-indexed for some reason.
     *line = debug_lines_[low].line + 1;
     return true;
+}
+
+bool SmxImage::IsLineBoundary(uint32_t addr) const {
+    if (!rtti_dbg_method_lines_)
+        return false;
+
+    auto dbg_method_row = GetDebugMethodRow(addr);
+    if (!dbg_method_row)
+        return false;
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, *dbg_method_row);
+    auto method = getRttiRow<smx_rtti_method>(rtti_methods_, dbg_method->method_index);
+
+    auto line_row = GetDebugMethodLineRow(*dbg_method_row, addr - method->pcode_start);
+    if (!line_row)
+        return false;
+
+    auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, *line_row);
+    return row->addr == (addr - method->pcode_start);
 }
 
 size_t
@@ -1134,108 +1232,6 @@ SmxImage::getFunctionAddress(const SymbolType* syms, const char* function, ucell
         cursor += sizeof(SymbolType);
     }
     return false;
-}
-
-bool
-SmxImage::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr) const {
-    *funcaddr = 0;
-    if (rtti_methods_) {
-        for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
-            const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
-            const char* name = names_ + method->name;
-            if (strcmp(name, function) != 0)
-                continue;
-
-            *funcaddr = method->pcode_start;
-            // verify that this function is defined in the appropriate file
-            const char* tgtfile = LookupFile(*funcaddr);
-            if (tgtfile != nullptr && !strcmp(file, tgtfile))
-                break;
-        }
-    } else {
-        for (;;) {
-            // find (next) matching function
-            uint32_t index = 0;
-            if (debug_syms_) {
-                getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function,
-                                                                         funcaddr, index);
-            } else {
-                getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(
-                    debug_syms_unpacked_, function, funcaddr, index);
-            }
-
-            if (index >= debug_info_->num_syms)
-                return false;
-
-            // verify that this function is defined in the appropriate file
-            const char* tgtfile = LookupFile(*funcaddr);
-            if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
-                break;
-            index++;
-            assert(index < debug_info_->num_syms);
-        }
-    }
-
-    // now find the first line in the function where we can "break" on
-    uint32_t index = 0;
-    for (; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
-        continue;
-
-    if (index >= debug_info_->num_lines)
-        return false;
-
-    *funcaddr = debug_lines_[index].addr;
-    return true;
-}
-
-bool
-SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr) const {
-    // Find a suitable "breakpoint address" close to the indicated line (and in
-    // the specified file). The address is moved up to the next "breakable" line
-    // if no "breakpoint" is available on the specified line. You can use function
-    // LookupLine() to find out at which precise line the breakpoint was set.
-
-    // The filename comparison is strict (case sensitive and path sensitive).
-    *addr = 0;
-
-    uint32_t bottomaddr, topaddr;
-    uint32_t file;
-    uint32_t index = 0;
-    for (file = 0; file < debug_info_->num_files; file++) {
-        // find the (next) matching instance of the file
-        if (debug_files_[file].name >= debug_names_section_->size ||
-            strcmp(debug_names_ + debug_files_[file].name, filename) != 0) {
-            continue;
-        }
-
-        // get address range for the current file
-        bottomaddr = debug_files_[file].addr;
-        topaddr = (file + 1 < debug_info_->num_files) ? debug_files_[file + 1].addr : (uint32_t)-1;
-
-        // go to the starting address in the line table
-        while (index < debug_info_->num_lines && debug_lines_[index].addr < bottomaddr)
-            index++;
-
-        // browse until the line is found or until the top address is exceeded
-        while (index < debug_info_->num_lines && debug_lines_[index].line < line &&
-               debug_lines_[index].addr < topaddr) {
-            index++;
-        }
-
-        if (index >= debug_info_->num_lines)
-            return false;
-        if (debug_lines_[index].line >= line)
-            break;
-
-        // if not found (and the line table is not yet exceeded) try the next
-        // instance of the same file (a file may appear twice in the file table)
-    }
-    if (file >= debug_info_->num_files)
-        return false;
-
-    assert(index < debug_info_->num_lines);
-    *addr = debug_lines_[index].addr;
-    return true;
 }
 
 FastRtti SmxImage::GetTypeParser(uint32_t offset) {

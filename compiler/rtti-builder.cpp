@@ -39,7 +39,7 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
     es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
-    dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
+    dbg_lines_ = new SmxRttiTable<smx_rtti_debug_line>(".dbg.method_lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
     dbg_methods_ = new SmxRttiTable<smx_rtti_debug_method>(".dbg.methods");
     dbg_globals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.globals");
@@ -89,14 +89,10 @@ RttiBuilder::build_debuginfo()
               [](const sp_fdbg_file_t& a, const sp_fdbg_file_t& b) -> bool {
                 return a.addr < b.addr;
               });
-    std::sort(dbg_lines_->list().begin(), dbg_lines_->list().end(),
-              [](const sp_fdbg_line_t& a, const sp_fdbg_line_t& b) -> bool {
-                return a.addr < b.addr;
-              });
 
     // Finish up debug header statistics.
     dbg_info_->header().num_files = dbg_files_->count();
-    dbg_info_->header().num_lines = dbg_lines_->count();
+    dbg_info_->header().num_lines = 0;
     dbg_info_->header().num_syms = 0;
     dbg_info_->header().num_arrays = 0;
 }
@@ -115,20 +111,8 @@ void RttiBuilder::AddDebugFile(ucell codeidx, const char* file) {
     last_file_name_ = file;
 }
 
-void RttiBuilder::AddDebugLine(ucell addr, cell line) {
-    // Lines are zero-indexed for some reason.
-    if (line > 0)
-        line--;
-
-    if (!dbg_lines_->list().empty()) {
-        auto& last = dbg_lines_->list().back();
-        if (last.addr == addr) {
-            last.line = line;
-            return;
-        }
-    }
-
-    sp_fdbg_line_t& entry = dbg_lines_->add();
+void RttiBuilder::AddDebugLine(uint16_t addr, uint16_t line) {
+    smx_rtti_debug_line& entry = dbg_lines_->add();
     entry.addr = addr;
     entry.line = line;
 }
@@ -190,6 +174,8 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
+    debug.first_line = dbg_lines_->count();
+    debug.line_start = fun->pos().line;
     return debug;
 }
 
@@ -219,8 +205,8 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
     else if (fun->is_native())
         method.flags = kRttiMethod_Native;
 
-    // Only add a method table entry if we actually had locals.
-    if (entry.first_local != dbg_locals_->count())
+    // Only add a method table entry if we actually had locals or lines.
+    if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
         dbg_methods_->add(entry);
 }
 

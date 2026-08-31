@@ -104,6 +104,14 @@ bool Interpreter::run() {
     while (!has_returned_ && reader_.more()) {
         insn_begin = reader_.cursor();
 
+        if (Environment::get()->IsDebugBreakEnabled()) {
+            if (smx_->IsLineBoundary((uint32_t)(insn_begin - code_))) {
+                InvokeDebugger(cx_, nullptr);
+                if (env_->hasPendingException())
+                    return false;
+            }
+        }
+
         if (env_->spew_interp_ops())
             SpewOpcode(stdout, rt_, code_, insn_begin);
 
@@ -112,14 +120,6 @@ bool Interpreter::run() {
         switch (op) {
             case OP_NOP:
                 break;
-            case OP_BREAK: {
-                if (Environment::get()->IsDebugBreakEnabled()) {
-                    InvokeDebugger(cx_, nullptr);
-                    if (env_->hasPendingException())
-                        return false;
-                }
-                break;
-            }
             case OP_LOAD_GLB: {
                 cell_t addr = reader_.readCell();
                 cell_t val;
@@ -432,12 +432,26 @@ bool Interpreter::run() {
                 pushCell(id);
                 break;
             }
-            case OP_CALL: {
+            case OP_CALL:
+            case OP_CALLN: {
                 uint32_t method_index = (uint32_t)reader_.readCell();
+                const smx_rtti_method* method = smx_->GetMethod(method_index);
+                if (op == OP_CALLN) {
+                    uint8_t nargs = reader_.read<uint8_t>();
+                    pushCell(nargs);
+                } else {
+                    auto parser = smx_->GetTypeParser(method->signature);
+                    uint32_t arg_count;
+                    if (!parser.ReadFunctionSignatureArgCount(&arg_count)) {
+                        cx_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
+                        return false;
+                    }
+                    pushCell(arg_count);
+                }
+
                 uint32_t native_index;
                 cell_t result = 0;
                 if (rt_->GetNativeIndex(method_index, &native_index)) {
-
                     cell_t* params = eval_stack_ptr_;
 
                     NativeEntry* native = rt_->NativeAt(native_index);
@@ -475,7 +489,7 @@ bool Interpreter::run() {
                 for (cell_t i = 0; i < nparams; i++)
                     popStack();
 
-                if (!smx_->IsVoidMethod(smx_->GetMethod(method_index)))
+                if (!smx_->IsVoidMethod(method))
                     pushCell(result);
                 break;
             }

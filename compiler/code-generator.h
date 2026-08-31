@@ -118,7 +118,6 @@ class CodeGenerator final
     void InvokeGetter(MethodmapPropertyDecl* method);
     void EmitRvalue(const value& lval);
     void EmitStore(ParseNode* node, const value& lval);
-    void EmitBreak();
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
 
     // Builtins.
@@ -228,8 +227,8 @@ class CodeGenerator final
     RefPtr<SmxCodeSection> code_;
     std::unique_ptr<RttiBuilder> rtti_;
 
-    ke::Maybe<uint32_t> last_break_op_;
     tr::vector<MemoryScope> heap_scopes_;
+    smx_rtti_debug_method debug_info_;
     SymbolStack local_syms_;
     tr::vector<DebugSymbol> global_syms_;
     tr::vector<std::pair<SymbolScope*, tr::vector<DebugSymbol>>> static_syms_;

@@ -612,9 +612,15 @@ class DumpTool final {
             if (op < OPCODES_LAST)
                 name = GetOpcodeName(op);
 
-            // Terminate previous line.
-            if (cip != method_start)
+            uint32_t line;
+            uint32_t offset = uint32_t(cip - code.bytes);
+            if (smx_->IsLineBoundary(offset) && smx_->LookupLine(offset, &line)) {
+                if (cip != method_start)
+                    fprintf(stdout, "\n");
+                fprintf(stdout, "    ; line %u\n", line);
+            } else if (cip != method_start) {
                 fprintf(stdout, "\n");
+            }
 
             fprintf(stdout, "    %04x: ", (uint32_t)(cip - method_start));
             if (name)
@@ -694,12 +700,18 @@ class DumpTool final {
 
             case OP_LOAD_FN:
             case OP_CALL:
+            case OP_CALLN:
             {
                 uint32_t method_index = reader.read<uint32_t>();
                 if (auto method = smx_->GetMethod(method_index))
                     fprintf(stdout, " %s", smx_->names() + method->name);
                 else
                     fprintf(stdout, " unknown_method_%u", method_index);
+
+                if (op == OP_CALLN) {
+                    uint8_t nargs = reader.read<uint8_t>();
+                    fprintf(stdout, " %u", nargs);
+                }
                 break;
             }
 

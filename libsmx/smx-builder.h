@@ -147,6 +147,13 @@ class SmxListSection : public SmxSection
   T& at(size_t index) {
     return list_[index];
   }
+  T& operator[](size_t index) {
+    return list_[index];
+  }
+  const T& operator[](size_t index) const {
+    return list_[index];
+  }
+
   virtual bool write(ISmxBuffer* buf) override {
     return buf->write(list_.data(), list_.size() * sizeof(T));
   }

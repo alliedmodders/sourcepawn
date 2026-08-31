@@ -107,9 +107,6 @@ class PcodeReader
             case OP_NOP:
                 return true;
 
-            case OP_BREAK:
-                return visitor_->visitBREAK();
-
             case OP_LOAD_GLB: {
                 cell_t srcaddr = readCell();
                 return visitor_->visitLOAD_GLB(srcaddr);
@@ -265,6 +262,12 @@ class PcodeReader
             case OP_CALL: {
                 uint32_t method_index = (uint32_t)readCell();
                 return visitor_->visitCALL(method_index);
+            }
+
+            case OP_CALLN: {
+                uint32_t method_index = (uint32_t)readCell();
+                uint8_t nargs = read<uint8_t>();
+                return visitor_->visitCALLN(method_index, nargs);
             }
 
             case OP_JUMP: {

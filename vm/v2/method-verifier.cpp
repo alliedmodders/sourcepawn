@@ -102,7 +102,6 @@ bool
 MethodVerifier::verifyOp(OPCODE op) {
     VerifyData* v = block_->data<VerifyData>();
     switch (op) {
-        case OP_BREAK:
         case OP_NOP:
             return true;
 
@@ -338,27 +337,31 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(OperandType::Cell);
         }
 
-        case OP_CALL: {
-            // An OP_CALL must be preceded by a PUSH_C variant, and it must be in the
-            // same block.
-            if (!prev_cip_ || (*prev_cip_ != OP_PUSH_C && *prev_cip_ != OP_PUSH_C_I8))
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-
-            cell_t nparams;
-            if (*prev_cip_ == OP_PUSH_C)
-                nparams = *reinterpret_cast<const cell_t*>(prev_cip_ + 1);
-            else
-                nparams = *reinterpret_cast<const int8_t*>(prev_cip_ + 1);
-
+        case OP_CALL:
+        case OP_CALLN: {
             uint32_t method_index = (uint32_t)readCell();
+            uint32_t arg_count;
+            const smx_rtti_method* method = smx_->GetMethod(method_index);
+
+            if (op == OP_CALLN) {
+                arg_count = (uint8_t)read<uint8_t>();
+            } else {
+                auto parser = smx_->GetTypeParser(method->signature);
+                if (!parser.ReadFunctionSignatureArgCount(&arg_count))
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            }
+
             if (!verifyCallIndex(method_index))
                 return false;
 
-            // Pops nparams args, then pops the nparams cell itself.
-            if (!popStack(nparams + 1))
+            // The interpreter pushes the argument count onto the stack before
+            // resolving the call.
+            if (!pushStack(OperandType::Cell))
+                return false;
+            if (!popStack(arg_count + 1))
                 return false;
 
-            if (!smx_->IsVoidMethod(smx_->GetMethod(method_index))) {
+            if (!smx_->IsVoidMethod(method)) {
                 if (!pushStack(OperandType::Cell))
                     return false;
             }

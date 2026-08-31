@@ -95,7 +95,6 @@ namespace v2 {
     FOR_EACH(SWITCH, 57, "switch", 5) \
     FOR_EACH(CASETBL, 58, "casetbl", -1) \
     FOR_EACH(ADDR_S, 59, "addr.s", 3) \
-    FOR_EACH(BREAK, 61, "break", 1) \
     FOR_EACH(GENARRAY, 62, "genarray", 5) \
     FOR_EACH(GENARRAY_Z, 63, "genarray.z", 5) \
     FOR_EACH(STRADJUST, 64, "stradjust", 1) \
@@ -149,6 +148,7 @@ namespace v2 {
     FOR_EACH(STOR_I_I64, 113, "stor.i.i64", 1) \
     FOR_EACH(RETV, 114, "retv", 1) \
     FOR_EACH(PUSH_C_I8, 115, "push.c.i8", 2) \
+    FOR_EACH(CALLN, 116, "calln", 6) \
 
 
 enum OPCODE {

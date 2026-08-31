@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <memory>
 
+#include <optional>
 #include <string_view>
 #include <unordered_map>
 
@@ -75,15 +76,16 @@ class SmxImage final : public FileReader
     const char* LookupFile(uint32_t code_offset) const;
     const char* LookupFunction(uint32_t code_offset) const;
     bool LookupLine(uint32_t code_offset, uint32_t* line) const;
-    bool LookupFunctionAddress(const char* function, const char* file,
-                               ucell_t* addr) const;
-    bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const;
+    bool LookupLineV2(uint32_t code_offset, uint32_t* line) const;
+    bool IsLineBoundary(uint32_t addr) const;
     size_t NumFiles() const;
     const char* GetFileName(size_t index) const;
     size_t NumFunctions() const;
     const char* GetFunctionName(size_t index, const char** filename) const;
     bool HasRtti() const;
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
+    std::optional<uint32_t> GetDebugMethodRow(uint32_t pcode_offset) const;
+    std::optional<uint32_t> GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const;
 
     const smx_rtti_method* GetMethod(uint32_t method_index) const {
         if (!rtti_methods_ || method_index >= rtti_methods_->row_count)
@@ -305,6 +307,7 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
+    const smx_rtti_table_header* rtti_dbg_method_lines_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_locals_ = nullptr;
 };
 

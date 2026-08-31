@@ -99,6 +99,12 @@ class SmxAssemblyBuffer : public ByteBuffer
     value->use(pc());
   }
 
+  void emit(OPCODE op, Label* address, uint8_t param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    encodeAbsoluteAddress(address);
+    write<uint8_t>(param);
+  }
+
   void idxaddr(cell_t rank_size, uint32_t bounds) {
       write<uint8_t>(OP_IDXADDR);
       write<uint8_t>(rank_size);
