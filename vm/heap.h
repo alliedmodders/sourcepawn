@@ -50,10 +50,10 @@ static constexpr uint32_t kDefaultHeapChunkSize = 16 * ke::kMB;
 template <typename T>
 class RawHeapPtr;
 
-class Heap {
+class RawHeap {
   public:
-    Heap(VirtMem& virt_mem);
-    ~Heap();
+    RawHeap(VirtMem& virt_mem);
+    ~RawHeap();
 
     bool Initialize();
 
@@ -74,6 +74,15 @@ class Heap {
     template <typename T>
     typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type MakeRawPtr(size_t n);
 
+  private:
+    VirtMem& virt_mem_;
+    mi_heap_t* mi_heap_ = nullptr;
+};
+
+class Heap : public RawHeap {
+  public:
+    using RawHeap::RawHeap;
+
     template <typename T> Handle<T> New(const TypeDesc* td, uint32_t payload_bytes = 0) {
         static_assert(std::is_base_of_v<HeapItem, T>, "Must be derived from HeapItem");
         assert(ke::IsUintAddSafe(static_cast<uint32_t>(sizeof(T)), payload_bytes));
@@ -86,17 +95,13 @@ class Heap {
         obj->rc = 0;
         return Handle<T>(reinterpret_cast<T*>(obj));
     }
-
-  private:
-    VirtMem& virt_mem_;
-    mi_heap_t* mi_heap_ = nullptr;
 };
 
 template <typename T>
 class RawHeapPtr {
   public:
     RawHeapPtr() : heap_(nullptr), ptr_(nullptr) {}
-    RawHeapPtr(Heap& heap, T* ptr) : heap_(&heap), ptr_(ptr) {}
+    RawHeapPtr(RawHeap& heap, T* ptr) : heap_(&heap), ptr_(ptr) {}
     ~RawHeapPtr() {
         reset();
     }
@@ -151,7 +156,7 @@ class RawHeapPtr {
     }
 
   private:
-    Heap* heap_;
+    RawHeap* heap_;
     T* ptr_;
 };
 
@@ -161,7 +166,7 @@ class RawHeapPtr<T[]> {
     using element_type = typename std::remove_extent<T>::type;
 
     RawHeapPtr() : heap_(nullptr), ptr_(nullptr), size_(0) {}
-    RawHeapPtr(Heap& heap, element_type* ptr, size_t size) : heap_(&heap), ptr_(ptr), size_(size) {}
+    RawHeapPtr(RawHeap& heap, element_type* ptr, size_t size) : heap_(&heap), ptr_(ptr), size_(size) {}
     ~RawHeapPtr() {
         reset();
     }
@@ -223,14 +228,14 @@ class RawHeapPtr<T[]> {
     }
 
   private:
-    Heap* heap_;
+    RawHeap* heap_;
     element_type* ptr_;
     size_t size_;
 };
 
 template <typename T, typename... Args>
 inline typename std::enable_if<!std::is_array<T>::value, RawHeapPtr<T>>::type
-Heap::MakeRawPtr(Args&&... args) {
+RawHeap::MakeRawPtr(Args&&... args) {
     void* mem = AllocRaw(sizeof(T));
     if (!mem) {
         return RawHeapPtr<T>();
@@ -241,7 +246,7 @@ Heap::MakeRawPtr(Args&&... args) {
 
 template <typename T>
 inline typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type
-Heap::MakeRawPtr(size_t n) {
+RawHeap::MakeRawPtr(size_t n) {
     using ElementType = typename std::remove_extent<T>::type;
     void* mem = AllocRaw(sizeof(ElementType) * n);
     if (!mem) {

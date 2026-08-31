@@ -151,13 +151,13 @@ bool Runtime::InitializeGlobals() {
         global_bytes += td->slot_size();
     }
 
-    global_buffer_ = heap_.MakeRawPtr<uint8_t[]>(global_bytes);
+    global_buffer_ = env_->heap().MakeRawPtr<uint8_t[]>(global_bytes);
     if (!global_buffer_) {
         ReportErrorNumber(SP_ERROR_OUT_OF_MEMORY);
         return false;
     }
 
-    uint32_t next_global_addr = heap_.ToLocalAddr(global_buffer_.get());
+    uint32_t next_global_addr = env_->heap().ToLocalAddr(global_buffer_.get());
     for (uint32_t i = 0; i < num_globals; i++) {
         global_vars_[i].addr = next_global_addr;
         next_global_addr += global_vars_[i].td->slot_size();

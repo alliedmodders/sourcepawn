@@ -141,7 +141,7 @@ class Environment : public ISourcePawnEnvironment
         return mutex_;
     }
 
-    Heap& heap() { return heap_; }
+    RawHeap& heap() { return heap_; }
     const RawHeapPtr<uint8_t[]>& stack() const { return stack_; }
 
     uint32_t& sp() { return sp_; }
@@ -297,7 +297,7 @@ class Environment : public ISourcePawnEnvironment
     TypeCache types_;
 
     VirtMem virt_mem_;
-    Heap heap_;
+    RawHeap heap_;
     RawHeapPtr<uint8_t[]> stack_;
     uint32_t sp_base_ = 0;
     uint32_t sp_top_ = 0;

@@ -20,16 +20,16 @@
 
 namespace sp {
 
-Heap::Heap(VirtMem& virt_mem) : virt_mem_(virt_mem) {
+RawHeap::RawHeap(VirtMem& virt_mem) : virt_mem_(virt_mem) {
 }
 
-Heap::~Heap() {
+RawHeap::~RawHeap() {
 
     if (mi_heap_)
         mi_heap_destroy(mi_heap_);
 }
 
-bool Heap::Initialize() {
+bool RawHeap::Initialize() {
     mi_heap_ = mi_heap_new();
     return mi_heap_ != nullptr;
 }
@@ -44,7 +44,7 @@ static bool mi_cdecl VisitBlocksForEmpty(const mi_heap_t*, const mi_heap_area_t*
     return true;
 }
 
-bool Heap::IsEmpty() const {
+bool RawHeap::IsEmpty() const {
     if (!mi_heap_)
         return true;
     bool is_empty = true;
@@ -54,7 +54,7 @@ bool Heap::IsEmpty() const {
 
 
 
-void* Heap::AllocRaw(size_t bytes) {
+void* RawHeap::AllocRaw(size_t bytes) {
     void* p = mi_heap_malloc(mi_heap_, bytes);
     if (!p) {
         Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
@@ -62,7 +62,7 @@ void* Heap::AllocRaw(size_t bytes) {
     return p;
 }
 
-void Heap::FreeRaw(void* ptr) {
+void RawHeap::FreeRaw(void* ptr) {
     mi_free(ptr);
 }
 
