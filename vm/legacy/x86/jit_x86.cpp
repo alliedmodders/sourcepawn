@@ -1869,6 +1869,7 @@ Compiler::visitCompareOp64(CompareOp op) {
     emitCheckAddress(alt, sizeof(int64_t));
 
     __ push(ebx);
+    __ push(alt);
 
     switch (op) {
         case CompareOp::Eq:
@@ -1917,6 +1918,7 @@ Compiler::visitCompareOp64(CompareOp op) {
             assert(false);
     }
 
+    __ pop(alt);
     __ pop(ebx);
     __ movzxb(eax, eax);
     return true;
