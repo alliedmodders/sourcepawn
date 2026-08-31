@@ -1697,7 +1697,7 @@ void Compiler::CallRtForHandle(void* method_addr, uint16_t dest_reg) {
     __ movl(RegAddr(dest_reg), eax);
 }
 
-void Compiler::CallRtForBool(void* method_addr) {
+void Compiler::CallRtForBool(void* method_addr, uint32_t nargs) {
 #if defined(_WIN32)
     // |this|
     __ movl(ecx, reinterpret_cast<intptr_t>(rt_));
@@ -1710,6 +1710,13 @@ void Compiler::CallRtForBool(void* method_addr) {
     __ movl(Operand(ExternalAddress(env_->addressOfExit())), 0);
 
     __ call(ExternalAddress(method_addr));
+
+#if defined(_WIN32)
+    // The callee pops the arguments that were written into the pre-allocated
+    // stack area. Restore |esp| so the area stays intact and aligned.
+    __ subl(esp, int32_t(nargs * sizeof(intptr_t)));
+#endif
+
     EmitCipMapping(op_cip_);
 
     auto& thunk = AddDeferredErrorThunk();
@@ -1818,7 +1825,7 @@ void Compiler::EmitCopyArrayFlatA(uint16_t src_reg, uint16_t dest_reg, uint32_t 
     __ movl(eax, RegAddr(dest_reg));
     __ movl(Operand(esp, RtArgSlot(1)), eax);
     __ movl(Operand(esp, RtArgSlot(2)), count);
-    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayFlatA));
+    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayFlatA), 3);
 }
 
 void Compiler::EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) {
@@ -1826,7 +1833,7 @@ void Compiler::EmitCopyArrayA(uint16_t src_reg, uint16_t dest_reg) {
     __ movl(Operand(esp, RtArgSlot(0)), eax);
     __ movl(eax, RegAddr(dest_reg));
     __ movl(Operand(esp, RtArgSlot(1)), eax);
-    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayOfObjects));
+    CallRtForBool(PmfCast<void*>(&Runtime::CopyArrayOfObjects), 2);
 }
 
 void Compiler::EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) {

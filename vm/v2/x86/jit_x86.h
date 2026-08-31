@@ -133,7 +133,7 @@ class Compiler : public CompilerBase
     // Emits a call to a Handle<>-returning Runtime method with deferred error
     // reporting. The caller pre-places method-specific arguments on the stack.
     void CallRtForHandle(void* method_addr, uint16_t dest_reg);
-    void CallRtForBool(void* method_addr);
+    void CallRtForBool(void* method_addr, uint32_t nargs);
 };
 
 } // namespace sp::v2
