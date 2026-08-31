@@ -2604,7 +2604,7 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
         // grammar for multitags is:
         //   multi-tag ::= '{' (symbol (',' symbol)*)? '}' ':'
         if (lexer_->match('{')) {
-            while (true) {
+            while (lexer_->freading()) {
                 if (!lexer_->match('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
                     Atom* name;
