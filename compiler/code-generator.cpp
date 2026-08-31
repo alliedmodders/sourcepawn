@@ -553,7 +553,7 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
             prev1 = {};
         } else {
             assert(item->val().ident == iCONSTEXPR);
-            cell_t cv = item->val().constval();
+            cell_t cv = item->val().const_cell();
             if (type->inner()->lit_size() == 1)
                 AddValue<int8_t>(&data, cv);
             else if (type->inner()->lit_size() == 2)
@@ -693,7 +693,7 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
             val.ident == iVARIABLE && val.sym()->vclass() == sLOCAL &&
             !val.sym()->is_shared() && !val.type()->isHeapItem())
         {
-            __ emit(OP_STOR_S_C, VarSlot(val.sym()), rhs.constval());
+            __ emit(OP_STOR_S_C, VarSlot(val.sym()), rhs.const_cell());
             return;
         }
 
@@ -711,8 +711,10 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         } else if (rhs.ident == iCONSTEXPR) {
             if (rhs.type()->isNull() && val.type()->isHeapItem())
                 __ emit(OP_LOAD_NULL);
+            else if (rhs.type()->isFloat())
+                __ emit(OP_PUSH_C_F32, rhs.const_cell());
             else
-                __ PUSH_C(rhs.constval());
+                __ PUSH_C(rhs.const_i32());
         } else {
             EmitExpr(ctor);
         }
@@ -774,9 +776,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
             if (expr->val().type()->isNull())
                 __ emit(OP_LOAD_NULL);
             else if (expr->val().type()->isFloat())
-                __ emit(OP_PUSH_C_F32, expr->val().constval());
+                __ emit(OP_PUSH_C_F32, expr->val().const_cell());
             else
-                __ PUSH_C(expr->val().constval());
+                __ PUSH_C(expr->val().const_i32());
         }
         return;
     }
@@ -2373,7 +2375,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
         for (const auto& expr : case_entry.first) {
             const auto& v = expr->val();
             assert(v.ident == iCONSTEXPR);
-            case_labels.emplace(v.constval(), Label());
+            case_labels.emplace(v.const_i32(), Label());
         }
     }
 
@@ -2393,7 +2395,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 
         for (const auto& expr : case_entry.first) {
             const auto& v = expr->val();
-            __ bind(&case_labels[v.constval()]);
+            __ bind(&case_labels[v.const_i32()]);
         }
 
         EmitStmt(stmt_node);

@@ -371,11 +371,11 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             return false;
         } else {
             // Constant must be > 0.
-            if (v.constval() <= 0) {
+            if (v.const_i32() <= 0) {
                 report(expr->pos(), 9);
                 return false;
             }
-            computed_[i] = v.constval();
+            computed_[i] = v.const_i32();
         }
     }
     return true;
@@ -683,7 +683,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
     }
 
-    ke::Maybe<cell> prev1, prev2;
+    bool prev1 = false, prev2 = false;
     for (const auto& expr : array->exprs()) {
         if (!sema_->CheckExpr(expr))
             continue;
@@ -705,7 +705,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
 
         prev2 = prev1;
         if (v.ident == iCONSTEXPR)
-            prev1 = ke::Some(v.constval());
+            prev1 = true;
     }
 
     cell ncells = rank_size ? rank_size : array->exprs().size();
@@ -722,7 +722,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             report(array->exprs().back()->pos(), 68) << rank->inner();
             return false;
         }
-        if (prev1.isValid() && prev2.isValid() && !rank->inner()->isInt()) {
+        if (prev1 && prev2 && !rank->inner()->isInt()) {
             // Unknown stepping type.
             report(array->exprs().back()->pos(), 68) << rank->inner();
             return false;

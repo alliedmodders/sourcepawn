@@ -94,17 +94,36 @@ struct ExprVal {
         ident = iACCESSOR;
         accessor_ = accessor;
     }
-    cell constval() const {
-        assert(ident == iCONSTEXPR);
-        return constval_;
+    cell const_i32() const {
+        assert(ident == iCONSTEXPR &&
+               !type()->isFloat() &&
+               !type()->isWideType() &&
+               !type()->isHeapItem());
+        return const_i32_;
     }
     void set_constval(cell val) {
         ident = iCONSTEXPR;
-        constval_ = val;
+        const_i32_ = val;
     }
     void set_constval(QualType type, cell val) {
         set_type(type);
         set_constval(val);
+    }
+    cell const_cell() const {
+        assert(ident == iCONSTEXPR && !type()->isWideType() && !type()->isHeapItem());
+        return const_i32_;
+    }
+    float const_float() const {
+        assert(ident == iCONSTEXPR && type()->isFloat());
+        return const_float_;
+    }
+    void set_const_float(float val) {
+        ident = iCONSTEXPR;
+        const_float_ = val;
+    }
+    void set_const_float(QualType type, float val) {
+        set_type(type);
+        set_const_float(val);
     }
     void set_slice(IdentifierKind ident, QualType type) {
         assert(ident == iARRAYELEM);
@@ -141,7 +160,8 @@ struct ExprVal {
         // when ident == iACCESSOR
         PropertyDecl* accessor_;
         // when ident == iCONSTEXPR
-        cell constval_;
+        float const_float_;
+        cell const_i32_;
         // when ident == iVARIABLE
         VarDeclBase* sym_;
         // when ident == iFUNCTN

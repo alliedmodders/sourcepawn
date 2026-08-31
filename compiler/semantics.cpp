@@ -600,7 +600,7 @@ bool Expr::EvalConst(cell* value, Type** type) {
     }
 
     if (value)
-        *value = val_.constval();
+        *value = val_.const_cell();
     if (type)
         *type = val_.type();
     return true;
@@ -724,7 +724,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
 
     if (val.ident == iCONSTEXPR) {
         if (!sc_->preprocessing()) {
-            if (val.constval())
+            if (val.const_i32())
                 report(expr, 206);
             else
                 report(expr, 205);
@@ -751,7 +751,7 @@ bool Semantics::AnalyzeForConst(Expr* expr, cell* value, Type** type) {
     }
 
     if (value)
-        *value = val.constval();
+        *value = val.const_cell();
     if (type)
         *type = val.type();
     return true;
@@ -804,20 +804,20 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     switch (unary->token()) {
         case '~':
             if (out_val.ident == iCONSTEXPR)
-                out_val.set_constval(~out_val.constval());
+                out_val.set_constval(~out_val.const_i32());
             break;
         case '!':
             if (out_val.ident == iCONSTEXPR)
-                out_val.set_constval(!out_val.constval());
+                out_val.set_constval(!out_val.const_i32());
             out_val.set_type(types_->type_bool());
             break;
         case '-':
             if (out_val.ident == iCONSTEXPR && out_val.type()->isFloat()) {
-                float f = sp::FloatCellUnion(out_val.constval()).f32;
-                out_val.set_constval(sp::FloatCellUnion(-f).cell);
+                float f = out_val.const_float();
+                out_val.set_const_float(-f);
             } else if (out_val.ident == iCONSTEXPR) {
                 /* the negation of a fixed point number is just an integer negation */
-                out_val.set_constval(-out_val.constval());
+                out_val.set_constval(-out_val.const_i32());
             } else {
                 // Special case for -INT_MIN, since we can't eat the '-' during lexing.
                 if (auto num64 = Number64Expr::ToInt64(expr); num64) {
@@ -1034,7 +1034,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         char boolresult = FALSE;
         CheckCoercion(state.expr, left_val->type(), right_val->type(), CvtContext::Operator);
         val.ident = iCONSTEXPR;
-        cell folded = calc(left_val->constval(), op_token, right_val->constval(),
+        cell folded = calc(left_val->const_i32(), op_token, right_val->const_i32(),
                            &boolresult);
 
         // If a constant operation overflows, promote it to the next sized up
@@ -1145,9 +1145,9 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
         val.ident = iCONSTEXPR;
         if (expr->token() == tlOR)
-            val.set_constval((left_val.constval() || right_val.constval()));
+            val.set_constval((left_val.const_i32() || right_val.const_i32()));
         else if (expr->token() == tlAND)
-            val.set_constval((left_val.constval() && right_val.constval()));
+            val.set_constval((left_val.const_i32() && right_val.const_i32()));
         else
             assert(false);
     } else {
@@ -1218,16 +1218,16 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
             const auto& right_val = right->val();
             switch (op.token) {
                 case tlLE:
-                    constval &= left_val.constval() <= right_val.constval();
+                    constval &= left_val.const_i32() <= right_val.const_i32();
                     break;
                 case tlGE:
-                    constval &= left_val.constval() >= right_val.constval();
+                    constval &= left_val.const_i32() >= right_val.const_i32();
                     break;
                 case '>':
-                    constval &= left_val.constval() > right_val.constval();
+                    constval &= left_val.const_i32() > right_val.const_i32();
                     break;
                 case '<':
-                    constval &= left_val.constval() < right_val.constval();
+                    constval &= left_val.const_i32() < right_val.const_i32();
                     break;
                 default:
                     assert(false);
@@ -1267,7 +1267,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     if (first->lvalue()) {
         first = expr->set_first(new RvalueExpr(first));
     } else if (first->val().ident == iCONSTEXPR) {
-        report(first, first->val().constval() ? 206 : 205);
+        report(first, first->val().const_i32() ? 206 : 205);
     }
 
     if (first->val().type()->isWideType())
@@ -1715,16 +1715,16 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
         if (index_val.ident == iCONSTEXPR) {
             if (!array->isCharArray()) {
                 /* normal array index */
-                if (index_val.constval() < 0 ||
-                    (array->size() != 0 && array->size() <= index_val.constval()))
+                if (index_val.const_i32() < 0 ||
+                    (array->size() != 0 && array->size() <= index_val.const_i32()))
                 {
                     report(index, 32);
                     return false;
                 }
             } else {
                 /* character index */
-                if (index_val.constval() < 0 ||
-                    (array->size() != 0 && array->size() <= index_val.constval()))
+                if (index_val.const_i32() < 0 ||
+                    (array->size() != 0 && array->size() <= index_val.const_i32()))
                 {
                     report(index, 32);
                     return false;
@@ -2662,7 +2662,7 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             report(expr, 77) << v.type();
             return false;
         }
-        if (v.ident == iCONSTEXPR && v.constval() <= 0) {
+        if (v.ident == iCONSTEXPR && v.const_i32() <= 0) {
             report(expr, 9);
             return false;
         }
@@ -2985,7 +2985,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
 
     ke::Maybe<cell> constval;
     if (cond->val().ident == iCONSTEXPR)
-        constval.init(cond->val().constval());
+        constval.init(cond->val().const_i32());
 
     bool has_break = false;
     bool has_return = false;
@@ -3035,7 +3035,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 
     ke::Maybe<cell> constval;
     if (cond && cond->val().ident == iCONSTEXPR)
-        constval.init(cond->val().constval());
+        constval.init(cond->val().const_i32());
 
     bool has_break = false;
     bool has_return = false;
@@ -3580,7 +3580,7 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     if (from->val().ident == iCONSTEXPR && from->val().type()->isInt() &&
         type == BuiltinType::Int64)
     {
-        to = new Number64Expr(from->pos(), from->val().constval());
+        to = new Number64Expr(from->pos(), from->val().const_i32());
     } else {
         to = new SimpleCastExpr(from, types_->GetBuiltin(type));
     }
