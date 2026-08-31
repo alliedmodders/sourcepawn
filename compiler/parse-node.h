@@ -289,7 +289,7 @@ class Decl : public Stmt
 
     char vclass();
     bool is_const();
-    virtual QualType type() const;
+    QualType type();
 
     Atom* name() const { return name_; }
 
@@ -344,7 +344,7 @@ class VarDeclBase : public Decl
     void set_implicit_dynamic_array() { implicit_dynamic_array_ = true; }
     Label* label() { return &addr_; }
     cell addr() const { return addr_.offset(); }
-    QualType type() const override { return type_.qualified(); }
+    QualType type() const { return type_.qualified(); }
 
     bool is_used() const { return is_read_ || is_written_; }
 
@@ -434,7 +434,7 @@ class EnumFieldDecl : public Decl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumFieldDecl; }
 
     Expr* value() const { return value_; }
-    QualType type() const override { return QualType(type_); }
+    QualType type() const { return QualType(type_); }
     void set_type(Type* type) { type_ = type; }
 
     cell const_val() const { return const_val_; }
@@ -468,7 +468,7 @@ class EnumDecl : public Decl
     int increment() const { return increment_; }
     int multiplier() const { return multiplier_; }
     int array_size() const { return array_size_; }
-    QualType type() const override { return QualType(type_); }
+    QualType type() const { return QualType(type_); }
 
     MethodmapDecl* mm() const { return mm_; }
     void set_mm(MethodmapDecl* mm) { mm_ = mm; }
@@ -1537,7 +1537,7 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    QualType type() const override { return QualType(return_type()); }
+    QualType type() const { return QualType(return_type()); }
     Type* return_type() const { return decl_.type.type; }
 
     // Only to be called when updating the type for return arrays.
@@ -1700,7 +1700,7 @@ class LayoutFieldDecl : public Decl
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
-    QualType type() const override { return type_info().qualified(); }
+    QualType type() const { return type_info().qualified(); }
 
     cell_t offset() const { return offset_; }
     void set_offset(cell_t offset) { offset_ = offset; }
@@ -1726,7 +1726,7 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
     cell_t array_size() const { return array_size_; }
-    QualType type() const override { return QualType(type_); }
+    QualType type() const { return QualType(type_); }
 
   private:
     PoolArray<FunctionDecl*> methods_;
@@ -1751,7 +1751,7 @@ class MethodmapPropertyDecl : public Decl {
 
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t& mutable_type_info() { return type_; }
-    QualType type() const override { return type_.qualified(); }
+    QualType type() const { return type_.qualified(); }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
     LayoutDecl* parent() const {
@@ -1788,7 +1788,7 @@ class MethodmapDecl : public LayoutDecl
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
-    QualType type() const override { return QualType(type_); }
+    QualType type() const { return QualType(type_); }
     MethodmapMethodDecl* ctor() const { return ctor_; }
     MethodmapMethodDecl* dtor() const { return dtor_; }
     Atom* extends() const { return extends_; }

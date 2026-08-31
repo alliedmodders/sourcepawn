@@ -230,9 +230,32 @@ cell Decl::ConstVal() {
     return 0;
 }
 
-QualType Decl::type() const {
-    assert(false);
-    return QualType(nullptr);
+QualType Decl::type() {
+    switch (kind()) {
+        case StmtKind::VarDecl:
+        case StmtKind::ArgDecl:
+        case StmtKind::ConstDecl:
+            return to<VarDeclBase>()->type();
+        case StmtKind::EnumFieldDecl:
+            return to<EnumFieldDecl>()->type();
+        case StmtKind::EnumDecl:
+            return to<EnumDecl>()->type();
+        case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
+        case StmtKind::MethodmapMethodDecl:
+            return to<FunctionDecl>()->type();
+        case StmtKind::LayoutFieldDecl:
+            return to<LayoutFieldDecl>()->type();
+        case StmtKind::EnumStructDecl:
+            return to<EnumStructDecl>()->type();
+        case StmtKind::MethodmapPropertyDecl:
+            return to<MethodmapPropertyDecl>()->type();
+        case StmtKind::MethodmapDecl:
+            return to<MethodmapDecl>()->type();
+        default:
+            assert(false);
+            return QualType(nullptr);
+    }
 }
 
 bool Decl::is_const() {
