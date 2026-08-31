@@ -2046,8 +2046,8 @@ bool Parser::parse_function_impl(FunctionDecl* fun)
 
     if (lexer_->match(tARROW)) {
         TypenameInfo ret_type;
-        if (parse_new_typename(nullptr, &ret_type) && ret_type.has_type())
-            fun->mutable_type_info().set_type(ret_type.type());
+        if (parse_new_typename(nullptr, &ret_type))
+            fun->mutable_type_info().set_type(ret_type);
         else
             fun->mutable_type_info().set_type(types_->type_void());
     } else {

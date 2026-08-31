@@ -1,6 +1,6 @@
 #include <shell>
 
-typedef FuncType = function int (int x);
+typedef FuncType = (int x) -> int;
 
 public void main() {
     let cb = function () -> FuncType { return function (int x) -> int { return x + 1; }; };

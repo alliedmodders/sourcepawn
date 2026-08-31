@@ -462,34 +462,8 @@ uint32_t RttiBuilder::to_typeid(QualType type) {
 uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     assert(fun == fun->canonical());
 
-    std::vector<uint8_t> bytes{cb::kFunction};
-
-    uint32_t argc = fun->FormalArgc();
-    if (argc > UCHAR_MAX)
-        report(45);
-
-    Type* hidden_arg = nullptr;
-    Type* return_type = fun->return_type();
-    if (fun->signature()->needs_hidden_arg()) {
-        hidden_arg = return_type;
-        return_type = types_->type_void();
-        argc++;
-    }
-
-    bytes.push_back((uint8_t)argc);
-
-    if (fun->IsVariadic())
-        bytes.push_back(cb::kLegacyVariadic);
-
-    encode_type_into(bytes, return_type);
-
-    if (hidden_arg)
-        encode_type_into(bytes, hidden_arg, hidden_arg->isWideType());
-    for (size_t i = 0; i < fun->FormalArgc(); i++) {
-        const auto& arg = fun->args()[i];
-        encode_type_into(bytes, arg->type(), arg->type()->isWideType());
-    }
-
+    std::vector<uint8_t> bytes;
+    encode_signature_into(bytes, fun->signature());
     return type_pool_.add(bytes);
 }
 
@@ -675,14 +649,29 @@ RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funce
 }
 
 void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft) {
+    uint32_t argc = ft->nargs();
+
+    QualType return_type = ft->return_type();
+    QualType hidden_arg;
+    if (ft->needs_hidden_arg()) {
+        hidden_arg = return_type;
+        return_type = types_->type_void();
+        argc++;
+    }
+
+    if (argc > UCHAR_MAX)
+        report(45);
+
     bytes.push_back(cb::kFunction);
-    bytes.push_back((uint8_t)ft->nargs());
+    bytes.push_back((uint8_t)argc);
 
     if (ft->variadic())
         bytes.push_back(cb::kLegacyVariadic);
 
-    encode_type_into(bytes, ft->return_type());
+    encode_type_into(bytes, return_type);
 
+    if (hidden_arg)
+        encode_type_into(bytes, hidden_arg, hidden_arg->isWideType());
     for (size_t i = 0; i < ft->nargs(); i++) {
         QualType type = ft->arg_type(i);
         encode_type_into(bytes, type, type->isWideType());
