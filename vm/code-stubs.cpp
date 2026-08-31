@@ -26,8 +26,13 @@ CodeStubs::Initialize() {
 #if defined(SP_HAS_JIT)
     if (!CompileInvokeStubV1())
         return false;
-    if (!CompileInvokeStubV2())
-        return false;
 #endif
     return true;
 }
+
+#if defined(SP_HAS_JIT)
+bool
+CodeStubs::CompileInvokeStubV2() {
+    return true;
+}
+#endif

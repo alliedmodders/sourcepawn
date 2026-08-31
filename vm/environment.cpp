@@ -22,7 +22,6 @@
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
 #    include "legacy/jit.h"
-#    include "v2/jit.h"
 #endif
 #include <stdarg.h>
 #include "legacy/builtins.h"
@@ -218,7 +217,7 @@ Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symb
     //   Lets GDB show JIT frames when debugging, with source info.
     //   Requires generating full ELF + DWARF objects in memory.
 
-#if defined(KE_LINUX) && defined(SP_HAS_JIT)
+#if defined(KE_LINUX)
     if (!perf_jit_file_ && (debug_metadata_flags_ & JIT_DEBUG_PERF_BASIC) != 0) {
         perf_jit_file_ =
             std::make_unique<PerfJitFile>((debug_metadata_flags_ & JIT_DEBUG_DELETE_ON_EXIT) != 0);
@@ -374,40 +373,6 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
 }
 
 bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result) {
-#if defined(SP_HAS_JIT)
-    if (jit_enabled_) {
-        if (!code_stubs_) {
-            code_stubs_ = std::make_unique<CodeStubs>(this);
-
-            // We delay initializing this to here to avoid executing any generated code if the embedder
-            // doesn't want the JIT enabled. The debug metadata flags must be set before this point.
-            if (!code_stubs_->Initialize()) {
-                code_stubs_ = nullptr;
-                return false;
-            }
-        }
-
-        if (v2::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
-            int err = SP_ERROR_NONE;
-            if (!v2::CompilerBase::Compile(cx, method, &err)) {
-                cx->ReportErrorNumber(err);
-                return false;
-            }
-        }
-
-        if (CompiledFunction* fn = method->jit()) {
-            JitInvokeFrame ivkframe(cx, fn->GetCodeOffset());
-
-            assert(top_ && top_->cx() == cx);
-
-            InvokeStubV2Fn invoke = code_stubs_->InvokeStubV2();
-            invoke(cx, fn->GetEntryAddress(), result);
-
-            return exception_code_ == SP_ERROR_NONE;
-        }
-    }
-#endif
-
     // The JIT performs its own validation. Handle the interpreter here.
     {
         if (!method->Validate())

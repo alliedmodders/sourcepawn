@@ -69,23 +69,18 @@ module.sources += [
 if 'SP_HAS_JIT' in module.compiler.defines:
   module.sources += [
     'legacy/jit.cpp',
-    'v2/jit.cpp',
     'linking.cpp',
   ]
   if module.compiler.target.arch == 'x86':
     module.sources += [
       'legacy/x86/code-stubs-x86.cpp',
       'legacy/x86/jit_x86.cpp',
-      'v2/x86/code-stubs-x86.cpp',
-      'v2/x86/jit_x86.cpp',
       'x86/features-x86.cpp',
     ]
   elif module.compiler.target.arch == 'x86_64':
     module.sources += [
       'legacy/x64/code-stubs-x64.cpp',
       'legacy/x64/jit_x64.cpp',
-      'v2/x64/code-stubs-x64.cpp',
-      'v2/x64/jit_x64.cpp',
       'x64/assembler-x64.cpp',
       'x64/features-x64.cpp',
       'x64/macro-assembler-x64.cpp',

@@ -607,7 +607,9 @@ class SourcePawn(object):
 
     def AddVmFlags(self, module):
         is_emscripten = module.compiler.family == 'emscripten'
-        has_jit = False #module.compiler.target.arch in ['x86', 'x86_64'] and not is_emscripten
+        has_jit = module.compiler.target.arch in ['x86', 'x86_64'] and not is_emscripten
+        if getattr(builder.options, 'disable_jit', False):
+            has_jit = False
         if has_jit:
             module.compiler.defines += ['SP_HAS_JIT']
 

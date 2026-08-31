@@ -49,6 +49,8 @@ parser.options.add_argument('--build', type=str, dest='build', default='all',
                             help='Deprecated; no effect.')
 parser.options.add_argument('--enable-spew', action='store_true', default=False, dest='enable_spew',
                             help='Enable debug spew')
+parser.options.add_argument('--disable-jit', action='store_true', default=False, dest='disable_jit',
+                            help='Disable JIT compilation')
 parser.options.add_argument("--enable-coverage", action='store_true', default=False,
                             dest='enable_coverage', help='Enable code coverage support.')
 parser.options.add_argument("--targets", type=str, default=None,

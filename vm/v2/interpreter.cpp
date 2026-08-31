@@ -1133,7 +1133,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 }
 
                 auto src_elt = src->td->array_elt();
-                auto dest_elt = dest->td->array_elt();
+                [[maybe_unused]] auto dest_elt = dest->td->array_elt();
                 assert(src_elt->element_size() == dest_elt->element_size());
 
                 auto src_data = heap_.ToPhysAddr<uint8_t*>(src->data);

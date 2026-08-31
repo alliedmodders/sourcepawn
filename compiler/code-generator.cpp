@@ -1684,7 +1684,7 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
         return;
     }
 
-    auto type = fun_->return_type()->as<ArrayType>();
+    [[maybe_unused]] auto type = fun_->return_type()->as<ArrayType>();
     assert(!type->inner()->isArray());
 
     __ load_hidden_arg(fun_);
