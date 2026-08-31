@@ -213,7 +213,8 @@ struct typeinfo_t {
     void set_type(const TypenameInfo& rt) {
         if (rt.has_type()) {
             type_atom = nullptr;
-            set_type(rt.type());
+            is_label = false;
+            type = rt.type();
         } else {
             type_atom = rt.type_atom();
             is_label = rt.is_label();

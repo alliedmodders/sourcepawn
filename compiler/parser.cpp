@@ -49,6 +49,16 @@ Parser::Parser(CompileContext& cc, Semantics* sema)
     types_ = cc_.types();
     class_atom_ = cc_.atom("class");
     property_atom_ = cc_.atom("property");
+    float_atom_ = cc_.atom("float");
+    bool_atom_ = cc_.atom("bool");
+    float_tag_atom_ = cc_.atom("Float");
+    string_tag_atom_ = cc_.atom("String");
+    underscore_atom_ = cc_.atom("_");
+    any_atom_ = cc_.atom("any");
+    intptr_atom_ = cc_.atom("intptr");
+    int8_atom_ = cc_.atom("int8");
+    int16_atom_ = cc_.atom("int16");
+    int64_atom_ = cc_.atom("int64");
 }
 
 Parser::~Parser()
@@ -2036,8 +2046,10 @@ bool Parser::parse_function_impl(FunctionDecl* fun)
 
     if (lexer_->match(tARROW)) {
         TypenameInfo ret_type;
-        if (parse_new_typename(nullptr, &ret_type) && ret_type.type())
+        if (parse_new_typename(nullptr, &ret_type) && ret_type.has_type())
             fun->mutable_type_info().set_type(ret_type.type());
+        else
+            fun->mutable_type_info().set_type(types_->type_void());
     } else {
         fun->mutable_type_info().set_type(types_->type_void());
     }
@@ -2853,6 +2865,12 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
         case tINT8:
             *out = TypenameInfo{types_->type_int8()};
             return true;
+        case tINT16:
+            *out = TypenameInfo{types_->type_int16()};
+            return true;
+        case tINT64:
+            *out = TypenameInfo{types_->type_int64()};
+            return true;
         case tCHAR:
             *out = TypenameInfo{types_->type_char()};
             return true;
@@ -2866,31 +2884,47 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
         case tSYMBOL:
             if (tok->id == tLABEL)
                 report(120);
-            if (tok->atom->str() == "float") {
+            if (tok->atom == float_atom_) {
                 *out = TypenameInfo{types_->type_float()};
                 return true;
             }
-            if (tok->atom->str() == "bool") {
+            if (tok->atom == bool_atom_) {
                 *out = TypenameInfo{types_->type_bool()};
                 return true;
             }
-            if (tok->atom->str() == "Float") {
+            if (tok->atom == float_tag_atom_) {
                 report(98) << "Float" << "float";
                 *out = TypenameInfo{types_->type_float()};
                 return true;
             }
-            if (tok->atom->str() == "String") {
+            if (tok->atom == string_tag_atom_) {
                 report(98) << "String" << "char";
                 *out = TypenameInfo{types_->type_string()};
                 return true;
             }
-            if (tok->atom->str() == "_") {
+            if (tok->atom == underscore_atom_) {
                 report(98) << "_" << "int";
                 *out = TypenameInfo{types_->type_int()};
                 return true;
             }
-            if (tok->atom->str() == "any") {
+            if (tok->atom == any_atom_) {
                 *out = TypenameInfo(types_->type_any());
+                return true;
+            }
+            if (tok->atom == intptr_atom_) {
+                *out = TypenameInfo{types_->type_intptr()};
+                return true;
+            }
+            if (tok->atom == int8_atom_) {
+                *out = TypenameInfo{types_->type_int8()};
+                return true;
+            }
+            if (tok->atom == int16_atom_) {
+                *out = TypenameInfo{types_->type_int16()};
+                return true;
+            }
+            if (tok->atom == int64_atom_) {
+                *out = TypenameInfo{types_->type_int64()};
                 return true;
             }
             *out = TypenameInfo(tok->atom, tok->id == tLABEL);

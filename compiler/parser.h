@@ -148,6 +148,16 @@ class Parser
     int sources_index_ = -1;
     Atom* class_atom_ = nullptr;
     Atom* property_atom_ = nullptr;
+    Atom* float_atom_ = nullptr;
+    Atom* bool_atom_ = nullptr;
+    Atom* float_tag_atom_ = nullptr;
+    Atom* string_tag_atom_ = nullptr;
+    Atom* underscore_atom_ = nullptr;
+    Atom* any_atom_ = nullptr;
+    Atom* intptr_atom_ = nullptr;
+    Atom* int8_atom_ = nullptr;
+    Atom* int16_atom_ = nullptr;
+    Atom* int64_atom_ = nullptr;
 };
 
 } // namespace cc
