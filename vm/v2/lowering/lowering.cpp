@@ -127,44 +127,34 @@ class MethodLowerer
     void FreeReg(VReg* reg);
 
     ExprNode* CreateLocalNode(const TypeDesc* type, VReg reg) {
-        return pool_.make<ExprNode>(ExprNode::kReg, type, reg, false);
+        ExprNode* node = pool_.make<ExprNode>(ExprNode::kReg, type);
+        node->reg = reg;
+        node->reg.owned = false;
+        return node;
     }
 
     ExprNode* CreateConstNode(const TypeDesc* type, cell_t value) {
-        return pool_.make<ExprNode>(type, value);
+        return pool_.make<ConstExprNode>(type, value);
     }
 
     ExprNode* CreateConstNode64(const TypeDesc* type, int64_t value) {
-        return pool_.make<ExprNode>(type, value);
+        return pool_.make<ConstExprNode>(type, value);
     }
 
-    ExprNode* CreateOpNode(const TypeDesc* type, LLOp op, ExprNode* left, ExprNode* right) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kSimpleOp;
-        node->type = type;
-        node->op.opcode = op;
-        node->op.left = left;
-        node->op.right = right;
-        return node;
+    ExprNode* CreateUnaryOpNode(const TypeDesc* type, LLOp op, ExprNode* operand) {
+        return pool_.make<UnaryExprNode>(type, op, operand);
+    }
+
+    ExprNode* CreateBinaryOpNode(const TypeDesc* type, LLOp op, ExprNode* left, ExprNode* right) {
+        return pool_.make<BinaryExprNode>(type, op, left, right);
     }
 
     ExprNode* CreateLoadElemNode(const TypeDesc* type, LLOp opcode, ExprNode* base, ExprNode* index) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kLoadElem;
-        node->type = type;
-        node->load_elem.opcode = opcode;
-        node->load_elem.base = base;
-        node->load_elem.index = index;
-        return node;
+        return pool_.make<LoadElemExprNode>(type, opcode, base, index);
     }
 
     ExprNode* CreateSlotOpNode(const TypeDesc* type, LLOp opcode, VReg reg) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kSlotOp;
-        node->type = type;
-        node->slot_op.opcode = opcode;
-        node->slot_op.reg = reg;
-        return node;
+        return pool_.make<SlotOpExprNode>(type, opcode, reg);
     }
 
     uint16_t GetCellCount(const TypeDesc* type) const {
@@ -174,67 +164,43 @@ class MethodLowerer
     }
 
     ExprNode* CreateTempNode(const TypeDesc* type, VReg reg, bool owns_reg = true) {
-        return pool_.make<ExprNode>(ExprNode::kReg, type, reg, owns_reg);
+        ExprNode* node = pool_.make<ExprNode>(ExprNode::kReg, type);
+        node->reg = reg;
+        node->reg.owned = owns_reg;
+        return node;
     }
 
     ExprNode* CreateCallNode(const TypeDesc* type, uint32_t method_index, std::span<VReg>&& argv,
                              VReg spread_reg, std::span<VReg>&& args_to_free)
     {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kCall;
-        node->type = type;
-        node->call.method_index = method_index;
-        node->call.argv = std::move(argv);
-        node->call.spread_reg = spread_reg;
-        node->call.args_to_free = std::move(args_to_free);
-        node->call.fn_reg = VReg();
+        CallExprNode* node = pool_.make<CallExprNode>(type, std::move(argv), std::move(args_to_free));
+        node->method_index = method_index;
+        node->spread_reg = spread_reg;
         return node;
     }
 
     ExprNode* CreateLoadFnNode(const TypeDesc* type, uint32_t fn_id) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kLoadFn;
-        node->type = type;
-        node->load_fn.fn_id = fn_id;
-        return node;
+        return pool_.make<LoadFnExprNode>(type, fn_id);
     }
 
     ExprNode* CreateCallINode(const TypeDesc* type, VReg fn_reg, std::span<VReg>&& argv,
                               std::span<VReg>&& args_to_free)
     {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kCall;
-        node->type = type;
-        node->call.fn_reg = fn_reg;
-        node->call.argv = std::move(argv);
-        node->call.args_to_free = std::move(args_to_free);
-        node->call.spread_reg = VReg();
-        node->call.method_index = 0;
+        CallExprNode* node = pool_.make<CallExprNode>(type, std::move(argv), std::move(args_to_free));
+        node->fn_reg = fn_reg;
         return node;
     }
 
     ExprNode* CreateLoadUpvarNode(const TypeDesc* type, uint32_t index) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kLoadUpvar;
-        node->type = type;
-        node->load_upvar.index = index;
-        return node;
+        return pool_.make<LoadUpvarExprNode>(type, index);
     }
 
     ExprNode* CreateLoadFieldNode(const TypeDesc* type, ExprNode* base, uint32_t offset) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kLoadField;
-        node->type = type;
-        node->load_field.base = base;
-        node->load_field.offset = offset;
-        return node;
+        return pool_.make<LoadFieldExprNode>(type, base, offset);
     }
 
     ExprNode* CreateNewObjNode(const TypeDesc* type) {
-        ExprNode* node = pool_.make<ExprNode>();
-        node->kind = ExprNode::kNewObj;
-        node->type = type;
-        return node;
+        return pool_.make<ExprNode>(ExprNode::kNewObj, type);
     }
 
     bool InitializeRegisters();
@@ -616,12 +582,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_FLAT_I16; break;
                     default: assert(false); break;
                 }
-                if (base_node->kind == ExprNode::kSlotOp &&
-                    base_node->slot_op.opcode == LL_ADDR_S)
+                if (auto* slot = base_node->as<SlotOpExprNode>(); slot && slot->opcode == LL_ADDR_S)
                 {
                     emit(llop, StorElemFlatArgs{
                         .array_size = (uint32_t)base->array_size(),
-                        .base_reg = base_node->slot_op.reg.index,
+                        .base_reg = slot->reg.index,
                         .index_reg = index_reg.index,
                         .val_reg = val_reg.index
                     });
@@ -690,7 +655,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 ExprNode* dup = CreateTempNode(top->type, top->reg, false);
                 pushStack(dup);
             } else {
-                assert(top->kind != ExprNode::kSimpleOp && top->kind != ExprNode::kLoadElem);
+                assert(top->kind != ExprNode::kUnaryOp && top->kind != ExprNode::kBinaryOp &&
+                       top->kind != ExprNode::kLoadElem);
                 pushStack(top);
             }
             break;
@@ -790,9 +756,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_INVERT: {
             ExprNode* a = popStack();
             if (a->type->IsWideInt())
-                pushStack(CreateOpNode(int64_type_, LL_INVERT_I64, a, nullptr));
+                pushStack(CreateUnaryOpNode(int64_type_, LL_INVERT_I64, a));
             else
-                pushStack(CreateOpNode(cell_type_, LL_INVERT_I32, a, nullptr));
+                pushStack(CreateUnaryOpNode(cell_type_, LL_INVERT_I32, a));
             break;
         }
         case OP_TEST:
@@ -804,7 +770,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_CVT_F64: {
             if (stack_.back()->type->kind() == TypeKind::Float32) {
                 ExprNode* val = popStack();
-                pushStack(CreateOpNode(float64_type_, LL_CVT_F32_F64, val, nullptr));
+                pushStack(CreateUnaryOpNode(float64_type_, LL_CVT_F32_F64, val));
             } else {
                 LowerUnary(LL_CVT_F64, float64_type_);
             }
@@ -904,14 +870,14 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (val->type->IsWideInt())
                 pushStack(val);
             else
-                pushStack(CreateOpNode(int64_type_, LL_CVT_I64, val, nullptr));
+                pushStack(CreateUnaryOpNode(int64_type_, LL_CVT_I64, val));
             break;
         }
 
         case OP_CVT_I32: {
             ExprNode* val = popStack();
             if (val->type->IsWideInt())
-                pushStack(CreateOpNode(cell_type_, LL_TRUNCATE_I64, val, nullptr));
+                pushStack(CreateUnaryOpNode(cell_type_, LL_TRUNCATE_I64, val));
             else
                 pushStack(val);
             break;
@@ -923,10 +889,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 if (val->type->IsWideInt())
                     pushStack(val);
                 else
-                    pushStack(CreateOpNode(intptr_type_, LL_CVT_I64, val, nullptr));
+                    pushStack(CreateUnaryOpNode(intptr_type_, LL_CVT_I64, val));
             } else {
                 if (val->type->IsInt64())
-                    pushStack(CreateOpNode(intptr_type_, LL_TRUNCATE_I64, val, nullptr));
+                    pushStack(CreateUnaryOpNode(intptr_type_, LL_TRUNCATE_I64, val));
                 else
                     pushStack(val);
             }
@@ -935,12 +901,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
         case OP_CVT_I16: {
             ExprNode* val = popStack();
-            pushStack(CreateOpNode(cell_type_, LL_CVT_I16, val, nullptr));
+            pushStack(CreateUnaryOpNode(cell_type_, LL_CVT_I16, val));
             break;
         }
         case OP_CVT_I8: {
             ExprNode* val = popStack();
-            pushStack(CreateOpNode(cell_type_, LL_CVT_I8, val, nullptr));
+            pushStack(CreateUnaryOpNode(cell_type_, LL_CVT_I8, val));
             break;
         }
 
@@ -1684,7 +1650,9 @@ void MethodLowerer::FlushEmit(ExprNode* node) {
     VReg temp = AllocateTemp(node->type);
     EmitNode(node, temp);
 
-    *node = ExprNode(ExprNode::kReg, node->type, temp, true);
+    node->kind = ExprNode::kReg;
+    node->reg = temp;
+    node->reg.owned = true;
 }
 
 void MethodLowerer::EmitMove(VReg src, VReg dest, const TypeDesc* type) {
@@ -1821,7 +1789,7 @@ void MethodLowerer::LowerBinary(LLOp op_i32, const TypeDesc* force_result_type) 
         llop = op_i32;
         type = force_result_type ? force_result_type : cell_type_;
     }
-    pushStack(CreateOpNode(type, llop, left, right));
+    pushStack(CreateBinaryOpNode(type, llop, left, right));
 }
 
 void MethodLowerer::LowerBitwise(LLOp op_i32, LLOp op_i64) {
@@ -1836,7 +1804,7 @@ void MethodLowerer::LowerBitwise(LLOp op_i32, LLOp op_i64) {
         llop = op_i32;
         type = cell_type_;
     }
-    pushStack(CreateOpNode(type, llop, left, right));
+    pushStack(CreateBinaryOpNode(type, llop, left, right));
 }
 
 void MethodLowerer::LowerUnary(LLOp op_i32, const TypeDesc* force_result_type) {
@@ -1856,7 +1824,7 @@ void MethodLowerer::LowerUnary(LLOp op_i32, const TypeDesc* force_result_type) {
         op = op_i32;
         type = force_result_type ? force_result_type : val->type;
     }
-    pushStack(CreateOpNode(type, op, val, nullptr));
+    pushStack(CreateUnaryOpNode(type, op, val));
 }
 
 void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc,
@@ -2011,14 +1979,16 @@ void MethodLowerer::EmitCall(const smx_rtti_method* method, const TypeDesc* ret_
 
 VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
     switch (node->kind) {
-        case ExprNode::kReg:
+        case ExprNode::kReg: {
             if (target_reg.valid() && target_reg != node->reg) {
                 EmitMove(node->reg, target_reg, node->type);
                 return target_reg;
             }
             return node->reg;
+        }
 
         case ExprNode::kCall: {
+            auto* call = node->to<CallExprNode>();
             VReg temp, call_dest;
             if (target_reg.valid() && node->type->IsHeapItem()) {
                 // We cannot emit an LL_RELEASE(target_reg) before EmitCall because
@@ -2037,12 +2007,12 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 call_dest = target_reg;
             }
 
-            auto* method = node->call.fn_reg.valid() ? nullptr : image_->GetMethod(node->call.method_index);
-            EmitCall(method, node->type, node->call.fn_reg, call_dest, node->call.argv,
-                     node->call.spread_reg);
+            auto* method = call->fn_reg.valid() ? nullptr : image_->GetMethod(call->method_index);
+            EmitCall(method, node->type, call->fn_reg, call_dest, call->argv,
+                     call->spread_reg);
 
-            FreeReg(node->call.fn_reg);
-            for (VReg reg : node->call.args_to_free)
+            FreeReg(call->fn_reg);
+            for (VReg reg : call->args_to_free)
                 FreeReg(reg);
 
             if (temp.valid()) {
@@ -2054,50 +2024,56 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
         }
 
         case ExprNode::kConstant: {
+            auto* cn = node->to<ConstExprNode>();
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
             if (node->type->IsFloat64() || node->type->IsWideInt())
-                emit(LL_LOAD_CONST64, node->constval.value64, dest);
+                emit(LL_LOAD_CONST64, cn->value64, dest);
             else
-                emit(LL_LOAD_CONST, node->constval.value, dest);
+                emit(LL_LOAD_CONST, cn->value, dest);
             return dest;
         }
 
         case ExprNode::kLoadFn: {
+            auto* fn = node->to<LoadFnExprNode>();
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            emit(LL_LOAD_FN, node->load_fn.fn_id, dest);
+            emit(LL_LOAD_FN, fn->fn_id, dest);
             return dest;
         }
 
-        case ExprNode::kSimpleOp: {
-            VReg left_reg = EmitNode(node->op.left);
-            VReg right_reg;
-            if (node->op.right)
-                right_reg = EmitNode(node->op.right);
-
+        case ExprNode::kUnaryOp: {
+            auto* unary = node->to<UnaryExprNode>();
+            VReg operand_reg = EmitNode(unary->operand);
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-
-            emitOp(node->op.opcode);
-            if (left_reg.valid())
-                emitVal(left_reg);
-            if (right_reg.valid())
-                emitVal(right_reg);
+            emitOp(unary->opcode);
+            emitVal(operand_reg);
             emitVal(dest);
+            FreeReg(operand_reg);
+            return dest;
+        }
 
-            if (node->op.left)
-                FreeReg(left_reg);
-            if (node->op.right)
-                FreeReg(right_reg);
-
+        case ExprNode::kBinaryOp: {
+            auto* binary = node->to<BinaryExprNode>();
+            VReg left_reg = EmitNode(binary->left);
+            VReg right_reg = EmitNode(binary->right);
+            VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
+            emitOp(binary->opcode);
+            emitVal(left_reg);
+            emitVal(right_reg);
+            emitVal(dest);
+            FreeReg(left_reg);
+            FreeReg(right_reg);
             return dest;
         }
 
         case ExprNode::kSlotOp: {
+            auto* slot = node->to<SlotOpExprNode>();
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            emit(node->slot_op.opcode, node->slot_op.reg, dest);
+            emit(slot->opcode, slot->reg, dest);
             return dest;
         }
 
         case ExprNode::kLoadUpvar: {
+            auto* up = node->to<LoadUpvarExprNode>();
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
             VReg callee_reg = AllocateTempCells(1, false);
 
@@ -2111,15 +2087,16 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             else
                 llop = LL_LOAD_UPVAR_X32;
             emit(LL_CALLEE, callee_reg);
-            emit(llop, UpvarArgs{node->load_upvar.index, callee_reg.index, dest.index});
+            emit(llop, UpvarArgs{up->index, callee_reg.index, dest.index});
 
             FreeReg(callee_reg);
             return dest;
         }
 
         case ExprNode::kLoadField: {
+            auto* lf = node->to<LoadFieldExprNode>();
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            VReg base_reg = EmitNode(node->load_field.base);
+            VReg base_reg = EmitNode(lf->base);
 
             LLOp llop;
             if (node->type->IsHeapItem())
@@ -2130,30 +2107,30 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 llop = LL_LOAD_FLD_X64;
             else
                 llop = LL_LOAD_FLD_X32;
-            emit(llop, node->load_field.offset, base_reg, dest);
+            emit(llop, lf->offset, base_reg, dest);
 
             FreeReg(base_reg);
             return dest;
         }
 
         case ExprNode::kLoadElem: {
-            VReg index_reg = EmitNode(node->load_elem.index);
+            auto* le = node->to<LoadElemExprNode>();
+            VReg index_reg = EmitNode(le->index);
 
             if (target_reg.valid() && node->type->IsHeapItem())
                 emit(LL_RELEASE, target_reg);
 
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            ExprNode* base_expr = node->load_elem.base;
+            ExprNode* base_expr = le->base;
             const TypeDesc* base = base_expr->type;
-            LLOp op = node->load_elem.opcode;
+            LLOp op = le->opcode;
 
             if (base->IsFlatArray()) {
-                if (base_expr->kind == ExprNode::kSlotOp &&
-                    base_expr->slot_op.opcode == LL_ADDR_S)
+                if (auto* slot = base_expr->as<SlotOpExprNode>(); slot && slot->opcode == LL_ADDR_S)
                 {
                     emit(op, LoadElemFlatArgs{
                         .array_size = (uint32_t)base->array_size(),
-                        .base_reg = base_expr->slot_op.reg.index,
+                        .base_reg = slot->reg.index,
                         .index_reg = index_reg.index,
                         .dest_reg = dest.index
                     });
