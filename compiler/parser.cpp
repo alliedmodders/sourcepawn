@@ -1439,7 +1439,8 @@ Parser::parse_post_dims(typeinfo_t* type)
             dim_exprs.emplace_back(nullptr);
         } else {
             dim_exprs.emplace_back(hier14());
-            lexer_->need(']');
+            if (!lexer_->need(']'))
+                break;
         }
     } while (lexer_->match('['));
 
