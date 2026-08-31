@@ -45,7 +45,6 @@
 #include "rtti-builder.h"
 #include "sc.h"
 #include "scopes.h"
-#include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
 #include "vm/environment.h"

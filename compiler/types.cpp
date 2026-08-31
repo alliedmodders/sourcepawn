@@ -31,7 +31,6 @@
 #include "compile-context.h"
 #include "parse-node.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "types.h"
 
 namespace sp {
@@ -153,6 +152,21 @@ bool Type::isHeapItem() {
     return false;
 }
 
+Decl* Type::decl() const {
+    switch (kind_) {
+        case TypeKind::Object:
+            return class_ptr_;
+        case TypeKind::EnumStruct:
+            return enumstruct_ptr_;
+        case TypeKind::Methodmap:
+            return methodmap_ptr_;
+        case TypeKind::Pstruct:
+            return pstruct_ptr_;
+        default:
+            return nullptr;
+    }
+}
+
 ArrayType::ArrayType(Type* inner, int size, bool is_flat)
   : Type(nullptr, TypeKind::Array)
 {
@@ -179,9 +193,9 @@ TypeManager::TypeManager(CompileContext& cc)
     function_cache_.init(512);
 }
 
-Type* TypeManager::find(Atom* atom) {
-    auto iter = types_.find(atom);
-    if (iter == types_.end())
+Type* TypeManager::findBuiltin(Atom* atom) {
+    auto iter = builtins_.find(atom);
+    if (iter == builtins_.end())
         return nullptr;
     return iter->second;
 }
@@ -190,25 +204,9 @@ Type* TypeManager::Get(int index) {
     return by_index_[index];
 }
 
-Type* TypeManager::add(const char* name, TypeKind kind) {
-    return add(cc_.atom(name), kind);
-}
-
-Type* TypeManager::add(Atom* name, TypeKind kind) {
-    Type* type = new Type(name, kind);
-    RegisterType(type);
-    return type;
-}
-
-void TypeManager::RegisterType(Type* type, bool unique_name) {
-    if (unique_name) {
-        assert(types_.find(type->declName()) == types_.end());
-        types_.emplace(type->declName(), type);
-    }
-}
-
 Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
-    Type* ptr = add(name, TypeKind::Builtin);
+    auto name_atom = cc_.atom(name);
+    Type* ptr = new Type(name_atom, TypeKind::Builtin);
     ptr->setBuiltinType(type);
 
     uint32_t index = (uint32_t)type;
@@ -216,6 +214,8 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
         builtin_types_.resize(index + 1);
     builtin_types_[index] = ptr;
 
+    auto result = builtins_.emplace(name_atom, ptr);
+    assert(result.second);
     return ptr;
 }
 
@@ -225,8 +225,6 @@ ArrayType* TypeManager::defineArray(Type* element_type, int dim) {
     auto p = array_cache_.findForAdd(lookup);
     if (!p.found()) {
         auto at = new ArrayType(element_type, dim, false);
-        RegisterType(at, false);
-
         array_cache_.add(p, at);
     }
     return (*p)->to<ArrayType>();
@@ -247,8 +245,6 @@ ArrayType* TypeManager::defineArray(Type* element_type, const int* dim_vec, int 
         auto p = array_cache_.findForAdd(lookup);
         if (!p.found()) {
             auto at = new ArrayType(iter, dim_vec[depth], false);
-            RegisterType(at, false);
-
             array_cache_.add(p, at);
         }
         iter = *p;
@@ -267,8 +263,6 @@ ArrayType* TypeManager::defineFlatArray(Type* element_type, int dim) {
     auto p = array_cache_.findForAdd(lookup);
     if (!p.found()) {
         auto at = new ArrayType(element_type, dim, true);
-        RegisterType(at, false);
-
         array_cache_.add(p, at);
     }
     return (*p)->to<ArrayType>();
@@ -289,23 +283,25 @@ ArrayType* TypeManager::redefineArray(Type* element_type, ArrayType* old_type) {
 
 void TypeManager::init() {
     type_int_ = defineBuiltin("int", BuiltinType::Int);
-    types_.emplace(cc_.atom("_"), type_int_);
+    builtins_.emplace(cc_.atom("_"), type_int_);
 
     type_bool_ = defineBuiltin("bool", BuiltinType::Bool);
     type_any_ = defineBuiltin("any", BuiltinType::Any);
 
     type_float_ = defineBuiltin("float", BuiltinType::Float);
-    types_.emplace(cc_.atom("Float"), type_float_);
+    builtins_.emplace(cc_.atom("Float"), type_float_);
     type_double_ = defineBuiltin("double", BuiltinType::Double);
 
     type_void_ = defineBuiltin("void", BuiltinType::Void);
     type_null_ = defineBuiltin("null_t", BuiltinType::Null);
 
     type_string_ = defineBuiltin("char", BuiltinType::Char);
-    types_.emplace(cc_.atom("String"), type_string_);
+    builtins_.emplace(cc_.atom("String"), type_string_);
 
     type_function_ = defineFunction(cc_.atom("Function"), nullptr);
+    builtins_.emplace(type_function_->declName(), type_function_);
     type_object_ = defineObject("object");
+    builtins_.emplace(type_object_->declName(), type_object_);
 
     type_int64_ = defineBuiltin("int64", BuiltinType::Int64);
     type_intptr_ = defineBuiltin("intptr", BuiltinType::IntPtr);
@@ -314,60 +310,46 @@ void TypeManager::init() {
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {
-    Type* type = add(name, TypeKind::Function);
+    Type* type = new Type(name, TypeKind::Function);
     type->setFunction(fe);
     return type;
 }
 
 Type* TypeManager::defineObject(const char* name) {
-    Type* type = add(name, TypeKind::Object);
+    Type* type = new Type(cc_.atom(name), TypeKind::Object);
     type->setObject();
     return type;
 }
 
 Type* TypeManager::defineMethodmap(Atom* name, MethodmapDecl* map) {
-    Type* type = find(name);
-    if (!type)
-        type = add(name, TypeKind::Methodmap);
+    Type* type = new Type(name, TypeKind::Methodmap);
     type->setMethodmap(map);
     return type;
 }
 
-Type*
-TypeManager::defineEnumTag(const char* name)
-{
-    auto atom = cc_.atom(name);
-    if (auto type = find(atom)) {
-        assert(type->kind() == TypeKind::Methodmap);
-        return type;
-    }
-
-    Type* type = add(atom, TypeKind::Enum);
-    return type;
+Type* TypeManager::defineEnumTag(const char* name) {
+    return new Type(cc_.atom(name), TypeKind::Enum);
 }
 
 Type* TypeManager::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
-    Type* type = add(name, TypeKind::EnumStruct);
+    Type* type = new Type(name, TypeKind::EnumStruct);
     type->setEnumStruct(decl);
     return type;
 }
 
 Type* TypeManager::defineClass(Atom* name, ClassDecl* decl) {
-    Type* type = add(name, TypeKind::Object);
+    Type* type = new Type(name, TypeKind::Object);
     type->setClass(decl);
     return type;
 }
 
-Type*
-TypeManager::defineTag(Atom* name) {
-    Type* type = add(name, TypeKind::Enum);
-    return type;
+Type* TypeManager::defineTag(Atom* name) {
+    return new Type(name, TypeKind::Enum);
 }
 
-Type* TypeManager::definePstruct(PstructDecl* decl) {
-    assert(find(decl->name()) == nullptr);
-
-    Type* type = add(decl->name(), TypeKind::Pstruct);
+Type*
+TypeManager::definePstruct(PstructDecl* decl) {
+    Type* type = new Type(decl->name(), TypeKind::Pstruct);
     type->setPstruct(decl);
     return type;
 }
@@ -381,27 +363,19 @@ Type* TypeManager::defineReference(Type* inner) {
     auto name = inner->declName()->str() + "&";
     Type* type = new Type(cc_.atom(name), TypeKind::Reference);
     type->setReference(inner);
-    RegisterType(type, false);
 
     ref_types_.emplace(inner, type);
     return type;
 }
 
 Type* TypeManager::defineTypedef(Atom* name, Type* inner) {
-    assert(find(name) == nullptr);
-
-    Type* type = add(name, TypeKind::Typedef);
+    Type* type = new Type(name, TypeKind::Typedef);
     type->setTypedef(inner);
     return type;
 }
 
 Type* TypeManager::declareTypedef(Atom* name) {
-    assert(find(name) == nullptr);
-    return add(name, TypeKind::Typedef);
-}
-
-void TypeManager::updateTypedef(Type* placeholder, Type* inner) {
-    placeholder->setTypedef(inner);
+    return new Type(name, TypeKind::Typedef);
 }
 
 FunctionType* TypeManager::defineFunction(QualType return_type,
@@ -412,7 +386,6 @@ FunctionType* TypeManager::defineFunction(QualType return_type,
     auto p = function_cache_.findForAdd(lookup);
     if (!p.found()) {
         auto ft = new FunctionType(return_type, args, variadic, conv);
-        RegisterType(ft, false);
 
         function_cache_.add(p, ft);
     }

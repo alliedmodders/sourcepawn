@@ -78,7 +78,6 @@
 #include "lexer.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sctracker.h"
 #define VERSION_INT 0x0302
 
 using namespace ke;

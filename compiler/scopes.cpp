@@ -50,5 +50,28 @@ void SymbolScope::AddChain(Decl* decl) {
     }
 }
 
+Type* SymbolScope::FindType(Atom* atom) const {
+    if (!types_)
+        return nullptr;
+    auto iter = types_->find(atom);
+    if (iter == types_->end())
+        return nullptr;
+    return iter->second;
+}
+
+void SymbolScope::AddType(Atom* atom, Type* type) {
+    if (!types_) {
+        auto& cc = CompileContext::get();
+        types_ = cc.NewTypeMap();
+    }
+
+    assert(types_->find(atom) == types_->end());
+    types_->emplace(atom, type);
+}
+
+void SymbolScope::AddTypeChain(Atom* atom, Type* type) {
+    AddType(atom, type);
+}
+
 } // namespace cc
 } // namespace sp

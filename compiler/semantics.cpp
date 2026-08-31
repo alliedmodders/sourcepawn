@@ -31,7 +31,6 @@
 #include "errors.h"
 #include "lexer.h"
 #include "parse-node.h"
-#include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"
 

@@ -28,7 +28,6 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "semantics.h"
 #include "semantics-inl.h"
 #include "symbols.h"

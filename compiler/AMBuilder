@@ -22,7 +22,6 @@ module.sources += [
   'pool-objects.cpp',
   'rtti-builder.cpp',
   'sci18n.cpp',
-  'sctracker.cpp',
   'semantics.cpp',
   'semantics-types.cpp',
   'scopes.cpp',

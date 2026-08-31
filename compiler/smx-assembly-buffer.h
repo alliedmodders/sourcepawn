@@ -24,7 +24,6 @@
 #include <sp_vm_types.h>
 
 #include "label.h"
-#include "sctracker.h"
 #include "symbols.h"
 
 namespace sp {

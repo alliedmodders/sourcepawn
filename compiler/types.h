@@ -86,14 +86,27 @@ enum class TypeKind : uint8_t {
     Typedef
 };
 
-struct funcenum_t;
 class EnumStructDecl;
 class ClassDecl;
+class Decl;
 class Expr;
 class FunctionType;
 class MethodmapDecl;
 class PstructDecl;
 class Type;
+
+struct funcenum_t : public PoolObject
+{
+    funcenum_t()
+      : type(nullptr),
+        name(),
+        anonymous(false)
+    {}
+    Type* type;
+    Atom* name;
+    PoolArray<FunctionType*> entries;
+    bool anonymous;
+};
 
 // Compact encoding of type + constness.
 class QualType {
@@ -409,6 +422,12 @@ class Type : public PoolObject
         methodmap_ptr_ = map;
     }
 
+    void setTypedef(Type* inner) {
+        assert(kind_ == TypeKind::Typedef);
+        assert(!inner->isTypedef());
+        inner_type_ = inner;
+    }
+
     bool isObject() const {
         return kind_ == TypeKind::Object || isNull();
     }
@@ -474,6 +493,8 @@ class Type : public PoolObject
         return pstruct_ptr_;
     }
 
+    Decl* decl() const;
+
     Type* inner() const {
         assert(isReference() || isArray() || isTypedef());
         return inner_type_;
@@ -508,11 +529,6 @@ class Type : public PoolObject
     void setReference(Type* inner) {
         assert(!inner->isReference());
         assert(kind_ == TypeKind::Reference);
-        inner_type_ = inner;
-    }
-    void setTypedef(Type* inner) {
-        assert(kind_ == TypeKind::Typedef);
-        assert(!inner->isTypedef());
         inner_type_ = inner;
     }
 
@@ -597,7 +613,7 @@ class TypeManager
 
     Type* Get(int index);
 
-    Type* find(Atom* name);
+    Type* findBuiltin(Atom* name);
 
     void init();
 
@@ -613,7 +629,6 @@ class TypeManager
     Type* defineReference(Type* inner);
     Type* defineTypedef(Atom* name, Type* inner);
     Type* declareTypedef(Atom* name);
-    void updateTypedef(Type* placeholder, Type* inner);
     ArrayType* defineArray(Type* element_type, int dim);
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
@@ -643,14 +658,11 @@ class TypeManager
     Type* GetBuiltin(BuiltinType type) const { return builtin_types_[(int)type]; }
 
   private:
-    Type* add(const char* name, TypeKind kind);
-    Type* add(Atom* name, TypeKind kind);
-    void RegisterType(Type* type, bool unique_name = true);
     Type* defineBuiltin(const char* name, BuiltinType type);
 
   private:
     CompileContext& cc_;
-    tr::unordered_map<Atom*, Type*> types_;
+    tr::unordered_map<Atom*, Type*> builtins_;
     tr::unordered_map<Type*, Type*> ref_types_;
     tr::vector<Type*> builtin_types_;
     std::vector<Type*> by_index_;

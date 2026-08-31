@@ -40,7 +40,6 @@
 #include "lexer.h"
 #include "parse-node.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
 

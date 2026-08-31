@@ -31,7 +31,6 @@
 #include "compile-context.h"
 #include "compile-options.h"
 #include "errors.h"
-#include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"
 #include "utils/compact-encoding.h"

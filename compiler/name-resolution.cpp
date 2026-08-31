@@ -29,7 +29,6 @@
 #include "parser.h"
 #include "sc.h"
 #include "scopes.h"
-#include "sctracker.h"
 #include "semantics.h"
 #include "symbols.h"
 
@@ -93,9 +92,7 @@ bool SemaContext::BindType(const token_pos_t& pos, typeinfo_t* ti) {
 }
 
 bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Type** out_type) {
-    auto types = cc_.types();
-
-    Type* type = types->find(atom);
+    Type* type = ResolveType(*this, atom);
     if (!type) {
         report(pos, 139) << atom;
         return false;
@@ -144,6 +141,8 @@ static bool DoEnterTypes(Stmt* stmt, SemaContext& sc) {
             return stmt->to<MethodmapDecl>()->EnterTypes(sc);
         case StmtKind::StmtList:
             return stmt->to<StmtList>()->EnterTypes(sc);
+        case StmtKind::FunctionDecl:
+            return true;
         default:
             return true;
     }
@@ -191,14 +190,18 @@ BlockStmt::Bind(SemaContext& sc)
 bool EnumDecl::EnterTypes(SemaContext& sc) {
     auto types = sc.cc().types();
     if (label_) {
-        type_ = types->find(label_);
-        if (!type_)
+        type_ = ResolveType(sc, label_);
+        if (!type_) {
             type_ = types->defineEnumTag(label_->chars());
+            AddScopedType(sc, type_);
+        }
     }
     if (name_) {
-        type_ = types->find(name_);
-        if (!type_)
+        type_ = ResolveType(sc, name_);
+        if (!type_) {
             type_ = types->defineEnumTag(name_->chars());
+            AddScopedType(sc, type_);
+        }
     }
     if (!type_)
         type_ = types->type_int();
@@ -208,10 +211,8 @@ bool EnumDecl::EnterTypes(SemaContext& sc) {
 bool EnumDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
-    auto types = sc.cc().types();
-
     if (label_) {
-        Type* label_type = types->find(label_);
+        Type* label_type = ResolveType(sc, label_);
         if (label_type->isInt()) {
             // No implicit-int allowed.
             report(pos_, 169);
@@ -235,8 +236,12 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
     if (name_) {
         bool is_methodmap = false;
         if (vclass_ == sGLOBAL) {
-            if (auto decl = FindSymbol(sc, name_))
-                is_methodmap = decl->kind() == StmtKind::MethodmapDecl;
+            if (auto* type = sc.scope()->FindType(name_)) {
+                if (type->isMethodmap()) {
+                    set_mm(type->asMethodmap());
+                    is_methodmap = true;
+                }
+            }
         }
 
         if (!is_methodmap) {
@@ -293,7 +298,8 @@ EnumDecl::Bind(SemaContext& sc)
 }
 
 bool PstructDecl::EnterTypes(SemaContext& sc) {
-    if (sc.cc().types()->find(name_)) {
+    assert(sc.scope()->IsGlobalOrFileStatic());
+    if (sc.cc().types()->findBuiltin(name_)) {
         report(pos_, 432) << name_;
         return false;
     }
@@ -302,6 +308,7 @@ bool PstructDecl::EnterTypes(SemaContext& sc) {
         return false;
     }
     type_ = sc.cc().types()->definePstruct(this);
+    sc.cc().globals()->AddType(name_, type_);
     return true;
 }
 
@@ -348,11 +355,12 @@ bool PstructDecl::Bind(SemaContext& sc) {
 }
 
 bool TypedefDecl::EnterTypes(SemaContext& sc) {
-    if (sc.cc().types()->find(name_)) {
+    if (sc.cc().types()->findBuiltin(name_)) {
         report(pos_, 432) << name_;
         return false;
     }
     placeholder_ = sc.cc().types()->declareTypedef(name_);
+    AddScopedType(sc, placeholder_);
     return true;
 }
 
@@ -361,7 +369,7 @@ bool TypedefDecl::EnterNames(SemaContext& sc) {
         auto ft = type_->Bind(sc);
         if (!ft)
             return false;
-        sc.cc().types()->updateTypedef(placeholder_, ft);
+        placeholder_->setTypedef(ft);
     } else {
         if (!sc.BindType(pos(), ti_))
             return false;
@@ -371,7 +379,7 @@ bool TypedefDecl::EnterNames(SemaContext& sc) {
             report(this, 465) << ti_->type;
             return false;
         }
-        sc.cc().types()->updateTypedef(placeholder_, ti_->type);
+        placeholder_->setTypedef(ti_->type);
     }
     return true;
 }
@@ -403,11 +411,17 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
 }
 
 bool TypesetDecl::EnterTypes(SemaContext& sc) {
-    if (sc.cc().types()->find(name_)) {
+    assert(sc.scope()->IsGlobalOrFileStatic());
+    if (ResolveType(sc, name_)) {
         report(pos_, 432) << name_;
         return false;
     }
-    fe_ = funcenums_add(sc.cc(), name_, false);
+
+    fe_ = new funcenum_t;
+    fe_->name = name_;
+    fe_->anonymous = false;
+    fe_->type = sc.cc().types()->defineFunction(name_, fe_);
+    AddScopedType(sc, fe_->type);
     return true;
 }
 
@@ -557,6 +571,13 @@ bool SymbolExpr::DoBind(SemaContext& sc, bool is_lval) {
         sc.cc().detected_illegal_preproc_symbols() = true;
 
         report(pos_, 230) << name_;
+    }
+
+    if (auto type = ResolveType(sc, name_)) {
+        if (auto decl = type->decl()) {
+            decl_ = decl;
+            return true;
+        }
     }
 
     ResolvedSymbol rs;
@@ -1027,7 +1048,10 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
 }
 
 bool EnumStructDecl::EnterTypes(SemaContext& sc) {
+    if (!CheckTypeNameRedefinition(sc, name_, pos_))
+        return false;
     type_ = sc.cc().types()->defineEnumStruct(name_, this);
+    AddScopedType(sc, type_);
     return true;
 }
 
@@ -1038,7 +1062,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
     if (!CheckNameRedefinition(sc, name(), pos_, sGLOBAL))
         return false;
-    DefineSymbol(sc, this, sGLOBAL);
 
     std::unordered_set<Atom*> seen;
 
@@ -1119,7 +1142,10 @@ bool EnumStructDecl::Bind(SemaContext& sc) {
 }
 
 bool ClassDecl::EnterTypes(SemaContext& sc) {
+    if (!CheckTypeNameRedefinition(sc, name_, pos_))
+        return false;
     type_ = sc.cc().types()->defineClass(name_, this);
+    AddScopedType(sc, type_);
     return true;
 }
 
@@ -1130,7 +1156,6 @@ bool ClassDecl::EnterNames(SemaContext& sc) {
 
     if (!CheckNameRedefinition(sc, name(), pos_, sGLOBAL))
         return false;
-    DefineSymbol(sc, this, sGLOBAL);
 
     std::unordered_set<Atom*> seen;
 
@@ -1248,14 +1273,18 @@ Decl::DecorateInnerName(Atom* parent_name, Atom* field_name)
 }
 
 bool MethodmapDecl::EnterTypes(SemaContext& sc) {
-    auto& cc = sc.cc();
-    if (auto type = cc.types()->find(name_)) {
+    assert(sc.scope()->IsGlobalOrFileStatic());
+    if (auto type = ResolveType(sc, name_)) {
         if (!type->isEnum()) {
             report(pos_, 432) << name_;
             return false;
         }
+        type->setMethodmap(this);
+        type_ = type;
+    } else {
+        type_ = sc.cc().types()->defineMethodmap(name_, this);
+        AddScopedType(sc, type_);
     }
-    type_ = cc.types()->defineMethodmap(name_, this);
     return true;
 }
 
@@ -1274,8 +1303,6 @@ bool MethodmapDecl::EnterNames(SemaContext& sc) {
             return false;
         }
         ed->set_mm(this);
-    } else {
-        cc.globals()->Add(this);
     }
 
     std::unordered_map<Atom*, Decl*> names;
@@ -1323,10 +1350,10 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
 
     is_bound_ = true;
 
-    auto& cc = sc.cc();
     if (extends_) {
-        if (auto parent = FindSymbol(cc.globals(), extends_))
-            parent_ = MethodmapDecl::LookupMethodmap(parent);
+        Type* parent_type = ResolveType(sc, extends_);
+        if (parent_type && parent_type->kind() == TypeKind::Methodmap)
+            parent_ = parent_type->asMethodmap();
         if (!parent_)
             report(pos_, 102) << "methodmap" << extends_;
     }

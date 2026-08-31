@@ -66,6 +66,7 @@ bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymb
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
+bool CheckTypeNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos);
 
 void markusage(Decl* decl, int usage);
 void markusage(const ExprVal& val, int usage);

@@ -54,7 +54,6 @@
 #include "parser.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sctracker.h"
 #include "semantics.h"
 #include "source-manager.h"
 #include "symbols.h"
@@ -2086,7 +2085,7 @@ void Lexer::LexSymbol(full_token_t* tok, Atom* atom) {
         } else if (allow_tags_) {
             tok->id = tLABEL;
             advance();
-        } else if (cc_.types()->find(atom)) {
+        } else if (cc_.types()->findBuiltin(atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             report(220);

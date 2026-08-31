@@ -71,6 +71,11 @@ tr::unordered_map<Atom*, Decl*>* CompileContext::NewSymbolMap() {
     return &symbol_maps_.front();
 }
 
+tr::unordered_map<Atom*, Type*>* CompileContext::NewTypeMap() {
+    type_maps_.emplace_front();
+    return &type_maps_.front();
+}
+
 void CompileContext::TrackMalloc(size_t bytes) {
     malloc_bytes_ += bytes;
     malloc_bytes_peak_ = std::max(malloc_bytes_peak_, malloc_bytes_);

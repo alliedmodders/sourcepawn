@@ -38,7 +38,6 @@
 #include "lexer.h"
 #include "lexer-inl.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "symbols.h"
 
 namespace sp {

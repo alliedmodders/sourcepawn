@@ -23,7 +23,6 @@
 
 #include "parse-node.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "stl/stl-deque.h"
 
 namespace sp {

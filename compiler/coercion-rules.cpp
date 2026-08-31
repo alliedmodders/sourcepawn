@@ -20,8 +20,6 @@
 #include "coercion-rules.h"
 
 #include "parse-node.h"
-#include "sctracker.h"
-#include "semantics-inl.h"
 #include "semantics.h"
 
 namespace sp {

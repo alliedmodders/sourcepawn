@@ -27,6 +27,7 @@ namespace sp {
 namespace cc {
 
 class Decl;
+class Type;
 
 class SymbolScope final : public PoolObject
 {
@@ -51,6 +52,10 @@ class SymbolScope final : public PoolObject
 
     // Add, but allow duplicates by linking together.
     void AddChain(Decl* decl);
+
+    Type* FindType(Atom* atom) const;
+    void AddType(Atom* atom, Type* type);
+    void AddTypeChain(Atom* atom, Type* type);
 
     void ForEachSymbol(const std::function<void(Decl*)>& callback) {
         if (!symbols_)
@@ -78,11 +83,15 @@ class SymbolScope final : public PoolObject
     SymbolScope* parent_;
     ScopeKind kind_;
     tr::unordered_map<Atom*, Decl*>* symbols_;
+    tr::unordered_map<Atom*, Type*>* types_;
     int fnumber_;
 };
 
 Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found = nullptr);
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found = nullptr);
+Type* ResolveType(SymbolScope* scope, Atom* name, SymbolScope** found = nullptr);
+Type* ResolveType(SemaContext& sc, Atom* name, SymbolScope** found = nullptr);
+void AddScopedType(SemaContext& sc, Type* type);
 
 } // namespace cc
 } // namespace sp

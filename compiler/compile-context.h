@@ -42,6 +42,7 @@ class Lexer;
 class ReportManager;
 class SemaContext;
 class SymbolScope;
+class Type;
 class TypeManager;
 struct CompileOptions;
 
@@ -126,6 +127,7 @@ class CompileContext final
     void operator =(CompileContext&&) = delete;
 
     tr::unordered_map<Atom*, Decl*>* NewSymbolMap();
+    tr::unordered_map<Atom*, Type*>* NewTypeMap();
 
   private:
     PoolAllocator allocator_;
@@ -160,6 +162,7 @@ class CompileContext final
 
     // AST attachments.
     tr::forward_list<tr::unordered_map<Atom*, Decl*>> symbol_maps_;
+    tr::forward_list<tr::unordered_map<Atom*, Type*>> type_maps_;
 
     size_t malloc_bytes_ = 0;
     size_t malloc_bytes_peak_ = 0;

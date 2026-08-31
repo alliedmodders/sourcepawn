@@ -28,6 +28,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sc.h"
+#include "scopes.h"
 #include "semantics.h"
 
 namespace sp {
@@ -165,6 +166,13 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     return true;
 }
 
+bool CheckTypeNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos) {
+    if (!ResolveType(sc, name))
+        return true;
+    report(pos, 432) << name;
+    return false;
+}
+
 static inline bool IsUpvar(Decl* decl) {
     switch (decl->kind()) {
         case StmtKind::VarDecl:
@@ -230,6 +238,30 @@ Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
 
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {
     return FindSymbol(sc.scope(), name, found);
+}
+
+Type* ResolveType(SymbolScope* scope, Atom* name, SymbolScope** found) {
+    for (auto iter = scope; iter; iter = iter->parent()) {
+        if (auto type = iter->FindType(name)) {
+            if (found)
+                *found = iter;
+            return type;
+        }
+    }
+    return CompileContext::get().types()->findBuiltin(name);
+}
+
+Type* ResolveType(SemaContext& sc, Atom* name, SymbolScope** found) {
+    return ResolveType(sc.scope(), name, found);
+}
+
+void AddScopedType(SemaContext& sc, Type* type) {
+    auto scope = sc.ScopeForAdd();
+    if (scope->kind() == sFILE_STATIC) {
+        assert(scope->parent()->kind() == sGLOBAL);
+        scope = scope->parent();
+    }
+    scope->AddType(type->declName(), type);
 }
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass) {
