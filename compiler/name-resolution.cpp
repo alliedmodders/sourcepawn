@@ -1073,6 +1073,11 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             }
         }
 
+        if (field->type()->isHeapItem()) {
+            report(field->pos(), 83) << field->name();
+            continue;
+        }
+
         if (field->type_info().is_const)
             report(field->pos(), 94) << field->name();
 

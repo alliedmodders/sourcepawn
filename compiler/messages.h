@@ -104,7 +104,7 @@ static const char* errmsg[] = {
     /*080*/ "'...' not allowed in enum struct initializers\n",
     /*081*/ "enum struct field arrays must have fixed sizes\n",
     /*082*/ "properties cannot be arrays\n",
-    /*083*/ "unused\n",
+    /*083*/ "enum struct field \"%s\" cannot be a heap item (objects, arrays of objects, or function references)\n",
     /*084*/ "cannot call constructor for '%s' as static method\n",
     /*085*/ "unused\n",
     /*086*/ "number literal has invalid digits\n",
