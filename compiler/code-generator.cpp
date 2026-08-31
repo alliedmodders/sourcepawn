@@ -2348,12 +2348,17 @@ void CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt) {
 
         if (!IsTerminalFlow(body->flow_type()) || loop_cx.continue_to.used()) {
             __ bind(&loop_cx.continue_to);
-            EmitTest(cond, true, &start);
+            if (stmt->always_taken())
+                __ emit(OP_JUMP, &start);
+            else
+                EmitTest(cond, true, &start);
         }
     } else {
         __ bind(&loop_cx.continue_to);
 
-        EmitTest(cond, false, &loop_cx.break_to);
+        if (!stmt->always_taken())
+            EmitTest(cond, false, &loop_cx.break_to);
+
         EmitStmt(body);
         if (body->flow_type() == Flow_None)
             __ emit(OP_JUMP, &loop_cx.continue_to);
