@@ -109,18 +109,6 @@ struct smx_rtti_method {
     uint32_t flags;
 };
 
-// DEPRECATED. No longer generated for v2 binaries.
-//
-// The rtti.natives table has the following row structure. The rows must be
-// identical to the native table mapping.
-struct smx_rtti_native {
-    // Index into the name table.
-    uint32_t name;
-
-    // Method signature; see smx_rtti_method::signature.
-    uint32_t signature;
-};
-
 static constexpr uint32_t kRttiGlobal_VisibilityMask = 0x3;
 static constexpr uint32_t kRttiGlobal_Private = 0x0;
 static constexpr uint32_t kRttiGlobal_Public = 0x1;
@@ -148,32 +136,6 @@ struct smx_rtti_typeset {
     uint32_t signature;
 };
 
-// The rtti.enumstructs table has the following row structure:
-struct smx_rtti_enumstruct {
-    // Index into the name table.
-    uint32_t name;
-
-    // First row in the rtti.es_fields table. Rows up to the next
-    // enumstruct's first row, or the end of the enumstruct table, are
-    // owned by this entry.
-    uint32_t first_field;
-
-    // Size of the enum struct in cells.
-    uint32_t size;
-};
-
-// The rtti.es_fields table has the following row structure:
-struct smx_rtti_es_field {
-    // Index into the name table.
-    uint32_t name;
-
-    // Type id.
-    uint32_t type_id;
-
-    // Offset from the base address, in bytes.
-    uint32_t offset;
-};
-
 // The rtti.field_refs table has the following row structure:
 struct smx_rtti_field_ref {
     // Index into the classdef table.
@@ -183,9 +145,12 @@ struct smx_rtti_field_ref {
     uint32_t field_index;
 };
 
+static const uint32_t kClassType_Struct = 0x0;
+static const uint32_t kClassType_EnumStruct = 0x1;
+
 // The rtti.classdef table has the following row structure:
 struct smx_rtti_classdef {
-    // Bits 0-1 indicate the definition type.
+    // Bits 0-2 indicate the definition type (kClassType_*).
     uint32_t flags;
 
     // Index into the name table.
@@ -194,12 +159,6 @@ struct smx_rtti_classdef {
     // First row in the rtti.fields table. Rows up to the next classdef's first
     // row, or the end of the fields table, are owned by this classdef.
     uint32_t first_field;
-
-    // Unused, currently 0.
-    uint32_t reserved0;
-    uint32_t reserved1;
-    uint32_t reserved2;
-    uint32_t reserved3;
 };
 
 // The rtti.fields table has the following row structure:
@@ -226,8 +185,6 @@ struct smx_rtti_string {
     //     0b111????? - Invalid
     uint32_t offset;
 };
-
-static const uint32_t kClassDefType_Struct = 0x0;
 
 // A type identifier is a 32-bit value encoding a type. It is encoded as
 // follows:
@@ -296,7 +253,7 @@ static const uint8_t kEnum = 0x42;       // rtti.enums
 static const uint8_t kObsoleteTypedef = 0x43;
 static const uint8_t kTypeset = 0x44;    // rtti.typesets
 static const uint8_t kClassdef = 0x45;   // rtti.classdefs
-static const uint8_t kEnumStruct = 0x46; // rtti.enumstructs
+static const uint8_t kEnumStruct = 0x46; // rtti.classdefs (rtti.enumstructs in v1)
 
 // Followed by a fixed-length int16 encoding the number of locals, then that
 // many encoded types.

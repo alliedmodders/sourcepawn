@@ -301,6 +301,17 @@ static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
+static cell_t TestLocalToArrayPtr(IPluginContext* cx, const cell_t* params) {
+  ARRAY_PTR array;
+  if (cx->LocalToArrayPtr(params[1], &array) != SP_ERROR_NONE)
+    return -1;
+
+  char* data = reinterpret_cast<char*>(cx->GetArrayData(array));
+  if (!data)
+    return -2;
+
+  return data[params[2]];
+}
 
 static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
@@ -560,6 +571,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt.get(), "call_with_string", CallWithString);
   BindNative(rt.get(), "call_with_array", CallWithArray);
+  BindNative(rt.get(), "test_local_to_array_ptr", TestLocalToArrayPtr);
 
   BindNative(rt.get(), "assert_eq", AssertEq);
   BindNative(rt.get(), "printf", Printf);

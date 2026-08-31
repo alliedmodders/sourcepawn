@@ -124,7 +124,7 @@ namespace sp::v2 {
     FOR_EACH(FILLARRAY, 100, "fillarray") \
     FOR_EACH(ARRAY_TO_NATIVE, 101, "array2native") \
     FOR_EACH(SLICE, 102, "slice") \
-    FOR_EACH(LOAD_FLD, 103, "load.fld") \
+    FOR_EACH(LOAD_FLD_X32, 103, "load.fld.x32") \
     FOR_EACH(ADDR_FLD, 104, "addr.fld") \
     FOR_EACH(LOAD_ELEM_I32, 105, "load.elem.i32") \
     FOR_EACH(LOAD_ELEM_F32, 106, "load.elem.f32") \
@@ -145,7 +145,12 @@ namespace sp::v2 {
     FOR_EACH(STOR_ELEM_FLAT_I32, 121, "stor.elem.flat.i32") \
     FOR_EACH(STOR_ELEM_FLAT_F32, 122, "stor.elem.flat.f32") \
     FOR_EACH(STOR_ELEM_FLAT_I64, 123, "stor.elem.flat.i64") \
-    FOR_EACH(STOR_ELEM_FLAT_U8, 124, "stor.elem.flat.i8")
+    FOR_EACH(STOR_ELEM_FLAT_U8, 124, "stor.elem.flat.i8") \
+    FOR_EACH(LOAD_FLD_X64, 125, "load.fld.x64") \
+    FOR_EACH(STOR_FLD_X32, 126, "stor.fld.x32") \
+    FOR_EACH(STOR_FLD_X64, 127, "stor.fld.x64") \
+    FOR_EACH(COPYOBJ, 128, "copyobj") \
+    FOR_EACH(SLICE_ES, 129, "slice.es")
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text) LL_##op = val,

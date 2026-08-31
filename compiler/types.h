@@ -52,6 +52,7 @@ enum IdentifierKind {
     iFUNCTN = 9,
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
     iTYPENAME = 14,     /* symbol defining a type */
+    iFIELD = 15,        /* field of a struct or enumstruct */
 };
 
 enum class BuiltinType : uint8_t {
@@ -273,6 +274,8 @@ class Type : public PoolObject
     bool isCharArray() const;
     bool isFlatArray() const;
     bool isCompositeValue() const;
+    bool isPassByRef() const;
+    bool isAddressType() const;
 
     // True if a value representation can be > 1 cell.
     bool isComposite() const { return isArray() || isEnumStruct(); }

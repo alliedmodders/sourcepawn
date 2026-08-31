@@ -30,7 +30,7 @@ namespace v2 {
 
 using namespace ke;
 
-static constexpr cell_t kNativePointerTag = 1;
+static constexpr cell_t kNativePointerTag = 0x80000000;
 
 class MethodInfo;
 struct SpArray;
@@ -125,6 +125,7 @@ class Runtime final : public BaseRuntime,
     const TypeDesc* GetFlatArrayType(const TypeDesc* elt, uint32_t size);
     const TypeDesc* GetSliceType(const TypeDesc* elt);
     const TypeDesc* GetPrimitiveType(TypeKind kind);
+    const TypeDesc* GetEnumStructType(const smx_rtti_classdef* classdef);
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 

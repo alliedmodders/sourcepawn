@@ -963,7 +963,7 @@ IPluginFunction* Runtime::GetFunctionByIdOrError(funcid_t func_id) {
 
 int Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
     uint32_t handle = base & ~kNativePointerTag;
-    *out = reinterpret_cast<ARRAY_PTR>(heap_.ToPhysAddr<SpArray*>(handle));
+    *out = heap_.ToPhysAddr<ARRAY_PTR>(handle);
     return SP_ERROR_NONE;
 }
 
@@ -1009,6 +1009,20 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             // Rewrite to int32 for now.
             return GetPrimitiveType(TypeKind::Int32);
         }
+        case cb::kClassdef:
+        case cb::kEnumStruct: {
+            uint32_t index;
+            if (!parser.ReadUint32_Leb128(&index)) {
+                ReportError("invalid type data");
+                return nullptr;
+            }
+            if (!image_->rtti_classdefs() || index >= image_->rtti_classdefs()->row_count) {
+                ReportError("invalid classdef index in type data");
+                return nullptr;
+            }
+            auto classdef = image_->getClassdef(index);
+            return GetEnumStructType(classdef);
+        }
         case cb::kInt64:
             return GetPrimitiveType(TypeKind::Int64);
         case cb::kFixedArray: {
@@ -1040,6 +1054,14 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             return GetArrayType(td);
         }
         case cb::kFunctionPtr: {
+            uint32_t index;
+            if (!parser.ReadUint32_Leb128(&index)) {
+                ReportError("Invalid type data");
+                return nullptr;
+            }
+            return GetPrimitiveType(TypeKind::TopFunction);
+        }
+        case cb::kTypeset: {
             uint32_t index;
             if (!parser.ReadUint32_Leb128(&index)) {
                 ReportError("Invalid type data");
@@ -1137,6 +1159,10 @@ const TypeDesc* Runtime::GetStringLitType(uint16_t index) {
     return GetFixedArrayType(char_type, (uint32_t)blob->size() + 1);
 }
 
+const TypeDesc* Runtime::GetEnumStructType(const smx_rtti_classdef* classdef) {
+    return types_.GetEnumStruct(this, classdef);
+}
+
 uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
     uint8_t* ptr = heap_.Allocate(td->slot_size());
     if (!ptr)
@@ -1152,6 +1178,7 @@ uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
         case TypeKind::TopFunction:
         case TypeKind::Array:
         case TypeKind::FlatArray:
+        case TypeKind::EnumStruct:
             break;
 
         case TypeKind::FixedArray: {
@@ -1213,6 +1240,7 @@ SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {
         case TypeKind::Any:
         case TypeKind::TopFunction:
         case TypeKind::Array:
+        case TypeKind::EnumStruct:
             break;
 
         case TypeKind::FixedArray: {

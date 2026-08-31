@@ -49,6 +49,8 @@ class MethodLowerer
     MethodLowerer(ControlFlowGraph* graph, MethodInfo* method)
      : graph_(graph),
        method_(method),
+       rt_(graph->rt()),
+       image_(graph->rt()->image()),
        cell_type_(graph->rt()->GetPrimitiveType(TypeKind::Int32)),
        int64_type_(graph->rt()->GetPrimitiveType(TypeKind::Int64)),
        float32_type_(graph->rt()->GetPrimitiveType(TypeKind::Float32)),
@@ -83,6 +85,8 @@ class MethodLowerer
   private:
     ControlFlowGraph* graph_;
     MethodInfo* method_;
+    Runtime* rt_;
+    SmxImage* image_;
     LoweringAssembler masm_;
     std::vector<Block*> blocks_by_id_;
     std::vector<size_t> jumps_to_patch_;
@@ -628,7 +632,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             uint16_t index = reader_.read<uint16_t>();
             emitVal<uint16_t>(index);
             const TypeDesc* td = graph_->rt()->GetTypeOfGlobal(index);
-            if (td->IsFlatArray())
+            if (td->IsCompositeValue())
                 pushStack(td);
             else
                 pushStack(graph_->rt()->GetReferenceType(td));
@@ -664,7 +668,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             int16_t offset = reader_.read<int16_t>();
             emitVal<int16_t>(offset);
             const TypeDesc* td = method_->GetTypeOfLocal(offset);
-            if (td->IsFlatArray())
+            if (td->IsCompositeValue())
                 pushStack(td);
             else
                 pushStack(graph_->rt()->GetReferenceType(td));
@@ -722,19 +726,117 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
-        case OP_LOAD_FN:
-        case OP_LOAD_FLD:
-        case OP_ADDR_FLD: {
-            LLOp llop = LL_NOP;
-            switch (op) {
-                case OP_LOAD_FN:  llop = LL_LOAD_FN; break;
-                case OP_LOAD_FLD: llop = LL_LOAD_FLD; break;
-                case OP_ADDR_FLD: llop = LL_ADDR_FLD; break;
-                default: assert(false); break;
-            }
-            emitOp(llop);
+        case OP_LOAD_FN: {
+            emitOp(LL_LOAD_FN);
             emitVal<uint32_t>(reader_.read<uint32_t>());
             pushStack(cell_type_);
+            break;
+        }
+
+        case OP_LOAD_FLD: {
+            uint32_t ref_index = reader_.read<uint32_t>();
+            auto ref = image_->getFieldRef(ref_index);
+            auto classdef = image_->getClassdef(ref->cls_index);
+            auto field = image_->getField(ref->field_index);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
+            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+
+            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t offset = class_td->cls_offsets()[relative_field_index];
+            popStack();
+
+            LLOp llop = field_td->IsInt64() ? LL_LOAD_FLD_X64 : LL_LOAD_FLD_X32;
+            emitOp(llop);
+            emitVal<uint32_t>(offset);
+            pushStack(field_td);
+            break;
+        }
+
+        case OP_ADDR_FLD: {
+            uint32_t ref_index = reader_.read<uint32_t>();
+            auto ref = image_->getFieldRef(ref_index);
+            auto classdef = image_->getClassdef(ref->cls_index);
+            auto field = image_->getField(ref->field_index);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
+            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+            const TypeDesc* pushed_td = field_td->IsCompositeValue() ? field_td : rt_->GetReferenceType(field_td);
+
+            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t offset = class_td->cls_offsets()[relative_field_index];
+            popStack();
+
+            emitOp(LL_ADDR_FLD);
+            emitVal<uint32_t>(offset);
+            pushStack(pushed_td);
+            break;
+        }
+
+        case OP_STOR_FLD: {
+            uint32_t ref_index = reader_.read<uint32_t>();
+            auto ref = image_->getFieldRef(ref_index);
+            auto classdef = image_->getClassdef(ref->cls_index);
+            auto field = image_->getField(ref->field_index);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
+            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+
+            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t offset = class_td->cls_offsets()[relative_field_index];
+            popStack();
+            popStack();
+
+            LLOp llop = field_td->IsInt64() ? LL_STOR_FLD_X64 : LL_STOR_FLD_X32;
+            emitOp(llop);
+            emitVal<uint32_t>(offset);
+            break;
+        }
+
+        case OP_LOAD_FLD_OFFSET: {
+            uint32_t ref_index = reader_.read<uint32_t>();
+            auto ref = image_->getFieldRef(ref_index);
+            auto classdef = image_->getClassdef(ref->cls_index);
+            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+
+            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t offset = class_td->cls_offsets()[relative_field_index];
+            uint32_t cell_offset = offset / sizeof(cell_t);
+
+            emitOp(LL_PUSH_C);
+            emitVal<cell_t>(cell_offset);
+            pushStack(cell_type_);
+            break;
+        }
+
+        case OP_LOAD_ES_SIZE: {
+            uint32_t type_id = reader_.read<uint32_t>();
+            const TypeDesc* td = rt_->LoadTypeFromId(type_id);
+            uint32_t cell_size = td->slot_size() / sizeof(cell_t);
+
+            emitOp(LL_PUSH_C);
+            emitVal<cell_t>(cell_size);
+            pushStack(cell_type_);
+            break;
+        }
+
+        case OP_COPYOBJ: {
+            uint32_t type_id = reader_.read<uint32_t>();
+            const TypeDesc* td = rt_->LoadTypeFromId(type_id);
+            popStack();
+            popStack();
+            emitOp(LL_COPYOBJ);
+            emitVal<uint32_t>(td->slot_size());
+            break;
+        }
+
+        case OP_SLICE_ES: {
+            uint32_t type_id = reader_.read<uint32_t>();
+            const TypeDesc* td = rt_->LoadTypeFromId(type_id);
+            uint32_t cell_size = td->slot_size() / sizeof(cell_t);
+            emitOp(LL_SLICE_ES);
+            emitVal<uint32_t>(cell_size);
+            popStack();
+            const TypeDesc* any_type = graph_->rt()->GetPrimitiveType(TypeKind::Any);
+            const TypeDesc* slice_type = graph_->rt()->GetSliceType(any_type);
+            pushStack(slice_type);
             break;
         }
 

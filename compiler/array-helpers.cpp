@@ -521,34 +521,6 @@ bool ArrayValidator::ValidateInitializer() {
     return ValidateRank(at_, init_);
 }
 
-cell CalcArraySize(Type* type) {
-    auto array = type->to<ArrayType>();
-
-    cell size = 0;
-    cell last_size = 1;
-    do {
-        cell length = array->size();
-        assert(length);
-
-        auto next_array = array->inner()->as<ArrayType>();
-
-        if (!next_array) {
-            if (array->inner()->isChar())
-                length = char_array_cells(length);
-            else if (auto es = array->inner()->asEnumStruct())
-                length *= es->array_size();
-            else if (array->inner()->isInt64())
-                length *= 2;
-        }
-
-        last_size *= length;
-        size += last_size;
-
-        array = next_array;
-    } while (array);
-    return size;
-}
-
 bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     Decl* decl = expr->decl();
     if (!decl)

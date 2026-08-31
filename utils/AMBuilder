@@ -6,3 +6,8 @@ module = binary.Module(builder, 'utils')
 module.sources += [
   'pool-allocator.cpp',
 ]
+
+if module.compiler.target.platform == 'linux':
+  module.sources += [
+    'procmap.cpp',
+  ]

@@ -416,6 +416,7 @@ SmxImage::validateRtti() {
     const char* optional_tables[] = {
         "rtti.classdefs", "rtti.enums",    "rtti.enumstructs", "rtti.enumstruct_fields",
         "rtti.fields",    "rtti.typedefs", "rtti.typesets", "rtti.globals",
+        "rtti.field_refs",
     };
     for (size_t i = 0; i < sizeof(optional_tables) / sizeof(optional_tables[0]); i++) {
         const char* table_name = optional_tables[i];
@@ -431,14 +432,13 @@ SmxImage::validateRtti() {
     if (rtti_enums_ && !validateRttiEnums())
         return false;
 
-    rtti_enumstruct_fields_ = findRttiSection("rtti.enumstruct_fields");
-    rtti_enumstructs_ = findRttiSection("rtti.enumstructs");
-    if (rtti_enumstructs_ && !validateRttiEnumStructs())
-        return false;
-
     rtti_fields_ = findRttiSection("rtti.fields");
     rtti_classdefs_ = findRttiSection("rtti.classdefs");
     if (rtti_classdefs_ && !validateRttiClassdefs())
+        return false;
+
+    rtti_field_refs_ = findRttiSection("rtti.field_refs");
+    if (rtti_field_refs_ && !validateRttiFieldRefs())
         return false;
 
     rtti_typesets_ = findRttiSection("rtti.typesets");
@@ -464,68 +464,20 @@ SmxImage::validateRttiEnums() {
     return true;
 }
 
-bool
-SmxImage::validateRttiEnumStructs() {
-    if (!rtti_enumstruct_fields_)
-        return error("rtti.enumstruct_fields section missing");
-
-    for (uint32_t i = 0; i < rtti_enumstructs_->row_count; i++) {
-        const smx_rtti_enumstruct* enumstruct =
-            getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i);
-        if (!validateName(enumstruct->name))
-            return error("invalid enum struct name");
-
-        // Calculate how many fields this enumstruct has.
-        uint32_t stopat = rtti_enumstruct_fields_->row_count;
-        if (i != rtti_enumstructs_->row_count - 1) {
-            const smx_rtti_enumstruct* next_enumstruct =
-                getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i + 1);
-            stopat = next_enumstruct->first_field;
-        }
-        if (enumstruct->first_field >= stopat)
-            return error("invalid enum struct fields boundary");
-
-        for (uint32_t j = enumstruct->first_field; j < stopat; j++) {
-            if (!validateRttiEnumStructField(enumstruct, j))
-                return false;
-        }
-    }
-    return true;
-}
-
-bool
-SmxImage::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index) {
-    if (index >= rtti_enumstruct_fields_->row_count)
-        return error("invalid enum struct field index");
-
-    const smx_rtti_es_field* field = getRttiRow<smx_rtti_es_field>(rtti_enumstruct_fields_, index);
-    if (!validateName(field->name))
-        return error("invalid enum struct field name");
-    if (field->offset >= enumstruct->size * 4)
-        return error("invalid enum struct field offset");
-    if (!rtti_data_->validateType(field->type_id))
-        return error("invalid enum struct field type");
-    return true;
-}
-
-bool
-SmxImage::validateRttiClassdefs() {
+bool SmxImage::validateRttiClassdefs() {
     if (!rtti_fields_)
         return error("rtti.fields section missing");
 
     for (uint32_t i = 0; i < rtti_classdefs_->row_count; i++) {
-        const smx_rtti_classdef* classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i);
+        const smx_rtti_classdef* classdef = getClassdef(i);
+        if (!classdef)
+            return error("invalid classdef");
         // TODO: Validate flags.
         if (!validateName(classdef->name))
             return error("invalid classdef name");
 
         // Calculate how many fields this class has.
-        uint32_t stopat = rtti_fields_->row_count;
-        if (i != rtti_classdefs_->row_count - 1) {
-            const smx_rtti_classdef* next_classdef =
-                getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
-            stopat = next_classdef->first_field;
-        }
+        uint32_t stopat = getClassdefFieldsEnd(i);
         if (classdef->first_field >= stopat)
             return error("invalid classdef fields boundary");
 
@@ -537,13 +489,42 @@ SmxImage::validateRttiClassdefs() {
     return true;
 }
 
+uint32_t SmxImage::getClassdefFieldsEnd(uint32_t i) const {
+    if (i == rtti_classdefs_->row_count - 1)
+        return rtti_fields_->row_count;
+    const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
+    return next_classdef->first_field;
+}
+
+bool SmxImage::validateRttiFieldRefs() {
+    if (!rtti_classdefs_)
+        return error("rtti.classdefs section missing for field refs");
+    if (!rtti_fields_)
+        return error("rtti.fields section missing for field refs");
+
+    for (uint32_t i = 0; i < rtti_field_refs_->row_count; i++) {
+        const smx_rtti_field_ref* ref = getFieldRef(i);
+        if (!ref)
+            return error("invalid field ref");
+        const smx_rtti_classdef* classdef = getClassdef(ref->cls_index);
+        if (!classdef)
+            return error("invalid field ref class index");
+        if (!getField(ref->field_index))
+            return error("invalid field ref field index");
+
+        uint32_t stopat = getClassdefFieldsEnd(ref->cls_index);
+        if (ref->field_index < classdef->first_field || ref->field_index >= stopat)
+            return error("field not within class field bounds");
+    }
+    return true;
+}
+
 bool
 SmxImage::validateRttiField(uint32_t index) {
-    if (index >= rtti_fields_->row_count)
-        return error("invalid classdef field index");
-
     // TODO: Validate flags.
-    const smx_rtti_field* field = getRttiRow<smx_rtti_field>(rtti_fields_, index);
+    const smx_rtti_field* field = getField(index);
+    if (!field)
+        return error("invalid classdef field index");
     if (!validateName(field->name))
         return error("invalid classdef field name");
     if (!rtti_data_->validateType(field->type_id))

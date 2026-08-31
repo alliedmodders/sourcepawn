@@ -198,9 +198,7 @@ bool TypeChecker::CheckArrays(ArrayType* formal, ArrayType* actual) {
             return DiagnoseFailure();
         if (formal->inner()->isArray())
             return DiagnoseFailure();
-        if (auto es = actual_->asEnumStruct()) {
-            if (formal->size() && formal->size() != es->array_size())
-                return DiagnoseFailure();
+        if (actual_->asEnumStruct()) {
             if (!formal->inner()->isAny())
                 return DiagnoseFailure();
             return true;

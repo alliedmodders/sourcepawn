@@ -11,6 +11,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "type-cache.h"
+#include "v2/runtime.h"
 
 #include <utility>
 
@@ -105,6 +106,43 @@ const TypeDesc* TypeCache::GetReference(const TypeDesc* elt) {
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::Reference, elt);
     cache_.add(p, key, td);
+    return td;
+}
+
+const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classdef* classdef) {
+    TypeCacheKey key(classdef);
+
+    auto p = cache_.find(key);
+    if (p.found())
+        return p->value;
+
+    auto image = rt->image();
+    const smx_rtti_classdef* first = image->getClassdef(0);
+    uint32_t cls_index = (uint32_t)(classdef - first);
+    uint32_t stopat = image->getClassdefFieldsEnd(cls_index);
+    uint32_t num_fields = stopat - classdef->first_field;
+
+    uint32_t* offsets = pool_.alloc<uint32_t>(num_fields);
+    std::span<uint32_t> field_offsets(offsets, num_fields);
+
+    uint32_t current_offset = 0;
+    for (uint32_t i = 0; i < num_fields; i++) {
+        field_offsets[i] = current_offset;
+
+        auto field = image->getField(classdef->first_field + i);
+        auto field_td = rt->LoadTypeFromId(field->type_id);
+        if (!field_td)
+            return nullptr;
+        assert(!field_td->IsArrayish() || field_td->IsFlatArray());
+        current_offset += field_td->field_size();
+        current_offset = ke::Align(current_offset, sizeof(cell_t));
+    }
+    uint32_t total_size = current_offset;
+
+    TypeDesc* td = NewTypeDesc(pool_, classdef, total_size, field_offsets);
+    auto p2 = cache_.findForAdd(key);
+    assert(!p2.found());
+    cache_.add(p2, key, td);
     return td;
 }
 

@@ -335,6 +335,9 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
             EmitArrayCtor(array, init, 0);
             if (!array->is_fixed())
                 __ emit(OP_STOR_GLB, VarSlot(var->addr()));
+        } else if (var->type()->isEnumStruct()) {
+            __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
+            EmitEnumStructCtor(var->type()->asEnumStruct(), init);
         } else if (auto n64 = init->as<Number64Expr>()) {
             __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
             __ emit(OP_STOR_GLB, VarSlot(var->addr()));
@@ -388,6 +391,22 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         __ emit(OP_NEWARRAY, type_id);
     } else {
         // Otherwise, the address has been pushed onto the stack by the caller.
+    }
+
+    if (type->inner()->isEnumStruct()) {
+        ArrayExpr* array = ctor->to<ArrayExpr>();
+
+        for (size_t i = 0; i < array->exprs().size(); i++) {
+            __ emit(OP_DUP);
+            __ PUSH_C(i);
+            __ emit(OP_IDXADDR);
+
+            EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
+        }
+
+        if (type->is_fixed())
+            __ emit(OP_POP);
+        return;
     }
 
     if (ArrayType* inner = type->inner()->as<ArrayType>()) {
@@ -448,6 +467,43 @@ static inline void AddValue(std::string* out, T value) {
     } u;
     u.value = value;
     out->append(u.bytes, sizeof(u.bytes));
+}
+
+void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
+    ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
+    if (!array)
+        return;
+
+    const auto& field_list = es->fields();
+    auto field_iter = field_list.begin();
+
+    for (size_t i = 0; i < field_list.size(); i++) {
+        auto field = *field_iter;
+        field_iter++;
+
+        if (i >= array->exprs().size())
+            break;
+
+        Expr* expr = array->exprs().at(i);
+        auto field_type = field->type_info().type;
+        __ emit(OP_DUP);
+        if (auto field_array = field_type->as<ArrayType>()) {
+            uint32_t ref = rtti_->AddFieldRef(field);
+            __ emit(OP_ADDR_FLD, ref);
+            EmitArrayCtor(field_array, expr, 0);
+        } else if (auto field_es = field_type->asEnumStruct()) {
+            uint32_t ref = rtti_->AddFieldRef(field);
+            __ emit(OP_ADDR_FLD, ref);
+            EmitEnumStructCtor(field_es, expr);
+        } else {
+            EmitExpr(expr);
+            uint32_t ref = rtti_->AddFieldRef(field);
+            __ emit(OP_STOR_FLD, ref);
+        }
+    }
+
+    // Pop the base address from the stack
+    __ emit(OP_POP);
 }
 
 uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
@@ -548,7 +604,10 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         if (!array->is_fixed())
             __ emit(OP_STOR_S, VarSlot(slot));
     } else if (is_struct) {
-        assert(false);
+        if (init_rhs) {
+            __ emit(OP_ADDR_S, VarSlot(slot));
+            EmitEnumStructCtor(decl->type()->asEnumStruct(), init_rhs);
+        }
     } else {
         if (init) {
             const auto& val = init->right()->val();
@@ -697,6 +756,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         case ExprKind::SliceExpr:
             EmitSliceExpr(expr->to<SliceExpr>());
             break;
+        case ExprKind::SizeofExpr:
+            EmitSizeofExpr(expr->to<SizeofExpr>(), flags);
+            break;
 
         default:
             assert(false);
@@ -704,6 +766,29 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
 
     if ((flags & EMIT_DISCARD_RESULT) && !expr->HandlesDiscardResult())
         __ emit(OP_POP);
+}
+
+void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
+    Expr* child = expr->child();
+    const auto& cv = child->val();
+    EnumStructDecl* es = nullptr;
+
+    switch (cv.ident) {
+        case iARRAYELEM:
+        case iVARIABLE:
+        case iEXPRESSION:
+            es = cv.type()->asEnumStruct();
+            break;
+        case iTYPENAME:
+            es = cv.typename_decl()->as<EnumStructDecl>();
+            break;
+        default:
+            break;
+    }
+
+    assert(es != nullptr);
+    uint32_t type_id = rtti_->to_typeid(es->type());
+    __ emit(OP_LOAD_ES_SIZE, type_id);
 }
 
 bool Expr::HandlesDiscardResult() {
@@ -788,7 +873,8 @@ value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
             break;
         case iARRAYELEM:
             EmitExpr(expr, EMIT_ALLOW_LVALUE);
-            if (simple_address) {
+            // Array types are loaded as addresses by OP_LOAD_ELEM_A and do not need OP_IDXADDR.
+            if (simple_address && !val.type()->isArray()) {
                 __ emit(OP_IDXADDR);
                 val.ident = iADDRESS;
             }
@@ -796,6 +882,15 @@ value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
         case iACCESSOR:
             EmitExpr(expr, EMIT_ALLOW_LVALUE);
             break;
+        case iFIELD: {
+            auto fe = expr->as<FieldAccessExpr>();
+            EmitExpr(fe->base());
+            break;
+        }
+        case iADDRESS: {
+            EmitExpr(expr, EMIT_ALLOW_LVALUE);
+            break;
+        }
         default:
             assert(false);
     }
@@ -866,9 +961,22 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     auto oper = NormalizeBinaryToken(token);
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
-    if (expr->array_copy_length()) {
-        auto val = BindLvalue(left);
-        EmitRvalue(val);
+    if (expr->enum_struct_copy()) {
+        EmitRvalueFromLvalue(left);
+
+        assert(IsAssignOp(token));
+        assert(!oper);
+
+        EmitExpr(right);
+        auto es = left->val().type()->asEnumStruct();
+        assert(es != nullptr);
+        uint32_t type_id = rtti_->to_typeid(es->type());
+        __ emit(OP_COPYOBJ, type_id);
+        return;
+    }
+
+    if (expr->array_copy()) {
+        EmitRvalueFromLvalue(left);
 
         assert(IsAssignOp(token));
         assert(!oper);
@@ -896,7 +1004,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         left_val = left->val();
     }
 
-    assert(!expr->array_copy_length());
+    assert(!expr->array_copy());
     assert(!left_val.type()->isArray());
 
     EmitExpr(right);
@@ -1269,16 +1377,57 @@ void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
 }
 
 void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
-    EmitExpr(slice->expr(), EMIT_ALLOW_LVALUE);
-    if (slice->index())
-        EmitExpr(slice->index());
-    else
-        __ PUSH_C(0);
+    if (slice->expr()->lvalue()) {
+        EmitRvalueFromLvalue(slice->expr());
+    } else {
+        EmitExpr(slice->expr());
+    }
 
-    __ emit(OP_SLICE);
+    auto es = slice->expr()->val().type()->asEnumStruct();
+    if (es) {
+        uint32_t type_id = rtti_->to_typeid(es->type());
+        __ emit(OP_SLICE_ES, type_id);
+    } else {
+        if (slice->index())
+            EmitExpr(slice->index());
+        else
+            __ PUSH_C(0);
+        __ emit(OP_SLICE);
+    }
+}
+
+bool CodeGenerator::IsElidableSlice(Expr* expr, FunctionDecl* fun, ArgDecl* arg) {
+    if (!fun->is_native())
+        return false;
+    if (expr->kind() != ExprKind::SliceExpr)
+        return false;
+    if (arg->type_info().is_varargs)
+        return false;
+    if (!arg->type_info().type->isFlatArray())
+        return false;
+    return expr->to<SliceExpr>()->expr()->val().type()->isFlatArray();
+}
+
+void CodeGenerator::EmitElidedSliceExpr(SliceExpr* slice) {
+    if (slice->expr()->lvalue()) {
+        EmitRvalueFromLvalue(slice->expr());
+    } else {
+        EmitExpr(slice->expr());
+    }
+    if (slice->index()) {
+        EmitExpr(slice->index());
+        __ emit(OP_IDXADDR);
+    }
 }
 
 void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
+    if (expr->token() == tDBLCOLON) {
+        LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>();
+        uint32_t ref = rtti_->AddFieldRef(field);
+        __ emit(OP_LOAD_FLD_OFFSET, ref);
+        return;
+    }
+
     assert(expr->token() == '.');
 
     // Note that we do not load an iACCESSOR here, we only make sure the base
@@ -1290,12 +1439,7 @@ void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
     if (!expr->resolved())
         return;
 
-    if (LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>()) {
-        if (field->offset()) {
-            __ PUSH_C(field->offset() << 2);
-            __ emit(OP_ADD);
-        }
-    }
+    assert(false);
 }
 
 static inline Type* UnwrapRef(Type* type) {
@@ -1330,17 +1474,6 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     for (size_t i = argv.size() - 1; i < argv.size(); i--) {
         const auto& expr = argv[i];
 
-        bool lvalue = expr->lvalue();
-        if (lvalue)
-            BindLvalue(expr, true);
-        else
-            EmitExpr(expr);
-
-        if (expr->as<DefaultArgExpr>())
-            continue;
-
-        const auto& val = expr->val();
-
         ArgDecl* arg;
         if (i < arginfov.size()) {
             arg = arginfov[i];
@@ -1349,8 +1482,27 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             assert(arg->type_info().is_varargs);
         }
 
+        // Don't generate "slice ; array2native" sequences on local arrays,
+        // since "slice" and "array2native" cancel each other out.
+        bool is_elided_slice = IsElidableSlice(expr, call->fun(), arg);
+        if (is_elided_slice) {
+            EmitElidedSliceExpr(expr->to<SliceExpr>());
+        } else {
+            bool lvalue = expr->lvalue();
+            if (lvalue)
+                BindLvalue(expr, true);
+            else
+                EmitExpr(expr);
+        }
+
+        if (expr->as<DefaultArgExpr>())
+            continue;
+
+        const auto& val = expr->val();
+
         bool needs_temp = false;
         if (arg->type_info().is_varargs) {
+            bool lvalue = expr->lvalue();
             if (val.ident == iVARIABLE && !val.type()->isComposite()) {
                 assert(val.sym());
                 assert(lvalue);
@@ -1367,17 +1519,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                     EmitRvalue(val);
                 else if (val.ident == iVARIABLE)
                     EmitAddress(val.sym());
+                else if (val.ident == iFIELD)
+                    EmitAddress(val);
             }
 
             if (needs_temp) {
                 auto slot = AcquireTempSlot(expr, UnwrapRef(val.type()));
-                if (val.type()->isInt64()) {
-                    __ emit(OP_STOR_S, VarSlot(slot));
-                    __ emit(OP_ADDR_S, VarSlot(slot));
-                } else {
-                    __ emit(OP_STOR_S, VarSlot(slot));
-                    __ emit(OP_ADDR_S, VarSlot(slot));
-                }
+                __ emit(OP_STOR_S, VarSlot(slot));
+                __ emit(OP_ADDR_S, VarSlot(slot));
             }
         } else if (arg->type_info().type->isReference()) {
             if (val.ident == iVARIABLE && !val.type()->isComposite())
@@ -1394,23 +1543,22 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
 
-        if (val.type()->isArray() && !val.type()->isFlatArray() && call->fun()->is_native())
+        if (val.type()->isArray() && !val.type()->isFlatArray() && call->fun()->is_native() && !is_elided_slice)
             __ emit(OP_ARRAY_TO_NATIVE);
     }
 
     std::optional<uint32_t> hidden_slot;
 
     if (call->fun()->needs_hidden_arg()) {
-        if (auto type = return_type->as<ArrayType>()) {
-            auto slot = AcquireTempSlot(call, type);
-            if (type->is_flat())
-                __ emit(OP_ADDR_S, VarSlot(slot));
-            else
-                __ emit(OP_LOAD_S, VarSlot(slot));
+        if (return_type->isCompositeValue()) {
+            auto slot = AcquireTempSlot(call, return_type);
+            __ emit(OP_ADDR_S, VarSlot(slot));
             hidden_slot = {slot};
-        } else if (return_type->isEnumStruct()) {
-            assert(false);
-            assert(false);
+        } else if (auto type = return_type->as<ArrayType>()) {
+            assert(!type->is_flat());
+            auto slot = AcquireTempSlot(call, type);
+            __ emit(OP_LOAD_S, VarSlot(slot));
+            hidden_slot = {slot};
         } else {
             assert(return_type->isInt64());
 
@@ -1426,11 +1574,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         if (!return_type->isVoid())
             __ emit(OP_POP);
     } else if (hidden_slot) {
-        if (auto array = return_type->as<ArrayType>()) {
-            if (array->is_flat())
-                __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
-            else
-                __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
+        if (return_type->isCompositeValue()) {
+            __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
         } else {
             __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
         }
@@ -1444,20 +1589,29 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     auto init = arg->init_rhs();
 
     if (auto array = init->as<ArrayExpr>()) {
-        auto type = arg->type()->as<ArrayType>();
-        if (type->is_flat()) {
+        Type* type = *arg->type();
+        if (type->isEnumStruct()) {
             auto temp_slot = AcquireTempSlot(expr, type);
             __ emit(OP_ADDR_S, VarSlot(temp_slot));
-            EmitArrayCtor(type, array, EMIT_REPEATABLE);
+            EmitEnumStructCtor(type->asEnumStruct(), array);
 
             __ emit(OP_ADDR_S, VarSlot(temp_slot));
         } else {
-            auto type_id = rtti_->to_typeid(type);
-            if (type->size() == 0)
-                __ emit(OP_PUSH_C, (uint32_t)array->exprs().size());
-            __ emit(OP_NEWARRAY, type_id);
-            __ emit(OP_DUP);
-            EmitArrayCtor(type, array, EMIT_REPEATABLE);
+            auto arr_type = type->as<ArrayType>();
+            if (arr_type->is_flat()) {
+                auto temp_slot = AcquireTempSlot(expr, arr_type);
+                __ emit(OP_ADDR_S, VarSlot(temp_slot));
+                EmitArrayCtor(arr_type, array, EMIT_REPEATABLE);
+
+                __ emit(OP_ADDR_S, VarSlot(temp_slot));
+            } else {
+                auto type_id = rtti_->to_typeid(arr_type);
+                if (arr_type->size() == 0)
+                    __ emit(OP_PUSH_C, (uint32_t)array->exprs().size());
+                __ emit(OP_NEWARRAY, type_id);
+                __ emit(OP_DUP);
+                EmitArrayCtor(arr_type, array, EMIT_REPEATABLE);
+            }
         }
     } else {
         if (init->lvalue())
@@ -1509,6 +1663,15 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 }
 
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
+    if (auto es = fun_->return_type()->asEnumStruct()) {
+        __ load_hidden_arg(fun_);
+        EmitExpr(stmt->expr());
+        uint32_t type_id = rtti_->to_typeid(es->type());
+        __ emit(OP_COPYOBJ, type_id);
+        __ emit(OP_RETV);
+        return;
+    }
+
     auto type = fun_->return_type()->as<ArrayType>();
 
     if (type->inner()->isArray()) {
@@ -1584,7 +1747,12 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 }
 
 void CodeGenerator::EmitRvalue(RvalueExpr* expr) {
-    const auto& val = BindLvalue(expr->lval());
+    EmitRvalueFromLvalue(expr->lval());
+}
+
+void CodeGenerator::EmitRvalueFromLvalue(Expr* expr) {
+    assert(expr->lvalue());
+    value val = BindLvalue(expr);
     EmitRvalue(val);
 }
 
@@ -1600,22 +1768,32 @@ void CodeGenerator::EmitRvalue(const value& lval) {
                 __ emit(OP_LOAD_ELEM_F32);
             else if (!lval.type()->isComposite())
                 __ emit(OP_LOAD_ELEM_I32);
+            else if (lval.type()->isCompositeValue())
+                __ emit(OP_IDXADDR);
             else if (!lval.type()->isArray())
                 assert(false);
             break;
         case iADDRESS:
-            assert(!lval.type()->isFlatArray());
+            if (lval.type()->isComposite())
+                break;
             if (lval.type()->isChar())
                 __ emit(OP_LOAD_I_U8);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_I_I64);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_I_F32);
-            else if (!lval.type()->isComposite())
-                __ emit(OP_LOAD_I_I32);
             else
-                assert(false);
+                __ emit(OP_LOAD_I_I32);
             break;
+        case iFIELD: {
+            auto field = lval.field();
+            uint32_t ref = rtti_->AddFieldRef(field);
+            if (lval.type()->isCompositeValue())
+                __ emit(OP_ADDR_FLD, ref);
+            else
+                __ emit(OP_LOAD_FLD, ref);
+            break;
+        }
         case iACCESSOR:
             InvokeGetter(lval.accessor());
             break;
@@ -1683,6 +1861,12 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 __ emit(OP_STOR_I_I32);
             assert(!lval.type()->isComposite());
             break;
+        case iFIELD: {
+            auto field = lval.field();
+            uint32_t ref = rtti_->AddFieldRef(field);
+            __ emit(OP_STOR_FLD, ref);
+            break;
+        }
         case iACCESSOR:
             if (lval.type()->isInt64()) {
                 // Need to pass the int64 as an address for native compatibility.
@@ -1729,11 +1913,38 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
     }
 }
 
+void CodeGenerator::EmitAddress(const value& lval) {
+    switch (lval.ident) {
+        case iVARIABLE:
+            EmitAddress(lval.sym());
+            break;
+        case iFIELD: {
+            auto field = lval.field();
+            uint32_t ref = rtti_->AddFieldRef(field);
+            __ emit(OP_ADDR_FLD, ref);
+            break;
+        }
+        case iARRAYELEM:
+            if (!lval.type()->isArray())
+                __ emit(OP_IDXADDR);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+}
+
 void CodeGenerator::EmitAddress(VarDeclBase* decl) {
     if (decl->vclass() == sARGUMENT) {
-        __ emit(OP_LOAD_S, VarSlot(decl->addr()));
+        if (decl->type()->isPassByRef())
+            __ emit(OP_LOAD_S, VarSlot(decl->addr()));
+        else
+            __ emit(OP_ADDR_S, VarSlot(decl->addr()));
     } else if (decl->vclass() == sLOCAL) {
-        __ emit(OP_ADDR_S, VarSlot(decl->addr()));
+        if (decl->type()->isAddressType())
+            __ emit(OP_LOAD_S, VarSlot(decl->addr()));
+        else
+            __ emit(OP_ADDR_S, VarSlot(decl->addr()));
     } else {
         assert(decl->vclass() == sSTATIC || decl->vclass() == sGLOBAL);
         uint16_t slot = AcquireGlobalSlot(decl);
@@ -2160,12 +2371,19 @@ static inline bool CoercesToInt64(Type* type) {
 
 void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
     auto from = expr->expr();
-    EmitExpr(from, flags & EMIT_ALLOW_LVALUE);
+    if (expr->lvalue()) {
+        assert(from->lvalue());
 
-    if (CoercesToInt64(expr->val().type()) && from->val().type()->isInt64()) {
-        __ emit(OP_TRUNCATE_I64);
-    } else if (expr->val().type()->isInt64() && CoercesToInt64(from->val().type())) {
-        __ emit(OP_CVT_I64);
+        auto val = BindLvalue(from);
+        EmitAddress(val);
+    } else {
+        EmitExpr(from);
+
+        if (CoercesToInt64(expr->val().type()) && from->val().type()->isInt64()) {
+            __ emit(OP_TRUNCATE_I64);
+        } else if (expr->val().type()->isInt64() && CoercesToInt64(from->val().type())) {
+            __ emit(OP_CVT_I64);
+        }
     }
 }
 

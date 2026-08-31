@@ -39,9 +39,8 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
     stringpool_ = new SmxRttiTable<smx_rtti_string>("rtti.stringpool");
-    enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
-    es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
     globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
+    field_refs_ = new SmxRttiTable<smx_rtti_field_ref>("rtti.field_refs");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
     dbg_lines_ = new SmxRttiTable<smx_rtti_debug_line>(".dbg.method_lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -69,9 +68,8 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.addIfNotEmpty(classdefs_);
     builder.addIfNotEmpty(fields_);
     builder.addIfNotEmpty(stringpool_);
-    builder.addIfNotEmpty(enumstructs_);
-    builder.addIfNotEmpty(es_fields_);
     builder.addIfNotEmpty(globals_);
+    builder.addIfNotEmpty(field_refs_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -227,30 +225,34 @@ RttiBuilder::add_enumstruct(Type* type)
         return p->value;
 
     auto es_decl = type->asEnumStruct();
-    uint32_t es_index = enumstructs_->count();
+    uint32_t es_index = classdefs_->count();
     typeid_cache_.add(p, type, es_index);
 
-    smx_rtti_enumstruct es = {};
-    es.name = names_->add(*cc_.atoms(), type->declName());
-    es.first_field = es_fields_->count();
-    es.size = es_decl->array_size();
-    enumstructs_->add(es);
+    smx_rtti_classdef classdef;
+    memset(&classdef, 0, sizeof(classdef));
+    classdef.flags = kClassType_EnumStruct;
+    classdef.name = names_->add(*cc_.atoms(), type->declName());
+    classdef.first_field = fields_->count();
+    classdefs_->add(classdef);
 
     // Pre-allocate storage in case of nested types.
     const auto& enumlist = es_decl->fields();
-    for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++)
-        es_fields_->add() = smx_rtti_es_field{};
+    for (size_t i = 0; i < enumlist.size(); i++)
+        fields_->add();
 
     // Add all fields.
     size_t index = 0;
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
         auto field = (*iter);
 
-        smx_rtti_es_field info;
+        smx_rtti_field info;
+        info.flags = 0;
         info.name = names_->add(field->name());
         info.type_id = to_typeid(field->type());
-        info.offset = field->offset();
-        es_fields_->at(es.first_field + index) = info;
+        uint32_t field_idx = classdef.first_field + index;
+        fields_->at(field_idx) = info;
+
+        field_mappings_[field] = FieldMapping{es_index, field_idx};
         index++;
     }
 
@@ -271,7 +273,7 @@ RttiBuilder::add_struct(Type* type)
 
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
-    classdef.flags = kClassDefType_Struct;
+    classdef.flags = kClassType_Struct;
     classdef.name = names_->add(*cc_.atoms(), ps->name());
     classdef.first_field = fields_->count();
     classdefs_->add(classdef);
@@ -287,7 +289,10 @@ RttiBuilder::add_struct(Type* type)
         field.flags = 0;
         field.name = names_->add(arg->name());
         field.type_id = to_typeid(arg->type());
-        fields_->at(classdef.first_field + i) = field;
+        uint32_t field_idx = classdef.first_field + i;
+        fields_->at(field_idx) = field;
+
+        field_mappings_[arg] = FieldMapping{struct_index, field_idx};
     }
     return struct_index;
 }
@@ -570,6 +575,35 @@ void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionTyp
 int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {
     encode_type_into(locals->types, type);
     return locals->count++;
+}
+
+uint32_t RttiBuilder::AddFieldRef(LayoutFieldDecl* decl) {
+    auto iter = field_refs_map_.find(decl);
+    if (iter != field_refs_map_.end())
+        return iter->second;
+
+    auto mapping_iter = field_mappings_.find(decl);
+    if (mapping_iter == field_mappings_.end()) {
+        if (Decl* parent = decl->parent()) {
+            if (auto es = parent->as<EnumStructDecl>())
+                add_enumstruct(*es->type());
+            else if (auto ps = parent->as<PstructDecl>())
+                add_struct(*ps->type());
+            else
+                assert(false);
+        }
+        mapping_iter = field_mappings_.find(decl);
+    }
+    assert(mapping_iter != field_mappings_.end());
+
+    uint32_t ref_index = field_refs_->count();
+    smx_rtti_field_ref ref;
+    ref.cls_index = mapping_iter->second.cls_index;
+    ref.field_index = mapping_iter->second.field_index;
+    field_refs_->add(ref);
+
+    field_refs_map_[decl] = ref_index;
+    return ref_index;
 }
 
 } // namespace cc

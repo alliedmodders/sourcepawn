@@ -20,6 +20,9 @@
 #include "type-desc.h"
 
 namespace sp {
+namespace v2 {
+class Runtime;
+}
 
 struct TypeCacheKey {
     explicit TypeCacheKey(TypeKind kind)
@@ -36,10 +39,15 @@ struct TypeCacheKey {
         assert(kind == TypeKind::Array || kind == TypeKind::FixedArray ||
                kind == TypeKind::FlatArray || kind == TypeKind::ArraySlice);
     }
+    explicit TypeCacheKey(const smx_rtti_classdef* classdef)
+      : kind(TypeKind::EnumStruct), classdef(classdef)
+    {}
 
     bool operator ==(const TypeCacheKey& other) const {
         if (kind != other.kind)
             return false;
+        if (kind == TypeKind::EnumStruct)
+            return classdef == other.classdef;
         if (kind == TypeKind::Array || kind == TypeKind::ArraySlice || kind == TypeKind::Reference)
             return elt_kind == other.elt_kind;
         if (kind == TypeKind::FixedArray || kind == TypeKind::FlatArray) {
@@ -52,6 +60,7 @@ struct TypeCacheKey {
     TypeKind kind;
     const TypeDesc* elt_kind = nullptr;
     uint32_t size = 0;
+    const smx_rtti_classdef* classdef = nullptr;
 };
 
 class TypeCache final {
@@ -64,6 +73,7 @@ class TypeCache final {
     const TypeDesc* GetArray(const TypeDesc* elt);
     const TypeDesc* GetSlice(const TypeDesc* elt);
     const TypeDesc* GetReference(const TypeDesc* elt);
+    const TypeDesc* GetEnumStruct(v2::Runtime* rt, const smx_rtti_classdef* classdef);
 
   private:
     PoolAllocator pool_;
@@ -74,8 +84,12 @@ class TypeCache final {
         }
         static uintptr_t hash(const TypeCacheKey& key) {
             uintptr_t h = ke::HashInt32((uint8_t)key.kind);
-            h = ke::HashCombine(h, ke::HashPointer(key.elt_kind));
-            h = ke::HashCombine(h, ke::HashInt64(key.size));
+            if (key.kind == TypeKind::EnumStruct) {
+                h = ke::HashCombine(h, ke::HashPointer(key.classdef));
+            } else {
+                h = ke::HashCombine(h, ke::HashPointer(key.elt_kind));
+                h = ke::HashCombine(h, ke::HashInt64(key.size));
+            }
             return h;
         }
     };

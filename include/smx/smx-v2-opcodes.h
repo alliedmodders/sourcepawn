@@ -116,7 +116,7 @@ namespace v2 {
      */ \
     FOR_EACH(NEWARRAY, 66, "newarray", 5) \
     /* Same as newarray, except that there must be N values on the stack,
-     * where N is <= number of kArrays in the type before any non-kArray
+     * where N is the number of kArrays in the type before any non-kArray
      * types appear. Eg, int[][][25][] must have two integers pushed onto
      * the stack. N must be >= 1, and is encoded as a uint8_t, which is
      * followed by a uint32_t type_id.
@@ -147,7 +147,7 @@ namespace v2 {
      * is then pushed onto the stack (except in the ADDR case, when the
      * address is pushed instead).
      *
-     * The type in the field ref must match the type of the object.
+     * The object type in the field ref must match the type of the object.
      */ \
     FOR_EACH(LOAD_FLD, 71, "load.fld", 5) \
     FOR_EACH(ADDR_FLD, 72, "addr.fld", 5) \
@@ -163,6 +163,11 @@ namespace v2 {
     FOR_EACH(STOR_I_F32, 82, "stor.i.f32", 1) \
     FOR_EACH(LOAD_ELEM_A, 83, "load.elem.a", 1) \
     FOR_EACH(PUSH_C_F32, 84, "push.c.f32", 5) \
+    FOR_EACH(STOR_FLD, 85, "stor.fld", 5) \
+    FOR_EACH(LOAD_FLD_OFFSET, 86, "load.fld.offset", 5) \
+    FOR_EACH(LOAD_ES_SIZE, 87, "load.es.size", 5) \
+    FOR_EACH(COPYOBJ, 88, "copyobj", 5) \
+    FOR_EACH(SLICE_ES, 89, "slice.es", 5)
 
 
 enum OPCODE {

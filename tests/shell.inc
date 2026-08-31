@@ -66,3 +66,6 @@ native void assert_eq(any a1, any a2);
 
 native void print_test_struct(TestStruct x);
 native TestStruct add_test_structs(TestStruct a, TestStruct b);
+
+native int test_local_to_array_ptr(const char[] str, int index);
+

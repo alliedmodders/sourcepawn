@@ -605,6 +605,42 @@ bool Interpreter::run() {
                 pushCell(rt_->GetStringAddr(index));
                 break;
             }
+            case LL_LOAD_FLD_X32: {
+                uint32_t offset = reader_.read<uint32_t>();
+                cell_t obj_addr = popCell();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                pushCell(*reinterpret_cast<cell_t*>(base_ptr + offset));
+                break;
+            }
+            case LL_LOAD_FLD_X64: {
+                uint32_t offset = reader_.read<uint32_t>();
+                cell_t obj_addr = popCell();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                pushInt64(*reinterpret_cast<int64_t*>(base_ptr + offset));
+                break;
+            }
+            case LL_ADDR_FLD: {
+                uint32_t offset = reader_.read<uint32_t>();
+                cell_t obj_addr = popCell();
+                pushCell(obj_addr + offset);
+                break;
+            }
+            case LL_STOR_FLD_X32: {
+                uint32_t offset = reader_.read<uint32_t>();
+                cell_t val = popCell();
+                cell_t obj_addr = popCell();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                *reinterpret_cast<cell_t*>(base_ptr + offset) = val;
+                break;
+            }
+            case LL_STOR_FLD_X64: {
+                uint32_t offset = reader_.read<uint32_t>();
+                int64_t val = popInt64();
+                cell_t obj_addr = popCell();
+                uint8_t* base_ptr = rt_->heap().ToPhysAddr<uint8_t*>(obj_addr);
+                *reinterpret_cast<int64_t*>(base_ptr + offset) = val;
+                break;
+            }
             case LL_CALL:
             case LL_CALLN: {
                 uint32_t method_index = (uint32_t)reader_.readCell();
@@ -987,6 +1023,15 @@ bool Interpreter::run() {
                 memcpy(dest_data, src_data, src->length * src_elt->element_size());
                 break;
             }
+            case LL_COPYOBJ: {
+                uint32_t bytes = reader_.read<uint32_t>();
+                cell_t src_addr = popCell();
+                cell_t dest_addr = popCell();
+                uint8_t* dest = heap_.ToPhysAddr<uint8_t*>(dest_addr);
+                uint8_t* src = heap_.ToPhysAddr<uint8_t*>(src_addr);
+                memcpy(dest, src, bytes);
+                break;
+            }
             case LL_ADDR_S: {
                 cell_t slot = reader_.readInt16();
                 cell_t address = frm_ + StackOffset(slot);
@@ -1062,6 +1107,18 @@ bool Interpreter::run() {
                 assert((addr & kNativePointerTag) == 0);
 
                 pushCell(addr | kNativePointerTag);
+                break;
+            }
+            case LL_SLICE_ES: {
+                uint32_t cell_count = reader_.read<uint32_t>();
+                cell_t base = popCell();
+                SpArray* slice = rt_->heap().AllocTyped<SpArray>();
+                if (!slice)
+                    return false;
+                slice->td = rt_->GetSliceType(rt_->GetPrimitiveType(TypeKind::Any));
+                slice->length = cell_count;
+                slice->data = base;
+                pushCell(rt_->heap().ToLocalAddr(slice));
                 break;
             }
 

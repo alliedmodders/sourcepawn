@@ -277,6 +277,14 @@ char Decl::vclass() {
     return 0;
 }
 
+PstructDecl::PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields)
+  : Decl(StmtKind::PstructDecl, pos, name),
+    fields_(fields)
+{
+    for (auto field : fields_)
+        field->set_parent(this);
+}
+
 LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
     for (const auto& field : fields_) {
         if (field->name() == name)

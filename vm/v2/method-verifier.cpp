@@ -220,6 +220,8 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return pushStack(base);
             }
 
+            if (base->array_elt()->IsCompositeValue())
+                return pushStack(base->array_elt());
             return pushStack(rt_->GetReferenceType(base->array_elt()));
         }
 
@@ -352,7 +354,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* td = verifyStackOffset(offset);
             if (!td)
                 return false;
-            if (td->IsFlatArray())
+            if (td->IsCompositeValue())
                 return pushStack(td);
             return pushStack(rt_->GetReferenceType(td));
         }
@@ -420,7 +422,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto td = verifyGlobalIndex(index);
             if (!td)
                 return false;
-            if (td->IsFlatArray())
+            if (td->IsCompositeValue())
                 return pushStack(td);
             return pushStack(rt_->GetReferenceType(td));
         }
@@ -653,6 +655,110 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(td);
         }
 
+        case OP_LOAD_FLD: {
+            uint32_t ref_index = read<uint32_t>();
+            auto ref = smx_->getFieldRef(ref_index);
+            if (!ref)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* obj;
+            if (!popStack(&obj))
+                return false;
+            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto field = smx_->getField(ref->field_index);
+            if (!field)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto td = rt_->LoadTypeFromId(field->type_id);
+            if (!td)
+                return false;
+            return pushStack(td);
+        }
+        case OP_ADDR_FLD: {
+            uint32_t ref_index = read<uint32_t>();
+            auto ref = smx_->getFieldRef(ref_index);
+            if (!ref)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* obj;
+            if (!popStack(&obj))
+                return false;
+            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto field = smx_->getField(ref->field_index);
+            if (!field)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto td = rt_->LoadTypeFromId(field->type_id);
+            if (!td)
+                return false;
+            if (td->IsCompositeValue())
+                return pushStack(td);
+            return pushStack(rt_->GetReferenceType(td));
+        }
+        case OP_STOR_FLD: {
+            uint32_t ref_index = read<uint32_t>();
+            auto ref = smx_->getFieldRef(ref_index);
+            if (!ref)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* val_type;
+            if (!popStack(&val_type))
+                return false;
+            const TypeDesc* obj;
+            if (!popStack(&obj))
+                return false;
+            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto field = smx_->getField(ref->field_index);
+            if (!field)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto td = rt_->LoadTypeFromId(field->type_id);
+            if (!td)
+                return false;
+            if (!ValidateStore(td, val_type))
+                return false;
+            return true;
+        }
+        case OP_LOAD_FLD_OFFSET: {
+            uint32_t ref_index = read<uint32_t>();
+            auto ref = smx_->getFieldRef(ref_index);
+            if (!ref)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            auto field = smx_->getField(ref->field_index);
+            if (!field)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+        case OP_LOAD_ES_SIZE: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td || td->kind() != TypeKind::EnumStruct)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+        case OP_COPYOBJ: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td || td->kind() != TypeKind::EnumStruct)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc *src, *dest;
+            if (!popStack(&src) || !popStack(&dest))
+                return false;
+            if (src != td || dest != td)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return true;
+        }
+
+        case OP_SLICE_ES: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td || td->kind() != TypeKind::EnumStruct)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* base;
+            if (!popStack(&base))
+                return false;
+            if (base != td)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(rt_->GetSliceType(any_type()));
+        }
+
         default:
             // Should have been caught earlier.
             return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -691,7 +797,7 @@ bool MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
             first->stack[i] = any_type();
-        } else if (t1->IsFlatArray() || t2->IsFlatArray()) {
+        } else if (t1->IsCompositeValue() || t2->IsCompositeValue()) {
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
         } else if (t1->IsArrayish() && t2->IsArrayish() && t1->array_elt() == t2->array_elt()) {
             first->stack[i] = rt_->GetArrayType(t1->array_elt());

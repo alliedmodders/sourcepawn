@@ -5,4 +5,7 @@ module = binary.Module(builder, 'smxdump')
 
 module.sources += [
   'smxdump.cpp',
+  'dump-v1.cpp',
+  'dump-v2.cpp',
+  'dump-lower.cpp',
 ]

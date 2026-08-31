@@ -83,6 +83,7 @@ class CodeGenerator final
     void EmitGlobalInitStmt(GlobalInitStmt* stmt);
 
     void EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags);
+    void EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor);
     uint32_t EmitArrayFillData(ArrayType* type, ArrayExpr* array);
     uint32_t EmitStringFillData(ArrayType* type, StringExpr* array);
 
@@ -106,6 +107,8 @@ class CodeGenerator final
     void EmitSymbolExpr(SymbolExpr* expr);
     void EmitIndexExpr(IndexExpr* expr);
     void EmitSliceExpr(SliceExpr* expr);
+    bool IsElidableSlice(Expr* expr, FunctionDecl* fun, ArgDecl* arg);
+    void EmitElidedSliceExpr(SliceExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
     void EmitCallExpr(CallExpr* expr, unsigned int flags);
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
@@ -114,8 +117,10 @@ class CodeGenerator final
     void EmitSimpleCastExpr(SimpleCastExpr* expr);
     void EmitCastExpr(CastExpr* expr, unsigned int flags);
     void EmitRvalue(RvalueExpr* expr);
+    void EmitRvalueFromLvalue(Expr* expr);
     void EmitCommaExpr(CommaExpr* expr, unsigned int flags);
     void EmitArrayExpr(ArrayExpr* expr, unsigned int flags);
+    void EmitSizeofExpr(SizeofExpr* expr, unsigned int flags);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
@@ -126,6 +131,7 @@ class CodeGenerator final
     void InvokeGetter(MethodmapPropertyDecl* method);
     void EmitRvalue(const value& lval);
     void EmitStore(ParseNode* node, const value& lval);
+    void EmitAddress(const value& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
     void EmitAddress(VarDeclBase* decl);
 
@@ -161,7 +167,9 @@ class CodeGenerator final
     //
     // If |simple_address| is true, then iARRAYELEM is converted to an iADDRESS.
     // This is useful if the caller does not want to deal with complex stack
-    // operations.
+    // operations. Note that simple_address is ONLY intended to collapse two
+    // stack values into one. It is not intended to compute an address
+    // unconditionally.
     value BindLvalue(Expr* expr, bool simple_address = false);
 
   private:

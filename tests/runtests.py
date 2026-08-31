@@ -206,6 +206,7 @@ class Test(object):
     self.smx_path = None
     self.stdout_file = None
     self.stderr_file = None
+    self.txtout_file = None
     self.original_source = self.path
 
   def prepare(self):
@@ -222,6 +223,7 @@ class Test(object):
       self.smx_path += '.smx'
 
     base_path, _ = os.path.splitext(self.path)
+    smx_expected_base = base_path
 
     if self.path.endswith('.smx'):
       # Check if this is a versioned prebuilt.
@@ -232,10 +234,16 @@ class Test(object):
 
     self.read_local_manifest()
 
-    if os.path.exists(base_path + '.out'):
+    if os.path.exists(smx_expected_base + '.out'):
+      self.stdout_file = smx_expected_base + '.out'
+    elif os.path.exists(base_path + '.out'):
       self.stdout_file = base_path + '.out'
-    if os.path.exists(base_path + '.err'):
+
+    if os.path.exists(smx_expected_base + '.err'):
+      self.stderr_file = smx_expected_base + '.err'
+    elif os.path.exists(base_path + '.err'):
       self.stderr_file = base_path + '.err'
+
     if os.path.exists(base_path + '.txt'):
       self.txtout_file = base_path + '.txt'
 

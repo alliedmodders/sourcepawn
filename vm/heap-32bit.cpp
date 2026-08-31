@@ -14,6 +14,18 @@
 
 #include <memory>
 
+#if defined(_WIN32)
+#    include <windows.h>
+#    include <memoryapi.h>
+#else
+#    include <sys/mman.h>
+#    include <unistd.h>
+#    include <stdio.h>
+#    include <errno.h>
+#endif
+
+#include "../utils/procmap.h"
+
 #include "environment.h"
 #include "heap-defaults.h"
 
@@ -37,23 +49,78 @@ Heap32::~Heap32() {
     }
 }
 
+// For each platform, we need the address to be in the lower 32 bits of the
+// address space, so we can tag the top bit of the pointer.
+static void* AllocChunkMem(size_t size) {
+#if defined(_WIN32)
+    MEM_ADDRESS_REQUIREMENTS req{};
+    req.HighestEndingAddress = (PVOID)0x7FFFFFFF;
+
+    MEM_EXTENDED_PARAMETER param{};
+    param.Type = MemExtendedParameterAddressRequirements;
+    param.Pointer = &req;
+
+    return VirtualAlloc2(GetCurrentProcess(), nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE, &param, 1);
+#elif defined(MAP_FIXED_NOREPLACE)
+    uintptr_t search_start = 0x10000;
+    while (true) {
+        std::optional<uintptr_t> candidate =
+            sp::FindNextMmapCandidate(search_start, size, 0x80000000);
+        if (!candidate.has_value()) {
+            return nullptr;
+        }
+
+        void* ptr = mmap((void*)*candidate, size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+        if (ptr != MAP_FAILED) {
+            return ptr;
+        }
+
+        if (errno != EEXIST)
+            return nullptr;
+        search_start = *candidate + 0x10000;
+    }
+#else
+    // Fallback: probe-and-hint
+    uintptr_t hint = 0x10000;
+    while (hint + size <= 0x80000000) {
+        void* ptr = mmap((void*)hint, size, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (ptr != MAP_FAILED) {
+            if ((uintptr_t)ptr + size <= 0x80000000) {
+                return ptr;
+            }
+            munmap(ptr, size);
+        }
+        hint += size;
+    }
+#endif
+    return nullptr;
+}
+
+static void FreeChunkMem(void* base, size_t size) {
+#if defined(_WIN32)
+    VirtualFree(base, 0, MEM_RELEASE);
+#else
+    munmap(base, size);
+#endif
+}
+
 Heap32::Chunk::~Chunk() {
     if (base)
-        free(base);
+        FreeChunkMem(base, size);
 }
 
 Heap32::Chunk* Heap32::NewChunk(size_t size) {
-    // Use malloc here since make_unique doesn't take std::nothrow, and large
-    // allocations can fail.
+    // Use make_unique carefully since large allocations can fail
     auto chunk = std::make_unique<Chunk>();
-    chunk->base = (uint8_t*)malloc(size);
+    chunk->base = (uint8_t*)AllocChunkMem(size);
     if (!chunk->base) {
         Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
     }
-
     chunk->size = size;
-    chunk->end = chunk->base + chunk->size;
+    chunk->end = chunk->base + size;
     chunk->pos = chunk->base;
 
     committed_ += size;

@@ -250,7 +250,7 @@ PstructDecl::EnterNames(SemaContext& sc)
         return false;
     }
 
-    sc.cc().types()->definePstruct(this);
+    type_ = sc.cc().types()->definePstruct(this);
 
     size_t position = 0;
     for (auto& field : fields_) {
@@ -906,7 +906,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
     std::unordered_set<Atom*> seen;
 
-    cell position = 0;
     for (auto& field : fields_) {
         if (!sc.BindType(field->pos(), &field->mutable_type_info()))
             continue;
@@ -945,10 +944,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
         seen.emplace(field->name());
-
-        field->set_offset(position);
-
-        position += sizeof(cell_t);
     }
 
     if (fields_.empty())
@@ -962,7 +957,6 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         seen.emplace(decl->name());
     }
 
-    array_size_ = position;
     return errors.ok();
 }
 

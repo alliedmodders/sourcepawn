@@ -112,6 +112,14 @@ bool Type::isCompositeValue() const {
     return isEnumStruct() || isFlatArray();
 }
 
+bool Type::isPassByRef() const {
+    return isReference() || isArray() || isInt64() || isCompositeValue();
+}
+
+bool Type::isAddressType() const {
+    return isReference() || (isArray() && !isCompositeValue());
+}
+
 ArrayType::ArrayType(Type* inner, int size, bool is_flat)
   : Type(nullptr, TypeKind::Array)
 {

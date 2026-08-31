@@ -1,0 +1,253 @@
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
+// 
+// Copyright (C) 2026 AlliedModders LLC
+// 
+// This file is part of SourcePawn. SourcePawn is free software: you can
+// redistribute it and/or modify it under the terms of the GNU General Public
+// License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+//
+#include "smxdump.h"
+#include "vm/smx-image.h"
+#include "vm/binary-reader.h"
+#include <inttypes.h>
+
+using namespace ke;
+using namespace sp;
+using namespace SourcePawn;
+
+void DumpTool::PrintEscaped(std::string_view s) {
+    for (char c : s) {
+        unsigned char uc = (unsigned char)c;
+        if (uc == '\"') fprintf(stdout, "\\\"");
+        else if (uc == '\\') fprintf(stdout, "\\\\");
+        else if (uc == '\n') fprintf(stdout, "\\n");
+        else if (uc == '\r') fprintf(stdout, "\\r");
+        else if (uc == '\t') fprintf(stdout, "\\t");
+        else if (uc >= 32 && uc <= 126) fputc(uc, stdout);
+        else fprintf(stdout, "\\x%02x", uc);
+    }
+}
+
+void DumpTool::DumpString(uint16_t index) {
+    auto table = smx_->rtti_stringpool();
+    if (!table || index >= table->row_count) {
+        fprintf(stdout, " unknown_string_%u", index);
+        return;
+    }
+
+    auto entry = smx_->getRttiRow<smx_rtti_string>(table, index);
+    auto blob = smx_->ReadDataBlob(entry->offset);
+    if (!blob) {
+        fprintf(stdout, " <invalid_blob_0x%x>", entry->offset);
+        return;
+    }
+
+    std::string_view s = *blob;
+    fprintf(stdout, " \"");
+    if (s.length() > 60) {
+        PrintEscaped(s.substr(0, 57));
+        fprintf(stdout, "...");
+    } else {
+        PrintEscaped(s);
+    }
+    fprintf(stdout, "\"");
+}
+
+void DumpTool::DumpCodeRangeV2(uint32_t pcode_start, uint32_t pcode_end) {
+    using namespace sp::v2;
+    auto code = smx_->DescribeCode();
+
+    auto start = code.bytes + pcode_start;
+    auto cip = start;
+    auto code_end = code.bytes + pcode_end;
+    auto method_start = cip;
+
+    while (cip < code_end) {
+        OPCODE op = (OPCODE)*cip;
+
+        const char* name = nullptr;
+        if (op < OPCODES_LAST)
+            name = GetOpcodeName(op);
+
+        uint32_t line;
+        uint32_t offset = uint32_t(cip - code.bytes);
+        if (smx_->IsLineBoundary(offset) && smx_->LookupLine(offset, &line)) {
+            if (cip != method_start)
+                fprintf(stdout, "\n");
+            fprintf(stdout, "    ; line %u\n", line);
+        } else if (cip != method_start) {
+            fprintf(stdout, "\n");
+        }
+
+        fprintf(stdout, "    %04x: ", (uint32_t)(cip - method_start));
+        if (name)
+            fprintf(stdout, "%s", name);
+        else
+            fprintf(stdout, "unknown_op_%u", op);
+
+        DumpOpcodeV2(method_start, cip, op);
+
+        if (op == OP_SWITCH)
+            cip += GetSwitchOpcodeSize(cip);
+        else if (name)
+            cip += GetOpcodeSize(op);
+        else
+            cip++;
+    }
+    fprintf(stdout, "\n");
+}
+
+void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp::v2::OPCODE op) {
+    using namespace sp::v2;
+    BinaryReader reader(cip + 1);
+
+    switch (op) {
+        case OP_PUSH_C:
+            fprintf(stdout, " %d", reader.read<cell_t>());
+            break;
+
+        case OP_LOAD_GLB:
+        case OP_STOR_GLB:
+        case OP_ADDR_GLB:
+        {
+            uint16_t index = reader.read<uint16_t>();
+            auto globals = smx_->rtti_globals();
+            if (globals && index < globals->row_count) {
+                auto global = smx_->getRttiRow<smx_rtti_global>(globals, index);
+                fprintf(stdout, " %s", smx_->names() + global->name);
+            } else {
+                fprintf(stdout, " unknown_global_%u", index);
+            }
+            break;
+        }
+
+        case OP_LOAD_STR:
+            DumpString(reader.read<uint16_t>());
+            break;
+
+        case OP_PUSH_C_I8:
+            fprintf(stdout, " %d", (int)reader.read<int8_t>());
+            break;
+
+        case OP_PUSH_C_I64:
+            fprintf(stdout, " %" PRId64, reader.read<int64_t>());
+            break;
+
+        case OP_PUSH_C_F32:
+            fprintf(stdout, " %f", reader.read<float>());
+            break;
+
+        case OP_ADDR_S:
+        case OP_LOAD_S:
+        case OP_STOR_S:
+            fprintf(stdout, " %d", reader.read<int16_t>());
+            break;
+
+        case OP_STOR_S_C: {
+            int16_t offset = reader.read<int16_t>();
+            cell_t value = reader.read<cell_t>();
+            fprintf(stdout, " %d, %d", offset, value);
+            break;
+        }
+
+        case OP_LOAD_FN:
+        case OP_CALL:
+        case OP_CALLN:
+        {
+            uint32_t method_index = reader.read<uint32_t>();
+            if (auto method = smx_->GetMethod(method_index))
+                fprintf(stdout, " %s", smx_->names() + method->name);
+            else
+                fprintf(stdout, " unknown_method_%u", method_index);
+
+            if (op == OP_CALLN) {
+                uint8_t nargs = reader.read<uint8_t>();
+                fprintf(stdout, " %u", nargs);
+            }
+            break;
+        }
+
+        case OP_JUMP:
+        case OP_JZER:
+        case OP_JNZ:
+        case OP_JEQ:
+        case OP_JNEQ:
+        case OP_JSLESS:
+        case OP_JSGRTR:
+        case OP_JSGEQ:
+        case OP_JSLEQ:
+        {
+            uint32_t target_offs = reader.read<uint32_t>();
+            uint32_t diff = target_offs - (uint32_t)(method_start - smx_->DescribeCode().bytes);
+            fprintf(stdout, " %04x ; %x", diff, target_offs);
+            break;
+        }
+
+        case OP_NEWARRAY: {
+            uint32_t type_id = reader.read<uint32_t>();
+            auto rtti = smx_->GetTypeIdParser(type_id);
+            fprintf(stdout, " %s", DumpType(rtti).c_str());
+            break;
+        }
+
+        case OP_LOAD_ES_SIZE: {
+            uint32_t type_id = reader.read<uint32_t>();
+            auto rtti = smx_->GetTypeIdParser(type_id);
+            fprintf(stdout, " %s", DumpType(rtti).c_str());
+            break;
+        }
+
+        case OP_COPYOBJ: {
+            uint32_t type_id = reader.read<uint32_t>();
+            auto rtti = smx_->GetTypeIdParser(type_id);
+            fprintf(stdout, " %s", DumpType(rtti).c_str());
+            break;
+        }
+
+        case OP_SLICE_ES: {
+            uint32_t type_id = reader.read<uint32_t>();
+            auto rtti = smx_->GetTypeIdParser(type_id);
+            fprintf(stdout, " %s", DumpType(rtti).c_str());
+            break;
+        }
+
+        case OP_FILLARRAY: {
+            uint32_t data_offs = reader.read<uint32_t>();
+            fprintf(stdout, " 0x%x", data_offs);
+            break;
+        }
+
+        case OP_LOAD_FLD:
+        case OP_ADDR_FLD:
+        case OP_STOR_FLD:
+        case OP_LOAD_FLD_OFFSET:
+        {
+            uint32_t ref_index = reader.read<uint32_t>();
+            auto ref = smx_->getFieldRef(ref_index);
+            if (ref) {
+                const char* cls_name = "unknown";
+                const char* field_name = "unknown";
+                if (auto cls = smx_->getClassdef(ref->cls_index))
+                    cls_name = smx_->names() + cls->name;
+                if (auto field = smx_->getField(ref->field_index))
+                    field_name = smx_->names() + field->name;
+                fprintf(stdout, " %s::%s", cls_name, field_name);
+            } else {
+                fprintf(stdout, " unknown_field_ref_%u", ref_index);
+            }
+            break;
+        }
+
+        case OP_POP:
+        case OP_DUP:
+        case OP_SWAP:
+            break;
+
+        default:
+            break;
+    }
+}

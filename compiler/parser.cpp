@@ -475,7 +475,7 @@ Parser::parse_enumstruct()
             continue;
         }
 
-        fields.emplace_back(new LayoutFieldDecl(decl_pos, decl));
+        fields.emplace_back(new LayoutFieldDecl(decl_pos, decl, stmt));
 
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     }

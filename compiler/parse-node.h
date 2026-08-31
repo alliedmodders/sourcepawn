@@ -493,10 +493,7 @@ class EnumDecl : public Decl
 class PstructDecl : public Decl
 {
   public:
-    PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields)
-      : Decl(StmtKind::PstructDecl, pos, name),
-        fields_(fields)
-    {}
+    PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields);
 
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
@@ -507,8 +504,12 @@ class PstructDecl : public Decl
 
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
+    QualType type() const { return QualType(type_); }
+    void set_type(Type* type) { type_ = type; }
+
   protected:
     PoolArray<LayoutFieldDecl*> fields_;
+    Type* type_ = nullptr;
 };
 
 struct TypedefInfo : public PoolObject {
@@ -685,17 +686,20 @@ class BinaryExpr final : public BinaryExprBase
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
     void set_initializer() { initializer_ = true; }
-    cell array_copy_length() const { return array_copy_length_; }
-    void set_array_copy_length(cell len) { array_copy_length_ = len; }
+    bool array_copy() const { return array_copy_; }
+    void set_array_copy(bool copy) { array_copy_ = copy; }
     bool initializer() const { return initializer_; }
+    bool enum_struct_copy() const { return enum_struct_copy_; }
+    void set_enum_struct_copy(bool copy) { enum_struct_copy_ = copy; }
 
   private:
     bool ValidateAssignmentLHS();
     bool ValidateAssignmentRHS(SemaContext& sc);
 
   private:
-    cell array_copy_length_ = 0;
+    bool array_copy_ = false;
     bool initializer_ = false;
+    bool enum_struct_copy_ = false;
 };
 
 class LogicalExpr final : public BinaryExprBase
@@ -1718,9 +1722,10 @@ class MemberFunctionDecl : public FunctionDecl
 class LayoutFieldDecl : public Decl
 {
   public:
-    LayoutFieldDecl(const token_pos_t& pos, const declinfo_t& decl)
+    LayoutFieldDecl(const token_pos_t& pos, const declinfo_t& decl, Decl* parent = nullptr)
       : Decl(StmtKind::LayoutFieldDecl, pos, decl.name),
-        type_(decl.type)
+        type_(decl.type),
+        parent_(parent)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::LayoutFieldDecl; }
@@ -1732,9 +1737,13 @@ class LayoutFieldDecl : public Decl
     cell_t offset() const { return offset_; }
     void set_offset(cell_t offset) { offset_ = offset; }
 
+    Decl* parent() const { return parent_; }
+    void set_parent(Decl* parent) { parent_ = parent; }
+
   private:
     typeinfo_t type_;
     cell_t offset_;
+    Decl* parent_ = nullptr;
 };
 
 class EnumStructDecl : public LayoutDecl
@@ -1752,14 +1761,12 @@ class EnumStructDecl : public LayoutDecl
     PoolArray<FunctionDecl*>& methods() { return methods_; }
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
 
-    cell_t array_size() const { return array_size_; }
     QualType type() const { return QualType(type_); }
 
   private:
     PoolArray<FunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
     Type* type_ = nullptr;
-    cell_t array_size_ = 0;
 };
 
 class MethodmapPropertyDecl : public Decl {
@@ -1860,6 +1867,8 @@ inline bool Expr::lvalue() const {
         case iVARIABLE:
         case iACCESSOR:
         case iARRAYELEM:
+        case iFIELD:
+        case iADDRESS:
             if (kind() == ExprKind::RvalueExpr)
                 return false;
             return true;

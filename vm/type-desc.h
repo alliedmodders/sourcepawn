@@ -14,7 +14,11 @@
 
 #include <stdint.h>
 
+#include <span>
+
 namespace sp {
+
+struct smx_rtti_classdef;
 
 enum class TypeKind : uint8_t {
     Void,
@@ -30,6 +34,7 @@ enum class TypeKind : uint8_t {
     FlatArray,
     ArraySlice,
     Reference,
+    EnumStruct,
 };
 
 class TypeDesc final {
@@ -43,28 +48,49 @@ class TypeDesc final {
 
     TypeDesc(TypeKind kind, const TypeDesc* elt)
       : kind_(kind),
-        can_global_cache_(elt->can_global_cache()),
-        elt_(elt)
+        can_global_cache_(elt->can_global_cache())
     {
         assert(kind == TypeKind::Array || kind == TypeKind::ArraySlice ||
                kind == TypeKind::Reference);
-        if (kind != TypeKind::Reference)
-            array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+        if (kind == TypeKind::Reference) {
+            ref = elt;
+        } else {
+            array.elt = elt;
+            array.rank = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+        }
     }
 
     TypeDesc(TypeKind kind, const TypeDesc* elt, uint32_t array_size)
       : kind_(kind),
-        can_global_cache_(elt->can_global_cache()),
-        elt_(elt),
-        array_size_(array_size)
+        can_global_cache_(elt->can_global_cache())
     {
         assert(kind == TypeKind::FixedArray || kind == TypeKind::FlatArray);
-        array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+        array.elt = elt;
+        array.size = array_size;
+        array.rank = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
     }
 
     TypeDesc(const TypeDesc* elt, uint32_t array_size)
       : TypeDesc(TypeKind::FixedArray, elt, array_size)
     {}
+
+    explicit TypeDesc(const smx_rtti_classdef* classdef)
+      : kind_(TypeKind::EnumStruct),
+        can_global_cache_(false)
+    {
+        clsdef.classdef = classdef;
+        clsdef.total_size = 0;
+        clsdef.field_offsets = {};
+    }
+
+    TypeDesc(const smx_rtti_classdef* classdef, uint32_t total_size, std::span<uint32_t> field_offsets)
+      : kind_(TypeKind::EnumStruct),
+        can_global_cache_(false)
+    {
+        clsdef.classdef = classdef;
+        clsdef.total_size = total_size;
+        clsdef.field_offsets = field_offsets;
+    }
 
     // Size needed to store a value of this type into a variable slot.
     uint32_t slot_size() const {
@@ -73,7 +99,9 @@ class TypeDesc final {
             case TypeKind::Int64:
                 return sizeof(int64_t);
             case TypeKind::FlatArray:
-                return (array_size_ * elt_->element_size() + 3) & ~3;
+                return (array.size * array.elt->element_size() + 3) & ~3;
+            case TypeKind::EnumStruct:
+                return clsdef.total_size;
             default:
                 return sizeof(int32_t);
         }
@@ -102,11 +130,16 @@ class TypeDesc final {
             case TypeKind::FlatArray:
                 return sizeof(uint32_t);
 
+            case TypeKind::EnumStruct:
+                return clsdef.total_size;
+
             default:
                 assert(false);
                 return 0;
         }
     }
+
+    uint32_t field_size() const { return slot_size(); }
 
     bool IsInt64() const { return kind_ == TypeKind::Int64; }
 
@@ -116,15 +149,15 @@ class TypeDesc final {
     // For fixed arrays, length of arrays of this type.
     uint32_t array_size() const {
         assert(kind_ == TypeKind::FixedArray || kind_ == TypeKind::FlatArray);
-        return array_size_;
+        return array.size;
     }
     const TypeDesc* array_elt() const {
         assert(IsArrayish());
-        return elt_;
+        return array.elt;
     }
     uint32_t array_rank() const {
         assert(IsArrayish());
-        return array_rank_;
+        return array.rank;
     }
     bool IsArrayish() const {
         return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
@@ -133,20 +166,49 @@ class TypeDesc final {
     bool IsFlatArray() const {
         return kind_ == TypeKind::FlatArray;
     }
+    bool IsCompositeValue() const {
+        return kind_ == TypeKind::FlatArray || kind_ == TypeKind::EnumStruct;
+    }
     bool IsReference() const {
         return kind_ == TypeKind::Reference;
     }
     const TypeDesc* ref_type() const {
         assert(IsReference());
-        return elt_;
+        return ref;
+    }
+
+    bool HasClassdef() const {
+        return kind_ == TypeKind::EnumStruct;
+    }
+    const smx_rtti_classdef* cls() const {
+        assert(HasClassdef());
+        return clsdef.classdef;
+    }
+    uint32_t cls_size() const {
+        assert(HasClassdef());
+        return clsdef.total_size;
+    }
+    std::span<uint32_t> cls_offsets() const {
+        assert(HasClassdef());
+        return clsdef.field_offsets;
     }
 
   private:
     TypeKind kind_;
     bool can_global_cache_ = false;
-    uint8_t array_rank_ = 0;
-    const TypeDesc* elt_ = nullptr;
-    uint32_t array_size_ = 0;
+    union {
+        struct {
+            const TypeDesc* elt;
+            uint8_t rank;
+            uint32_t size;
+        } array;
+        const TypeDesc* ref;
+        struct {
+            const smx_rtti_classdef* classdef;
+            uint32_t total_size;
+            std::span<uint32_t> field_offsets;
+        } clsdef;
+    };
 };
 
 } // namespace sp

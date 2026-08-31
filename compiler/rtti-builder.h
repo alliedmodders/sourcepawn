@@ -20,6 +20,7 @@
 #pragma once
 
 #include <inttypes.h>
+#include <unordered_map>
 
 #include <amtl/am-hashmap.h>
 #include <smx/smx-v1.h>
@@ -59,6 +60,7 @@ class RttiBuilder
     int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
     uint32_t AddGlobal(VarDeclBase* decl, Atom* name);
     uint16_t AddString(Atom* atom, DataQueue* data);
+    uint32_t AddFieldRef(LayoutFieldDecl* decl);
     std::optional<uint32_t> FindStringDataOffset(Atom* atom);
 
     void AddDebugFile(ucell codeidx, const char* file);
@@ -107,9 +109,8 @@ class RttiBuilder
     RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
     RefPtr<SmxRttiTable<smx_rtti_string>> stringpool_;
-    RefPtr<SmxRttiTable<smx_rtti_enumstruct>> enumstructs_;
-    RefPtr<SmxRttiTable<smx_rtti_es_field>> es_fields_;
     RefPtr<SmxRttiTable<smx_rtti_global>> globals_;
+    RefPtr<SmxRttiTable<smx_rtti_field_ref>> field_refs_;
     RefPtr<SmxDebugInfoSection> dbg_info_;
     RefPtr<SmxRttiTable<smx_rtti_debug_line>> dbg_lines_;
     RefPtr<SmxDebugFileSection> dbg_files_;
@@ -121,6 +122,13 @@ class RttiBuilder
     TypeIdCache typeid_cache_;
     typedef ke::HashMap<Atom*, uint16_t, ke::PointerPolicy<Atom>> StringCache;
     StringCache string_cache_;
+
+    struct FieldMapping {
+        uint32_t cls_index;
+        uint32_t field_index;
+    };
+    std::unordered_map<LayoutFieldDecl*, FieldMapping> field_mappings_;
+    std::unordered_map<LayoutFieldDecl*, uint32_t> field_refs_map_;
 
     ucell last_file_addr_ = 0;
     std::string last_file_name_;

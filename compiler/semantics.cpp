@@ -306,7 +306,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
         if (visited[i])
             continue;
         auto arg = ps->fields()[i];
-        
+
 #ifdef NDEBUG
         if (arg->type()->as<ArrayType>() != nullptr) {
 #else
@@ -940,7 +940,7 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
             return false;
         }
 
-        expr_->set_array_copy_length(CalcArraySize(right_array));
+        expr_->set_array_copy(true);
     } else {
         if (right_val.type()->isArray()) {
             // Hack. Special case array literals assigned to an enum struct,
@@ -1001,8 +1001,7 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
             return false;
         }
 
-        auto es = left_val.type()->asEnumStruct();
-        expr_->set_array_copy_length(es->array_size());
+        expr_->set_enum_struct_copy(true);
     } else if (!left_val.type()->isArray()) {
         matchtag(left_val.type(), right_val.type(), TRUE);
     }
@@ -1291,8 +1290,8 @@ static inline bool IsValidIntWidthChange(Type* from, Type* to) {
 bool Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
-    Type* atype = expr->type();
-    if (atype->isVoid()) {
+    Type* to_type = expr->type();
+    if (to_type->isVoid()) {
         report(expr, 144);
         return false;
     }
@@ -1305,11 +1304,9 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
 
     out_val = inner->val();
 
-    Type* ltype = out_val.type();
-    if (atype == ltype)
-        return true;
+    Type* from_type = out_val.type();
 
-    auto actual_array =  ltype->as<ArrayType>();
+    auto actual_array =  from_type->as<ArrayType>();
     if (actual_array) {
         // Unwind back to the inner.
         auto iter = actual_array;
@@ -1318,36 +1315,40 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
                 break;
             iter = iter->inner()->to<ArrayType>();
         }
-        ltype = iter->inner();
+        from_type = iter->inner();
     }
 
-    if (ltype->isObject() || atype->isObject()) {
-        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
-    } else if (ltype->isFunction() != atype->isFunction()) {
+    if (from_type->isObject() || to_type->isObject()) {
+        matchtag(to_type, out_val.type(), MATCHTAG_COERCE);
+    } else if (from_type->isFunction() != to_type->isFunction()) {
         // Warn: unsupported cast.
         report(expr, 237);
-    } else if (ltype->isFunction() && atype->isFunction()) {
-        matchtag(atype, out_val.type(), MATCHTAG_COERCE);
+    } else if (from_type->isFunction() && to_type->isFunction()) {
+        matchtag(to_type, out_val.type(), MATCHTAG_COERCE);
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
-    } else if (atype->isEnumStruct() || ltype->isEnumStruct()) {
-        report(expr, 95) << atype;
+    } else if (to_type->isEnumStruct() || from_type->isEnumStruct()) {
+        report(expr, 95) << to_type;
     }
-    if (ltype->isReference() && !atype->isReference()) {
-        if (atype->isEnumStruct()) {
+    if (from_type->isReference() && !to_type->isReference()) {
+        if (to_type->isEnumStruct()) {
             report(expr, 136);
             return false;
         }
-        atype = types_->defineReference(atype);
+        to_type = types_->defineReference(to_type);
     }
-    if (actual_array && ltype->isInt64()) {
-        report(expr, 460) << actual_array << atype;
+    if (actual_array && from_type->isInt64()) {
+        report(expr, 460) << actual_array << to_type;
         return false;
     }
 
-    if (out_val.type()->isInt64() || atype->isInt64()) {
-        if (!IsValidIntWidthChange(out_val.type(), atype)) {
-            report(expr, 460) << out_val.type() << atype;
+    if (out_val.ident == iACCESSOR) {
+        if (inner->lvalue())
+            expr->set_expr(new RvalueExpr(inner));
+        out_val.ident = iEXPRESSION;
+    } else if (out_val.type()->isInt64() || to_type->isInt64()) {
+        if (!IsValidIntWidthChange(out_val.type(), to_type)) {
+            report(expr, 460) << out_val.type() << to_type;
             return false;
         }
         if (inner->lvalue())
@@ -1355,9 +1356,13 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         out_val.ident = iEXPRESSION;
     }
 
+    if (expr->lvalue())
+        out_val.ident = iADDRESS;
+
     if (actual_array)
-        atype = types_->redefineArray(atype, actual_array);
-    out_val.set_type(atype);
+        to_type = types_->redefineArray(to_type, actual_array);
+
+    out_val.set_type(to_type);
     return true;
 }
 
@@ -1822,9 +1827,7 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     assert(field);
 
     Type* field_type = field->type_info().type;
-
-    val.set_type(field_type);
-    val.ident = iARRAYELEM;
+    val.set_field(field, QualType(field_type));
     return true;
 }
 
@@ -1854,8 +1857,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     expr->set_resolved(field);
 
     auto& val = expr->val();
-    val.set_constval(fd->offset());
-    val.set_type(types_->type_int());
+    val.set_expr(QualType(types_->type_int()));
     return true;
 }
 
@@ -1879,8 +1881,9 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
         case iARRAYELEM:
         case iVARIABLE:
         case iEXPRESSION:
-            if (auto es = cv.type()->asEnumStruct()) {
-                val.set_constval(es->array_size());
+        case iFIELD:
+            if (cv.type()->asEnumStruct()) {
+                val.set_expr(QualType(types_->type_int()));
             } else if (auto array = cv.type()->as<ArrayType>()) {
                 if (!array->size()) {
                     report(child, 163);
@@ -1888,6 +1891,18 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 }
                 val.set_constval(array->size());
             } else if (cv.ident == iEXPRESSION) {
+                if (auto access = child->as<FieldAccessExpr>()) {
+                    if (access->token() == tDBLCOLON) {
+                        auto field = access->resolved()->as<LayoutFieldDecl>();
+                        if (auto array = field->type()->as<ArrayType>())
+                            val.set_constval(array->size());
+                        else if (field->type()->asEnumStruct())
+                            val.set_expr(QualType(types_->type_int()));
+                        else
+                            val.set_constval(1);
+                        return true;
+                    }
+                }
                 report(child, 72);
                 return false;
             } else {
@@ -1902,7 +1917,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 report(child, 72);
                 return false;
             }
-            val.set_constval(es->array_size());
+            val.set_expr(QualType(types_->type_int()));
             return true;
         }
 
@@ -1915,8 +1930,8 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             auto field = access->resolved()->as<LayoutFieldDecl>();
             if (auto array = field->type()->as<ArrayType>())
                 val.set_constval(array->size());
-            else if (auto es = field->type()->asEnumStruct())
-                val.set_constval(es->array_size());
+            else if (field->type()->asEnumStruct())
+                val.set_expr(QualType(types_->type_int()));
             else
                 val.set_constval(1);
             return true;
@@ -2835,8 +2850,8 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
             continue;
 
         auto type = arg->type();
-        if (!type->isArray()) {
-            // Note: arrays were checked earlier in ArrayValidator.
+        if (!type->isArray() && !type->isEnumStruct()) {
+            // Note: arrays and enum structs were checked earlier in ArrayValidator.
             const auto& rhs = arg->init_rhs();
             if (rhs->val().ident != iCONSTEXPR)
                 report(rhs, 8);
@@ -3115,13 +3130,19 @@ static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
             return false;
         return true;
     }
-    if (to && !(to->inner()->isArray() || to->inner()->isEnumStruct()))
+    if (val.type()->isEnumStruct()) {
+        if (to && !to->inner()->isAny())
+            return false;
+        return true;
+    }
+    if (to && to->inner()->isArray() && !to->inner()->isEnumStruct())
         return false;
-    if (val.ident == iARRAYELEM || val.ident == iARRAYELEM) {
+    if (val.ident == iARRAYELEM) {
         if (val.type()->isEnumStruct() || val.type()->isArray())
             return false;
         if (to && (val.type()->lit_size() != to->inner()->lit_size()))
             return false;
+        return true;
     }
     return false;
 }
@@ -3137,6 +3158,9 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
     if (param->val().type()->isFlatArray()) {
         base = param;
         inner_type = param->val().type()->inner();
+    } else if (param->val().type()->isEnumStruct()) {
+        base = param;
+        inner_type = types_->type_any();
     } else {
         assert(param->as<IndexExpr>());
         IndexExpr* index = param->as<IndexExpr>();

@@ -30,6 +30,7 @@ namespace cc {
 
 class Decl;
 class FunctionDecl;
+class LayoutFieldDecl;
 class MethodmapPropertyDecl;
 class VarDeclBase;
 
@@ -75,6 +76,12 @@ struct value {
         this->ident = iTYPENAME;
         this->decl_ = decl;
     }
+    void set_field(LayoutFieldDecl* field, QualType type) {
+        this->ident = iFIELD;
+        this->field_ = field;
+        set_type(type);
+    }
+
     MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
             return nullptr;
@@ -109,6 +116,10 @@ struct value {
         assert(ident == iFUNCTN);
         return fun_;
     }
+    LayoutFieldDecl* field() const {
+        assert(ident == iFIELD);
+        return field_;
+    }
 
     union {
         // when ident == iACCESSOR
@@ -121,6 +132,8 @@ struct value {
         FunctionDecl* fun_;
         // when ident == iTYPENAME
         Decl* decl_;
+        // when ident == iFIELD
+        LayoutFieldDecl* field_;
     };
 
     static value ErrorValue() {

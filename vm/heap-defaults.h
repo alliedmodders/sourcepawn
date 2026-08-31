@@ -24,7 +24,7 @@
 namespace sp {
 
 static constexpr uint32_t kDefaultStackSize = 16 * ke::kKB;
-static constexpr uint32_t kDefaultHeapChunkSize = 64 * ke::kKB;
+static constexpr uint32_t kDefaultHeapChunkSize = 16 * ke::kMB;
 
 #ifdef KE_64BIT
 using HeapImpl = Heap64;

@@ -93,6 +93,22 @@ class SmxImage final : public FileReader
             return nullptr;
         return getRttiRow<smx_rtti_method>(rtti_methods_, method_index);
     }
+    const smx_rtti_field_ref* getFieldRef(uint32_t index) const {
+        if (!rtti_field_refs_ || index >= rtti_field_refs_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_field_ref>(rtti_field_refs_, index);
+    }
+    const smx_rtti_classdef* getClassdef(uint32_t index) const {
+        if (!rtti_classdefs_ || index >= rtti_classdefs_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_classdef>(rtti_classdefs_, index);
+    }
+    const smx_rtti_field* getField(uint32_t index) const {
+        if (!rtti_fields_ || index >= rtti_fields_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_field>(rtti_fields_, index);
+    }
+    uint32_t getClassdefFieldsEnd(uint32_t i) const;
     bool IsVoidMethod(const smx_rtti_method* method) const;
 
     FastRtti GetTypeParser(uint32_t offset);
@@ -212,6 +228,9 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
     const smx_rtti_table_header* rtti_globals() const { return rtti_globals_; }
     const smx_rtti_table_header* rtti_stringpool() const { return rtti_stringpool_; }
+    const smx_rtti_table_header* rtti_classdefs() const { return rtti_classdefs_; }
+    const smx_rtti_table_header* rtti_fields() const { return rtti_fields_; }
+    const smx_rtti_table_header* rtti_field_refs() const { return rtti_field_refs_; }
 
     BinaryReader GetDataReader(uint32_t offset) {
         assert(IsValidDataOffset(offset));
@@ -233,9 +252,8 @@ class SmxImage final : public FileReader
     bool validateNatives();
     bool validateRtti();
     bool validateRttiClassdefs();
+    bool validateRttiFieldRefs();
     bool validateRttiEnums();
-    bool validateRttiEnumStructs();
-    bool validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index);
     bool validateRttiField(uint32_t index);
     bool validateRttiMethods();
     bool validateRttiNatives();
@@ -308,8 +326,7 @@ class SmxImage final : public FileReader
     std::unique_ptr<const RttiData> rtti_data_ = nullptr;
     const smx_rtti_table_header* rtti_classdefs_ = nullptr;
     const smx_rtti_table_header* rtti_enums_ = nullptr;
-    const smx_rtti_table_header* rtti_enumstructs_ = nullptr;
-    const smx_rtti_table_header* rtti_enumstruct_fields_ = nullptr;
+    const smx_rtti_table_header* rtti_field_refs_ = nullptr;
     const smx_rtti_table_header* rtti_fields_ = nullptr;
     const smx_rtti_table_header* rtti_methods_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
