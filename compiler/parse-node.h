@@ -27,7 +27,7 @@
 
 #include "ast-types.h"
 #include "coercion-rules.h"
-#include "expressions.h"
+#include "constant-fold.h"
 #include "lexer.h"
 #include "sc.h"
 #include "utils/pool-allocator.h"

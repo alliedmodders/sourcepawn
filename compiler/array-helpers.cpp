@@ -544,7 +544,7 @@ bool ArrayValidator::ValidateInitializer() {
             return false;
         if (init_->lvalue())
             decl_->init()->set_right(new RvalueExpr(init_));
-        return sema_->PerformCoercion(init_, at_, init_->val().type(), Semantics::Assignment);
+        return sema_->CheckCoercion(init_, at_, init_->val().type(), CvtContext::Assignment);
     }
 
     // Not a dynamic array, check for a fixed initializer.

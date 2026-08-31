@@ -21,7 +21,7 @@
 //
 //  Version: $Id$
 
-#include "expressions.h"
+#include "constant-fold.h"
 #include "parse-node.h"
 #include "sc.h"
 #include "sctracker.h"

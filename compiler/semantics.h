@@ -161,6 +161,10 @@ class Semantics final
                          TypeContext why, int flags = None);
     bool PerformCoercion(ParseNode* node, QualType formal, QualType actual,
                          TypeContext why, int flags = None);
+    bool CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
+                       CvtContext why);
+    bool CheckCoercion(ParseNode* node, QualType formal, QualType actual,
+                       CvtContext why);
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }

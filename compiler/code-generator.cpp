@@ -31,7 +31,7 @@
 #include "compile-context.h"
 #include "compile-options.h"
 #include "errors.h"
-#include "expressions.h"
+#include "constant-fold.h"
 #include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"

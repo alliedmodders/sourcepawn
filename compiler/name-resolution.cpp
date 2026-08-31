@@ -25,7 +25,7 @@
 
 #include "array-helpers.h"
 #include "errors.h"
-#include "expressions.h"
+#include "constant-fold.h"
 #include "parse-node.h"
 #include "parser.h"
 #include "sc.h"
@@ -206,10 +206,12 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
             Type* field_type = nullptr;
-            if (field->value()->EvalConst(&value, &field_type))
-                matchtag(type_, field_type, MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
-            else
+            if (field->value()->EvalConst(&value, &field_type)) {
+                sc.sema()->PerformCoercion(field->pos(), type_, QualType(field_type),
+                                           Semantics::Assignment, Semantics::EnumAssign);
+            } else {
                 error(field->pos(), 80);
+            }
         }
 
         field->set_type(type_);

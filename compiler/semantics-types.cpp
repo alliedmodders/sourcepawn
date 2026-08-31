@@ -196,6 +196,25 @@ bool Semantics::PerformCoercion(ParseNode* node, QualType formal, QualType actua
     return PerformCoercion(node->pos(), formal, actual, why, flags);
 }
 
+bool Semantics::CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
+                              CvtContext why)
+{
+    auto ck = FindConversion(*actual, *formal, why);
+    if (!HasImplicitConversion(ck)) {
+        report(pos, 450) << actual << formal;
+        return false;
+    }
+    if (ck == ConversionKind::TagMismatch)
+        report(pos, 213) << formal << actual;
+    return true;
+}
+
+bool Semantics::CheckCoercion(ParseNode* node, QualType formal, QualType actual,
+                              CvtContext why)
+{
+    return CheckCoercion(node->pos(), formal, actual, why);
+}
+
 bool Semantics::CheckType(TypeCheckerState& state) {
     auto report = ke::MakeScopeGuard([&state]() -> void {
         state.defer.Report();
@@ -326,6 +345,10 @@ bool Semantics::CheckValueType(TypeCheckerState& state, Type* formal, Type* actu
         // but we allow it anyway.
         if (HasTagOnInheritanceChain(formal, actual))
             return true;
+    }
+    if ((formal->isEnum() || formal->isMethodmap()) && (actual->isEnum() || actual->isMethodmap())) {
+        report(state.pos, 213) << formal << actual;
+        return true;
     }
 
     if ((formal->isEnum() || formal->isMethodmap()) && actual->isInt()) {

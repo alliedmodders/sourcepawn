@@ -29,7 +29,7 @@
 #include "code-generator.h"
 #include "coercion-rules.h"
 #include "errors.h"
-#include "expressions.h"
+#include "constant-fold.h"
 #include "lexer.h"
 #include "parse-node.h"
 #include "sctracker.h"
@@ -580,9 +580,9 @@ RvalueExpr::RvalueExpr(Expr* lval)
         if (val_.accessor()->getter())
             markusage(val_.accessor()->getter(), uREAD);
         val_.ident = iEXPRESSION;
-    } else if (val_.ident == iVARIABLE) {
-        if (val_.type()->isReference())
-            val_.set_type(val_.type()->inner());
+    }
+    if (val_.type()->isReference()) {
+        val_.set_type(val_.type()->inner());
     }
 }
 
@@ -849,7 +849,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         val.type()->coercesFromInt())
     {
         char boolresult = FALSE;
-        matchtag(left_val->type(), right_val->type(), FALSE);
+        PerformCoercion(state.expr, left_val->type(), right_val->type(), Generic);
         val.ident = iCONSTEXPR;
         val.set_constval(calc(left_val->constval(), op_token, right_val->constval(),
                               &boolresult));
@@ -881,116 +881,6 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     return CheckBinaryExprImpl(state);
 }
 
-static inline bool
-IsTypeBinaryConstantFoldable(Type* type)
-{
-    if (type->isEnum() || type->isInt())
-        return true;
-    return false;
-}
-
-bool Expr::FoldToConstant() {
-    switch (kind_) {
-        case ExprKind::BinaryExpr:
-            return to<BinaryExpr>()->FoldToConstant();
-        case ExprKind::TernaryExpr:
-            return to<TernaryExpr>()->FoldToConstant();
-        case ExprKind::CastExpr:
-            return to<CastExpr>()->FoldToConstant();
-        case ExprKind::SimpleCastExpr:
-            return to<SimpleCastExpr>()->FoldToConstant();
-        default:
-            return false;
-    }
-}
-
-bool CastExpr::FoldToConstant() {
-    cell val;
-    Type* from_type;
-    if (!expr_->EvalConst(&val, &from_type))
-        return false;
-    val_.set_constval(val);
-    val_.ident = iCONSTEXPR;
-    val_.set_type(type());
-    return true;
-}
-
-bool SimpleCastExpr::FoldToConstant() {
-    cell val;
-    Type* from_type;
-    if (!from_->EvalConst(&val, &from_type))
-        return false;
-    if (to_->isFloat() && from_type->coercesToInt()) {
-        float f = (float)val;
-        val = sp::FloatCellUnion(f).cell;
-    }
-    val_.set_constval(val);
-    val_.ident = iCONSTEXPR;
-    val_.set_type(to_);
-    return true;
-}
-
-bool BinaryExpr::FoldToConstant() {
-    cell left_val, right_val;
-    Type* left_type;
-    Type* right_type;
-
-    if (!left_->EvalConst(&left_val, &left_type) || !right_->EvalConst(&right_val, &right_type))
-        return false;
-    if (IsAssignOp(token_))
-        return false;
-
-    if (!IsTypeBinaryConstantFoldable(left_type) || !IsTypeBinaryConstantFoldable(right_type))
-        return false;
-
-    switch (token_) {
-        case '*':
-            val_.set_constval(left_val * right_val);
-            break;
-        case '/':
-        case '%':
-            if (!right_val) {
-                report(pos_, 93);
-                return false;
-            }
-            if (left_val == cell(0x80000000) && right_val == -1) {
-                report(pos_, 97);
-                return false;
-            }
-            if (token_ == '/')
-                val_.set_constval(left_val / right_val);
-            else
-                val_.set_constval(left_val % right_val);
-            break;
-        case '+':
-            val_.set_constval(left_val + right_val);
-            break;
-        case '-':
-            val_.set_constval(left_val - right_val);
-            break;
-        case tSHL:
-            val_.set_constval(left_val << right_val);
-            break;
-        case tSHR:
-            val_.set_constval(left_val >> right_val);
-            break;
-        case tSHRU:
-            val_.set_constval(uint32_t(left_val) >> uint32_t(right_val));
-            break;
-        case '&':
-            val_.set_constval(left_val & right_val);
-            break;
-        case '^':
-            val_.set_constval(left_val ^ right_val);
-            break;
-        case '|':
-            val_.set_constval(left_val | right_val);
-            break;
-        default:
-            return false;
-    }
-    return true;
-}
 
 bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     AutoErrorPos aep(expr->pos());
@@ -1066,7 +956,8 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         }
 
         // For the purposes of tag matching, we consider the order to be irrelevant.
-        matchtag_commutative(left_val.type(), right_val.type(), MATCHTAG_DEDUCE);
+        PerformCoercion(left, left_val.type(), right_val.type(),
+                        Generic, Commutative);
 
         if (right_val.ident != iCONSTEXPR)
             all_const = false;
@@ -1173,19 +1064,6 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     return true;
 }
 
-bool
-TernaryExpr::FoldToConstant()
-{
-    cell cond, left, right;
-    if (!first_->EvalConst(&cond, nullptr) || second_->EvalConst(&left, nullptr) ||
-        !third_->EvalConst(&right, nullptr))
-    {
-        return false;
-    }
-
-    val_.set_constval(cond ? left : right);
-    return true;
-}
 
 static inline bool IsValidIntWidthChange(Type* from, Type* to) {
     if (from->isInt64() && to->isInt())
@@ -2143,8 +2021,8 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         Type* type = val->type();
         if (type->isInt64() || (type->isReference() && type->inner()->isInt64())) {
             // Hack: allow this since we don't have typed varargs right now.
-        } else if (!checktag(*arg->type(), type)) {
-            report(param, 213) << arg->type() << type;
+        } else {
+            PerformCoercion(param, arg->type(), QualType(type), Argument);
         }
         if (auto slice = ParamNeedsSliceWrapper(param, nullptr))
             param = slice;
@@ -2177,7 +2055,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 134) << arg->type() << val->type();
                 return nullptr;
             }
-            checktag(arg->type()->inner(), val->type());
+            PerformCoercion(param, arg->type()->inner(), QualType(val->type()), Argument);
         }
     } else if (auto to_array = arg->type()->as<ArrayType>()) {
         if (auto slice = ParamNeedsSliceWrapper(param, to_array))
