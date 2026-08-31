@@ -33,6 +33,7 @@ enum class TypeKind : uint8_t {
     Int8,
     Int16,
     Any,
+    TopObject,
     Function,
     LegacyVarArgs,
     Null,
@@ -191,6 +192,7 @@ class TypeDesc final {
             case TypeKind::FixedArray:
             case TypeKind::FlatArray:
             case TypeKind::Object:
+            case TypeKind::TopObject:
                 return sizeof(uint32_t);
 
             case TypeKind::EnumStruct:
@@ -313,6 +315,7 @@ class TypeDesc final {
             case TypeKind::Function:
             case TypeKind::Object:
             case TypeKind::Closure:
+            case TypeKind::TopObject:
                 return true;
             default:
                 return false;

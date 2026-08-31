@@ -396,6 +396,9 @@ std::string DumpTool::DumpType(FastRtti& rtti) {
             case cb::kAny:
                 type_inner = "any";
                 break;
+            case cb::kTopObject:
+                type_inner = "object";
+                break;
             case cb::kVoid:
                 type_inner = "void";
                 break;

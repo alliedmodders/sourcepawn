@@ -254,6 +254,7 @@ static const uint8_t kFloat64 = 0x0d;
 static const uint8_t kChar8 = 0x0e;
 static const uint8_t kAny = 0x10;
 static const uint8_t kTopFunction = 0x11;
+static const uint8_t kTopObject = 0x12;
 
 // This section encodes multi-byte raw types.
 

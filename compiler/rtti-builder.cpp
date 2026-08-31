@@ -540,6 +540,8 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
         return cb::kBool;
     if (type->isAny())
         return cb::kAny;
+    if (type->isObject() && !type->asClass())
+        return cb::kTopObject;
     if (type->isChar())
         return cb::kChar8;
     if (type->isInt8())

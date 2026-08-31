@@ -1625,6 +1625,10 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, St
             if (dest != src)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;
+        case TypeKind::TopObject:
+            if (src->kind() == TypeKind::Object || src->kind() == TypeKind::TopObject)
+                return true;
+            return reportError(SP_ERROR_INVALID_INSTRUCTION);
         case TypeKind::EnumStruct:
         case TypeKind::Object:
             if (dest != src)

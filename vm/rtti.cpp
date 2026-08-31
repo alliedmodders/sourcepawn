@@ -78,6 +78,7 @@ bool FastRtti::SkipNextType() {
             case cb::kChar8:
             case cb::kAny:
             case cb::kVoid:
+            case cb::kTopObject:
             case cb::kTopFunction:
                 return true;
 
@@ -285,6 +286,7 @@ RttiParser::decode() {
         case cb::kInt8:
         case cb::kChar8:
         case cb::kAny:
+        case cb::kTopObject:
         case cb::kTopFunction:
             result = new Rtti(type);
             break;
@@ -385,6 +387,7 @@ RttiParser::validate() {
         case cb::kInt8:
         case cb::kChar8:
         case cb::kAny:
+        case cb::kTopObject:
         case cb::kTopFunction:
             return true;
 
