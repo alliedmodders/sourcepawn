@@ -11,10 +11,12 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "stack-frames.h"
+#include "base-runtime.h"
 #include "compiled-function.h"
 #include "environment.h"
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
+#include "v2/method-info.h"
 #if defined(KE_ARCH_X86)
 #    include "x86/frames-x86.h"
 #elif defined(KE_ARCH_X64)
@@ -27,7 +29,7 @@ using namespace ke;
 using namespace sp;
 using namespace SourcePawn;
 
-InvokeFrame::InvokeFrame(PluginContext* cx, ucell_t entry_cip)
+InvokeFrame::InvokeFrame(BaseRuntime* cx, ucell_t entry_cip)
  : prev_(Environment::get()->top()),
    cx_(cx),
    entry_cip_(0) {
@@ -39,10 +41,18 @@ InvokeFrame::~InvokeFrame() {
     Environment::get()->leaveInvoke();
 }
 
-InterpInvokeFrame::InterpInvokeFrame(PluginContext* cx, MethodInfo* method,
+InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method,
                                      const cell_t* const& cip)
  : InvokeFrame(cx, method->pcode_offset()),
-   method_(method),
+   function_cip_(method->pcode_offset()),
+   cip_(cip),
+   native_index_(-1) {
+}
+
+InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, v2::MethodInfo* method,
+                                     const cell_t* const& cip)
+ : InvokeFrame(cx, method->pcode_offset()),
+   function_cip_(method->pcode_offset()),
    cip_(cip),
    native_index_(-1) {
 }
@@ -63,7 +73,7 @@ InterpInvokeFrame::leaveNativeCall() {
     native_index_ = -1;
 }
 
-JitInvokeFrame::JitInvokeFrame(PluginContext* cx, ucell_t entry_cip)
+JitInvokeFrame::JitInvokeFrame(BaseRuntime* cx, ucell_t entry_cip)
  : InvokeFrame(cx, entry_cip),
    prev_exit_fp_(Environment::get()->exit_fp()) {
 }
@@ -99,13 +109,13 @@ InterpFrameIterator::type() const {
 cell_t
 InterpFrameIterator::function_cip() const {
     assert(current_ == FrameType::Scripted);
-    return ivk_->method_->pcode_offset();
+    return ivk_->function_cip_;
 }
 
 cell_t
 InterpFrameIterator::cip() const {
     assert(current_ == FrameType::Scripted);
-    auto& code = ivk_->cx()->runtime()->code();
+    auto& code = ivk_->cx()->GetBaseRuntime()->code();
 
     const uint8_t* ptr = reinterpret_cast<const uint8_t*>(ivk_->cip_);
     assert(ptr >= code.bytes && ptr < code.bytes + code.length);
@@ -121,12 +131,13 @@ InterpFrameIterator::native_index() const {
 
 // This constructor is for find_entry_fp() in the JIT.
 JitFrameIterator::JitFrameIterator(Environment* env)
- : JitFrameIterator(env->top()->cx()->runtime(), env->exit_fp()) {
+ : JitFrameIterator(env->top()->cx()->GetBaseRuntime(), env->exit_fp()) {
 }
 
-JitFrameIterator::JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp)
+JitFrameIterator::JitFrameIterator(BaseRuntime* rt, intptr_t* exit_fp)
  : rt_(rt),
    cur_frame_(FrameLayout::FromFp(exit_fp)) {
+
     assert(cur_frame_->frame_type() == JitFrameType::Exit);
     assert(cur_frame_->return_address);
     assert(cur_frame_->prev_fp);
@@ -171,7 +182,7 @@ JitFrameIterator::function_cip() const {
 
 cell_t
 JitFrameIterator::cip() const {
-    RefPtr<MethodInfo> method = rt_->GetMethod(function_cip());
+    ke::RefPtr<BaseMethodInfo> method = rt_->GetMethodFromFrameId(function_cip());
     if (!method)
         return 0;
 
@@ -203,7 +214,7 @@ FrameIterator::FrameIterator()
 
 void
 FrameIterator::nextInvokeFrame() {
-    runtime_ = ivk_->cx()->runtime();
+    runtime_ = ivk_->cx()->GetBaseRuntime();
     if (JitInvokeFrame* jvk = ivk_->AsJitInvokeFrame()) {
         frame_cursor_ = std::make_unique<JitFrameIterator>(runtime_, next_exit_fp_);
         next_exit_fp_ = jvk->prev_exit_fp();

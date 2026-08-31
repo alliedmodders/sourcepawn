@@ -21,11 +21,17 @@
 
 namespace sp {
 
+namespace v1 {
 class PluginRuntime;
-typedef PluginRuntime PluginContext;
+}
+namespace v2 {
+class PluginRuntime;
+}
+
 class Environment;
 
-typedef int (*InvokeStubFn)(PluginContext* cx, void* code, cell_t* rval);
+typedef int (*InvokeStubV1Fn)(v1::PluginRuntime* cx, void* code, cell_t* rval);
+typedef int (*InvokeStubV2Fn)(v2::PluginRuntime* cx, void* code, cell_t* rval);
 
 class CodeStubs
 {
@@ -35,8 +41,11 @@ class CodeStubs
   public:
     bool Initialize();
 
-    InvokeStubFn InvokeStub() const {
-        return (InvokeStubFn)invoke_stub_.entry;
+    InvokeStubV1Fn InvokeStubV1() const {
+        return (InvokeStubV1Fn)invoke_stub_v1_.entry;
+    }
+    InvokeStubV2Fn InvokeStubV2() const {
+        return (InvokeStubV2Fn)invoke_stub_v2_.entry;
     }
     void* ReturnStub() const {
         return return_stub_;
@@ -44,13 +53,15 @@ class CodeStubs
 
   private:
 #if defined(SP_HAS_JIT)
-    bool CompileInvokeStub();
+    bool CompileInvokeStubV1();
+    bool CompileInvokeStubV2();
 #endif
 
   private:
     Environment* env_;
-    LinkedCode invoke_stub_;
-    void* return_stub_; // Owned by invoke_stub_.
+    LinkedCode invoke_stub_v1_;
+    LinkedCode invoke_stub_v2_;
+    void* return_stub_; // Owned by invoke_stub_v1_.
 };
 
 } // namespace sp

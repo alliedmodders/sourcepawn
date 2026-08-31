@@ -18,7 +18,7 @@
 #pragma once
 
 #include "utils/byte-buffer.h"
-#include <smx/smx-v1-opcodes.h>
+#include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
 
 #include "label.h"
@@ -27,6 +27,8 @@
 
 namespace sp {
 namespace cc {
+
+using namespace sp::v2;
 
 enum regid {
     sPRI, /* indicates the primary register */

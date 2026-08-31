@@ -45,6 +45,7 @@ SmxImage::validate() {
         case SmxConsts::SP1_VERSION_1_1:
         case SmxConsts::SP1_VERSION_1_7:
         case SmxConsts::SP1_VERSION_1_13:
+        case SmxConsts::SP1_VERSION_CODE_V2:
             break;
         default:
             return error("unsupported version");

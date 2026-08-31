@@ -481,7 +481,7 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 static int Execute(const char* file)
 {
   char error[255];
-  std::unique_ptr<PluginRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
     fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
     return 1;

@@ -32,7 +32,7 @@
 
 #include <amtl/am-hashmap.h>
 #include <amtl/am-string.h>
-#include <smx/smx-v1-opcodes.h>
+#include <smx/smx-v2-opcodes.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
 #include <zlib/zlib.h>
@@ -74,7 +74,7 @@ VerifyBinary(const char* file, void* buffer, size_t size)
         FailedValidation("could not initialize environment");
 
     char msgbuf[255];
-    std::unique_ptr<PluginRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
+    std::unique_ptr<BaseRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
                                                                 nullptr, msgbuf, sizeof(msgbuf)));
     if (!rt)
         FailedValidation(msgbuf);

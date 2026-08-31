@@ -18,6 +18,8 @@
 
 namespace sp {
 
+using namespace SourcePawn;
+
 int InvokeDebugger(IPluginContext* ctx, const IErrorReport* report) {
     // Continue normal execution, if there is no listener registered.
     if (!Environment::get()->debugbreak())

@@ -16,7 +16,7 @@
 #include "graph-builder.h"
 #include "legacy/method-verifier.h"
 
-namespace sp {
+namespace sp::v1 {
 
 MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t codeOffset)
  : rt_(rt),
@@ -81,4 +81,4 @@ cell_t MethodInfo::StackSizeForLocalSlots() {
     return local_offsets_.back();
 }
 
-} // namespace sp
+} // namespace sp::v1

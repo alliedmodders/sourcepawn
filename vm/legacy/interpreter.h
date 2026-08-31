@@ -15,8 +15,8 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
-#ifndef _include_sourcepawn_vm_interpreter_h_
-#define _include_sourcepawn_vm_interpreter_h_
+#ifndef _include_sourcepawn_legacy_interpreter_h_
+#define _include_sourcepawn_legacy_interpreter_h_
 
 #include <amtl/am-refcounting.h>
 #include <assert.h>
@@ -26,10 +26,12 @@
 #include "stack-frames.h"
 
 namespace sp {
+class Environment;
+}
+namespace sp::v1 {
 
 using namespace ke;
 
-class Environment;
 class PluginRuntime;
 typedef PluginRuntime PluginContext;
 class MethodInfo;
@@ -212,6 +214,6 @@ class Interpreter final : public PcodeVisitor
     InterpInvokeFrame* ivk_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
-#endif // _include_sourcepawn_vm_interpreter_h_
+#endif // _include_sourcepawn_legacy_interpreter_h_

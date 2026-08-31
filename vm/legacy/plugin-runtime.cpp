@@ -28,35 +28,31 @@
 #include "md5/md5.h"
 #include "legacy/method-info.h"
 #include "legacy/method-verifier.h"
-#include "legacy/plugin-runtime.h"
 #include "watchdog_timer.h"
 
-using namespace sp;
+namespace sp {
+namespace v1 {
+
 using namespace SourcePawn;
 
 #define CELLBOUNDMAX (INT_MAX / sizeof(cell_t))
 
-static const size_t kMinHeapSize = 16384;
-
 PluginRuntime::PluginRuntime(SmxImage* image)
- : BaseRuntime(image),
-   memory_(nullptr),
-   data_size_(0),
-   mem_size_(0),
-   m_pNullVec(nullptr),
-   m_pNullString(nullptr)
+ : BaseRuntime(image)
+ , memory_(nullptr)
+ , data_size_(image_->DescribeData().length)
+ , mem_size_(image_->HeapSize())
+ , m_pNullVec(nullptr)
+ , m_pNullString(nullptr)
 {
-    data_size_ = data_.length;
-    mem_size_ = image_->HeapSize();
-
     // Compute and align a minimum memory amount.
     if (mem_size_ < data_size_)
         mem_size_ = data_size_;
     mem_size_ = ke::Align(mem_size_, sizeof(cell_t));
 
     // Add a minimum heap size if needed.
-    if (mem_size_ < data_size_ + kMinHeapSize)
-        mem_size_ = data_size_ + kMinHeapSize;
+    if (mem_size_ < data_size_ + 16384)
+        mem_size_ = data_size_ + 16384;
     assert(ke::IsAligned(mem_size_, sizeof(cell_t)));
 
     hp_ = data_size_;
@@ -183,7 +179,7 @@ static const NativeMapping sNativeMap[] = {
     {"__float_gt", OP_FLOAT_GT},
     {"__float_ge", OP_FLOAT_GE},
     {"__float_lt", OP_FLOAT_LT},
-    {"__float_le", OP_FLOAT_LE},
+    {"__float_ge", OP_FLOAT_GE},
     {"__float_eq", OP_FLOAT_EQ},
     {"__float_ne", OP_FLOAT_NE},
     {"__float_not", OP_FLOAT_NOT},
@@ -239,7 +235,7 @@ PluginRuntime::GetNativeReplacement(size_t index) {
     return float_table_[index].index;
 }
 
-RefPtr<MethodInfo>
+ke::RefPtr<BaseMethodInfo>
 PluginRuntime::GetMethod(cell_t pcode_offset) const {
     FunctionMap::Result r = function_map_.find(pcode_offset);
     if (!r.found())
@@ -1448,3 +1444,6 @@ void* PluginRuntime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
         *size = 0;
     return reinterpret_cast<void*>(handle);
 }
+
+} // namespace v1
+} // namespace sp

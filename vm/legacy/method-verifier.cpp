@@ -19,7 +19,7 @@
 #include "legacy/opcodes.h"
 #include "legacy/plugin-runtime.h"
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace ke;
 
@@ -1158,4 +1158,4 @@ bool MethodVerifier::verifyLocalSlots() {
     return true;
 }
 
-} // namespace sp
+} // namespace sp::v1

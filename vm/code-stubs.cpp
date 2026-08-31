@@ -24,7 +24,9 @@ CodeStubs::CodeStubs(Environment* env)
 bool
 CodeStubs::Initialize() {
 #if defined(SP_HAS_JIT)
-    if (!CompileInvokeStub())
+    if (!CompileInvokeStubV1())
+        return false;
+    if (!CompileInvokeStubV2())
         return false;
 #endif
     return true;

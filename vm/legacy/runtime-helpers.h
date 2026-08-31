@@ -19,7 +19,7 @@
 
 #include <sp_vm_types.h>
 
-namespace sp {
+namespace sp::v1 {
 
 class PluginRuntime;
 typedef PluginRuntime PluginContext;
@@ -30,6 +30,6 @@ int Int64Div(int64_t* pri, int64_t* alt, int64_t* pri_dest);
 int Int64Mod(int64_t* pri, int64_t* alt, int64_t* pri_dest);
 void ReportOutOfBoundsError(cell_t index, cell_t bounds);
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_runtime_helpers_h_

@@ -21,7 +21,7 @@
 #include <sp_vm_types.h>
 #include "control-flow.h"
 
-namespace sp {
+namespace sp::v1 {
 
 class PluginRuntime;
 
@@ -121,6 +121,6 @@ class MethodVerifier final
     int error_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_vm_method_verifier_h_

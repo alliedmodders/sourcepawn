@@ -17,6 +17,8 @@
 #include <string.h>
 #include "environment.h"
 
+#include "legacy/plugin-runtime.h"
+#include "v2/plugin-runtime.h"
 using namespace sp;
 using namespace SourcePawn;
 

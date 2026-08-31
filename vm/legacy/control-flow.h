@@ -10,8 +10,8 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#ifndef _include_sourcepawn_vm_control_flow_h_
-#define _include_sourcepawn_vm_control_flow_h_
+#ifndef _include_sourcepawn_vm_legacy_control_flow_h_
+#define _include_sourcepawn_vm_legacy_control_flow_h_
 
 #include <stdio.h>
 
@@ -24,7 +24,7 @@
 #include "label.h"
 #include "legacy/plugin-runtime.h"
 
-namespace sp {
+namespace sp::v1 {
 
 class ControlFlowGraph;
 
@@ -277,6 +277,6 @@ class AutoClearBlockData
     ControlFlowGraph* graph_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
-#endif // _include_sourcepawn_vm_control_flow_h_
+#endif // _include_sourcepawn_vm_legacy_control_flow_h_

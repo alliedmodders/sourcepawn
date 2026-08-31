@@ -12,19 +12,23 @@
 //
 #include "environment.h"
 #include "api.h"
-#include "legacy/method-info.h"
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "debug-metadata.h"
+#include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
+#include "v2/method-info.h"
+#include "v2/plugin-runtime.h"
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
 #    include "legacy/jit.h"
+#    include "v2/jit.h"
 #endif
 #include <stdarg.h>
 #include "legacy/builtins.h"
 #include "debugging.h"
 #include "legacy/interpreter.h"
+#include "v2/interpreter.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -73,7 +77,7 @@ Environment::get() {
 bool
 Environment::Initialize() {
     watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
-    builtins_ = std::make_unique<BuiltinNatives>();
+    builtins_ = std::make_unique<v1::BuiltinNatives>();
     code_alloc_ = std::make_unique<CodeAllocator>();
 
     if (!builtins_->Initialize())
@@ -101,7 +105,7 @@ bool Environment::SetJitEnabled(bool enabled) {
 bool
 Environment::EnableDebugBreak() {
     // Can't change this after any plugins are loaded.
-    if (!runtimes_.empty())
+    if (!v1_runtimes_.empty() || !v2_runtimes_.empty())
         return false;
 
     debug_break_enabled_ = true;
@@ -214,15 +218,27 @@ Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symb
 }
 
 void
-Environment::RegisterRuntime(PluginRuntime* rt) {
+Environment::RegisterRuntime(v1::PluginRuntime* rt) {
     mutex_.AssertCurrentThreadOwns();
-    runtimes_.append(rt);
+    v1_runtimes_.append(rt);
 }
 
 void
-Environment::DeregisterRuntime(PluginRuntime* rt) {
+Environment::DeregisterRuntime(v1::PluginRuntime* rt) {
     mutex_.AssertCurrentThreadOwns();
-    runtimes_.remove(rt);
+    v1_runtimes_.remove(rt);
+}
+
+void
+Environment::RegisterRuntime(v2::PluginRuntime* rt) {
+    mutex_.AssertCurrentThreadOwns();
+    v2_runtimes_.append(rt);
+}
+
+void
+Environment::DeregisterRuntime(v2::PluginRuntime* rt) {
+    mutex_.AssertCurrentThreadOwns();
+    v2_runtimes_.remove(rt);
 }
 
 static inline void
@@ -236,18 +252,24 @@ SwapLoopEdge(uint8_t* code, LoopEdge& e) {
 void
 Environment::PatchAllJumpsForTimeout() {
     mutex_.AssertCurrentThreadOwns();
-    for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end();
-         iter++) {
-        PluginRuntime* rt = *iter;
-
-        const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-        for (size_t i = 0; i < methods.size(); i++) {
-            CompiledFunction* fun = methods[i]->jit();
+    for (auto rt : v1_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
 
             uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
+            for (size_t j = 0; j < fun->NumLoopEdges(); j++)
+                SwapLoopEdge(base, fun->GetLoopEdge(j));
+        }
+    }
+    for (auto rt : v2_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
+            if (!fun)
+                continue;
 
+            uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
             for (size_t j = 0; j < fun->NumLoopEdges(); j++)
                 SwapLoopEdge(base, fun->GetLoopEdge(j));
         }
@@ -257,26 +279,31 @@ Environment::PatchAllJumpsForTimeout() {
 void
 Environment::UnpatchAllJumpsFromTimeout() {
     mutex_.AssertCurrentThreadOwns();
-    for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end();
-         iter++) {
-        PluginRuntime* rt = *iter;
-
-        const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-        for (size_t i = 0; i < methods.size(); i++) {
-            CompiledFunction* fun = methods[i]->jit();
+    for (auto rt : v1_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
 
             uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
+            for (size_t j = 0; j < fun->NumLoopEdges(); j++)
+                SwapLoopEdge(base, fun->GetLoopEdge(j));
+        }
+    }
+    for (auto rt : v2_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
+            if (!fun)
+                continue;
 
+            uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
             for (size_t j = 0; j < fun->NumLoopEdges(); j++)
                 SwapLoopEdge(base, fun->GetLoopEdge(j));
         }
     }
 }
 
-bool
-Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result) {
+bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result) {
 #if defined(SP_HAS_JIT)
     if (jit_enabled_) {
         if (!code_stubs_) {
@@ -290,9 +317,9 @@ Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t*
             }
         }
 
-        if (CompilerBase::SupportsPlugin(cx) && !method->jit()) {
+        if (v1::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
             int err = SP_ERROR_NONE;
-            if (!CompilerBase::Compile(cx, method, &err)) {
+            if (!v1::CompilerBase::Compile(cx, method, &err)) {
                 cx->ReportErrorNumber(err);
                 return false;
             }
@@ -303,7 +330,7 @@ Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t*
 
             assert(top_ && top_->cx() == cx);
 
-            InvokeStubFn invoke = code_stubs_->InvokeStub();
+            InvokeStubV1Fn invoke = code_stubs_->InvokeStubV1();
             invoke(cx, fn->GetEntryAddress(), result);
 
             return exception_code_ == SP_ERROR_NONE;
@@ -319,7 +346,118 @@ Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t*
         }
     }
 
-    return Interpreter::Run(cx, method, result);
+    return v1::Interpreter::Run(cx, method, result);
+}
+
+bool Environment::Invoke(v2::PluginContext* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result) {
+#if defined(SP_HAS_JIT)
+    if (jit_enabled_) {
+        if (!code_stubs_) {
+            code_stubs_ = std::make_unique<CodeStubs>(this);
+
+            // We delay initializing this to here to avoid executing any generated code if the embedder
+            // doesn't want the JIT enabled. The debug metadata flags must be set before this point.
+            if (!code_stubs_->Initialize()) {
+                code_stubs_ = nullptr;
+                return false;
+            }
+        }
+
+        if (v2::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
+            int err = SP_ERROR_NONE;
+            if (!v2::CompilerBase::Compile(cx, method, &err)) {
+                cx->ReportErrorNumber(err);
+                return false;
+            }
+        }
+
+        if (CompiledFunction* fn = method->jit()) {
+            JitInvokeFrame ivkframe(cx, fn->GetCodeOffset());
+
+            assert(top_ && top_->cx() == cx);
+
+            InvokeStubV2Fn invoke = code_stubs_->InvokeStubV2();
+            invoke(cx, fn->GetEntryAddress(), result);
+
+            return exception_code_ == SP_ERROR_NONE;
+        }
+    }
+#endif
+
+    // The JIT performs its own validation. Handle the interpreter here.
+    {
+        if (!method->Validate()) {
+            cx->ReportErrorNumber(method->validationError());
+            return false;
+        }
+    }
+
+    return v2::Interpreter::Run(cx, method, result);
+}
+
+static BaseRuntime*
+LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
+    if (!image->validate()) {
+        const char* errorMessage = image->errorMessage();
+        if (!errorMessage)
+            errorMessage = "binary parse error";
+        UTIL_Format(error, maxlength, "%s", errorMessage);
+        return nullptr;
+    }
+
+    BaseRuntime* pRuntime = nullptr;
+    if (image->hdr()->version < SmxConsts::SP1_VERSION_CODE_V2) {
+        pRuntime = new sp::v1::PluginRuntime(image.release());
+    } else {
+        pRuntime = new sp::v2::PluginRuntime(image.release());
+    }
+
+    if (!pRuntime->Initialize()) {
+        delete pRuntime;
+
+        UTIL_Format(error, maxlength, "out of memory");
+        return nullptr;
+    }
+
+    size_t len = strlen(file);
+    for (size_t i = len - 1; i < len; i--) {
+        if (file[i] == '/'
+#if defined WIN32
+            || file[i] == '\\'
+#endif
+        ) {
+            pRuntime->SetNames(file, &file[i + 1]);
+            break;
+        }
+    }
+
+    if (*pRuntime->Name() == '\0')
+        pRuntime->SetNames(file, file);
+
+    return pRuntime;
+}
+
+BaseRuntime*
+Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
+    FILE* fp = fopen(file, "rb");
+    if (!fp) {
+        UTIL_Format(error, maxlength, "could not open file");
+        return nullptr;
+    }
+
+    auto image = std::make_unique<SmxImage>(fp);
+    return LoadImage(std::move(image), file, error, maxlength);
+}
+
+BaseRuntime*
+Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                  void (*dtor)(uint8_t*), char* error, size_t maxlength) {
+    std::unique_ptr<SmxImage> image;
+    if (dtor)
+        image = std::make_unique<SmxImage>(addr, size, dtor);
+    else
+        image = std::make_unique<SmxImage>(addr, size);
+    return LoadImage(std::move(image), file, error, maxlength);
 }
 
 void
@@ -334,13 +472,14 @@ Environment::ReportError(int code) {
     }
 }
 
-ErrorReport::ErrorReport(int code, const char* message, PluginContext* cx,
-                         SourcePawn::IPluginFunction* pf)
- : code_(code)
- , message_(message)
- , context_(cx)
- , blame_(pf) {
+ErrorReport::ErrorReport(int code, const char* message, BaseRuntime* cx, IPluginFunction* pf)
+ : code_(code),
+   message_(message),
+   context_(cx),
+   blame_(pf)
+{
 }
+
 
 const char*
 ErrorReport::Message() const {
@@ -520,7 +659,7 @@ Environment::leaveInvoke() {
 bool
 Environment::IsJitAvailable() {
 #if defined(SP_HAS_JIT)
-    return CompilerBase::IsSupported();
+    return v1::CompilerBase::IsSupported();
 #else
     return false;
 #endif
@@ -591,66 +730,4 @@ const char* Environment::GetVersionString() {
 
 void Environment::SetProfilingTool(IProfilingTool* tool) {
     SetProfiler(tool);
-}
-
-static PluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
-    if (!image->validate()) {
-        const char* errorMessage = image->errorMessage();
-        if (!errorMessage)
-            errorMessage = "binary parse error";
-        UTIL_Format(error, maxlength, "%s", errorMessage);
-        return nullptr;
-    }
-
-    PluginRuntime* pRuntime = new PluginRuntime(image.release());
-    if (!pRuntime->Initialize()) {
-        delete pRuntime;
-
-        UTIL_Format(error, maxlength, "out of memory");
-        return nullptr;
-    }
-
-    size_t len = strlen(file);
-    for (size_t i = len - 1; i < len; i--) {
-        if (file[i] == '/'
-#if defined WIN32
-            || file[i] == '\\'
-#endif
-        ) {
-            pRuntime->SetNames(file, &file[i + 1]);
-            break;
-        }
-    }
-
-    if (*pRuntime->Name() == '\0')
-        pRuntime->SetNames(file, file);
-
-    return pRuntime;
-}
-
-PluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
-    FILE* fp = fopen(file, "rb");
-
-    if (!fp) {
-        UTIL_Format(error, maxlength, "file not found");
-        return nullptr;
-    }
-
-    std::unique_ptr<SmxImage> image(new SmxImage(fp));
-    fclose(fp);
-
-    return LoadImage(std::move(image), file, error, maxlength);
-}
-
-PluginRuntime* Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                                 void (*dtor)(uint8_t*), char* error, size_t maxlength)
-{
-    std::unique_ptr<SmxImage> image;
-
-    if (dtor)
-        image = std::make_unique<SmxImage>(addr, size, dtor);
-    else
-        image = std::make_unique<SmxImage>(addr, size);
-
-    return LoadImage(std::move(image), file, error, maxlength);
 }

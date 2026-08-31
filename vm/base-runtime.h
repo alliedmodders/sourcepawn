@@ -15,6 +15,7 @@
 #include <memory>
 #include <string>
 #include <amtl/am-refcounting.h>
+#include <amtl/am-inlinelist.h>
 #include <sp_vm_api.h>
 #include "base-method-info.h"
 #include "smx-image.h"
@@ -46,6 +47,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
         full_name_ = full;
         name_ = shortname;
     }
+
     BaseRuntime* GetBaseContext() { return this; }
 
     virtual void InstallBuiltinNatives() = 0;
@@ -59,6 +61,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     virtual int FindPublicByName(const char* name, uint32_t* index) = 0;
     virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) = 0;
     virtual uint32_t GetPublicsNum() = 0;
+    virtual bool PerformFullValidation() = 0;
 
     /**
      * @brief Returns the local parameter stack, starting from the

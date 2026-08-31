@@ -16,7 +16,7 @@
 #include "legacy/opcodes.h"
 #include "legacy/plugin-runtime.h"
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace ke;
 
@@ -459,4 +459,4 @@ GraphBuilder::error(int code) {
     return false;
 }
 
-} // namespace sp
+} // namespace sp::v1

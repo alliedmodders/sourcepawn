@@ -32,7 +32,7 @@
 # include "x64/jit_x64.h"
 #endif
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace SourcePawn;
 
@@ -355,4 +355,4 @@ cell_t CompilerBase::StackOffset(cell_t slot) {
     return method_info_->StackOffset(slot);
 }
 
-} // namespace sp
+} // namespace sp::v1

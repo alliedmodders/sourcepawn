@@ -32,8 +32,9 @@
 #include <stdint.h>
 
 namespace sp {
+namespace v1 {
 
-#define OPCODE_LIST(FOR_EACH) \
+#define OPCODE_LIST_V1(FOR_EACH) \
     FOR_EACH(NONE, 0, "none", 1) \
     FOR_EACH(LOAD_PRI, 1, "load.pri", 2) \
     FOR_EACH(LOAD_ALT, 2, "load.alt", 2) \
@@ -226,10 +227,9 @@ namespace sp {
     FOR_EACH(SMOD_ALT_I64, 216, "smod.alt.i64", 2) \
     FOR_EACH(STOR_S_PRI_I64, 217, "stor.s.pri.i64", 2) \
 
-
 enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
-    OPCODE_LIST(FOR_EACH_OPCODE)
+    OPCODE_LIST_V1(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
 
     // These opcodes are internal to the compiler and not part of the ABI. They
@@ -256,7 +256,7 @@ enum OPCODE {
     OPCODES_LAST
 };
 
-#define OPCODES_TOTAL (ucell_t) OPCODES_LAST
+} // namespace v1
 
 } // namespace sp
 

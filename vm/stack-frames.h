@@ -32,10 +32,16 @@ namespace sp {
 
 using namespace SourcePawn;
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
+class BaseRuntime;
 class MethodInfo;
 struct FrameLayout;
+
+namespace v1 {
+class MethodInfo;
+}
+namespace v2 {
+class MethodInfo;
+}
 
 enum class FrameType { Internal, Scripted, Native };
 
@@ -71,14 +77,14 @@ class InterpInvokeFrame;
 class InvokeFrame
 {
   protected:
-    InvokeFrame(PluginContext* cx, ucell_t cip);
+    InvokeFrame(BaseRuntime* cx, ucell_t cip);
     ~InvokeFrame();
 
   public:
     InvokeFrame* prev() const {
         return prev_;
     }
-    PluginContext* cx() const {
+    BaseRuntime* cx() const {
         return cx_;
     }
 
@@ -95,7 +101,7 @@ class InvokeFrame
 
   protected:
     InvokeFrame* prev_;
-    PluginContext* cx_;
+    BaseRuntime* cx_;
     ucell_t entry_cip_;
 };
 
@@ -105,7 +111,8 @@ class InterpInvokeFrame final : public InvokeFrame
     friend class InterpFrameIterator;
 
   public:
-    InterpInvokeFrame(PluginContext* cx, MethodInfo* method, const cell_t* const& cip);
+    InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method, const cell_t* const& cip);
+    InterpInvokeFrame(BaseRuntime* cx, v2::MethodInfo* method, const cell_t* const& cip);
     ~InterpInvokeFrame();
 
     void enterNativeCall(uint32_t native_index);
@@ -116,7 +123,7 @@ class InterpInvokeFrame final : public InvokeFrame
     }
 
   private:
-    ke::RefPtr<MethodInfo> method_;
+    cell_t function_cip_;
     const cell_t* const& cip_;
     int native_index_;
 };
@@ -125,7 +132,7 @@ class InterpInvokeFrame final : public InvokeFrame
 class JitInvokeFrame final : public InvokeFrame
 {
   public:
-    JitInvokeFrame(PluginContext* cx, ucell_t cip);
+    JitInvokeFrame(BaseRuntime* cx, ucell_t cip);
     ~JitInvokeFrame();
 
     JitInvokeFrame* AsJitInvokeFrame() override {
@@ -177,7 +184,7 @@ class JitFrameIterator final : public InlineFrameIterator
 {
   public:
     explicit JitFrameIterator(Environment* env);
-    JitFrameIterator(PluginRuntime* rt, intptr_t* exit_fp);
+    JitFrameIterator(BaseRuntime* rt, intptr_t* exit_fp);
 
     bool done() const override;
     void next() override;
@@ -191,7 +198,7 @@ class JitFrameIterator final : public InlineFrameIterator
     }
 
   private:
-    PluginRuntime* rt_;
+    BaseRuntime* rt_;
     FrameLayout* cur_frame_;
     mutable ucell_t cip_;
     void* pc_;
@@ -223,7 +230,7 @@ class FrameIterator : public SourcePawn::IFrameIterator
 
   private:
     InvokeFrame* ivk_;
-    PluginRuntime* runtime_;
+    BaseRuntime* runtime_;
     intptr_t* next_exit_fp_;
     std::unique_ptr<InlineFrameIterator> frame_cursor_;
 };

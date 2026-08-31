@@ -10,8 +10,8 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#ifndef _INCLUDE_SOURCEPAWN_VM_METHOD_INFO_H_
-#define _INCLUDE_SOURCEPAWN_VM_METHOD_INFO_H_
+#ifndef _INCLUDE_SOURCEPAWN_VM_LEGACY_METHOD_INFO_H_
+#define _INCLUDE_SOURCEPAWN_VM_LEGACY_METHOD_INFO_H_
 
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
@@ -20,9 +20,12 @@
 #include "control-flow.h"
 
 namespace sp {
+class CompiledFunction;
+class SmxImage;
+}
+namespace sp::v1 {
 
 class PluginRuntime;
-class CompiledFunction;
 
 class MethodInfo final : public BaseMethodInfo
 {
@@ -82,4 +85,4 @@ class MethodInfo final : public BaseMethodInfo
 
 } // namespace sp
 
-#endif //_INCLUDE_SOURCEPAWN_VM_METHOD_INFO_H_
+#endif // _INCLUDE_SOURCEPAWN_VM_LEGACY_METHOD_INFO_H_

@@ -27,11 +27,19 @@ namespace sp {
 
 using namespace SourcePawn;
 
+namespace v1 {
+class BuiltinNatives;
 class PluginRuntime;
+class MethodInfo;
+}
+namespace v2 {
+class PluginRuntime;
+class MethodInfo;
+}
+
 class CodeStubs;
 class WatchdogTimer;
 class ErrorReport;
-class BuiltinNatives;
 struct CodeDebugMapping;
 using CodeDebugMap = std::vector<CodeDebugMapping>;
 
@@ -105,10 +113,6 @@ class Environment : public ISourcePawnEnvironment
     IDebugListener* SetDebugListener(IDebugListener* listener);
     bool SetJitEnabled(bool enabled);
     void SetProfilingTool(IProfilingTool* tool);
-    PluginRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
-    PluginRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                        void (*dtor)(uint8_t*), char* error,
-                                        size_t maxlength);
 
     // Allocate and free executable memory.
     CodeChunk AllocateCode(size_t size);
@@ -118,20 +122,28 @@ class Environment : public ISourcePawnEnvironment
     CodeStubs* stubs() {
         return code_stubs_.get();
     }
-    BuiltinNatives* builtins() {
+    v1::BuiltinNatives* builtins() {
         return builtins_.get();
     }
 
     // Runtime management.
-    void RegisterRuntime(PluginRuntime* rt);
-    void DeregisterRuntime(PluginRuntime* rt);
+    void RegisterRuntime(v1::PluginRuntime* rt);
+    void DeregisterRuntime(v1::PluginRuntime* rt);
+    void RegisterRuntime(v2::PluginRuntime* rt);
+    void DeregisterRuntime(v2::PluginRuntime* rt);
     void PatchAllJumpsForTimeout();
     void UnpatchAllJumpsFromTimeout();
     ke::Mutex& lock() {
         return mutex_;
     }
 
-    bool Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result);
+    bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
+    bool Invoke(v2::PluginRuntime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);
+
+    // Loading.
+    BaseRuntime* LoadBinaryFromFile(const char* file, char* error, size_t maxlength);
+    BaseRuntime* LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                            void (*dtor)(uint8_t*), char* error, size_t maxlength);
 
     // Helpers.
     void SetProfiler(IProfilingTool* profiler) {
@@ -228,7 +240,7 @@ class Environment : public ISourcePawnEnvironment
 
   private:
     std::unique_ptr<WatchdogTimer> watchdog_timer_;
-    std::unique_ptr<BuiltinNatives> builtins_;
+    std::unique_ptr<v1::BuiltinNatives> builtins_;
     ke::Mutex mutex_;
 
     bool debug_break_enabled_;
@@ -259,7 +271,8 @@ class Environment : public ISourcePawnEnvironment
     std::unique_ptr<CodeAllocator> code_alloc_;
     std::unique_ptr<CodeStubs> code_stubs_;
 
-    ke::InlineList<PluginRuntime> runtimes_;
+    ke::InlineList<v1::PluginRuntime> v1_runtimes_;
+    ke::InlineList<v2::PluginRuntime> v2_runtimes_;
 
     uintptr_t frame_id_;
 
@@ -289,7 +302,7 @@ class EnterProfileScope
 class ErrorReport : public SourcePawn::IErrorReport
 {
   public:
-    ErrorReport(int code, const char* message, PluginContext* cx, SourcePawn::IPluginFunction* pf);
+    ErrorReport(int code, const char* message, BaseRuntime* cx, SourcePawn::IPluginFunction* pf);
 
   public: //IErrorReport
     const char* Message() const override;
@@ -301,7 +314,7 @@ class ErrorReport : public SourcePawn::IErrorReport
   private:
     int code_;
     const char* message_;
-    PluginContext* context_;
+    BaseRuntime* context_;
     IPluginFunction* blame_;
 };
 

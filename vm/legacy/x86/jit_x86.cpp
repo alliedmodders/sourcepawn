@@ -35,8 +35,8 @@
 #include "code-stubs.h"
 #include "debugging.h"
 #include "environment.h"
-#include "features-x86.h"
-#include "frames-x86.h"
+#include "x86/features-x86.h"
+#include "x86/frames-x86.h"
 #include "linking.h"
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
@@ -45,7 +45,7 @@
 
 #define __ masm.
 
-namespace sp {
+namespace sp::v1 {
 
 static inline ConditionCode
 OpToCondition(CompareOp op) {
@@ -1106,7 +1106,7 @@ Compiler::visitGENARRAY(uint32_t dims, bool autozero) {
 
 bool
 Compiler::visitCALL(cell_t offset) {
-    RefPtr<MethodInfo> method = rt_->GetMethod(offset);
+    RefPtr<BaseMethodInfo> method = rt_->GetMethod(offset);
     if (!method || !method->jit()) {
         // Need to emit a delayed thunk.
         CallThunk thunk(offset);

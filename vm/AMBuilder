@@ -16,46 +16,69 @@ if module.compiler.family == 'gcc':
 module.sources += [
   'api.cpp',
   'base-runtime.cpp',
-  'legacy/builtins.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',
-  'legacy/control-flow.cpp',
   'compiled-function.cpp',
   'debugging.cpp',
   'debug-metadata.cpp',
   'environment.cpp',
   'file-utils.cpp',
-  'legacy/graph-builder.cpp',
-  'legacy/interpreter.cpp',
   'md5/md5.cpp',
-  'legacy/method-info.cpp',
-  'legacy/method-verifier.cpp',
-  'legacy/opcodes.cpp',
-  'legacy/plugin-runtime.cpp',
   'rtti.cpp',
-  'legacy/runtime-helpers.cpp',
-  'legacy/scripted-invoker.cpp',
   'smx-image.cpp',
   'stack-frames.cpp',
   'watchdog_timer.cpp',
 ]
 
+# V1 implementation
+module.sources += [
+  'legacy/builtins.cpp',
+  'legacy/control-flow.cpp',
+  'legacy/graph-builder.cpp',
+  'legacy/interpreter.cpp',
+  'legacy/method-info.cpp',
+  'legacy/method-verifier.cpp',
+  'legacy/opcodes.cpp',
+  'legacy/plugin-runtime.cpp',
+  'legacy/runtime-helpers.cpp',
+  'legacy/scripted-invoker.cpp',
+]
+
+# V2 implementation
+module.sources += [
+  'v2/builtins.cpp',
+  'v2/control-flow.cpp',
+  'v2/graph-builder.cpp',
+  'v2/interpreter.cpp',
+  'v2/method-info.cpp',
+  'v2/method-verifier.cpp',
+  'v2/opcodes.cpp',
+  'v2/plugin-runtime.cpp',
+  'v2/runtime-helpers.cpp',
+  'v2/scripted-invoker.cpp',
+]
+
 if 'SP_HAS_JIT' in module.compiler.defines:
   module.sources += [
     'legacy/jit.cpp',
+    'v2/jit.cpp',
     'linking.cpp',
   ]
   if module.compiler.target.arch == 'x86':
     module.sources += [
-      'x86/code-stubs-x86.cpp',
+      'legacy/x86/code-stubs-x86.cpp',
+      'legacy/x86/jit_x86.cpp',
+      'v2/x86/code-stubs-x86.cpp',
+      'v2/x86/jit_x86.cpp',
       'x86/features-x86.cpp',
-      'x86/jit_x86.cpp',
     ]
   elif module.compiler.target.arch == 'x86_64':
     module.sources += [
+      'legacy/x64/code-stubs-x64.cpp',
+      'legacy/x64/jit_x64.cpp',
+      'v2/x64/code-stubs-x64.cpp',
+      'v2/x64/jit_x64.cpp',
       'x64/assembler-x64.cpp',
-      'x64/code-stubs-x64.cpp',
       'x64/features-x64.cpp',
       'x64/macro-assembler-x64.cpp',
-      'x64/jit_x64.cpp',
     ]

@@ -26,7 +26,7 @@ Environment *sEnv = nullptr;
 bool sVerbose = false;
 
 static bool
-Verify(sp::PluginRuntime* rt)
+Verify(sp::BaseRuntime* rt)
 {
   ExceptionHandler eh(sEnv);
   if (!rt->PerformFullValidation()) {
@@ -41,7 +41,7 @@ static bool
 Analyze(const char* file)
 {
   char error[255];
-  std::unique_ptr<sp::PluginRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  std::unique_ptr<sp::BaseRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
   if (!rt) {
     fprintf(stdout, "Could not load .smx file: %s\n", error);
     return false;

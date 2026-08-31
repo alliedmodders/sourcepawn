@@ -27,7 +27,7 @@
 #include <utils/bitset.h>
 #include "control-flow.h"
 
-namespace sp {
+namespace sp::v1 {
 
 class PluginRuntime;
 
@@ -119,6 +119,6 @@ class GraphBuilder
     BitSet block_bitmap_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_vm_graph_builder_h_

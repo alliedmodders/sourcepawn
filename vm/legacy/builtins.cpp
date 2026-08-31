@@ -14,7 +14,7 @@
 #include <amtl/am-float.h>
 #include <math.h>
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace SourcePawn;
 
@@ -162,4 +162,4 @@ sp_nativeinfo_t gBuiltinFloatNatives[] = {
     {nullptr, nullptr},
 };
 
-} // namespace sp
+} // namespace sp::v1

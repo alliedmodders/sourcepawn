@@ -32,7 +32,7 @@
 #include "legacy/runtime-helpers.h"
 #include "watchdog_timer.h"
 
-namespace sp {
+namespace sp::v1 {
 
 bool
 Interpreter::Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval) {
@@ -1442,4 +1442,4 @@ bool Interpreter::visitSTOR_S_C(cell_t slot, cell_t value) {
     return cx_->setFrameValue(StackOffset(slot), value);
 }
 
-} // namespace sp
+} // namespace sp::v1

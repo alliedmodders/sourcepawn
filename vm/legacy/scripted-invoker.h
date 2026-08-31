@@ -19,13 +19,16 @@
 #include <sp_vm_api.h>
 
 namespace sp {
+class CompiledFunction;
+class SmxImage;
+}
+namespace sp::v1 {
 
 using namespace ke;
 using namespace SourcePawn;
 
 class PluginRuntime;
 typedef PluginRuntime PluginContext;
-class CompiledFunction;
 class MethodInfo;
 
 struct ParamInfo {

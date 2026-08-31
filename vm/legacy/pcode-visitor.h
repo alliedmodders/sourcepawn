@@ -16,7 +16,7 @@
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 
-namespace sp {
+namespace sp::v1 {
 
 class LegacyImage;
 
@@ -163,6 +163,6 @@ class PcodeVisitor
     virtual bool visitCompareOpF32(CompareOp op) = 0;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_vm_pcode_visitor_h_

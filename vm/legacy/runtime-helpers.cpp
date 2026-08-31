@@ -19,7 +19,7 @@
 #include "environment.h"
 #include "legacy/plugin-runtime.h"
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace SourcePawn;
 
@@ -72,4 +72,4 @@ cell_t NativeInvokeThunk(PluginContext* ctx, NativeEntry* entry, const cell_t* p
     return entry->callback->Invoke(ctx, params);
 }
 
-} // namespace sp
+} // namespace sp::v1

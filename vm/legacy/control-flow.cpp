@@ -15,7 +15,7 @@
 #include <amtl/am-string.h>
 #include "legacy/opcodes.h"
 
-namespace sp {
+namespace sp::v1 {
 
 using namespace ke;
 
@@ -375,4 +375,4 @@ Block::endPc() const {
     return end_ - graph_.rt()->code().bytes;
 }
 
-} // namespace sp
+} // namespace sp::v1

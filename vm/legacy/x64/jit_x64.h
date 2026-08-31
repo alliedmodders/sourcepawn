@@ -17,10 +17,14 @@
 #pragma once
 
 #include "legacy/jit.h"
-#include "constants-x64.h"
+#include "x64/constants-x64.h"
 #include "legacy/plugin-runtime.h"
 
 namespace sp {
+class CompiledFunction;
+class SmxImage;
+}
+namespace sp::v1 {
 
 using namespace SourcePawn;
 
@@ -184,4 +188,4 @@ class Compiler : public CompilerBase
     Operand hpScopeAddr() { return Operand(context_reg, PluginContext::offsetOfHpScope()); }
 };
 
-} // namespace sp
+} // namespace sp::v1

@@ -21,15 +21,16 @@
 #define __ masm.
 
 #include "code-stubs.h"
+#include "compiled-function.h"
 #include "debugging.h"
 #include "environment.h"
-#include "features-x64.h"
-#include "legacy/method-info.h"
-#include "legacy/runtime-helpers.h"
+#include "x64/features-x64.h"
+#include "v2/method-info.h"
+#include "v2/runtime-helpers.h"
 
 #define __ masm.
 
-namespace sp {
+namespace sp::v2 {
 
 Compiler::Compiler(PluginRuntime* rt, MethodInfo* method)
  : CompilerBase(rt, method)
@@ -183,7 +184,7 @@ bool CompilerBase::IsSupported() {
 }
 
 bool CompilerBase::SupportsPlugin(PluginContext* cx) {
-    const auto& code = cx->runtime()->code();
+    const auto& code = cx->code();
     if (code.version < SmxConsts::CODE_VERSION_FEATURE_MASK)
         return false;
 
@@ -397,7 +398,7 @@ bool Compiler::visitRETN() {
 }
 
 bool Compiler::visitCALL(cell_t offset) {
-    RefPtr<MethodInfo> method = rt_->GetMethod(offset);
+    RefPtr<BaseMethodInfo> method = rt_->GetMethod(offset);
     if (!method || !method->jit()) {
         // Need to emit a delayed thunk.
         CallThunk thunk(offset);
@@ -1651,4 +1652,4 @@ void Compiler::jumpOnError(ConditionCode cc, int err) {
     error_thunks_.emplace_back(std::move(thunk));
 }
 
-} // namespace sp
+} // namespace sp::v2

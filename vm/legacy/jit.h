@@ -14,8 +14,8 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
-#ifndef _include_sourcepawn_jit_h_
-#define _include_sourcepawn_jit_h_
+#ifndef _include_sourcepawn_legacy_jit_h_
+#define _include_sourcepawn_legacy_jit_h_
 
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
@@ -27,12 +27,15 @@
 #include "legacy/pcode-visitor.h"
 
 namespace sp {
+class CompiledFunction;
+class SmxImage;
+}
+namespace sp::v1 {
 
 using namespace SourcePawn;
 
 class PluginRuntime;
 typedef PluginRuntime PluginContext;
-class SmxImage;
 
 struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).
@@ -178,6 +181,6 @@ class CompilerBase : public PcodeVisitor
     std::vector<CipMapEntry> cip_map_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
-#endif // _include_sourcepawn_jit_h_
+#endif // _include_sourcepawn_legacy_jit_h_

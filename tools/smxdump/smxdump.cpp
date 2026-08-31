@@ -195,7 +195,7 @@ class DumpTool final {
             fprintf(stdout, "    .pcode_start = 0x%x\n", method->pcode_start);
             fprintf(stdout, "    .pcode_end = 0x%x\n", method->pcode_end);
             DumpLocals(method);
-            DumpCodeRange<false>(method->pcode_start, method->pcode_end);
+            DumpCodeRangeV1<false>(method->pcode_start, method->pcode_end);
             fprintf(stdout, "}\n");
         }
     }
@@ -344,11 +344,12 @@ class DumpTool final {
 
     void DumpLegacyCode() {
         auto code = smx_->DescribeCode();
-        DumpCodeRange<true>(0, code.length);
+        DumpCodeRangeV1<true>(0, code.length);
     }
 
     template <bool SearchForMethods>
-    void DumpCodeRange(cell_t pcode_start, cell_t pcode_end) {
+    void DumpCodeRangeV1(cell_t pcode_start, cell_t pcode_end) {
+        using namespace sp::v1;
         auto code = smx_->DescribeCode();
 
         auto start = reinterpret_cast<const cell_t*>(code.bytes + pcode_start);
@@ -391,7 +392,7 @@ class DumpTool final {
             else
                 fprintf(stdout, "unknown_op_%u", op);
 
-            DumpOpcode(method_start, cip, op);
+            DumpOpcodeV1(method_start, cip, op);
 
             if (op == OP_CASETBL)
                 cip += GetCaseTableSize(reinterpret_cast<const uint8_t*>(cip));
@@ -405,7 +406,8 @@ class DumpTool final {
         fprintf(stdout, "\n");
     }
 
-    void DumpOpcode(const cell_t* method_start, const cell_t* cip, OPCODE op) {
+    void DumpOpcodeV1(const cell_t* method_start, const cell_t* cip, v1::OPCODE op) {
+        using namespace sp::v1;
         switch (op) {
             case OP_PUSH_C:
             case OP_PUSH_ADR:

@@ -30,15 +30,15 @@
  */
 #include "legacy/opcodes.h"
 
-using namespace sp;
+using namespace sp::v1;
 using namespace SourcePawn;
 
-namespace sp {
+namespace sp::v1 {
 
 const char* GetOpcodeName(OPCODE op) {
     static std::vector<const char*> names(OPCODES_LAST, nullptr);
 #define FOR_EACH_OPCODE(op, val, text, cells) names[OP_##op] = text;
-    OPCODE_LIST(FOR_EACH_OPCODE)
+    OPCODE_LIST_V1(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
     return names[op];
 }
@@ -171,4 +171,4 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
     fprintf(fp, "\n");
 }
 
-} // namespace sp
+} // namespace sp::v1

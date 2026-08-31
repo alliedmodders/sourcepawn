@@ -24,9 +24,6 @@ namespace sp {
 
 using namespace SourcePawn;
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
-
 // We create x64 stack frames like:
 //   [return address]
 //   [prev_ebp]

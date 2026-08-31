@@ -24,6 +24,7 @@
 #include "legacy/scripted-invoker.h"
 
 namespace sp {
+namespace v1 {
 
 static const cell_t STACK_MARGIN = 16 * sizeof(cell_t);
 
@@ -43,8 +44,7 @@ struct NativeEntry : public sp_native_t {
 };
 
 /* Jit wants fast access to this so we expose things as public */
-class PluginRuntime : public BaseRuntime,
-                      public ke::InlineListNode<PluginRuntime>
+class PluginRuntime : public BaseRuntime, public ke::InlineListNode<PluginRuntime>
 {
   public:
     PluginRuntime(SmxImage* image);
@@ -73,7 +73,7 @@ class PluginRuntime : public BaseRuntime,
     int UpdateNativeBindingObject(uint32_t index, SourcePawn::INativeCallback* callback, uint32_t flags,
                                   void* data) override;
     const sp_native_t* GetNative(uint32_t index) override;
-    bool PerformFullValidation();
+    bool PerformFullValidation() override;
     bool UsesDirectArrays() override;
     bool UsesHeapScopes();
 
@@ -81,7 +81,7 @@ class PluginRuntime : public BaseRuntime,
     void InstallBuiltinNatives() override;
 
     // Return the method if it was previously analyzed; null otherwise.
-    RefPtr<MethodInfo> GetMethod(cell_t pcode_offset) const;
+    ke::RefPtr<BaseMethodInfo> GetMethod(cell_t pcode_offset) const;
 
     // If there is no method at the given offset, return null. If there is a
     // method, return it.
@@ -225,17 +225,6 @@ class PluginRuntime : public BaseRuntime,
 
     ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
 
-  public:
-    const Code& code() const {
-        return code_;
-    }
-    const Data& data() const {
-        return data_;
-    }
-    SmxImage* image() const {
-        return image_.get();
-    }
-
   private:
     void SetupFloatNativeRemapping();
 
@@ -286,6 +275,7 @@ class PluginRuntime : public BaseRuntime,
     std::vector<RefPtr<MethodInfo>> methods_;
 };
 
+} // namespace v1
 } // namespace sp
 
 #endif //_INCLUDE_SOURCEPAWN_JIT_RUNTIME_H_

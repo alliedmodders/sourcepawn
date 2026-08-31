@@ -25,7 +25,7 @@
 * FUNCTION CALLING*
 ********************/
 
-using namespace sp;
+using namespace sp::v1;
 using namespace SourcePawn;
 
 ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, funcid_t id, uint32_t pub_id)

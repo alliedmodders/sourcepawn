@@ -29,9 +29,11 @@
 using namespace SourcePawn;
 
 namespace sp {
-class LegacyImage;
-class Environment;
 class CompiledFunction;
+class Environment;
+class SmxImage;
+}
+namespace sp::v1 {
 class CallThunk;
 
 class Compiler : public CompilerBase

@@ -12,15 +12,17 @@
 //
 #include <sp_vm_api.h>
 #include "code-stubs.h"
-#include "constants-x64.h"
 #include "debug-metadata.h"
 #include "linking.h"
-#include "macro-assembler-x64.h"
-#include "legacy/plugin-runtime.h"
+#include "v2/plugin-runtime.h"
+#include "x64/constants-x64.h"
+#include "x64/macro-assembler-x64.h"
 
 #define __ masm.
 
 namespace sp {
+
+using namespace sp::v2;
 
 // Windows ABI: RCX, RDX, R8, R9
 // Linux ABI: RDI, RSI, RDX, RCX, R8, R9
@@ -30,9 +32,7 @@ namespace sp {
 // Callee-saved common to both ABIs:
 //     RBX, RBP, R12, R13, R14, R15
 
-bool
-CodeStubs::CompileInvokeStub()
-{
+bool CodeStubs::CompileInvokeStubV2() {
     MacroAssembler masm;
 
     // Add 1 for the return address that was pushed.
@@ -45,11 +45,6 @@ CodeStubs::CompileInvokeStub()
     __ push(dat);
     __ push(frm);
     frame_items += 5;
-#if defined(KE_WINDOWS)
-    __ push(rdi);
-    __ push(rsi);
-    frame_items += 2;
-#endif
 
     size_t frame_items_to_restore = frame_items;
 
@@ -89,29 +84,20 @@ CodeStubs::CompileInvokeStub()
     //
     //      return_address
     //      rbp
-    //      r10
+    //      rcx
     //      context_reg
     //      env_reg
     //      stk
     //      dat
-    //      frm
-    // #if defined(KE_WINDOWS)
-    //      rdi
-    //      rsi
-    // #endif
-    //      <-- restore RSP to here -->
+    //      frm <-- restore RSP to here.
     //      ArgReg2
     //      alignment
     //
-    // The delta between rbp to frm (or rsi on Windows) is frame_items_to_restore
-    // minus the entries for return_address and rbp.
+    // The delta between rbp to frm is frame_items_to_restore minus the entries
+    // for return_address and rbp.
     int32_t offset_to_rsp = (frame_items_to_restore - 2) * sizeof(intptr_t);
     __ lea(rsp, Operand(rbp, -offset_to_rsp));
 
-#if defined(KE_WINDOWS)
-    __ pop(rsi);
-    __ pop(rdi);
-#endif
     __ pop(frm);
     __ pop(dat);
     __ pop(stk);
@@ -127,11 +113,11 @@ CodeStubs::CompileInvokeStub()
     __ bind(&error);
     __ jmp(&ret);
 
-    invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
-    if (!invoke_stub_.entry)
+    invoke_stub_v2_ = LinkCode(env_, masm, "<jit invoke stub>", {});
+    if (!invoke_stub_v2_.entry)
         return false;
 
-    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.entry) + error.offset();
+    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry) + error.offset();
     return true;
 }
 

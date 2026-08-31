@@ -36,9 +36,9 @@
 #include <sp_vm_types.h>
 #include "legacy/plugin-runtime.h"
 
-namespace sp {
+namespace sp::v1 {
 
-void SpewOpcode(FILE* fp, sp::PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
+void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cell_t* cip);
 
 // These count opcodes in # of cells, not bytes.
 const char* GetOpcodeName(OPCODE op);
@@ -47,7 +47,7 @@ int GetCaseTableSize(const uint8_t* cip);
 static inline int GetOpcodeSize(OPCODE op) {
     switch (op) {
 #define FOR_EACH_OPCODE(op, val, text, cells) case OP_##op: return cells;
-        OPCODE_LIST(FOR_EACH_OPCODE)
+        OPCODE_LIST_V1(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
         default:
             assert(false);

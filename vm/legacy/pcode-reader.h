@@ -22,7 +22,7 @@
 #include "legacy/plugin-runtime.h"
 #include "legacy/pcode-visitor.h"
 
-namespace sp {
+namespace sp::v1 {
 
 class PluginRuntime;
 class PcodeVisitor;
@@ -774,6 +774,6 @@ class PcodeReader
     const cell_t* stop_at_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_vm_pcode_reader_h_

@@ -14,16 +14,16 @@
 #include "code-stubs.h"
 #include "debug-metadata.h"
 #include "environment.h"
-#include "jit_x86.h"
+#include "v2/x86/jit_x86.h"
 #include "linking.h"
 
-using namespace sp;
-using namespace SourcePawn;
+namespace sp {
+
+using namespace sp::v2;
 
 #define __ masm.
 
-bool
-CodeStubs::CompileInvokeStub() {
+bool CodeStubs::CompileInvokeStubV2() {
     MacroAssembler masm;
     __ enterFrame(JitFrameType::Entry, 0);
 
@@ -84,10 +84,12 @@ CodeStubs::CompileInvokeStub() {
     __ bind(&error);
     __ jmp(&ret);
 
-    invoke_stub_ = LinkCode(env_, masm, "<jit invoke stub>", {});
-    if (!invoke_stub_.entry)
+    invoke_stub_v2_ = LinkCode(env_, masm, "<jit invoke stub>", {});
+    if (!invoke_stub_v2_.entry)
         return false;
 
-    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_.entry) + error.offset();
+    return_stub_ = reinterpret_cast<uint8_t*>(invoke_stub_v2_.entry) + error.offset();
     return true;
 }
+
+} // namespace sp

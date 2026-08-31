@@ -31,8 +31,6 @@ class IErrorReport;
 namespace sp {
 
 class Environment;
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
 
 typedef bool (*WatchdogCallback)();
 

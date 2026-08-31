@@ -17,7 +17,7 @@
 #include <sp_vm_types.h>
 #include <string.h>
 
-namespace sp {
+namespace sp::v1 {
 
 class BuiltinNatives
 {
@@ -42,6 +42,6 @@ class BuiltinNatives
     NativeMap map_;
 };
 
-} // namespace sp
+} // namespace sp::v1
 
 #endif // _include_sourcepawn_vm_builtins_h_
