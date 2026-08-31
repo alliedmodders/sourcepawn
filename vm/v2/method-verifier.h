@@ -151,6 +151,7 @@ class MethodVerifier final
     std::vector<Block*> verify_joins_;
     const TypeDesc* return_type_ = nullptr;
     uint32_t arg_count_ = 0;
+    bool is_variadic_ = false;
     int code_version_;
     uint32_t code_features_;
     uint32_t method_index_;

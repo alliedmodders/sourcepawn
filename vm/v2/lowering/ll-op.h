@@ -236,7 +236,9 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_ELEM_FLAT_I32, 135, "load.elem.flat.i32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_ELEM_FLAT_F32, 136, "load.elem.flat.f32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_ELEM_FLAT_I64, 137, "load.elem.flat.i64", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(LOAD_ELEM_FLAT_U8, 138, "load.elem.flat.i8", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG})
+    FOR_EACH(LOAD_ELEM_FLAT_U8, 138, "load.elem.flat.i8", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(NTVCALL_VA, 139, "ntvcall.va", {LL_FMT_U32, LL_FMT_U8, LL_FMT_REG, LL_FMT_CALL}) \
+    FOR_EACH(NTVCALL, 140, "ntvcall", {LL_FMT_U32, LL_FMT_U8, LL_FMT_REG, LL_FMT_CALL})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

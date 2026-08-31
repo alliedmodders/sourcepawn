@@ -775,6 +775,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         case ExprKind::SizeofExpr:
             EmitSizeofExpr(expr->to<SizeofExpr>(), flags);
             break;
+        case ExprKind::SpreadArgsExpr:
+            assert(false);
+            break;
 
         default:
             assert(false);
@@ -1487,11 +1490,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     // we store the address in a local slot, so we can easily read it back out
     // after the function returns. For simple stack allocations we just use a
     // local variable.
+    bool is_spread = !call->args().empty() && call->args().back()->as<SpreadArgsExpr>();
     cell_t nargs = (cell_t)call->args().size();
+    if (is_spread)
+        nargs--;
 
     const auto& argv = call->args();
     const auto& arginfov = call->fun()->args();
-    for (size_t i = argv.size() - 1; i < argv.size(); i--) {
+    for (size_t i = nargs - 1; i < nargs; i--) {
         const auto& expr = argv[i];
 
         ArgDecl* arg;
@@ -1587,7 +1593,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         nargs++;
     }
 
-    EmitCall(call->fun(), nargs);
+    EmitCall(call->fun(), nargs, is_spread);
 
     if (discard) {
         if (!return_type->isVoid())
@@ -2251,7 +2257,7 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
         EmitFunctionDecl(method);
 }
 
-void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
+void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs, bool is_spread) {
     assert(fun->is_live());
 
     if (fun->is_native()) {
@@ -2269,11 +2275,12 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
             node->second.emplace_back(fun);
     }
 
-    if (fun->IsVariadic()) {
+    if (is_spread)
+        __ emit(OP_CALLVA, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
+    else if (fun->IsVariadic())
         __ emit(OP_CALLN, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
-    } else {
+    else
         __ emit(OP_CALL, &fun->cg()->method_id);
-    }
 }
 
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {

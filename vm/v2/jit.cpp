@@ -243,29 +243,34 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitMove(op, src, dest);
                 break;
             }
-            case LL_CALL: {
+            case LL_CALL:
+            {
                 const smx_rtti_method* method = reader.read<const smx_rtti_method*>();
                 uint8_t nargs = reader.read<uint8_t>();
                 uint16_t dest = reader.read<uint16_t>();
                 uint32_t method_index = method - rt_->image()->GetMethod(0);
-                if (method->flags & kRttiMethod_Native) {
-                    uint32_t native_index;
-                    [[maybe_unused]] bool ok = rt_->GetNativeIndex(method_index, &native_index);
-                    assert(ok);
-                    std::vector<uint16_t> args;
-                    args.reserve(nargs);
-                    for (uint8_t i = 0; i < nargs; i++) {
-                        args.push_back(reader.read<uint16_t>());
-                    }
-                    EmitNativeCall(native_index, nargs, dest, args);
-                } else {
-                    std::vector<uint16_t> args;
-                    args.reserve(nargs);
-                    for (uint8_t i = 0; i < nargs; i++) {
-                        args.push_back(reader.read<uint16_t>());
-                    }
-                    EmitScriptedCall(method_index, nargs, dest, args);
+                std::vector<uint16_t> args(nargs);
+                for (uint8_t i = 0; i < nargs; i++) {
+                    args[i] = reader.read<uint16_t>();
                 }
+                EmitScriptedCall(method_index, nargs, dest, args);
+                break;
+            }
+            case LL_NTVCALL:
+            case LL_NTVCALL_VA:
+            {
+                uint32_t native_index = reader.read<uint32_t>();
+                uint8_t nargs = reader.read<uint8_t>();
+
+                uint16_t spread_reg = LL_INVALID_REG;
+                if (op == LL_NTVCALL_VA)
+                    spread_reg = reader.read<uint16_t>();
+
+                uint16_t dest = reader.read<uint16_t>();
+                std::vector<uint16_t> args(nargs);
+                for (uint8_t i = 0; i < nargs; i++)
+                    args[i] = reader.read<uint16_t>();
+                EmitNativeCall(native_index, nargs, dest, args, spread_reg);
                 break;
             }
             case LL_JUMP: {

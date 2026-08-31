@@ -629,5 +629,9 @@ void AstPrinter::PrintSimpleCastExpr(SimpleCastExpr* node, bool is_last) {
     stack_.pop_back();
 }
 
+void AstPrinter::PrintSpreadArgsExpr(SpreadArgsExpr* node, bool is_last) {
+    fprintf(out_, "SpreadArgsExpr\n");
+}
+
 } // namespace cc
 } // namespace sp

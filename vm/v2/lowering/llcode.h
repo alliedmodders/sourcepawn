@@ -34,6 +34,8 @@ struct LLBlock {
     ke::FixedArray<uint32_t> successors;
 };
 
+static constexpr uint16_t LL_INVALID_REG = 0xFFFF;
+
 class LLCode
 {
   public:

@@ -2205,6 +2205,22 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         return param;
     }
 
+    if (param->as<SpreadArgsExpr>()) {
+        if (!call->fun()->IsVariadic()) {
+            report(param, 474);
+            return nullptr;
+        }
+        if (!sc_->func() || !sc_->func()->IsVariadic()) {
+            report(param, 475);
+            return nullptr;
+        }
+        if (param != call->args().back()) {
+            report(param, 476);
+            return nullptr;
+        }
+        return param;
+    }
+
     if (param != call->implicit_this()) {
         if (!CheckRvalue(param, *arg->type()))
             return nullptr;

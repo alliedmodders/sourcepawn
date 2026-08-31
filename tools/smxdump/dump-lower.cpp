@@ -108,6 +108,38 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
                 break;
             }
 
+            case LL_NTVCALL: {
+                uint32_t native_index = reader.read<uint32_t>();
+                uint8_t nargs = reader.read<uint8_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                std::vector<std::string> args;
+                args.push_back(runtime_->GetNative(native_index)->name);
+                args.push_back(std::to_string(nargs));
+                if (dest_reg != 0xffff)
+                    args.push_back("dest:" + FormatRegister(dest_reg));
+                for (uint32_t i = 0; i < nargs; i++)
+                    args.push_back(FormatRegister(reader.read<uint16_t>()));
+                fprintf(stdout, " %s", ke::Join(args, ", ").c_str());
+                break;
+            }
+
+            case LL_NTVCALL_VA: {
+                uint32_t native_index = reader.read<uint32_t>();
+                uint8_t nargs = reader.read<uint8_t>();
+                uint16_t spread_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                std::vector<std::string> args;
+                args.push_back(runtime_->GetNative(native_index)->name);
+                args.push_back(std::to_string(nargs));
+                args.push_back("spread:" + FormatRegister(spread_reg));
+                if (dest_reg != 0xffff)
+                    args.push_back("dest:" + FormatRegister(dest_reg));
+                for (uint32_t i = 0; i < nargs; i++)
+                    args.push_back(FormatRegister(reader.read<uint16_t>()));
+                fprintf(stdout, " %s", ke::Join(args, ", ").c_str());
+                break;
+            }
+
             default: {
                 const LLArgFmt* args = nullptr;
                 size_t nargs = 0;

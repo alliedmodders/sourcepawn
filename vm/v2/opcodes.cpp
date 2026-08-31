@@ -103,10 +103,11 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_LOAD_FN:
         case OP_CALL:
         case OP_CALLN:
+        case OP_CALLVA:
         {
             uint32_t method_index = reader.read<uint32_t>();
             fprintf(fp, "%u", method_index);
-            if (op == OP_CALLN) {
+            if (op == OP_CALLN || op == OP_CALLVA) {
                 uint8_t nargs = reader.read<uint8_t>();
                 fprintf(fp, ", %u", nargs);
             }

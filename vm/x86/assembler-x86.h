@@ -46,10 +46,10 @@ struct Register {
 
     int code;
 
-    bool operator==(const Register& other) const {
+    constexpr bool operator==(const Register& other) const {
         return code == other.code;
     }
-    bool operator!=(const Register& other) const {
+    constexpr bool operator!=(const Register& other) const {
         return code != other.code;
     }
 };
@@ -64,10 +64,10 @@ struct FpuRegister {
 
     int code;
 
-    bool operator==(const FpuRegister& other) const {
+    constexpr bool operator==(const FpuRegister& other) const {
         return code == other.code;
     }
-    bool operator!=(const FpuRegister& other) const {
+    constexpr bool operator!=(const FpuRegister& other) const {
         return code != other.code;
     }
 };
@@ -81,49 +81,49 @@ struct FloatRegister {
 
     int code;
 
-    bool operator==(const FloatRegister& other) const {
+    constexpr bool operator==(const FloatRegister& other) const {
         return code == other.code;
     }
-    bool operator!=(const FloatRegister& other) const {
+    constexpr bool operator!=(const FloatRegister& other) const {
         return code != other.code;
     }
 };
 
-const Register eax = {0};
-const Register ecx = {1};
-const Register edx = {2};
-const Register ebx = {3};
-const Register esp = {4};
-const Register ebp = {5};
-const Register esi = {6};
-const Register edi = {7};
+constexpr Register eax = {0};
+constexpr Register ecx = {1};
+constexpr Register edx = {2};
+constexpr Register ebx = {3};
+constexpr Register esp = {4};
+constexpr Register ebp = {5};
+constexpr Register esi = {6};
+constexpr Register edi = {7};
 
-const Register r8_al = {0};
-const Register r8_cl = {1};
-const Register r8_dl = {2};
-const Register r8_bl = {3};
-const Register r8_ah = {4};
-const Register r8_ch = {5};
-const Register r8_dh = {6};
-const Register r8_bh = {7};
+constexpr Register r8_al = {0};
+constexpr Register r8_cl = {1};
+constexpr Register r8_dl = {2};
+constexpr Register r8_bl = {3};
+constexpr Register r8_ah = {4};
+constexpr Register r8_ch = {5};
+constexpr Register r8_dh = {6};
+constexpr Register r8_bh = {7};
 
-const FpuRegister st0 = {0};
-const FpuRegister st1 = {1};
-const FpuRegister st2 = {2};
-const FpuRegister st3 = {3};
-const FpuRegister st4 = {4};
-const FpuRegister st5 = {5};
-const FpuRegister st6 = {6};
-const FpuRegister st7 = {7};
+constexpr FpuRegister st0 = {0};
+constexpr FpuRegister st1 = {1};
+constexpr FpuRegister st2 = {2};
+constexpr FpuRegister st3 = {3};
+constexpr FpuRegister st4 = {4};
+constexpr FpuRegister st5 = {5};
+constexpr FpuRegister st6 = {6};
+constexpr FpuRegister st7 = {7};
 
-const FloatRegister xmm0 = {0};
-const FloatRegister xmm1 = {1};
-const FloatRegister xmm2 = {2};
-const FloatRegister xmm3 = {3};
-const FloatRegister xmm4 = {4};
-const FloatRegister xmm5 = {5};
-const FloatRegister xmm6 = {6};
-const FloatRegister xmm7 = {7};
+constexpr FloatRegister xmm0 = {0};
+constexpr FloatRegister xmm1 = {1};
+constexpr FloatRegister xmm2 = {2};
+constexpr FloatRegister xmm3 = {3};
+constexpr FloatRegister xmm4 = {4};
+constexpr FloatRegister xmm5 = {5};
+constexpr FloatRegister xmm6 = {6};
+constexpr FloatRegister xmm7 = {7};
 
 static const uint8_t kModeDisp0 = 0;
 static const uint8_t kModeDisp8 = 1;

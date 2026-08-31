@@ -1279,6 +1279,15 @@ class StructExpr final : public Expr
     PoolList<StructInitFieldExpr*> fields_;
 };
 
+class SpreadArgsExpr final : public Expr {
+  public:
+    explicit SpreadArgsExpr(const token_pos_t& pos)
+      : Expr(ExprKind::SpreadArgsExpr, pos)
+    {}
+
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::SpreadArgsExpr; }
+};
+
 class IfStmt : public Stmt
 {
   public:
@@ -1508,6 +1517,9 @@ class FunctionDecl : public Decl
     }
 
     bool IsVariadic() const;
+    uint32_t FormalArgc() const {
+        return args_.size() - (IsVariadic() ? 1 : 0);
+    }
     int FindNamedArg(Atom* name) const;
     bool MustReturnValue() const;
 

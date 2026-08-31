@@ -127,7 +127,7 @@ class CodeGenerator final
     void EmitLogicalExprTest(LogicalExpr* expr, bool jump_on_true, sp::Label* target);
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
-    void EmitCall(FunctionDecl* fun, cell nargs);
+    void EmitCall(FunctionDecl* fun, cell nargs, bool is_spread = false);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void EmitRvalue(const value& lval);
     void EmitStore(ParseNode* node, const value& lval);

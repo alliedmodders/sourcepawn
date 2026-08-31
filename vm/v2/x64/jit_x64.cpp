@@ -50,11 +50,11 @@ bool CompilerBase::SupportsPlugin(Runtime* cx) {
     return true;
 }
 
-// Every JIT function gets 64 bytes of stack. Since x64 passes arguments via
-// registers we don't need as much scratch space as we do on x86. This gives
-// us enough for eight 8-byte locals, and enough for shadow stack space on
-// win64.
-static constexpr int kNativeStackAllowance = 64 * sizeof(intptr_t);
+// Every JIT function gets 64 bytes of stack (eight 8-byte locals). Since x64
+// passes arguments via registers we don't need as much scratch space as we do
+// on x86. This is enough for shadow stack space on win64 plus local scratch
+// storage.
+static constexpr int kNativeStackAllowance = 8 * sizeof(intptr_t);
 
 // Handle<> storage is placed at the top of the pre-allocated stack area.
 static constexpr int kHandleOffset = -24;
@@ -142,30 +142,73 @@ void Compiler::EmitRetn(LLOp op, std::optional<uint16_t> reg) {
     __ ret();
 }
 
-void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
+                              const std::vector<uint16_t>& args, uint16_t spread_reg)
+{
     NativeEntry* native = rt_->NativeAt(native_index);
 
     RipCodeLabel return_address;
     __ pushInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
-#ifdef _WIN64
-    static constexpr int kStackAlignment = 8 + 32;
-#else
-    static constexpr int kStackAlignment = 8;
-#endif
+
+    // 8 bytes to re-align after the inline frame.
+    // 16 bytes for two locals (for LL_NTVCALL_VA only).
+    // shadow stack if needed.
+    static constexpr int kStackAlignment = 8 + 16 + kShadowStackSize;
     __ subq(rsp, kStackAlignment);
 
-    __ lea(ArgReg2, Operand(dat_reg, stk, NoScale));
-    __ movl(Operand(ArgReg2, 0), nargs);
+    // Save the base to the stack.
+    __ movl(Operand(rsp, kShadowStackSize + 0), stk);
+
+    // Copy formal arguments.
+    __ movl(HeapAddr(stk, 0), nargs);
     for (uint8_t i = 0; i < nargs; i++) {
         uint16_t arg_reg = args[i];
         __ movl(rax, RegAddr(arg_reg));
-        __ movl(Operand(ArgReg2, (i + 1) * sizeof(cell_t)), rax);
+        __ movl(HeapAddr(stk, (i + 1) * sizeof(cell_t)), rax);
     }
+
+    // Bump up stk.
+    __ lea(stk, Operand(stk, (nargs + 1) * sizeof(cell_t)));
+
+    if (spread_reg != LL_INVALID_REG) {
+        __ movl(r10, RegAddr(spread_reg));
+        __ movl(rax, HeapAddr(r10));
+
+        // Check for stack overflow.
+        __ lea(r11, Operand(stk, rax, ScaleFour));
+        __ cmpl(r11, Operand(env_reg, Environment::offsetOfSpTop()));
+        JumpOnError(above_equal, SP_ERROR_STACKLOW);
+
+        // Bump up the argument count, get the original params vec (stk).
+        __ movl(rdi, Operand(rsp, kShadowStackSize + 0));
+        __ addl(HeapAddr(rdi, 0), rax);
+
+        // Copy arguments, saving the base ptr first since on both platforms
+        // it's one of the registers needed for movsd. Note that the incoming
+        // address is a flat array, not a heap array.
+        __ lea(rdi, HeapAddr(stk, 0));
+        __ lea(rsi, HeapAddr(r10, sizeof(cell_t)));
+        __ movl(rcx, rax);
+        __ rep_movsd();
+
+        // We calculated the new stk earlier.
+        __ movl(stk, r11);
+    }
+
+    // Store the new |stk| back.
+    __ movl(Operand(env_reg, Environment::offsetOfSp()), stk);
+
+    __ movl(ArgReg2, Operand(rsp, kShadowStackSize + 0));
+    __ lea(ArgReg2, HeapAddr(ArgReg2));
     __ movq(ArgReg1, reinterpret_cast<intptr_t>(native));
     __ movq(ArgReg0, context_reg);
     __ callWithABI(ExternalAddress((void*)NativeInvokeThunk));
     __ bind(&return_address);
     EmitCipMapping(op_cip_);
+
+    // Restore the stack.
+    __ movl(stk, Operand(rsp, kShadowStackSize + 0));
+    __ movl(Operand(env_reg, Environment::offsetOfSp()), stk);
 
     __ popInlineExitFrame(kStackAlignment);
 
@@ -173,11 +216,13 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
     __ cmpl(Operand(env_reg, Environment::offsetOfExceptionCode()), 0);
     JumpOnReportedError(not_zero);
 
-    if (dest != 0xFFFF)
+    if (dest != LL_INVALID_REG)
         __ movl(RegAddr(dest), rax);
 }
 
-void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
+                                const std::vector<uint16_t>& args)
+{
     for (uint8_t i = 0; i < nargs; i++) {
         uint16_t arg_reg = args[i];
         __ movl(rax, RegAddr(arg_reg));
@@ -197,7 +242,7 @@ void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t d
 
     EmitCipMapping(op_cip_);
 
-    if (dest != 0xFFFF)
+    if (dest != LL_INVALID_REG)
         __ movl(RegAddr(dest), rax);
 }
 

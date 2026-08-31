@@ -1101,8 +1101,12 @@ Parser::parse_call(const token_pos_t& pos, int tok, Expr* target)
         }
 
         Expr* expr = nullptr;
-        if (!lexer_->match('_'))
-            expr = hier14();
+        if (!name && lexer_->match(tELLIPS)) {
+            expr = new SpreadArgsExpr(lexer_->pos());
+        } else {
+            if (!lexer_->match('_'))
+                expr = hier14();
+        }
 
         if (name && expr)
             expr = new NamedArgExpr(name_pos, name, expr);

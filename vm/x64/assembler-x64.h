@@ -691,7 +691,8 @@ class Assembler : public AssemblerBase
     void addl(const T& rm, int32_t imm) {
         alu_imm_32(0, imm, rm);
     }
-    void addl(Register dest, Register src) {
+    template <typename DestType>
+    void addl(const DestType& dest, Register src) {
         emit1(0x01, src, dest);
     }
     void addl(Register dest, const Operand& src) {

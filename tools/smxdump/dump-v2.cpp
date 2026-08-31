@@ -170,6 +170,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         case OP_LOAD_FN:
         case OP_CALL:
         case OP_CALLN:
+        case OP_CALLVA:
         {
             uint32_t method_index = reader.read<uint32_t>();
             if (auto method = smx_->GetMethod(method_index))
@@ -177,7 +178,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
             else
                 fprintf(stdout, " unknown_method_%u", method_index);
 
-            if (op == OP_CALLN) {
+            if (op == OP_CALLN || op == OP_CALLVA) {
                 uint8_t nargs = reader.read<uint8_t>();
                 fprintf(stdout, " %u", nargs);
             }

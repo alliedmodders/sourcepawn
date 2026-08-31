@@ -87,7 +87,6 @@ bool CodeStubs::CompileInvokeStubV2() {
 
     __ bind(&report_error);
     {
-        __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
         __ enterExitFrame(ExitFrameType::Helper, 0);
         __ subl(esp, 12);
         __ push(eax);
@@ -97,7 +96,6 @@ bool CodeStubs::CompileInvokeStubV2() {
     }
 
     __ bind(&throw_timeout);
-    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
     __ enterExitFrame(ExitFrameType::Helper, 0);
     __ callWithABI(ExternalAddress((void*)CompilerBase::InvokeReportTimeout));
     __ leaveExitFrame();
@@ -106,7 +104,6 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ bind(&bounds_error);
     __ movl(eax, Operand(esp, 8)); // bounds
     __ movl(ecx, Operand(esp, 4)); // index
-    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
     __ enterExitFrame(ExitFrameType::Helper, 0);
     __ subl(esp, 16);
     __ movl(Operand(esp, 4), eax);
@@ -117,7 +114,6 @@ bool CodeStubs::CompileInvokeStubV2() {
 
     Label deferred_error;
     __ bind(&deferred_error);
-    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
     __ enterExitFrame(ExitFrameType::Helper, 0);
     __ callWithABI(ExternalAddress((void*)CompilerBase::DispatchDeferredReport));
     __ leaveExitFrame();
@@ -165,8 +161,6 @@ bool CodeStubs::CompileDeallocStub() {
 
     // Push our exit frame. This re-aligns the stack.
     __ enterExitFrame(ExitFrameType::Helper, 0);
-
-    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
 
     __ subl(esp, 16);
     __ movl(Operand(esp, 0), ecx);

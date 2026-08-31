@@ -358,4 +358,7 @@ static const char* errmsg_ex[] = {
     /*471*/ "default argument must be moved to the function prototype\n",
     /*472*/ "default value must be constant literal or global variable\n",
     /*473*/ "no viable conversion from '%s' (stack array) to '%s' (heap array)\n",
+    /*474*/ "cannot use ... operator to forward arguments to non-variadic functions\n",
+    /*475*/ "no variadic arguments available to forward\n",
+    /*476*/ "variadic arguments cannot precede other arguments\n",
 };

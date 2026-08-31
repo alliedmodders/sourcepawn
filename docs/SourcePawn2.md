@@ -6,9 +6,9 @@ Introducing SourcePawn 2.0.
 SourcePawn can now allocate objects and arrays, and assign or return them like a
 normal programming language.
 
-The path to get here was very narrow. We tried to maintain compatibility as much
-as possible, which is very difficult in a language that is full of weird
-low-level idiosyncracies.
+The semantic path to get here was very narrow. We tried to maintain
+compatibility as much as possible, which is very difficult in a language that
+is full of weird low-level idiosyncracies.
 
 The full scope of changes are divided into two sections: language changes, and
 virtual machine changes (the implementation details).
@@ -227,7 +227,35 @@ to the V1 interpreter, on average:
 +---------------+--------------------+--------------------+
 ```
 
+The new just-in-time compilers for x86 and x64 have a few improvements as well.
+A lot of redundant code has moved into the Environment, which makes the
+compiler much simpler. In lines of code, they are about 15% smaller.
+
 There are some other internal details that might be of interest. The stack now
 grows up instead of down. Variadic arguments are now boxed into a temporary
 array, meaning that outside of natives (for compatibility), there are no more
 truly variadic functions.
+
+A quirk of the new VM is that all scripted addresses must fit in a cell\_t, eg,
+the VM will not work with addresses that are greater than 2GB. This is to make
+the new array system work with old natives. LocalToPhysAddr() needs to
+distinguish between a stack array (a bare address) with a heap array (a special
+reference-counted object type). To do this, we tag the high bit of the cell.
+The low bit would not work due to char arrays.
+
+Furthermore, due to natives being hardcoded to take a cell\_t, and hardcoding
+parameter indexes, the only performant solution available was to use pointer
+compression.
+
+On Win32, we use VirtualAlloc2 to make sure addresses are under 2GB. On Linux,
+we use an mmap loop and some procmap parsing to find chunks in the first 2GB
+of the virtual address space.
+
+On 64-bit platforms, we reserve 2GB of virtual addresses up-front, and commit
+it on demand.
+
+This design, coupled with the fact that mimalloc does not support per-heap
+virtual address space, means that all plugins share the same heap and stack.
+The major benefit is that there is now zero-cost to move objects and arrays
+between plugins. The downside is that unloading will henceforth be unreliable,
+since plugin memory is no longer isolated.

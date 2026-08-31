@@ -92,6 +92,7 @@ void Compiler::EmitPrologue(const FrameInfo& frame) {
 
     // Set stk = frm + num_regs * 4.
     __ lea(stk, Operand(frm, int32_t(frame.num_regs * sizeof(cell_t))));
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
 }
 
 void Compiler::EmitCallThunk(CallThunk* thunk) {
@@ -167,8 +168,13 @@ void Compiler::EmitRetn(LLOp op, std::optional<uint16_t> reg) {
     __ ret();
 }
 
-void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
+                              const std::vector<uint16_t>& args, uint16_t spread_reg)
+{
     NativeEntry* native = rt_->NativeAt(native_index);
+
+    // Save the old stk value.
+    __ movl(Operand(esp, 0), stk);
 
     __ movl(Operand(stk, 0), nargs);
     for (uint8_t i = 0; i < nargs; i++) {
@@ -177,7 +183,32 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
         __ movl(Operand(stk, (i + 1) * sizeof(cell_t)), eax);
     }
 
-    __ movl(eax, stk);
+    // Update stk.
+    __ lea(stk, Operand(stk, (nargs + 1) * sizeof(cell_t)));
+
+    if (spread_reg != LL_INVALID_REG) {
+        __ movl(edx, RegAddr(spread_reg));
+        __ movl(ecx, Operand(edx, 0));
+
+        // Check for stack overflow.
+        __ lea(eax, Operand(stk, ecx, ScaleFour));
+        __ cmpl(eax, Operand(ExternalAddress(env_->addressOfSpTop())));
+        JumpOnError(above_equal, SP_ERROR_STACKLOW);
+
+        // Copy arguments. stk (edi) is already positioned to where we need,
+        // and ecx already contains the arg count.
+        static_assert(stk == edi);
+        __ lea(esi, Operand(edx, sizeof(cell_t)));
+        __ rep_movsd();
+
+        __ movl(stk, eax);
+    }
+
+    // Update stack value.
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
+
+    // Get |params| back.
+    __ movl(eax, Operand(esp, 0));
 
     CodeLabel return_address;
     __ pushInlineExitFrame(ExitFrameType::Native, native_index, &return_address);
@@ -187,12 +218,15 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
     __ movl(Operand(esp, 4), intptr_t(native));
     __ movl(Operand(esp, 0), intptr_t(context_));
 
-    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
-    __ call(ExternalAddress((void*)NativeInvokeThunk));
+    __ callWithABI(ExternalAddress((void*)NativeInvokeThunk));
     __ bind(&return_address);
     EmitCipMapping(op_cip_);
 
     __ popInlineExitFrame(4); // 4 was our alignment amount.
+
+    // Restore stack.
+    __ movl(stk, Operand(esp, 0));
+    __ movl(Operand(ExternalAddress(env_->addressOfSp())), stk);
 
     // Check for exception.
     __ cmpl(Operand(ExternalAddress(env_->addressOfExceptionCode())), 0);
@@ -202,7 +236,9 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
         __ movl(RegAddr(dest), eax);
 }
 
-void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) {
+void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
+                                const std::vector<uint16_t>& args)
+{
     for (uint8_t i = 0; i < nargs; i++) {
         uint16_t arg_reg = args[i];
         __ movl(eax, RegAddr(arg_reg));

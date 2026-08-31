@@ -296,8 +296,10 @@ GraphBuilder::prescan() {
         const uint8_t* insn = cip_;
         OPCODE op = readOp();
 
-        if (op <= 0 || op >= OPCODES_LAST)
+        if (op <= 0 || op >= OPCODES_LAST) {
+            fprintf(stderr, "prescan failure: op %d is out of bounds (OPCODES_LAST is %d)\n", op, OPCODES_LAST);
             return error(SP_ERROR_INVALID_INSTRUCTION);
+        }
 
         // Mark the bitmap.
         insn_bitmap_.set(getByteNumber(insn));
@@ -314,7 +316,7 @@ GraphBuilder::prescan() {
         } else {
             int opcode_size = GetOpcodeSize(op);
             if (opcode_size == 0) {
-                // This opcode is not generated, and is therefore illegal.
+                fprintf(stderr, "prescan failure: op %d (%s) has size 0\n", op, GetOpcodeName(op));
                 return error(SP_ERROR_INVALID_INSTRUCTION);
             }
             opcode_bytes = opcode_size - 1;

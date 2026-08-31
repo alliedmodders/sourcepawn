@@ -949,6 +949,8 @@ const TypeDesc* Runtime::LoadMethodSignature(uint32_t method_index) {
         return nullptr;
     }
 
+    // :TODO: acquire method
+
     auto parser = image_->GetTypeParser(method->signature);
 
     uint32_t expected_argc;

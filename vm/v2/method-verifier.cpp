@@ -489,14 +489,40 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_CALL:
-        case OP_CALLN: {
+        case OP_CALLN:
+        case OP_CALLVA: {
             uint32_t method_index = (uint32_t)readCell();
             uint32_t arg_count;
             const smx_rtti_method* method = smx_->GetMethod(method_index);
 
-            if (op == OP_CALLN) {
+            if (op == OP_CALLVA) {
+                if (!(method->flags & kRttiMethod_Native)) {
+                    fprintf(stderr, "OP_CALLVA failure: callee not native\n");
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+                }
+                const TypeDesc* sig = rt_->LoadMethodSignature(method_index);
+                if (!sig) {
+                    fprintf(stderr, "OP_CALLVA failure: no sig found\n");
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+                }
+                if (sig->args().empty()) {
+                    fprintf(stderr, "OP_CALLVA failure: sig args empty\n");
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+                }
+                if (!sig->args().back()->IsLegacyVarArgs()) {
+                    fprintf(stderr, "OP_CALLVA failure: callee not legacy variadic\n");
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+                }
+                if (!is_variadic_) {
+                    fprintf(stderr, "OP_CALLVA failure: caller not variadic\n");
+                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
+                }
+            }
+
+            if (op == OP_CALLN || op == OP_CALLVA) {
                 arg_count = (uint8_t)read<uint8_t>();
             } else {
+                // :TODO:  replace with function TypeDesc
                 auto parser = smx_->GetTypeParser(method->signature);
                 if (!parser.ReadFunctionSignatureArgCount(&arg_count))
                     return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -515,6 +541,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(arg_count + 1))
                 return false;
 
+            // :TODO: replace with function TypeDesc
             if (!smx_->IsVoidMethod(method)) {
                 auto parser = smx_->GetTypeParser(method->signature);
                 uint32_t unused_argc;
@@ -1114,6 +1141,7 @@ bool MethodVerifier::verifyCallIndex(uint32_t method_index) {
 }
 
 bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t arg_count) {
+    // :TODO: replace with function TypeDesc
     auto parser = smx_->GetTypeParser(method->signature);
     uint32_t expected_argc;
     if (!parser.ReadFunctionSignatureArgCount(&expected_argc))
@@ -1177,6 +1205,7 @@ bool MethodVerifier::verifyLocalSlots() {
     if (!method_)
         return reportError(SP_ERROR_FILE_FORMAT);
 
+    // :TODO: replace with function TypeDesc
     auto parser = rt_->image()->GetTypeParser(method_->signature);
     if (!parser.ReadFunctionSignatureArgCount(&arg_count_))
         return reportError(SP_ERROR_FILE_FORMAT);
@@ -1184,7 +1213,8 @@ bool MethodVerifier::verifyLocalSlots() {
     uint8_t variadic;
     if (!parser.GetByte(&variadic))
         return reportError(SP_ERROR_FILE_FORMAT);
-    if (variadic == cb::kLegacyVariadic)
+    is_variadic_ = (variadic == cb::kLegacyVariadic);
+    if (is_variadic_)
         parser.NextByte();
 
     // Read return type
@@ -1200,13 +1230,19 @@ bool MethodVerifier::verifyLocalSlots() {
             return reportError(SP_ERROR_FILE_FORMAT);
     }
 
+    uint32_t formal_argc = arg_count_;
+    if (is_variadic_)
+        arg_count_++;
+
     arg_types_ = ke::FixedArray<const TypeDesc*>(arg_count_);
-    for (uint32_t i = 0; i < arg_count_; i++) {
+    for (uint32_t i = 0; i < formal_argc; i++) {
         auto td = rt_->LoadArgType(parser);
         if (!td)
             return reportError(SP_ERROR_FILE_FORMAT);
         arg_types_[i] = td;
     }
+    if (is_variadic_)
+        arg_types_[formal_argc] = rt_->GetPrimitiveType(TypeKind::LegacyVarArgs);
 
     if (!method_->locals)
         return true;

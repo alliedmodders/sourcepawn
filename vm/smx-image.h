@@ -96,6 +96,10 @@ class SmxImage final :
             return nullptr;
         return getRttiRow<smx_rtti_method>(rtti_methods_, method_index);
     }
+    uint32_t GetIndexOfMethod(const smx_rtti_method* method) const {
+        assert(rtti_methods_);
+        return method - getRttiRow<smx_rtti_method>(rtti_methods_, 0);
+    }
     const smx_rtti_field_ref* getFieldRef(uint32_t index) const {
         if (!rtti_field_refs_ || index >= rtti_field_refs_->row_count)
             return nullptr;

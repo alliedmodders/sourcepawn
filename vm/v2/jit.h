@@ -85,8 +85,10 @@ class CompilerBase
     virtual void EmitLoadConst64(uint16_t reg, int64_t val) = 0;
     virtual void EmitAddr(uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitRetn(LLOp op, std::optional<uint16_t> reg) = 0;
-    virtual void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) = 0;
-    virtual void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) = 0;
+    virtual void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
+                                const std::vector<uint16_t>& args, uint16_t spread_reg) = 0;
+    virtual void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
+                                  const std::vector<uint16_t>& args) = 0;
     virtual void EmitJump(size_t target_idx) = 0;
     virtual void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) = 0;
     virtual void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) = 0;

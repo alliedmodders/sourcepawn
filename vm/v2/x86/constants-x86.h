@@ -20,7 +20,7 @@
 
 namespace sp::v2 {
 
-const Register frm = ebx;
-const Register stk = edi;
+constexpr Register frm = ebx;
+constexpr Register stk = edi;
 
 } // namespace sp::v2

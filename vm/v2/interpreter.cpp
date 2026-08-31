@@ -849,94 +849,123 @@ bool Interpreter::run_internal() {
                 *ptr = vregs_[valreg];
                 break;
             }
+            case LL_NTVCALL:
+            case LL_NTVCALL_VA: {
+                uint32_t native_index = reader_.read<uint32_t>();
+                uint8_t nargs = reader_.read<uint8_t>();
+                uint16_t spread_reg = LL_INVALID_REG;
+                if (op == LL_NTVCALL_VA)
+                    spread_reg = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+
+
+                uint32_t vararg_count = 0;
+                cell_t* varargs = nullptr;
+                if (spread_reg != LL_INVALID_REG) {
+                    varargs = rt_->heap().ToPhysAddr<cell_t*>(vregs_[spread_reg]);
+                    vararg_count = varargs[0];
+                }
+
+                ke::SaveRestore<uint32_t> save_sp(env_->sp());
+
+                uint32_t total_args = nargs + vararg_count;
+                uint32_t params_size = (total_args + 1) * sizeof(cell_t);
+                uint32_t stack_base = env_->sp();
+                if (!env_->addStack(params_size))
+                    return false;
+
+                cell_t* params = rt_->heap().ToPhysAddr<cell_t*>(stack_base);
+
+                params[0] = total_args;
+                for (uint8_t i = 0; i < nargs; i++) {
+                    uint16_t arg_reg = reader_.read<uint16_t>();
+                    params[i + 1] = vregs_[arg_reg];
+                }
+                for (cell_t i = 0; i < vararg_count; i++)
+                    params[nargs + i + 1] = varargs[i + 1];
+
+                NativeEntry* native = rt_->NativeAt(native_index);
+                ivk_->enterNativeCall(native_index);
+
+                if (native->status == SP_NATIVE_BOUND) {
+                    cell_t result;
+                    if (native->legacy_fn)
+                        result = native->legacy_fn(rt_, params);
+                    else
+                        result = native->callback->Invoke(rt_, params);
+
+                    if (dest != 0xFFFF)
+                        vregs_[dest] = result;
+                } else {
+                    rt_->ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
+                }
+
+                ivk_->leaveNativeCall();
+
+                if (env_->hasPendingException())
+                    return false;
+
+                break;
+            }
             case LL_CALL: {
                 const smx_rtti_method* method = reader_.read<const smx_rtti_method*>();
                 uint8_t nargs = reader_.read<uint8_t>();
                 uint16_t dest = reader_.read<uint16_t>();
 
-                uint32_t method_index = method - smx_->GetMethod(0);
-                uint32_t native_index;
-                cell_t result = 0;
-                if (rt_->GetNativeIndex(method_index, &native_index)) {
-                    cell_t params[256];
-                    params[0] = nargs;
-                    for (uint8_t i = 0; i < nargs; i++) {
-                        uint16_t arg_reg = reader_.read<uint16_t>();
-                        params[i + 1] = vregs_[arg_reg];
-                    }
+                uint32_t method_index = smx_->GetIndexOfMethod(method);
 
-                    NativeEntry* native = rt_->NativeAt(native_index);
-                    ivk_->enterNativeCall(native_index);
-                    if (native->status == SP_NATIVE_BOUND) {
-                        ke::SaveRestore<uint32_t> save_sp(env_->sp());
+                RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
+                if (!target->Validate())
+                    return false;
 
-                        if (native->legacy_fn)
-                            result = native->legacy_fn(rt_, params);
-                        else
-                            result = native->callback->Invoke(rt_, params);
-                    } else {
-                        rt_->ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
-                    }
-                    ivk_->leaveNativeCall();
-                    if (env_->hasPendingException())
+                if (!target->llcode()) {
+                    ke::RefPtr<ControlFlowGraph> graph = target->BuildGraph();
+                    if (!graph)
                         return false;
-                } else {
-                    RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
-                    if (!target->Validate())
-                        return false;
-
-                    if (!target->llcode()) {
-                        ke::RefPtr<ControlFlowGraph> graph = target->BuildGraph();
-                        if (!graph)
-                            return false;
-                        std::unique_ptr<LLCode> code = LowerMethod(graph, target.get());
-                        target->set_llcode(std::move(code));
-                    }
-
-                    size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                    uint32_t target_nargs = target->arg_types().size();
-                    uint32_t callee_regs = target->llcode()->num_regs() - target_nargs;
-                    uint32_t stack_amount = frame_size + target_nargs * sizeof(cell_t) + callee_regs * sizeof(cell_t);
-
-                    uint32_t frame_base = env_->sp();
-                    if (!env_->addStack(stack_amount))
-                        return false;
-
-                    uint32_t new_frm = frame_base + frame_size;
-                    cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(new_frm);
-                    for (uint8_t i = 0; i < nargs; i++) {
-                        uint16_t arg_reg = reader_.read<uint16_t>();
-                        new_vregs[i] = vregs_[arg_reg];
-                    }
-
-                    InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_base);
-                    frame->caller_method = method_.get();
-                    frame->saved_cip = reader_.cursor();
-                    frame->dest_reg = dest;
-                    frame->prev_frame = frm_;
-
-                    if (callee_regs > 0)
-                        memset(&new_vregs[nargs], 0, callee_regs * sizeof(cell_t));
-
-                    ivk_->setCip(&frame->saved_cip);
-
-                    new (&frame->ivk) InterpInvokeFrame(rt_, target.get(), &insn_begin);
-
-                    frm_ = new_frm;
-                    ivk_ = &frame->ivk;
-                    vregs_ = std::span<cell_t>(new_vregs, target->llcode()->num_regs());
-                    method_ = target;
-
-                    const uint8_t* callee_code = method_->llcode()->bytes();
-                    reader_ = BinaryReader(callee_code, callee_code + method_->llcode()->size());
-                    ll_code = callee_code;
-                    continue;
+                    std::unique_ptr<LLCode> code = LowerMethod(graph, target.get());
+                    target->set_llcode(std::move(code));
                 }
 
-                if (dest != 0xFFFF)
-                    vregs_[dest] = result;
-                break;
+                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
+                uint32_t target_nargs = target->arg_types().size();
+                uint32_t callee_regs = target->llcode()->num_regs() - target_nargs;
+                uint32_t stack_amount = frame_size + target_nargs * sizeof(cell_t) + callee_regs * sizeof(cell_t);
+
+                uint32_t frame_base = env_->sp();
+                if (!env_->addStack(stack_amount))
+                    return false;
+
+                uint32_t new_frm = frame_base + frame_size;
+                cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(new_frm);
+                for (uint8_t i = 0; i < nargs; i++) {
+                    uint16_t arg_reg = reader_.read<uint16_t>();
+                    new_vregs[i] = vregs_[arg_reg];
+                }
+
+                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_base);
+                frame->caller_method = method_.get();
+                frame->saved_cip = reader_.cursor();
+                frame->dest_reg = dest;
+                frame->prev_frame = frm_;
+
+                if (callee_regs > 0)
+                    memset(&new_vregs[nargs], 0, callee_regs * sizeof(cell_t));
+
+                ivk_->setCip(&frame->saved_cip);
+
+                new (&frame->ivk) InterpInvokeFrame(rt_, target.get(), &insn_begin);
+
+                frm_ = new_frm;
+                ivk_ = &frame->ivk;
+                vregs_ = std::span<cell_t>(new_vregs, target->llcode()->num_regs());
+                method_ = target;
+
+                const uint8_t* callee_code = method_->llcode()->bytes();
+                reader_ = BinaryReader(callee_code, callee_code + method_->llcode()->size());
+                ll_code = callee_code;
+                continue;
             }
+
             case LL_JUMP: {
                 cell_t offset = reader_.read<int32_t>();
                 if (offset < (cell_t)(insn_begin - ll_code)) {

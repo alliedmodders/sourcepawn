@@ -371,7 +371,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
 
     std::vector<uint8_t> bytes{cb::kFunction};
 
-    uint32_t argc = fun->args().size();
+    uint32_t argc = fun->FormalArgc();
     if (argc > UCHAR_MAX)
         report(45);
 
@@ -391,8 +391,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
 
     if (hidden_arg)
         encode_type_into(bytes, hidden_arg, hidden_arg->isInt64());
-    for (const auto& arg : fun->args())
+    for (size_t i = 0; i < fun->FormalArgc(); i++) {
+        const auto& arg = fun->args()[i];
         encode_type_into(bytes, arg->type(), arg->type()->isInt64());
+    }
 
     return type_pool_.add(bytes);
 }

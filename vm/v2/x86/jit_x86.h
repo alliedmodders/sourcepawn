@@ -48,8 +48,10 @@ class Compiler : public CompilerBase
     void EmitLoadConst64(uint16_t reg, int64_t val) override;
     void EmitAddr(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitRetn(LLOp op, std::optional<uint16_t> reg) override;
-    void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) override;
-    void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest, const std::vector<uint16_t>& args) override;
+    void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
+                        const std::vector<uint16_t>& args, uint16_t spread_reg) override;
+    void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
+                          const std::vector<uint16_t>& args) override;
     void EmitJump(size_t target_idx) override;
     void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) override;
     void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) override;

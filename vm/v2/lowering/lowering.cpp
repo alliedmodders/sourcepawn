@@ -112,6 +112,7 @@ struct ExprNode {
             uint32_t method_index;
             std::span<VReg> argv;
             std::span<VReg> args_to_free;
+            VReg spread_reg;
         } call;
     };
 };
@@ -223,10 +224,13 @@ class MethodLowerer
         return pool_.make<ExprNode>(ExprNode::kReg, type, reg, owns_reg);
     }
 
-    ExprNode* CreateCallNode(const TypeDesc* type, uint32_t method_index, std::span<VReg>&& argv, std::span<VReg>&& args_to_free) {
+    ExprNode* CreateCallNode(const TypeDesc* type, uint32_t method_index, std::span<VReg>&& argv,
+                             VReg spread_reg, std::span<VReg>&& args_to_free)
+    {
         ExprNode* node = pool_.make<ExprNode>(ExprNode::kCall, type, VReg(), false);
         node->call.method_index = method_index;
         node->call.argv = std::move(argv);
+        node->call.spread_reg = spread_reg;
         node->call.args_to_free = std::move(args_to_free);
         return node;
     }
@@ -245,9 +249,10 @@ class MethodLowerer
     void ReconcileStack(Block* target);
     void EmitMove(VReg src, VReg dest, const TypeDesc* type);
     VReg EmitNode(ExprNode* node, VReg target_reg = VReg());
-    void EmitCall(const smx_rtti_method* method, VReg dest_reg, const std::span<VReg>& argv);
+    void EmitCall(const smx_rtti_method* method, VReg dest_reg, const std::span<VReg>& argv,
+                  VReg spread_reg = VReg());
 
-    void LowerCall(uint32_t method_index, std::optional<uint8_t> argc);
+    void LowerCall(uint32_t method_index, std::optional<uint8_t> argc, VReg spread_reg = VReg());
     void LowerBinary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
                      const TypeDesc* force_result_type = nullptr);
     void LowerUnary(LLOp op_i32, const TypeDesc* force_result_type = nullptr);
@@ -1134,6 +1139,14 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_CALLVA: {
+            uint32_t method_id = reader_.read<uint32_t>();
+            uint8_t nargs = reader_.read<uint8_t>();
+            int32_t offset = -(int32_t)(method_->FormalArgc() + 1);
+            LowerCall(method_id, {nargs}, OffsetToVReg(offset));
+            break;
+        }
+
         case OP_NEWARRAY: {
             uint32_t type_id = reader_.read<uint32_t>();
             const TypeDesc* td = graph_->rt()->LoadTypeFromId(type_id);
@@ -1490,7 +1503,8 @@ void MethodLowerer::LowerUnary(LLOp op_i32, LLOp op_f32, LLOp op_i64,
     pushStack(CreateOpNode(type, op, a, nullptr));
 }
 
-void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc) {
+void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc, VReg spread_reg)
+{
     const smx_rtti_method* method = rt_->image()->GetMethod(method_index);
     RefPtr<MethodInfo> callee = rt_->AcquireMethod(method_index);
     const TypeDesc* sig = callee->signature();
@@ -1525,39 +1539,35 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         }
     }
 
-    bool package_variadic = (!sig->is_native() && is_variadic && arg_count >= expected_argc);
+    bool package_variadic = (!sig->is_native() && is_variadic);
 
     if (package_variadic) {
         uint32_t variadic_count = arg_count - expected_argc;
 
-        const TypeDesc* flat_array_td = rt_->GetFlatArrayType(cell_type_, 1 + variadic_count);
+        const TypeDesc* flat_array_td = rt_->GetFlatArrayType(cell_type_, variadic_count + 1);
         VReg array_reg = AllocateTemp(flat_array_td);
-
-        VReg count_reg = AllocateTemp(cell_type_);
-        emit(LL_LOAD_CONST, variadic_count, count_reg);
-
-        VReg idx_reg = AllocateTemp(cell_type_);
-        emit(LL_LOAD_CONST, 0, idx_reg);
-        emit(LL_STOR_ELEM_FLAT_I32, (uint32_t)(1 + variadic_count), (uint16_t)cell_type_->slot_size(), array_reg, idx_reg, count_reg);
-        FreeReg(count_reg);
-        FreeReg(idx_reg);
-
+        emit(LL_LOAD_CONST, (uint32_t)variadic_count, array_reg.index);
         for (uint32_t i = 0; i < variadic_count; i++) {
-            idx_reg = AllocateTemp(cell_type_);
-            emit(LL_LOAD_CONST, i + 1, idx_reg);
-            emit(LL_STOR_ELEM_FLAT_I32, (uint32_t)(1 + variadic_count), (uint16_t)cell_type_->slot_size(), array_reg, idx_reg, argv[expected_argc + i]);
-            FreeReg(idx_reg);
+            VReg array_slot(array_reg.index + 1 + i, 1, false);
+            emit(LL_MOVE, argv[expected_argc + i], array_slot);
             FreeReg(argv[expected_argc + i]);
         }
 
+        VReg addr_reg = AllocateTemp(rt_->GetPrimitiveType(TypeKind::Int32));
+        emit(LL_ADDR_S, array_reg, addr_reg);
+
+        // Drop all of the extra arguments and replace them with the address
+        // to our argument array.
         argv.resize(expected_argc + 1);
-        argv[expected_argc] = array_reg;
+        argv[expected_argc] = addr_reg;
+
+        args_to_free.push_back(array_reg);
     }
 
     bool is_void = (sig->return_type()->kind() == TypeKind::Void);
 
     if (is_void) {
-        EmitCall(method, VReg(), std::span<VReg>(argv));
+        EmitCall(method, VReg(), std::span<VReg>(argv), spread_reg);
         for (VReg reg : args_to_free)
             FreeReg(reg);
         return;
@@ -1582,11 +1592,12 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         call_args_to_free = arr;
     }
 
-    pushStack(CreateCallNode(return_td, method_index, std::move(call_argv), std::move(call_args_to_free)));
+    pushStack(CreateCallNode(return_td, method_index, std::move(call_argv), spread_reg,
+              std::move(call_args_to_free)));
 }
 
 void MethodLowerer::EmitCall(const smx_rtti_method* method, VReg dest_reg,
-                             const std::span<VReg>& argv)
+                             const std::span<VReg>& argv, VReg spread_reg)
 {
     // Natives have one extra argument, the argument count.
     uint32_t callee_args = (uint32_t)argv.size();
@@ -1594,7 +1605,18 @@ void MethodLowerer::EmitCall(const smx_rtti_method* method, VReg dest_reg,
         callee_args += 1;
     max_callee_args_ = std::max(max_callee_args_, callee_args);
 
-    emit(LL_CALL, method, (uint8_t)argv.size(), (uint16_t)dest_reg.index);
+    if (method->flags & kRttiMethod_Native) {
+        uint32_t method_index = image_->GetIndexOfMethod(method);
+        uint32_t native_index;
+        rt_->GetNativeIndex(method_index, &native_index);
+        if (spread_reg.valid())
+            emit(LL_NTVCALL_VA, native_index, (uint8_t)argv.size(), spread_reg, (uint16_t)dest_reg.index);
+        else
+            emit(LL_NTVCALL, native_index, (uint8_t)argv.size(), (uint16_t)dest_reg.index);
+    } else {
+        emit(LL_CALL, method, (uint8_t)argv.size(), (uint16_t)dest_reg.index);
+    }
+
     for (uint32_t i = 0; i < argv.size(); i++)
         emitVal(argv[i]);
     for (uint32_t i = 0; i < argv.size(); i++)
@@ -1619,7 +1641,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 // causing a crash if they share the same physical array instance
                 // (e.g. self-assignment like x = get_array(x)).
                 VReg temp = AllocateTemp(node->type);
-                EmitCall(method, temp, node->call.argv);
+                EmitCall(method, temp, node->call.argv, node->call.spread_reg);
                 for (VReg reg : node->call.args_to_free)
                     FreeReg(reg);
                 emit(LL_RELEASE, target_reg);
@@ -1628,7 +1650,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                 return target_reg;
             }
             VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
-            EmitCall(method, dest, node->call.argv);
+            EmitCall(method, dest, node->call.argv, node->call.spread_reg);
             for (VReg reg : node->call.args_to_free)
                 FreeReg(reg);
             return dest;
