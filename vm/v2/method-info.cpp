@@ -18,13 +18,19 @@
 
 namespace sp::v2 {
 
-MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t codeOffset)
+MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t method_index)
  : rt_(rt),
-   pcode_offset_(codeOffset),
+   method_index_(method_index),
    checked_(false),
    validation_error_(SP_ERROR_NONE),
-   max_stack_(0)
+   max_stack_(0),
+   max_eval_stack_depth_(0),
+   max_eval_stack_bytes_(0)
 {}
+
+uint32_t MethodInfo::pcode_offset() const {
+    return rt_->image()->GetMethod(method_index_)->pcode_start;
+}
 
 MethodInfo::~MethodInfo()
 {}
@@ -43,13 +49,15 @@ void
 MethodInfo::InternalValidate() {
     checked_ = true;
 
-    MethodVerifier verifier(rt_, pcode_offset_);
+    MethodVerifier verifier(rt_, method_index_);
     graph_ = verifier.verify();
     if (!graph_) {
         validation_error_ = verifier.error();
         return;
     }
     max_stack_ = verifier.max_stack();
+    max_eval_stack_depth_ = verifier.max_eval_stack_depth();
+    max_eval_stack_bytes_ = verifier.max_eval_stack_bytes();
     local_sizes_ = std::move(verifier.local_sizes());
     BuildLocalOffsetTable();
 }
@@ -69,8 +77,11 @@ cell_t MethodInfo::StackOffset(cell_t slot) {
     if (rt_->code().version < SmxConsts::CODE_VERSION_TYPED_STACK)
         return slot;
 
-    if (slot < 0)
-        return (-slot - 1 + 3) * sizeof(cell_t);
+    if (slot < 0) {
+        // -1 is because we can't encode 0-based arguments, because 0 is local.
+        // +1 because we skip the argument count.
+        return (-slot - 1 + 1) * sizeof(cell_t);
+    }
 
     return local_offsets_.at(slot);
 }

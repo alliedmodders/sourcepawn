@@ -30,11 +30,6 @@ namespace cc {
 
 using namespace sp::v2;
 
-enum regid {
-    sPRI, /* indicates the primary register */
-    sALT, /* indicates the secundary register */
-};
-
 struct StackSlot {
     explicit StackSlot(int16_t offset) : offset(offset) {}
     int16_t offset;
@@ -104,71 +99,46 @@ class SmxAssemblyBuffer : public ByteBuffer
     value->use(pc());
   }
 
-  void const_pri(cell_t value) {
-    if (value == 0)
-      emit(OP_ZERO_PRI);
-    else
-      emit(OP_CONST_PRI, value);
-  }
-  void const_alt(cell_t value) {
-    if (value == 0)
-      emit(OP_ZERO_ALT);
-    else
-      emit(OP_CONST_ALT, value);
+  void idxaddr(cell_t rank_size, uint32_t bounds) {
+      write<uint8_t>(OP_IDXADDR);
+      write<uint8_t>(rank_size);
+      write<uint32_t>(bounds);
   }
 
-  void setheap_pri() {
-    emit(OP_HEAP, sizeof(cell));
-    emit(OP_STOR_I);
-    emit(OP_MOVE_PRI);
+  void PUSH_C(cell_t value) {
+    if (value >= -128 && value <= 127) {
+      emit(OP_PUSH_C_I8);
+      write<int8_t>(static_cast<int8_t>(value));
+    } else {
+      emit(OP_PUSH_C, value);
+    }
   }
-
-  void relop_prefix() {
-    emit(OP_PUSH_PRI);
-    emit(OP_MOVE_PRI);
-  }
-  void relop_suffix() {
-    emit(OP_SWAP_ALT);
-    emit(OP_AND);
-    emit(OP_POP_ALT);
-  }
-
   void load_hidden_arg(FunctionDecl* decl) {
     assert(decl->needs_hidden_arg());
-    emit(OP_LOAD_S_ALT, StackSlot(-1));
+    emit(OP_LOAD_S, StackSlot(-1));
   }
 
-  void address(Decl* sym, regid reg) {
-    address(sym->as<VarDeclBase>(), reg);
+  void address(Decl* sym) {
+    address(sym->as<VarDeclBase>());
   }
 
-  void address(VarDeclBase* sym, regid reg) {
+  void address(VarDeclBase* sym) {
     bool is_ref = sym->type()->isArray() ||
                   sym->type()->isReference() ||
                   sym->type()->isEnumStruct();
     if (is_ref && IsLocal(sym->vclass())) {
-      if (reg == sPRI)
-        emit(OP_LOAD_S_PRI, StackSlot(sym->addr()));
-      else
-        emit(OP_LOAD_S_ALT, StackSlot(sym->addr()));
+      emit(OP_LOAD_S, StackSlot(sym->addr()));
     } else {
       if (sym->type()->isArray())
         assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
 
-      if (reg == sPRI) {
-        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-          if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
-            emit(OP_LOAD_S_PRI, StackSlot(sym->addr()));
-          else
-            emit(OP_ADDR_PRI, StackSlot(sym->addr()));
-        } else {
-          emit(OP_CONST_PRI, sym->label());
-        }
-      } else {
-        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
-          emit(OP_ADDR_ALT, StackSlot(sym->addr()));
+      if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
+        if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
+          emit(OP_LOAD_S, StackSlot(sym->addr()));
         else
-          emit(OP_CONST_ALT, sym->label());
+          emit(OP_ADDR_S, StackSlot(sym->addr()));
+      } else {
+        emit(OP_PUSH_C, sym->addr());
       }
     }
   }
@@ -176,11 +146,11 @@ class SmxAssemblyBuffer : public ByteBuffer
   void copyarray(VarDeclBase* sym, cell size) {
     if (sym->type()->isArray()) {
       assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
-      emit(OP_LOAD_S_ALT, StackSlot(sym->addr()));
+      emit(OP_LOAD_S, StackSlot(sym->addr()));
     } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-      emit(OP_ADDR_ALT, StackSlot(sym->addr()));
+      emit(OP_ADDR_S, StackSlot(sym->addr()));
     } else {
-      emit(OP_CONST_ALT, sym->addr());
+      emit(OP_PUSH_C, sym->addr());
     }
     emit(OP_MOVS, size);
   }
@@ -193,12 +163,6 @@ class SmxAssemblyBuffer : public ByteBuffer
   void casetbl_entry(cell_t value, Label* where) {
     write<cell_t>(value);
     encodeAbsoluteAddress(where);
-  }
-
-  void sysreq_n(Label* address, uint32_t nparams) {
-    write<uint8_t>(static_cast<uint8_t>(OP_SYSREQ_N));
-    encodeAbsoluteAddress(address);
-    write<cell_t>(nparams);
   }
 
   void bind(Label* target) {

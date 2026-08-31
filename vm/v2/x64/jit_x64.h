@@ -43,14 +43,14 @@ class Compiler : public CompilerBase
     bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
     bool visitLREF_S_PRI(cell_t srcoffs) override;
     bool visitLOAD_I() override;
-    bool visitLODB_I(cell_t width) override;
+    bool visitLODB_I() override;
     bool visitCONST(PawnReg dest, cell_t imm) override;
     bool visitADDR(PawnReg dest, cell_t offset) override;
     bool visitSTOR_PRI(cell_t offset) override;
     bool visitSTOR_S(cell_t offset, PawnReg src) override;
     bool visitSREF_S_PRI(cell_t offset) override;
     bool visitSTOR_I() override;
-    bool visitSTRB_I(cell_t width) override;
+    bool visitSTRB_I() override;
     bool visitIDXADDR() override;
     bool visitMOVE(PawnReg reg) override;
     bool visitXCHG() override;
@@ -60,7 +60,7 @@ class Compiler : public CompilerBase
     bool visitPOP(PawnReg dest) override;
     bool visitHEAP(cell_t amount) override;
     bool visitRETN() override;
-    bool visitCALL(cell_t offset) override;
+    bool visitCALL(uint32_t method_index) override;
     bool visitJcmp(CompareOp op, cell_t offset) override;
     bool visitSHL() override;
     bool visitSHR() override;

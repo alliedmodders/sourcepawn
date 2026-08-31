@@ -599,6 +599,9 @@ class Expr : public ParseNode
     // Return whether or not the expression is idempotent (eg has side effects).
     bool HasSideEffects();
 
+    // Return whether or not this Expr handles EMIT_DISCARD_RESULT.
+    bool HandlesDiscardResult();
+
     value& val() { return val_; }
     const value& val() const { return val_; }
     bool lvalue() const { return lvalue_; }
@@ -1020,14 +1023,14 @@ class IndexExpr final : public Expr
 class RvalueExpr final : public EmitOnlyExpr
 {
   public:
-    explicit RvalueExpr(Expr* expr);
+    explicit RvalueExpr(Expr* lval);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::RvalueExpr; }
 
-    Expr* expr() const { return expr_; }
+    Expr* lval() const { return lval_; }
 
   private:
-    Expr* expr_;
+    Expr* lval_;
 };
 
 class SimpleCastExpr final : public EmitOnlyExpr
@@ -1597,12 +1600,7 @@ class FunctionDecl : public Decl
     }
 
     struct CGInfo : public PoolObject {
-        tr::vector<tr::string>* dbgstrs = nullptr;
-        Label label;     // modern replacement for addr
-        Label funcid;
-        int max_local_stack = 0;
-        int max_callee_stack = 0;
-        uint32_t pcode_end = 0;
+        Label method_id;
     };
     CGInfo* cg();
 

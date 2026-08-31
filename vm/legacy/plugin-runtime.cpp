@@ -236,6 +236,11 @@ PluginRuntime::GetNativeReplacement(size_t index) {
 }
 
 ke::RefPtr<BaseMethodInfo>
+PluginRuntime::GetMethodFromFrameId(uint32_t frame_id) const {
+    return GetMethod(frame_id);
+}
+
+ke::RefPtr<BaseMethodInfo>
 PluginRuntime::GetMethod(cell_t pcode_offset) const {
     FunctionMap::Result r = function_map_.find(pcode_offset);
     if (!r.found())
@@ -1424,11 +1429,6 @@ PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
         return fn;
     ReportError("Invalid function id: 0x%08x", func_id);
     return nullptr;
-}
-
-ke::RefPtr<BaseMethodInfo>
-PluginRuntime::GetMethodFromFrameId(uint32_t frame_id) const {
-    return GetMethod(frame_id);
 }
 
 int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {

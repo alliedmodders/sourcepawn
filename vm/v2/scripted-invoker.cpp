@@ -28,20 +28,11 @@
 using namespace sp::v2;
 using namespace SourcePawn;
 
-ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, funcid_t id, uint32_t pub_id)
+ScriptedInvoker::ScriptedInvoker(PluginRuntime* runtime, uint32_t method_index)
  : env_(Environment::get()),
-   context_(runtime),
-   m_FnId(id)
+   context_(runtime->context()),
+   method_index_(method_index)
 {
-    runtime->GetPublicByIndex(pub_id, &public_);
-
-    size_t rt_len = strlen(runtime->Name());
-    size_t len = rt_len + strlen("::") + strlen(public_->name);
-
-    full_name_ = std::make_unique<char[]>(len + 1);
-    strcpy(full_name_.get(), runtime->Name());
-    strcpy(full_name_.get() + rt_len, "::");
-    strcpy(full_name_.get() + rt_len + 2, public_->name);
 }
 
 ScriptedInvoker::~ScriptedInvoker() {
@@ -205,7 +196,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         SafeStrcpy((char*)debugNameForCrashDumps + 1, debugNameLength - 1, debugName);
     }
 
-    if (!context_->Invoke(m_FnId, params.data(), args.argc, result))
+    if (!context_->Invoke(GetFunctionID(), params.data(), args.argc, result))
         return false;
 
     assert(!env_->hasPendingException());
@@ -269,12 +260,25 @@ IPluginRuntime* ScriptedInvoker::GetParentRuntime() {
     return context_;
 }
 
-funcid_t ScriptedInvoker::GetFunctionID() {
-    return m_FnId;
+const char* ScriptedInvoker::DebugName() {
+    if (debug_name_.empty()) {
+        auto image = context_->image();
+        auto method = image->getRttiRow<smx_rtti_method>(image->rtti_methods(), method_index_);
+
+        debug_name_ = context_->Name();
+        debug_name_ += "::";
+        debug_name_ += image->names() + method->name;
+    }
+    return debug_name_.c_str();
 }
 
-RefPtr<MethodInfo> ScriptedInvoker::AcquireMethod() {
+RefPtr<MethodInfo>
+ScriptedInvoker::AcquireMethod() {
     if (!method_)
-        method_ = context_->AcquireMethod(public_->code_offs);
+        method_ = context_->AcquireMethod(method_index_);
     return method_;
+}
+
+funcid_t ScriptedInvoker::GetFunctionID() {
+    return (method_index_ << 1) | 1;
 }

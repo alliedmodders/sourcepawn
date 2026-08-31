@@ -85,6 +85,13 @@ class SmxImage final : public FileReader
     bool HasRtti() const;
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
 
+    const smx_rtti_method* GetMethod(uint32_t method_index) const {
+        if (!rtti_methods_ || method_index >= rtti_methods_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_method>(rtti_methods_, method_index);
+    }
+    bool IsVoidMethod(const smx_rtti_method* method) const;
+
     FastRtti GetTypeParser(uint32_t offset);
 
   private:
@@ -96,6 +103,7 @@ class SmxImage final : public FileReader
         uint32_t size;
     };
     const Section* findSection(const char* name) const;
+    bool IsVoidSignature(uint32_t offset) const;
 
   public:
     template <typename T>
@@ -293,7 +301,6 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_enumstruct_fields_ = nullptr;
     const smx_rtti_table_header* rtti_fields_ = nullptr;
     const smx_rtti_table_header* rtti_methods_ = nullptr;
-    const smx_rtti_table_header* rtti_natives_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;

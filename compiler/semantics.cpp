@@ -329,7 +329,7 @@ bool Semantics::CheckExpr(Expr* expr) {
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
-            return CheckWrappedExpr(expr, expr->to<RvalueExpr>()->expr());
+            return CheckWrappedExpr(expr, expr->to<RvalueExpr>()->lval());
         case ExprKind::NamedArgExpr:
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
         default:
@@ -432,7 +432,7 @@ bool Expr::HasSideEffects() {
             return e->base()->HasSideEffects();
         }
         case ExprKind::RvalueExpr:
-            return to<RvalueExpr>()->expr()->HasSideEffects();
+            return to<RvalueExpr>()->lval()->HasSideEffects();
         case ExprKind::CallExpr: // Not intelligent yet.
         case ExprKind::IncDecExpr:
             return true;
@@ -501,13 +501,13 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
     return expr;
 }
 
-RvalueExpr::RvalueExpr(Expr* expr)
-  : EmitOnlyExpr(ExprKind::RvalueExpr, expr->pos()),
-    expr_(expr)
+RvalueExpr::RvalueExpr(Expr* lval)
+  : EmitOnlyExpr(ExprKind::RvalueExpr, lval->pos()),
+    lval_(lval)
 {
-    assert(expr_->lvalue());
+    assert(lval_->lvalue());
 
-    val_ = expr_->val();
+    val_ = lval_->val();
     if (val_.ident == iACCESSOR) {
         if (val_.accessor()->getter())
             markusage(val_.accessor()->getter(), uREAD);
@@ -2134,7 +2134,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             checktag(arg->type()->inner(), val->type());
         }
     } else if (arg->type()->isArray()) {
-        assert(!param->val().type()->isInt64());
         // If the input type is an index into an array, create an implicit
         // array type to represent the slice.
         Type* type = val->type();

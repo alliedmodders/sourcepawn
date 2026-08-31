@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <string>
 
 #include <amtl/am-refcounting.h>
 #include <sp_vm_api.h>
@@ -34,7 +35,7 @@ class MethodInfo;
 class ScriptedInvoker : public IPluginFunction
 {
   public:
-    ScriptedInvoker(PluginRuntime* pRuntime, funcid_t fnid, uint32_t pub_id);
+    ScriptedInvoker(PluginRuntime* pRuntime, uint32_t method_index);
     virtual ~ScriptedInvoker();
 
   public:
@@ -53,13 +54,10 @@ class ScriptedInvoker : public IPluginFunction
     bool Invoke(cell_t* result) override;
     bool IsRunnable() override;
     funcid_t GetFunctionID() override;
-    const char* DebugName() override { return full_name_.get(); }
+    const char* DebugName() override;
     bool Invoke(const sp::CallArgs& args, cell_t* rval = nullptr) override;
 
   public:
-    sp_public_t* Public() const {
-        return public_;
-    }
 
     // Helper for pRuntime->AcquireMethod that caches the result.
     RefPtr<MethodInfo> AcquireMethod();
@@ -67,10 +65,9 @@ class ScriptedInvoker : public IPluginFunction
   private:
     Environment* env_;
     PluginContext* context_;
+    uint32_t method_index_;
     CallArgs default_args_;
-    funcid_t m_FnId;
-    std::unique_ptr<char[]> full_name_;
-    sp_public_t* public_;
+    std::string debug_name_;
     RefPtr<MethodInfo> method_;
 };
 

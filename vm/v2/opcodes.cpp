@@ -70,29 +70,28 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
         case OP_HEAP:
         case OP_GENARRAY:
         case OP_GENARRAY_Z:
-        case OP_CONST_PRI:
-        case OP_CONST_ALT:
         case OP_MOVS:
-        case OP_LOAD_PRI:
-        case OP_STOR_PRI:
+        case OP_LOAD_GLB:
+        case OP_LOAD_GLB_I64:
+        case OP_STOR_GLB:
+        case OP_STOR_GLB_I64:
         case OP_FILL:
             fprintf(fp, "%d", reader.read<cell_t>());
             break;
 
-        case OP_PUSH_ADR:
-        case OP_PUSH_S:
-        case OP_LOAD_S_PRI:
-        case OP_LOAD_S_ALT:
-        case OP_STOR_S_PRI:
-        case OP_STOR_S_ALT:
-        case OP_ADDR_PRI:
-        case OP_ADDR_ALT:
+        case OP_PUSH_C_I8:
+            fprintf(fp, "%d", (int)reader.read<int8_t>());
+            break;
+
+        case OP_ADDR_S:
+        case OP_LOAD_S:
+        case OP_STOR_S:
         case OP_CVT_I64:
         case OP_INVERT_I64:
         case OP_NEG_I64:
         case OP_SMUL_I64:
         case OP_ADD_I64:
-        case OP_SUB_ALT_I64:
+        case OP_SUB_I64:
         case OP_SHL_I64:
         case OP_SSHR_I64:
         case OP_SHR_I64:
@@ -101,14 +100,22 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
         case OP_XOR_I64:
         case OP_ZERO_S:
         case OP_ZERO_S_I64:
-        case OP_STOR_S_PRI_I64:
-        case OP_LREF_S_PRI:
-        case OP_SREF_S_PRI:
+        case OP_STOR_S_I64:
+        case OP_LREF_S:
+        case OP_SREF_S:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 
-        case OP_SDIV_ALT_I64:
-        case OP_SMOD_ALT_I64:
+        case OP_IDXADDR:
+        {
+            uint8_t rank_size = reader.read<uint8_t>();
+            int32_t bounds = reader.read<int32_t>();
+            fprintf(fp, "%d, %d", rank_size, bounds);
+            break;
+        }
+
+        case OP_SDIV_I64:
+        case OP_SMOD_I64:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 
@@ -142,16 +149,7 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
             break;
         }
 
-        case OP_SYSREQ_N: {
-            uint32_t index = (uint32_t)reader.read<cell_t>();
-            uint32_t nargs = (uint32_t)reader.read<cell_t>();
-            if (index < runtime->image()->NumNatives())
-                fprintf(fp, "%s", runtime->GetNative(index)->name);
-            fprintf(fp, " ; (%d args, index %d)", nargs, index);
-            break;
-        }
-
-        case OP_INITARRAY_ALT: {
+        case OP_INITARRAY: {
             cell_t v0 = reader.read<cell_t>();
             cell_t v1 = reader.read<cell_t>();
             cell_t v2 = reader.read<cell_t>();

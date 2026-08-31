@@ -51,8 +51,8 @@ def exec_argv(argv, timeout = None, logger = None, env = None):
 
   try:
     stdout, stderr = p.communicate()
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
+    stdout = stdout.decode('utf-8', errors='ignore')
+    stderr = stderr.decode('utf-8', errors='ignore')
     return p.returncode, stdout, stderr
   finally:
     if timer is not None:

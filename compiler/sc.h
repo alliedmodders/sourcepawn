@@ -109,8 +109,7 @@ constexpr cell char_array_cells(cell size) {
     return (size + sizeof(cell) - 1) / sizeof(cell);
 }
 
-// Label needs one extra bit, so divide by 2.
-static constexpr cell kMaxCells = INT_MAX / sizeof(cell) / 2;
+static constexpr cell kMaxCells = (INT_MAX / 4) / sizeof(cell_t);
 
 // Disable this to enable easy watchpoints on bitfield members.
 #if 1

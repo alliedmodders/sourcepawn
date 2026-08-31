@@ -292,6 +292,10 @@ SmxImage::validatePublics() {
     const Section* section = findSection(".publics");
     if (!section)
         return true;
+
+    if (hdr_->version >= SmxConsts::SP_VERSION_2)
+        return error("publics table no longer implemented");
+
     if (!validateSection(section))
         return error("invalid .publics section");
     if ((section->size % sizeof(sp_file_publics_t)) != 0)
@@ -374,7 +378,6 @@ SmxImage::validateRtti() {
 
     const char* mandatory_tables[] = {
         "rtti.methods",
-        "rtti.natives",
     };
     for (size_t i = 0; i < sizeof(mandatory_tables) / sizeof(mandatory_tables[0]); i++) {
         const char* table_name = mandatory_tables[i];
@@ -391,10 +394,6 @@ SmxImage::validateRtti() {
 
     rtti_methods_ = findRttiSection("rtti.methods");
     if (!validateRttiMethods())
-        return false;
-
-    rtti_natives_ = findRttiSection("rtti.natives");
-    if (!validateRttiNatives())
         return false;
 
     const char* optional_tables[] = {
@@ -532,6 +531,21 @@ SmxImage::validateRttiField(uint32_t index) {
 
 bool
 SmxImage::validateRttiMethods() {
+    if (rtti_methods_->row_size >= 20) {
+        if (code_->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK)
+            return error("invalid method row size");
+    } else {
+        if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK)
+            return error("invalid method row size");
+    }
+    if (rtti_methods_->row_size >= 24) {
+        if (hdr_->version < SmxConsts::SP_VERSION_2)
+            return error("invalid method row size");
+    } else {
+        if (hdr_->version >= SmxConsts::SP_VERSION_2)
+            return error("invalid method row size");
+    }
+
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
         const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
         if (!validateName(method->name))
@@ -545,26 +559,27 @@ SmxImage::validateRttiMethods() {
         if (method->pcode_end > code_.header()->size)
             return error("invalid method code end");
         if (rtti_methods_->row_size >= 20) {
-            if (code_->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK)
-                return error("invalid method row size");
             if (!rtti_data_->validateLocalSlots(method->locals))
                 return error("invalid local signature");
-        } else {
-            if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK)
-                return error("invalid method row size");
         }
-    }
-    return true;
-}
-
-bool
-SmxImage::validateRttiNatives() {
-    for (uint32_t i = 0; i < rtti_natives_->row_count; i++) {
-        const smx_rtti_native* native = getRttiRow<smx_rtti_native>(rtti_natives_, i);
-        if (!validateName(native->name))
-            return error("invalid native name");
-        if (!rtti_data_->validateFunctionOffset(native->signature))
-            return error("invalid native type offset");
+        if (rtti_methods_->row_size >= 24) {
+            uint32_t supported_flags = kRttiMethodVisibilityMask | kRttiMethod_Native;
+            uint32_t unknown_flags = method->flags & ~supported_flags;
+            if (unknown_flags)
+                return error("invalid method flags");
+            uint8_t visibility = method->flags & kRttiMethodVisibilityMask;
+            if (visibility != kRttiMethodVisibility_Private &&
+                visibility != kRttiMethodVisibility_Public)
+            {
+                return error("invalid method visibility");
+            }
+            if (method->flags & kRttiMethod_Native) {
+                if (visibility)
+                    return error("invalid native method flags");
+                if (method->pcode_start != 0 || method->pcode_end != 0 || method->locals != 0)
+                    return error("invalid native method attributes");
+            }
+        }
     }
     return true;
 }
@@ -1225,4 +1240,29 @@ SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t*
 
 FastRtti SmxImage::GetTypeParser(uint32_t offset) {
     return FastRtti(rtti_data_->blob(), rtti_data_->size(), offset);
+}
+
+bool SmxImage::IsVoidMethod(const smx_rtti_method* method) const {
+    return IsVoidSignature(method->signature);
+}
+
+bool SmxImage::IsVoidSignature(uint32_t offset) const {
+    if (!offset)
+        return false;
+
+    FastRtti rtti(rtti_data_->blob(), rtti_data_->size(), offset);
+
+    uint32_t arg_count;
+    if (!rtti.ReadFunctionSignatureArgCount(&arg_count))
+        return false;
+
+    uint8_t b;
+    if (!rtti.GetByte(&b))
+        return false;
+    if (b == cb::kLegacyVariadic)
+        rtti.NextByte();
+
+    if (!rtti.GetByte(&b))
+        return false;
+    return b == cb::kVoid;
 }

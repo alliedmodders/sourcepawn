@@ -9,6 +9,12 @@
 //
 #pragma once
 
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include <sp_vm_types.h>
+
 namespace sp {
 
 class BinaryReader final {
@@ -25,7 +31,30 @@ class BinaryReader final {
         return value;
     }
 
+    cell_t readCell() {
+        return read<cell_t>();
+    }
+    int16_t readInt16() {
+        return read<int16_t>();
+    }
+
     const uint8_t* cursor() const { return cursor_; }
+
+    bool more() const {
+        return !stop_ || cursor_ < stop_;
+    }
+
+    void set_cursor(const uint8_t* cursor) {
+        assert(!stop_ || cursor <= stop_);
+        cursor_ = cursor;
+    }
+
+    const uint8_t* getBytes(size_t n) {
+        assert(!stop_ || cursor_ + n <= stop_);
+        const uint8_t* result = cursor_;
+        cursor_ += n;
+        return result;
+    }
 
   private:
     const uint8_t* cursor_;

@@ -223,13 +223,10 @@ bool Compiler::visitLOAD_I() {
     return true;
 }
 
-bool Compiler::visitLODB_I(cell_t width) {
+bool Compiler::visitLODB_I() {
     emitCheckAddress(pri);
     __ movl(pri, Operand(dat, pri, NoScale));
-    if (width == 1)
-        __ andl(pri, 0xff);
-    else if (width == 2)
-        __ andl(pri, 0xffff);
+    __ andl(pri, 0xff);
     return true;
 }
 
@@ -269,14 +266,9 @@ bool Compiler::visitSTOR_I() {
     return true;
 }
 
-bool Compiler::visitSTRB_I(cell_t width) {
+bool Compiler::visitSTRB_I() {
     emitCheckAddress(alt);
-    if (width == 1)
-        __ movb(Operand(dat, alt, NoScale), pri);
-    else if (width == 2)
-        __ movw(Operand(dat, alt, NoScale), pri);
-    else if (width == 4)
-        __ movl(Operand(dat, alt, NoScale), pri);
+    __ movb(Operand(dat, alt, NoScale), pri);
     return true;
 }
 
@@ -366,11 +358,11 @@ bool Compiler::visitRETN() {
     return true;
 }
 
-bool Compiler::visitCALL(cell_t offset) {
-    RefPtr<BaseMethodInfo> method = rt_->GetMethod(offset);
-    if (!method || !method->jit()) {
+bool Compiler::visitCALL(uint32_t method_index) {
+    RefPtr<BaseMethodInfo> method = rt_->GetMethodByIndex(method_index);
+    if (!method->jit()) {
         // Need to emit a delayed thunk.
-        CallThunk thunk(offset);
+        CallThunk thunk(method_index);
         __ callWithABI(&thunk.label);
         call_thunks_.emplace_back(std::move(thunk));
     } else {

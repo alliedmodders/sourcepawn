@@ -240,12 +240,8 @@ cleanup:
 
     if (compile_ok && cc.errfname().empty()) {
         if (options->verbosity >= 1 && compile_ok) {
-            printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
-            printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
-            printf("Stack/heap size:   %8ld bytes\n", (long)cg.DynamicMemorySize());
-            printf("Total requirements:%8ld bytes\n", (long)cg.code_size() +
-                                                             (long)cg.data_size() +
-                                                             (long)cg.DynamicMemorySize());
+            printf("Code size: %" PRIu32 " bytes\n", cg.code_size());
+            printf("Data size: %" PRIu32 " bytes\n", cg.data_size());
         }
         if (opt_show_stats.value()) {
             size_t allocated, reserved, bookkeeping;

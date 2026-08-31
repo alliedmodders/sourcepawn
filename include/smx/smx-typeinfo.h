@@ -75,6 +75,13 @@ struct smx_rtti_enum {
     uint32_t reserved2;
 };
 
+// The first bits of smx_rtti_method::flags (as determined by the mask below)
+// contain one of the following visibility values.
+static constexpr uint32_t kRttiMethodVisibilityMask = 0x3;
+static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
+static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
+static constexpr uint32_t kRttiMethod_Native = 0x4;
+
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {
     // Index into the name table.
@@ -96,6 +103,9 @@ struct smx_rtti_method {
 
     // Local variable signatures, or 0 if no locals.
     uint32_t locals;
+
+    // See kRttiMethodFlags.
+    uint32_t flags;
 };
 
 // The rtti.natives table has the following row structure. The rows must be

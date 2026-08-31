@@ -28,14 +28,21 @@ class PluginRuntime;
 class MethodVerifier final
 {
   public:
-    explicit MethodVerifier(PluginRuntime* rt, uint32_t startOffset);
+    enum class OperandType {
+        Cell,
+        Int64
+    };
 
-    typedef std::function<void(cell_t)> ExternalFuncRefCallback;
+    explicit MethodVerifier(PluginRuntime* rt, uint32_t method_index);
+
+    typedef std::function<void(uint32_t)> ExternalFuncRefCallback;
     void collectExternalFuncRefs(const ExternalFuncRefCallback& callback);
 
     ke::RefPtr<ControlFlowGraph> verify();
 
     int32_t max_stack() const { return max_stack_; }
+    uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
+    uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     int error() const { return error_; }
     ke::FixedArray<uint8_t>&& local_sizes() { return std::move(local_sizes_); }
 
@@ -54,8 +61,8 @@ class MethodVerifier final
     bool verifyStackAmount(cell_t amount);
     bool verifyHeapAmount(cell_t amount);
     bool verifyMemAmount(cell_t amount);
-    bool verifyCallOffset(cell_t offset);
-    void reportError(int err);
+    bool verifyCallIndex(uint32_t method_index);
+    bool reportError(int err);
 
     cell_t readCell() {
         return read<cell_t>();
@@ -72,22 +79,25 @@ class MethodVerifier final
 
     struct VerifyData : public IBlockData {
         VerifyData()
-         : stack_balance(0),
-           heap_scope_depth(0)
+         : heap_scope_depth(0),
+           stack_bytes(0)
         {}
         VerifyData(const VerifyData& other)
-         : stack_balance(other.stack_balance),
-           heap_scope_depth(other.heap_scope_depth)
+         : heap_scope_depth(other.heap_scope_depth),
+           stack(other.stack),
+           stack_bytes(other.stack_bytes)
         {}
 
         VerifyData& operator=(const VerifyData& other) {
-            stack_balance = other.stack_balance;
             heap_scope_depth = other.heap_scope_depth;
+            stack = other.stack;
+            stack_bytes = other.stack_bytes;
             return *this;
         }
 
-        uint32_t stack_balance;
         uint32_t heap_scope_depth;
+        std::vector<OperandType> stack;
+        uint32_t stack_bytes;
 
         std::unique_ptr<VerifyData> entry;
     };
@@ -96,14 +106,17 @@ class MethodVerifier final
     bool mergeTracker(Block* block, VerifyData* other);
     bool verifyJoin(VerifyData* first, VerifyData* other);
     bool verifyJoins(Block* block);
-    bool pushStack(uint32_t num_cells);
-    bool popStack(uint32_t num_cells);
+    bool pushStack(OperandType type);
+    bool popStack(OperandType type);
+    bool popStack(OperandType* type);
+    bool popStack(uint32_t num_operands);
     bool pushHeap(uint32_t num_cells);
 
     bool verifyLocalSlots();
 
   private:
     PluginRuntime* rt_;
+    SmxImage* smx_;
     ke::RefPtr<ControlFlowGraph> graph_;
     Block* block_;
     const smx_rtti_method* method_ = nullptr;
@@ -112,11 +125,13 @@ class MethodVerifier final
     uint32_t arg_count_ = 0;
     int code_version_;
     uint32_t code_features_;
-    uint32_t startOffset_;
+    uint32_t method_index_;
     size_t memSize_;
     size_t datSize_;
     size_t heapSize_;
     uint32_t max_stack_;
+    uint32_t max_eval_stack_depth_ = 0;
+    uint32_t max_eval_stack_bytes_ = 0;
     const uint8_t* code_;
     const uint8_t* insn_;
     const uint8_t* cip_;

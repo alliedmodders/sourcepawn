@@ -32,7 +32,6 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
-    natives_ = new SmxRttiTable<smx_rtti_native>("rtti.natives");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
     classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
@@ -61,7 +60,6 @@ RttiBuilder::finish(SmxBuilder& builder)
 
     builder.add(data_);
     builder.add(methods_);
-    builder.add(natives_);
     builder.addIfNotEmpty(enums_);
     builder.addIfNotEmpty(typesets_);
     builder.addIfNotEmpty(classdefs_);
@@ -179,13 +177,13 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
     var->type_id = type_id;
 }
 
-smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
+smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_start) {
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
     smx_rtti_method& method = methods_->add();
     method.name = names_->add(fun->name());
-    method.pcode_start = fun->cg()->label.offset();
+    method.pcode_start = pcode_start;
     method.pcode_end = 0;
     method.signature = encode_signature(fun->canonical());
 
@@ -196,12 +194,10 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
 }
 
 void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
-                                LocalSlotSignature&& locals)
+                                LocalSlotSignature&& locals, uint32_t pcode_end)
 {
-    assert(fun->cg()->pcode_end > fun->cg()->label.offset());
-
     auto& method = methods_->at(entry.method_index);
-    method.pcode_end = fun->cg()->pcode_end;
+    method.pcode_end = pcode_end;
 
     if (locals.count) {
         union {
@@ -217,15 +213,15 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
         method.locals = 0;
     }
 
+    method.flags = 0;
+    if (fun->is_public())
+        method.flags = kRttiMethodVisibility_Public;
+    else if (fun->is_native())
+        method.flags = kRttiMethod_Native;
+
     // Only add a method table entry if we actually had locals.
     if (entry.first_local != dbg_locals_->count())
         dbg_methods_->add(entry);
-}
-
-void RttiBuilder::add_native(FunctionDecl* fun) {
-    smx_rtti_native& native = natives_->add();
-    native.name = names_->add(fun->name());
-    native.signature = encode_signature(fun);
 }
 
 uint32_t
@@ -340,12 +336,10 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
 
     encode_type_into(bytes, return_type);
 
-    if (hidden_arg && fun->is_native())
+    if (hidden_arg)
         encode_type_into(bytes, hidden_arg);
     for (const auto& arg : fun->args())
         encode_type_into(bytes, arg->type());
-    if (hidden_arg && !fun->is_native())
-        encode_type_into(bytes, hidden_arg);
 
     return type_pool_.add(bytes);
 }

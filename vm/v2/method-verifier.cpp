@@ -14,6 +14,7 @@
 #include <limits.h>
 
 #include <amtl/am-vector.h>
+#include "binary-reader.h"
 #include "graph-builder.h"
 #include "v2/method-verifier.h"
 #include "v2/opcodes.h"
@@ -23,10 +24,11 @@ namespace sp::v2 {
 
 using namespace ke;
 
-MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
+MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t method_index)
  : rt_(rt),
+   smx_(rt->image()),
    block_(nullptr),
-   startOffset_(startOffset),
+   method_index_(method_index),
    memSize_(rt_->HeapSize()),
    datSize_(rt_->image()->DescribeData().length),
    heapSize_(memSize_ - datSize_),
@@ -42,27 +44,21 @@ MethodVerifier::MethodVerifier(PluginRuntime* rt, uint32_t startOffset)
 
     code_version_ = rt_->image()->DescribeCode().version;
     code_features_ = rt_->image()->DescribeCode().features;
-
-    auto& code = rt_->code();
-    code_ = code.bytes;
-    stop_at_ = code.bytes + code.length;
 }
 
 ke::RefPtr<ControlFlowGraph>
 MethodVerifier::verify() {
-    auto image = rt_->image();
-    if (image->HasRtti()) {
-        method_ = image->GetMethodRttiByOffset(startOffset_);
-        if (!method_ || method_->pcode_start != startOffset_) {
-            reportError(SP_ERROR_INVALID_ADDRESS);
-            return nullptr;
-        }
-    }
+    method_ = smx_->GetMethod(method_index_);
+    assert(method_);
+
+    auto& code = rt_->code();
+    code_ = code.bytes + method_->pcode_start;
+    stop_at_ = code.bytes + method_->pcode_end;
 
     if (!verifyLocalSlots())
         return nullptr;
 
-    GraphBuilder gb(rt_, startOffset_);
+    GraphBuilder gb(rt_, method_);
     graph_ = gb.build();
     if (!graph_) {
         reportError(gb.error_code());
@@ -98,101 +94,148 @@ MethodVerifier::verify() {
         reportError(SP_ERROR_STACKLOW);
         return nullptr;
     }
-    max_stack_ *= sizeof(cell_t);
 
     return graph_;
 }
 
 bool
 MethodVerifier::verifyOp(OPCODE op) {
+    VerifyData* v = block_->data<VerifyData>();
     switch (op) {
-        case OP_PROC:
-        case OP_NOP:
         case OP_BREAK:
+        case OP_NOP:
+            return true;
+
         case OP_LOAD_I:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
+
+        case OP_LOAD_I_I64:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Int64);
+
         case OP_STOR_I:
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
+
+        case OP_STOR_I_I64:
+            return popStack(OperandType::Int64) && popStack(OperandType::Cell);
+
         case OP_IDXADDR:
-        case OP_MOVE_PRI:
-        case OP_MOVE_ALT:
-        case OP_XCHG:
+            // rank_size(uint8_t), bounds(uint32_t)
+            read<uint8_t>();
+            read<int32_t>();
+            // Pops index, pops base address, pushes result.
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell) && pushStack(OperandType::Cell);
+
         case OP_SHL:
         case OP_SHR:
         case OP_SSHR:
         case OP_SMUL:
         case OP_ADD:
-        case OP_SUB_ALT:
+        case OP_SUB:
         case OP_AND:
         case OP_OR:
         case OP_XOR:
-        case OP_NOT:
-        case OP_NEG:
-        case OP_INVERT:
-        case OP_ZERO_PRI:
-        case OP_ZERO_ALT:
         case OP_EQ:
         case OP_NEQ:
         case OP_SLESS:
         case OP_SLEQ:
         case OP_SGRTR:
         case OP_SGEQ:
-        case OP_INC_PRI:
-        case OP_DEC_PRI:
-        case OP_STRADJUST_PRI:
-        case OP_MOVE_I64:
-        case OP_TRUNCATE_I64:
-        case OP_TEST_I64:
-        case OP_SLESS_I64:
-        case OP_SLEQ_I64:
-        case OP_SGRTR_I64:
-        case OP_SGEQ_I64:
-        case OP_EQ_I64:
-        case OP_NEQ_I64:
-        case OP_TEST_F32:
-        case OP_NEG_F32:
+        case OP_SDIV_I32:
+        case OP_SMOD_I32:
         case OP_MUL_F32:
-        case OP_DIV_ALT_F32:
+        case OP_DIV_F32:
         case OP_ADD_F32:
-        case OP_SUB_ALT_F32:
+        case OP_SUB_F32:
         case OP_EQ_F32:
         case OP_NEQ_F32:
         case OP_LESS_F32:
         case OP_LEQ_F32:
         case OP_GRTR_F32:
         case OP_GEQ_F32:
+        case OP_MOD_F32:
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell) && pushStack(OperandType::Cell);
+
+        case OP_NOT:
+        case OP_NEG:
+        case OP_INVERT:
+        case OP_INC:
+        case OP_DEC:
+        case OP_NEG_F32:
         case OP_CVT_F32:
-        case OP_MOD_ALT_F32:
-        case OP_SDIV_ALT_I32:
-        case OP_SMOD_ALT_I32:
-            return true;
+        case OP_TEST_F32:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
 
-        case OP_SWAP_PRI:
-        case OP_SWAP_ALT:
-            // Simulate the swap operation.
-            if (!popStack(1))
+        case OP_STRADJUST:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
+
+        case OP_TRUNCATE_I64:
+        case OP_TEST_I64:
+            return popStack(OperandType::Int64) && pushStack(OperandType::Cell);
+
+        case OP_SLESS_I64:
+        case OP_SLEQ_I64:
+        case OP_SGRTR_I64:
+        case OP_SGEQ_I64:
+        case OP_EQ_I64:
+        case OP_NEQ_I64:
+            return popStack(OperandType::Int64) && popStack(OperandType::Int64) && pushStack(OperandType::Cell);
+
+        case OP_DUP:
+            if (v->stack.empty())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(v->stack.back());
+
+        case OP_DUP_ROTATE: {
+            OperandType t1, t2;
+            if (!popStack(&t1) || !popStack(&t2))
                 return false;
-            return pushStack(1);
-
-        case OP_PUSH_PRI:
-        case OP_PUSH_ALT:
-            return pushStack(1);
-
-        case OP_POP_PRI:
-        case OP_POP_ALT:
-            return popStack(1);
-
-        case OP_ADDR_ALT:
-        case OP_ADDR_PRI:
-        {
-            cell_t offset = readInt16();
-            return verifyStackOffset(offset, 0);
+            return pushStack(t1) && pushStack(t2) && pushStack(t1);
         }
 
-        case OP_LOAD_S_PRI:
-        case OP_LOAD_S_ALT:
-        case OP_LREF_S_PRI:
-        case OP_SREF_S_PRI:
-        case OP_STOR_S_ALT:
-        case OP_STOR_S_PRI:
+        case OP_SWAP: {
+            OperandType t1, t2;
+            if (!popStack(&t1) || !popStack(&t2))
+                return false;
+            return pushStack(t1) && pushStack(t2);
+        }
+
+        case OP_POP:
+            return popStack(OperandType::Cell);
+
+        case OP_ADDR_S:
+        {
+            cell_t offset = readInt16();
+            if (!verifyStackOffset(offset, 0))
+                return false;
+            return pushStack(OperandType::Cell);
+        }
+
+        case OP_LOAD_S:
+        case OP_LREF_S:
+        {
+            cell_t offset = readInt16();
+            if (!verifyStackOffset(offset, sizeof(cell_t)))
+                return false;
+            return pushStack(OperandType::Cell);
+        }
+
+        case OP_LOAD_S_I64:
+        {
+            cell_t offset = readInt16();
+            if (!verifyStackOffset(offset, sizeof(int64_t)))
+                return false;
+            return pushStack(OperandType::Int64);
+        }
+
+        case OP_STOR_S:
+        case OP_SREF_S:
+        {
+            cell_t offset = readInt16();
+            if (!verifyStackOffset(offset, sizeof(cell_t)))
+                return false;
+            return popStack(OperandType::Cell);
+        }
+
         case OP_ZERO_S:
         {
             cell_t offset = readInt16();
@@ -211,24 +254,32 @@ MethodVerifier::verifyOp(OPCODE op) {
             return verifyStackOffset(offset, sizeof(cell_t));
         }
 
-        case OP_INVERT_I64:
         case OP_CVT_I64:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Int64);
+
+        case OP_INVERT_I64:
         case OP_NEG_I64:
+            return popStack(OperandType::Int64) && pushStack(OperandType::Int64);
+
         case OP_SMUL_I64:
         case OP_ADD_I64:
-        case OP_SUB_ALT_I64:
+        case OP_SUB_I64:
         case OP_SHL_I64:
         case OP_SSHR_I64:
         case OP_SHR_I64:
         case OP_OR_I64:
         case OP_AND_I64:
         case OP_XOR_I64:
-        case OP_SDIV_ALT_I64:
-        case OP_SMOD_ALT_I64:
-        case OP_STOR_S_PRI_I64:
+        case OP_SDIV_I64:
+        case OP_SMOD_I64:
+            return popStack(OperandType::Int64) && popStack(OperandType::Int64) && pushStack(OperandType::Int64);
+
+        case OP_STOR_S_I64:
         {
             cell_t offset = readInt16();
-            return verifyStackOffset(offset, sizeof(int64_t));
+            if (!verifyStackOffset(offset, sizeof(int64_t)))
+                return false;
+            return popStack(OperandType::Int64);
         }
 
         case OP_STOR_S_C_I64: {
@@ -238,121 +289,144 @@ MethodVerifier::verifyOp(OPCODE op) {
             return verifyStackOffset(offset, sizeof(int64_t));
         }
 
-        case OP_LOAD_PRI:
-        case OP_STOR_PRI: {
+        case OP_LOAD_GLB:
+        {
             cell_t offset = readCell();
-            return verifyDatOffset(offset);
+            if (!verifyDatOffset(offset))
+                return false;
+            return pushStack(OperandType::Cell);
+        }
+
+        case OP_LOAD_GLB_I64:
+        {
+            cell_t offset = readCell();
+            if (!verifyDatOffset(offset))
+                return false;
+            return pushStack(OperandType::Int64);
+        }
+
+        case OP_STOR_GLB:
+        {
+            cell_t offset = readCell();
+            if (!verifyDatOffset(offset))
+                return false;
+            return popStack(OperandType::Cell);
+        }
+
+        case OP_STOR_GLB_I64:
+        {
+            cell_t offset = readCell();
+            if (!verifyDatOffset(offset))
+                return false;
+            return popStack(OperandType::Int64);
         }
 
         case OP_LODB_I:
         case OP_STRB_I: {
-            cell_t val = readCell();
-            if (val != 1 && val != 2 && val != 4) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-            return true;
+            if (op == OP_LODB_I)
+                return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
         }
 
         case OP_PUSH_C: {
             readCell();
-            return pushStack(1);
+            return pushStack(OperandType::Cell);
         }
 
-        case OP_PUSH_S:
-        {
-            cell_t offset = readInt16();
-            if (!verifyStackOffset(offset, sizeof(cell_t)))
-                return false;
-            return pushStack(1);
-        }
-
-        case OP_PUSH_ADR:
-        {
-            cell_t offset = readInt16();
-            if (!verifyStackOffset(offset, 0))
-                return false;
-            return pushStack(1);
+        case OP_PUSH_C_I8: {
+            read<int8_t>();
+            return pushStack(OperandType::Cell);
         }
 
         case OP_CALL: {
             // An OP_CALL must be preceded by a PUSH_C variant, and it must be in the
             // same block.
-            if (!prev_cip_ || *prev_cip_ != OP_PUSH_C) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
+            if (!prev_cip_ || (*prev_cip_ != OP_PUSH_C && *prev_cip_ != OP_PUSH_C_I8))
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+
+            cell_t nparams;
+            if (*prev_cip_ == OP_PUSH_C)
+                nparams = *reinterpret_cast<const cell_t*>(prev_cip_ + 1);
+            else
+                nparams = *reinterpret_cast<const int8_t*>(prev_cip_ + 1);
+
+            uint32_t method_index = (uint32_t)readCell();
+            if (!verifyCallIndex(method_index))
                 return false;
-            }
-            cell_t nparams = prev_cip_[1];
-            cell_t offset = readCell();
-            if (!verifyCallOffset(offset))
-                return false;
+
+            // Pops nparams args, then pops the nparams cell itself.
             if (!popStack(nparams + 1))
                 return false;
+
+            if (!smx_->IsVoidMethod(smx_->GetMethod(method_index))) {
+                if (!pushStack(OperandType::Cell))
+                    return false;
+            }
             if (collect_func_refs_)
-                collect_func_refs_(offset);
+                collect_func_refs_(method_index);
             return true;
         }
 
         case OP_JUMP:
+            readCell();
+            return true;
+
         case OP_JZER:
         case OP_JNZ:
+            readCell();
+            return popStack(OperandType::Cell);
+
         case OP_JEQ:
         case OP_JNEQ:
         case OP_JSLESS:
         case OP_JSLEQ:
         case OP_JSGRTR:
         case OP_JSGEQ:
+            readCell();
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
+
         case OP_ADD_C:
-        case OP_SMUL_C:
-        case OP_CONST_PRI:
-        case OP_CONST_ALT:
-        case OP_BOUNDS:
-        case OP_SWITCH: {
-            cip_ += sizeof(cell_t);
-            return true;
+        case OP_SMUL_C: {
+            readCell();
+            OperandType type;
+            if (!popStack(&type))
+                return false;
+            return pushStack(type);
         }
+
+        case OP_SWITCH:
+            readCell();
+            return popStack(OperandType::Cell);
+
+        case OP_CASETBL:
+            cip_ = insn_ + GetCaseTableSize(insn_);
+            return true;
 
         case OP_MOVS: {
             cell_t val = readCell();
-            return verifyMemAmount(val);
+            if (!verifyMemAmount(val))
+                return false;
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
         }
 
         case OP_FILL: {
             cell_t val = readCell();
-            return verifyMemAmount(val);
+            if (!verifyMemAmount(val))
+                return false;
+            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
         }
 
         // Note - STACK and HEAP are verified at runtime.
         case OP_HEAP:
         {
             cell_t value = readCell();
-            if (!ke::IsAligned(value, sizeof(cell_t))) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            if (value < 0) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            if (value > INT_MAX / 4) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            return true;
-        }
-
-        case OP_SYSREQ_N: {
-            cell_t index = readCell();
-            if (index < 0 || size_t(index) >= rt_->image()->NumNatives()) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            cell_t nparams = readCell();
-            if (!pushStack(1))
-                return false;
-            if (!popStack(nparams + 1))
-                return false;
-            return verifyParamCount(nparams);
+            if (!ke::IsAligned(value, sizeof(cell_t)))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (value < 0)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (value > INT_MAX / 4)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(OperandType::Cell);
         }
 
         case OP_GENARRAY:
@@ -360,13 +434,18 @@ MethodVerifier::verifyOp(OPCODE op) {
             cell_t ndims = readCell();
             if (!verifyDimensionCount(ndims))
                 return false;
-            if (!popStack(ndims - 1))
-                return false;
-            return true;
+            for (cell_t i = 0; i < ndims; i++) {
+                if (!popStack(OperandType::Cell))
+                    return false;
+            }
+            return pushStack(OperandType::Cell);
         }
 
-        case OP_INITARRAY_ALT: {
+        case OP_INITARRAY: {
             constexpr cell_t kMaxCells = INT_MAX / (2 * (int)sizeof(cell_t));
+
+            if (!popStack(OperandType::Cell))
+                return false;
 
             cell_t addr = readCell();
             cell_t iv_size = readCell();
@@ -376,16 +455,14 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (iv_size < 0 || data_copy_size < 0 || data_fill_size < 0 || iv_size >= kMaxCells ||
                 data_copy_size >= kMaxCells || data_fill_size >= kMaxCells ||
                 (!data_fill_size && fill_value) || !ke::IsAligned(addr, sizeof(cell_t))) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             }
 
             cell_t copy_addr = addr + iv_size * sizeof(cell_t);
             cell_t fill_addr = copy_addr + data_copy_size * sizeof(cell_t);
             if (copy_addr < addr || fill_addr < copy_addr ||
                 !ke::IsUintAddSafe<uint32_t>(fill_addr, data_fill_size * sizeof(cell_t))) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             }
 
             // If there's nothing to read from DAT, we can early return.
@@ -398,44 +475,45 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_CASETBL:
-            cip_ = insn_ + GetCaseTableSize(insn_);
-            return true;
-
         case OP_HEAP_SAVE:
-            block_->data<VerifyData>()->heap_scope_depth++;
+            v->heap_scope_depth++;
             return true;
 
         case OP_HEAP_RESTORE:
-            if (!block_->data<VerifyData>()->heap_scope_depth) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-            block_->data<VerifyData>()->heap_scope_depth--;
+            if (!v->heap_scope_depth)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            v->heap_scope_depth--;
             return true;
 
         case OP_RETN:
-            block_->heap_scope_depth() = block_->data<VerifyData>()->heap_scope_depth;
+            if (!popStack(OperandType::Cell))
+                return false;
+            [[fallthrough]];
+        case OP_RETV:
+            block_->heap_scope_depth() = v->heap_scope_depth;
             return true;
+
+        case OP_LOAD_FN: {
+            uint32_t method_index = readCell();
+            if (!smx_->GetMethod(method_index))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(OperandType::Cell);
+        }
 
         default:
             // Should have been caught earlier.
-            assert(op != OP_PROC);
-            reportError(SP_ERROR_INVALID_INSTRUCTION);
-            return false;
+            return reportError(SP_ERROR_INVALID_INSTRUCTION);
     }
 }
 
 bool
 MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
-    if (first->stack_balance != other->stack_balance) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+    if (first->stack != other->stack) {
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
 
     if (first->heap_scope_depth != other->heap_scope_depth) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -486,9 +564,7 @@ MethodVerifier::handleJoins() {
         verify_joins_.push_back(block_);
 
     // If the block had no incoming edges other than backedges, then this would
-    // be an illegal backedge to the entry block. While this is not allowed
-    // currently, because of OP_PROC, it may be allowed in the future, so we
-    // handle it.
+    // be an illegal backedge to the entry block.
     if (!found_pred) {
         assert(verify_later);
         return true;
@@ -512,33 +588,56 @@ MethodVerifier::verifyJoins(Block* block) {
 }
 
 bool
-MethodVerifier::pushStack(uint32_t num_cells) {
+MethodVerifier::pushStack(OperandType type) {
     VerifyData* v = block_->data<VerifyData>();
-    if (!ke::IsUint32AddSafe(v->stack_balance, num_cells)) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
+    v->stack.push_back(type);
 
-    v->stack_balance += num_cells;
-    if (v->stack_balance > INT_MAX / sizeof(cell_t)) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
+    if (v->stack.size() > max_eval_stack_depth_)
+        max_eval_stack_depth_ = (uint32_t)v->stack.size();
 
-    if (v->stack_balance > max_stack_)
-        max_stack_ = v->stack_balance;
+    v->stack_bytes += (type == OperandType::Int64 ? 8 : 4);
+    if (v->stack_bytes > max_eval_stack_bytes_)
+        max_eval_stack_bytes_ = v->stack_bytes;
+
+    if (v->stack.size() > max_stack_)
+        max_stack_ = (uint32_t)v->stack.size();
     return true;
 }
 
 bool
-MethodVerifier::popStack(uint32_t num_cells) {
-    VerifyData* v = block_->data<VerifyData>();
-    if (num_cells > v->stack_balance) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
+MethodVerifier::popStack(OperandType type) {
+    OperandType other;
+    if (!popStack(&other))
         return false;
+    if (other != type) {
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
+    return true;
+}
 
-    v->stack_balance -= num_cells;
+bool
+MethodVerifier::popStack(OperandType* type) {
+    VerifyData* v = block_->data<VerifyData>();
+    if (v->stack.empty()) {
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+    }
+    *type = v->stack.back();
+    v->stack_bytes -= (*type == OperandType::Int64 ? 8 : 4);
+    v->stack.pop_back();
+    return true;
+}
+
+bool
+MethodVerifier::popStack(uint32_t num_operands) {
+    VerifyData* v = block_->data<VerifyData>();
+    if (v->stack.size() < num_operands) {
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+    }
+    for (uint32_t i = 0; i < num_operands; i++) {
+        OperandType type = v->stack.back();
+        v->stack_bytes -= (type == OperandType::Int64 ? 8 : 4);
+        v->stack.pop_back();
+    }
     return true;
 }
 
@@ -546,19 +645,13 @@ bool MethodVerifier::verifyStackOffset(cell_t offset, uint32_t op_size) {
     // Modern stack is typed.
     if (offset < 0) {
         uint32_t arg_slot = -offset - 1;
-        if (arg_slot >= arg_count_) {
-            reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return false;
-        }
+        if (arg_slot >= arg_count_)
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
     } else {
-        if (offset >= local_sizes_.size()) {
-            reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return false;
-        }
-        if (op_size && local_sizes_[offset] != op_size) {
-            reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return false;
-        }
+        if (offset >= local_sizes_.size())
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        if (op_size && local_sizes_[offset] != op_size)
+            return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -566,8 +659,7 @@ bool MethodVerifier::verifyStackOffset(cell_t offset, uint32_t op_size) {
 bool
 MethodVerifier::verifyDatOffset(cell_t offset) {
     if (offset < 0 || size_t(offset) >= datSize_) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -575,8 +667,7 @@ MethodVerifier::verifyDatOffset(cell_t offset) {
 bool
 MethodVerifier::verifyDimensionCount(cell_t ndims) {
     if (ndims <= 0) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -584,27 +675,14 @@ MethodVerifier::verifyDimensionCount(cell_t ndims) {
 bool
 MethodVerifier::verifyParamCount(cell_t nparams) {
     if (nparams < 0 || nparams > SP_MAX_CALL_ARGUMENTS) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
 
-bool
-MethodVerifier::verifyCallOffset(cell_t offset) {
-    if (offset < 0) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-
-    const uint8_t* target = code_ + offset;
-    if (target < code_ || target >= stop_at_) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
-    }
-    if (*target != OP_PROC) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+bool MethodVerifier::verifyCallIndex(uint32_t method_index) {
+    if (!smx_->GetMethod(method_index)) {
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -615,8 +693,7 @@ MethodVerifier::verifyStackAmount(cell_t amount) {
     // won't go out of the heap.
     size_t estimate = size_t((amount < 0) ? -amount : amount);
     if (estimate >= heapSize_) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -627,8 +704,7 @@ MethodVerifier::verifyHeapAmount(cell_t amount) {
     // won't go out of the heap.
     size_t estimate = size_t((amount < 0) ? -amount : amount);
     if (estimate >= heapSize_) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -636,8 +712,7 @@ MethodVerifier::verifyHeapAmount(cell_t amount) {
 bool
 MethodVerifier::verifyMemAmount(cell_t amount) {
     if (amount < 0 || size_t(amount) > memSize_) {
-        reportError(SP_ERROR_INSTRUCTION_PARAM);
-        return false;
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
@@ -647,22 +722,21 @@ MethodVerifier::collectExternalFuncRefs(const ExternalFuncRefCallback& callback)
     collect_func_refs_ = callback;
 }
 
-void
+bool
 MethodVerifier::reportError(int err) {
     // Break here to find why verification failed.
     error_ = err;
+    return false;
 }
 
 bool MethodVerifier::verifyLocalSlots() {
     if (!method_) {
-        reportError(SP_ERROR_FILE_FORMAT);
-        return false;
+        return reportError(SP_ERROR_FILE_FORMAT);
     }
 
     auto parser = rt_->image()->GetTypeParser(method_->signature);
     if (!parser.ReadFunctionSignatureArgCount(&arg_count_)) {
-        reportError(SP_ERROR_FILE_FORMAT);
-        return false;
+        return reportError(SP_ERROR_FILE_FORMAT);
     }
 
     if (!method_->locals)
@@ -672,8 +746,7 @@ bool MethodVerifier::verifyLocalSlots() {
 
     uint16_t count;
     if (!parser.ReadLocalSlotCount(&count)) {
-        reportError(SP_ERROR_FILE_FORMAT);
-        return false;
+        return reportError(SP_ERROR_FILE_FORMAT);
     }
 
     local_sizes_ = ke::FixedArray<uint8_t>(count);
@@ -714,11 +787,8 @@ bool MethodVerifier::verifyLocalSlots() {
                 break;
 
             default:
-                reportError(SP_ERROR_FILE_FORMAT);
-                return false;
+                return reportError(SP_ERROR_FILE_FORMAT);
         }
-
-        max_stack_ += local_sizes_[i];
 
         parser.SkipNextType();
     }

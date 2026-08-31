@@ -13,6 +13,7 @@
 
 #include "graph-builder.h"
 #include <smx/smx-v2-opcodes.h>
+#include <smx/smx-typeinfo.h>
 #include "v2/opcodes.h"
 #include "v2/plugin-runtime.h"
 
@@ -20,13 +21,13 @@ namespace sp::v2 {
 
 using namespace ke;
 
-GraphBuilder::GraphBuilder(PluginRuntime* rt, uint32_t start_offset)
+GraphBuilder::GraphBuilder(PluginRuntime* rt, const smx_rtti_method* method)
  : rt_(rt),
-   start_offset_(start_offset),
+   start_offset_(method->pcode_start),
    error_code_(0)
 {
-    start_at_ = rt_->code().bytes + start_offset_;
-    stop_at_ = rt_->code().bytes + rt_->code().length;
+    start_at_ = rt_->code().bytes + method->pcode_start;
+    stop_at_ = rt_->code().bytes + method->pcode_end;
 }
 
 RefPtr<ControlFlowGraph>
@@ -58,10 +59,8 @@ GraphBuilder::scan() {
 
     block_map_.init(16);
 
-    // Set cip, start past the mandatory OP_PROC.
+    // Set cip, start at the method entry.
     cip_ = start_at_;
-    assert(peekOp() == OP_PROC);
-    cip_++;
 
     // Begin an epoch to track which blocks have been visited.
     graph_->newEpoch();
@@ -101,6 +100,7 @@ static inline bool
 IsControlOpcode(OPCODE op) {
     switch (op) {
         case OP_RETN:
+        case OP_RETV:
         case OP_JUMP:
         case OP_JZER:
         case OP_JNZ:
@@ -150,6 +150,7 @@ GraphBuilder::scanFlow() -> FlowState {
 
     switch (op) {
         case OP_RETN:
+        case OP_RETV:
             current_->end(cip_, BlockEnd::Insn);
             current_ = nullptr;
             return FlowState::Ended;
@@ -299,8 +300,6 @@ GraphBuilder::enqueueBlock(Block* block) {
 bool
 GraphBuilder::prescan() {
     cip_ = start_at_;
-    if (!more() || readOp() != OP_PROC)
-        return error(SP_ERROR_INVALID_INSTRUCTION);
 
     // Allocate the jump bitmap.
     size_t max_bytes = (stop_at_ - start_at_);
@@ -310,8 +309,6 @@ GraphBuilder::prescan() {
     while (more()) {
         const uint8_t* insn = cip_;
         OPCODE op = readOp();
-        if (op == OP_PROC || op == OP_ENDPROC)
-            break;
 
         if (op <= 0 || op >= OPCODES_LAST)
             return error(SP_ERROR_INVALID_INSTRUCTION);
@@ -343,7 +340,7 @@ GraphBuilder::prescan() {
             return error(SP_ERROR_INVALID_INSTRUCTION);
 
         // If this is a control opcode, we need to markup any jump targets.
-        if (IsControlOpcode(op) && op != OP_RETN) {
+        if (IsControlOpcode(op) && op != OP_RETN && op != OP_RETV) {
             // All jump instructions, and SWITCH, have the target as an immediate
             // value.
             if (!prescan_jump_target(op, *reinterpret_cast<const cell_t*>(cip_)))
@@ -373,11 +370,9 @@ GraphBuilder::prescan_jump_target(OPCODE op, cell_t target) {
     if (size_t(target) >= size_t(stop_at_ - rt_->code().bytes))
         return error(SP_ERROR_INSTRUCTION_PARAM);
 
-    // Note that the target must not be equal to start_at_, since jumping to
-    // the OP_PROC is illegal (this would push infinite stack frames or
-    // something).
+    // Note that the target must be within the method.
     const uint8_t* cip = rt_->code().bytes + target;
-    if (cip <= start_at_)
+    if (cip < start_at_)
         return error(SP_ERROR_INSTRUCTION_PARAM);
 
     // Since OP_SWITCH points to a CASETBL, not an actual jump target, ignore it

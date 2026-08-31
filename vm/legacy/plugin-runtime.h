@@ -81,6 +81,7 @@ class PluginRuntime : public BaseRuntime, public ke::InlineListNode<PluginRuntim
     void InstallBuiltinNatives() override;
 
     // Return the method if it was previously analyzed; null otherwise.
+    ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
     ke::RefPtr<BaseMethodInfo> GetMethod(cell_t pcode_offset) const;
 
     // If there is no method at the given offset, return null. If there is a
@@ -222,8 +223,6 @@ class PluginRuntime : public BaseRuntime, public ke::InlineListNode<PluginRuntim
     PluginRuntime* runtime() {
         return this;
     }
-
-    ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
 
   private:
     void SetupFloatNativeRemapping();

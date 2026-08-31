@@ -416,25 +416,17 @@ Compiler::visitSMOD_ALT_I32() {
 }
 
 bool
-Compiler::visitLODB_I(cell_t width) {
+Compiler::visitLODB_I() {
     emitCheckAddress(pri);
     __ movl(pri, Operand(dat, pri, NoScale));
-    if (width == 1)
-        __ andl(pri, 0xff);
-    else if (width == 2)
-        __ andl(pri, 0xffff);
+    __ andl(pri, 0xff);
     return true;
 }
 
 bool
-Compiler::visitSTRB_I(cell_t width) {
+Compiler::visitSTRB_I() {
     emitCheckAddress(alt);
-    if (width == 1)
-        __ movb(Operand(dat, alt, NoScale), pri);
-    else if (width == 2)
-        __ movw(Operand(dat, alt, NoScale), pri);
-    else if (width == 4)
-        __ movl(Operand(dat, alt, NoScale), pri);
+    __ movb(Operand(dat, alt, NoScale), pri);
     return true;
 }
 

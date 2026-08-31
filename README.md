@@ -218,12 +218,25 @@ This release contains a number of language changes.
 
 SourcePawn 1.13 is currently in development.
 
- - A new `int64` primitive type is available for 64-bit arithmetic. Plugins
-   using int64 will require a newer SourcePawn VM to run.
+A new virtual machine and bytecode has been added to address a number of
+shortcomings and maintenance issues in the old design. The "v2" VM is used for
+all new binaries. The legacy VM is still used for older binaries.
+
+ - Instructions are encoded into 8 bits instead of 32, greatly reducing binary
+   size. The compiler no longer performs compression as a result.
+ - The virtual machine is now purely stack based. The two-register scheme of the
+   legacy VM resulted in needless instructions and a great deal of internal
+   complexity.
+ - The interpreter now uses a switch loop for faster execution.
+ - Many legacy concepts, such as "AMX frames", have been removed.
+ - A new `int64` primitive type is available for 64-bit arithmetic.
  - The `float` type is now intrinsically supported, and `float.inc` is no
    longer required for basic float support.
  - Operator overload support has been removed due to lack of use.
  - An x64 JIT backend has been added. It is used on x64 processors supporting
    SSE 4.1 and higher, for plugins compiled on spcomp 1.13 or higher.
  - The x86 JIT will now only run on processors supporting SSE2 and higher.
- - The .pubvars and .publics sections of SMX files are no longer sorted.
+ - The .pubvars and .publics sections of SMX files are replaced by RTTI
+   sections. References to this RTTI are embedded in the bytecode to enforce
+   type safety.
+ - The .natives and rtti.natives sections have been merged into smx\_rtti\_method.

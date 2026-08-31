@@ -261,7 +261,7 @@ class Type : public PoolObject
     bool isCharArray() const;
 
     // True if a value representation can be > 1 cell.
-    bool isComposite() const { return isArray() || isEnumStruct() || isInt64(); }
+    bool isComposite() const { return isArray() || isEnumStruct(); }
 
     bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
 

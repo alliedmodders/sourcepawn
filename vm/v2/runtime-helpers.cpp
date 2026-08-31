@@ -59,7 +59,7 @@ ReportOutOfBoundsError(cell_t index, cell_t bounds) {
     } else {
         Environment::get()->ReportErrorFmt(SP_ERROR_ARRAY_BOUNDS,
                                            "Array index out-of-bounds (index %d, limit %d)", index,
-                                           size_t(bounds) + 1);
+                                           size_t(bounds));
     }
 }
 

@@ -29,7 +29,7 @@ class PluginRuntime;
 class MethodInfo final : public BaseMethodInfo
 {
   public:
-    MethodInfo(PluginRuntime* rt, uint32_t codeOffset);
+    MethodInfo(PluginRuntime* rt, uint32_t method_index);
     ~MethodInfo();
 
     ke::RefPtr<ControlFlowGraph> BuildGraph() {
@@ -47,8 +47,10 @@ class MethodInfo final : public BaseMethodInfo
     uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
     int validationError() const { return validation_error_; }
-    uint32_t pcode_offset() const override { return pcode_offset_; }
+    uint32_t pcode_offset() const override;
     int32_t max_stack() const { return max_stack_; }
+    uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
+    uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
@@ -71,13 +73,15 @@ class MethodInfo final : public BaseMethodInfo
 
   private:
     PluginRuntime* rt_;
-    uint32_t pcode_offset_;
+    uint32_t method_index_;
     std::unique_ptr<CompiledFunction> jit_;
     ke::RefPtr<ControlFlowGraph> graph_;
 
     bool checked_;
     int validation_error_;
     int32_t max_stack_;
+    uint32_t max_eval_stack_depth_;
+    uint32_t max_eval_stack_bytes_;
     ke::FixedArray<uint8_t> local_sizes_;
     ke::FixedArray<cell_t> local_offsets_;
 };

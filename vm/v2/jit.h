@@ -86,7 +86,7 @@ class CompilerBase : public PcodeVisitor
     virtual void emitOutOfBoundsError(OutOfBoundsError* path) = 0;
 
     // Helpers.
-    static int CompileFromThunk(PluginContext* cx, uint32_t pcode_offs, void** addrp, uint8_t* pc);
+    static int CompileFromThunk(PluginContext* cx, uint32_t method_index, void** addrp, uint8_t* pc);
     static void* find_entry_fp();
     static void InvokeReportError(int err);
     static void InvokeReportTimeout();
@@ -136,14 +136,14 @@ class CompilerBase : public PcodeVisitor
     MacroAssembler masm;
 
     struct CallThunk {
-        explicit CallThunk(uint32_t pcode_offset)
-          : pcode_offset(pcode_offset)
+        explicit CallThunk(uint32_t method_index)
+          : method_index(method_index)
         {}
         CallThunk(CallThunk&& other) = default;
         CallThunk& operator =(CallThunk& other) = default;
 
         PatchCodeLabel label;
-        uint32_t pcode_offset;
+        uint32_t method_index;
     };
     std::vector<CallThunk> call_thunks_;
 

@@ -26,6 +26,10 @@
 #include <utils/bitset.h>
 #include "control-flow.h"
 
+namespace sp {
+struct smx_rtti_method;
+}
+
 namespace sp::v2 {
 
 class PluginRuntime;
@@ -33,7 +37,7 @@ class PluginRuntime;
 class GraphBuilder
 {
   public:
-    GraphBuilder(PluginRuntime* rt, uint32_t start_offset);
+    GraphBuilder(PluginRuntime* rt, const smx_rtti_method* method);
 
     ke::RefPtr<ControlFlowGraph> build();
 

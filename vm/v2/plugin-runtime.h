@@ -64,7 +64,6 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     IPluginFunction* GetFunctionByName(const char* public_name) override;
     IPluginFunction* GetFunctionById(funcid_t func_id) override;
     size_t GetMemUsage() override;
-    ScriptedInvoker* GetPublicFunction(size_t index);
     int UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
                             void* data) override;
     int UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
@@ -77,23 +76,21 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     void InstallBuiltinNatives() override {}
 
     // Return the method if it was previously analyzed; null otherwise.
-    ke::RefPtr<BaseMethodInfo> GetMethod(cell_t pcode_offset) const;
+    ke::RefPtr<BaseMethodInfo> GetMethodByIndex(uint32_t method_index) const;
 
-    // If there is no method at the given offset, return null. If there is a
+    // If there is no method at the given index, return null. If there is a
     // method, return it.
-    RefPtr<MethodInfo> AcquireMethod(cell_t pcode_offset);
+    RefPtr<MethodInfo> AcquireMethod(uint32_t method_index);
 
     // Return a list of all methods. The caller must own the environment lock.
     const std::vector<RefPtr<MethodInfo>>& AllMethods() const;
 
-    NativeEntry* NativeAt(size_t index) {
-        return &natives_[index];
-    }
+    ScriptedInvoker* GetScriptedInvoker(funcid_t func_id);
+    ScriptedInvoker* GetFunctionByMethodIndex(uint32_t method_index);
+    bool GetNativeIndex(uint32_t method_index, uint32_t* index) const;
 
-    static PluginRuntime* FromAPI(IPluginRuntime* rt) {
-        return static_cast<PluginRuntime*>(rt);
-    }
-
+    NativeEntry* NativeAt(size_t index) { return &natives_[index]; }
+    PluginContext* context() { return this; }
   public: // IPluginContext
     int AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr);
     int LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) override;
@@ -169,6 +166,9 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
     cell_t hp() const {
         return hp_;
     }
+    cell_t hp_scope() const {
+        return hp_scope_;
+    }
 
     int popTrackerAndSetHeap();
     int pushTracker(uint32_t amount);
@@ -217,10 +217,11 @@ class PluginRuntime final : public BaseRuntime, public ke::InlineListNode<Plugin
 
   private:
     std::unique_ptr<uint8_t[]> aligned_code_;
-    std::unique_ptr<NativeEntry[]> natives_;
-    std::unique_ptr<sp_public_t[]> publics_;
+    std::vector<NativeEntry> natives_;
+    std::unordered_map<uint32_t, uint32_t> native_map_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;
-    std::unique_ptr<ScriptedInvoker*[]> entrypoints_;
+    std::vector<sp_public_t> publics_;
+    std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;
 
     uint8_t* memory_;
     uint32_t data_size_;

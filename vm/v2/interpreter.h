@@ -20,8 +20,7 @@
 #include <amtl/am-refcounting.h>
 #include <assert.h>
 #include <sp_vm_types.h>
-#include "v2/pcode-reader.h"
-#include "v2/pcode-visitor.h"
+#include "binary-reader.h"
 #include "stack-frames.h"
 
 namespace sp {
@@ -35,124 +34,10 @@ class PluginRuntime;
 typedef PluginRuntime PluginContext;
 class MethodInfo;
 
-class InterpRegs
-{
-  public:
-    InterpRegs()
-     : regs_() {
-    }
-
-    cell_t& operator[](PawnReg reg) {
-        assert(reg == PawnReg::Pri || reg == PawnReg::Alt);
-        return regs_[unsigned(reg)];
-    }
-    cell_t& pri() {
-        return regs_[0];
-    }
-    cell_t& alt() {
-        return regs_[1];
-    }
-
-  private:
-    cell_t regs_[2];
-};
-
-class Interpreter final : public PcodeVisitor
+class Interpreter final
 {
   public:
     static bool Run(PluginContext* cx, RefPtr<MethodInfo> method, cell_t* rval);
-
-  public:
-    bool visitPUSH_C(cell_t value) override;
-    bool visitPUSH_ADR(cell_t slot) override;
-    bool visitCALL(cell_t offset) override;
-    bool visitHEAP(cell_t amount) override;
-    bool visitLOAD_I() override;
-    bool visitSTOR_I() override;
-    bool visitPUSH(PawnReg src) override;
-    bool visitPOP(PawnReg dest) override;
-    bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) override;
-    bool visitZERO(PawnReg dest) override;
-    bool visitZERO_S(cell_t offset) override;
-    bool visitZERO_S_I64(cell_t offset) override;
-    bool visitRETN() override;
-    bool visitPUSH_S(cell_t offset) override;
-    bool visitCONST(PawnReg dest, cell_t imm) override;
-    bool visitJUMP(cell_t offset) override;
-    bool visitJcmp(CompareOp op, cell_t offset) override;
-    bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
-    bool visitSTOR_S(cell_t offset, PawnReg src) override;
-    bool visitLREF_S_PRI(cell_t srcoffs) override;
-    bool visitSREF_S_PRI(cell_t destoffs) override;
-    bool visitADD_C(cell_t value) override;
-    bool visitSMUL_C(cell_t value) override;
-    bool visitADD() override;
-    bool visitINC_PRI() override;
-    bool visitDEC_PRI() override;
-    bool visitAND() override;
-    bool visitOR() override;
-    bool visitXOR() override;
-    bool visitSHL() override;
-    bool visitSHR() override;
-    bool visitSSHR() override;
-    bool visitSUB_ALT() override;
-    bool visitSMUL() override;
-    bool visitSDIV_ALT_I32() override;
-    bool visitSMOD_ALT_I32() override;
-    bool visitNOT() override;
-    bool visitNEG() override;
-    bool visitINVERT() override;
-    bool visitCompareOp(CompareOp op) override;
-    bool visitADDR(PawnReg dest, cell_t offset) override;
-    bool visitMOVS(uint32_t amount) override;
-    bool visitMOVE_I64() override;
-    bool visitFILL(uint32_t amount) override;
-    bool visitIDXADDR() override;
-    bool visitLODB_I(cell_t width) override;
-    bool visitSTRB_I(cell_t width) override;
-    bool visitLOAD_PRI(cell_t srcaddr) override;
-    bool visitSTOR_PRI(cell_t offset) override;
-    bool visitMOVE(PawnReg reg) override;
-    bool visitXCHG() override;
-    bool visitSWAP_ALT() override;
-    bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override;
-    bool visitBOUNDS(uint32_t limit) override;
-    bool visitGENARRAY(uint32_t dims, bool autozero) override;
-    bool visitSTRADJUST_PRI() override;
-    bool visitBREAK() override;
-    bool visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                            cell_t data_fill_size, cell_t fill_value) override;
-    bool visitHEAP_SAVE() override;
-    bool visitHEAP_RESTORE() override;
-    bool visitCVT_I64(cell_t slot) override;
-    bool visitTRUNCATE_I64() override;
-    bool visitTEST_I64() override;
-    bool visitINVERT_I64(cell_t slot) override;
-    bool visitNEG_I64(cell_t slot) override;
-    bool visitSMUL_I64(cell_t slot) override;
-    bool visitSDIV_ALT_I64(cell_t pri_slot) override;
-    bool visitSMOD_ALT_I64(cell_t pri_slot) override;
-    bool visitADD_I64(cell_t slot) override;
-    bool visitSUB_ALT_I64(cell_t slot) override;
-    bool visitSHL_I64(cell_t slot) override;
-    bool visitSSHR_I64(cell_t slot) override;
-    bool visitSHR_I64(cell_t slot) override;
-    bool visitOR_I64(cell_t slot) override;
-    bool visitAND_I64(cell_t slot) override;
-    bool visitXOR_I64(cell_t slot) override;
-    bool visitSTOR_S_C(cell_t slot, cell_t value) override;
-    bool visitSTOR_S_C_I64(cell_t slot, cell_t cell0, cell_t cell1) override;
-    bool visitSTOR_S_PRI_I64(cell_t slot) override;
-    bool visitCompareOp64(CompareOp op) override;
-    bool visitTEST_F32() override;
-    bool visitNEG_F32() override;
-    bool visitMUL_F32() override;
-    bool visitDIV_ALT_F32() override;
-    bool visitADD_F32() override;
-    bool visitSUB_ALT_F32() override;
-    bool visitCVT_F32() override;
-    bool visitMOD_ALT_F32() override;
-    bool visitCompareOpF32(CompareOp op) override;
 
   private:
     Interpreter(PluginContext* cx, RefPtr<MethodInfo> method);
@@ -160,21 +45,55 @@ class Interpreter final : public PcodeVisitor
     bool run();
 
     cell_t return_value() const { return return_value_; }
-    cell_t StackOffset(cell_t offset);
 
   private:
-    bool invokeNative(uint32_t native_index);
+    cell_t StackOffset(cell_t offset);
+    cell_t getLocalCell(int32_t slot);
+    void setLocalCell(int32_t slot, cell_t value);
+    int64_t& getLocalInt64(int32_t slot);
+
+  private:
+    enum class StackType : uint8_t {
+        Cell,
+        Int64
+    };
+
+    struct StackValue {
+        StackType type;
+        union {
+          cell_t cell;
+          int64_t i64;
+        } u;
+    };
+
+    void pushCell(cell_t value);
+    cell_t popCell();
+    void pushInt64(int64_t value);
+    int64_t popInt64();
+    void popStack();
+    StackValue popValue();
+    void pushValue(const StackValue& v);
 
   private:
     Environment* env_;
     PluginRuntime* rt_;
+    SmxImage* smx_;
     PluginContext* cx_;
-    PcodeReader<Interpreter> reader_;
     RefPtr<MethodInfo> method_;
+    const uint8_t* code_;
+    BinaryReader reader_;
     bool has_returned_;
     cell_t return_value_;
-    InterpRegs regs_;
+    cell_t frm_;
+    cell_t* phys_frm_;
     InterpInvokeFrame* ivk_;
+
+    uint8_t* stack_types_top_ = nullptr;
+    uint8_t* stack_types_limit_ = nullptr;
+    uint8_t* stack_types_ptr_ = nullptr;
+    cell_t* eval_stack_top_ = nullptr;
+    cell_t* eval_stack_limit_ = nullptr;
+    cell_t* eval_stack_ptr_ = nullptr;
 };
 
 } // namespace sp::v2

@@ -49,10 +49,9 @@ class RttiBuilder
     RttiBuilder(CompileContext& cc, SmxNameTable* names);
 
     void finish(SmxBuilder& builder);
-    void add_native(FunctionDecl* sym);
-    smx_rtti_debug_method add_method(FunctionDecl* fun);
+    smx_rtti_debug_method add_method(FunctionDecl* fun, uint32_t pcode_start);
     void finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
-                       LocalSlotSignature&& locals);
+                       LocalSlotSignature&& locals, uint32_t pcode_end);
 
     int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
 
@@ -91,7 +90,6 @@ class RttiBuilder
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;
     RefPtr<SmxRttiTable<smx_rtti_method>> methods_;
-    RefPtr<SmxRttiTable<smx_rtti_native>> natives_;
     RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
     RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
     RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;

@@ -14,6 +14,7 @@
 #include <amtl/experimental/am-argparser.h>
 #include "vm/environment.h"
 #include "vm/smx-image.h"
+#include "vm/binary-reader.h"
 #include "vm/legacy/opcodes.h"
 #include "vm/v2/opcodes.h"
 
@@ -193,17 +194,73 @@ class DumpTool final {
             fprintf(stdout, ".method %s ; index %u", smx_->names() + method->name, i);
             if (show_name_offsets.value())
                 fprintf(stdout, ", name_offset = %u", method->name);
+
+            bool is_native = false;
+            if (methods->row_size >= 24)
+                is_native = !!(method->flags & kRttiMethod_Native);
+
             fprintf(stdout, "\n");
             fprintf(stdout, "{\n");
-            fprintf(stdout, "    .pcode_start = 0x%x\n", method->pcode_start);
-            fprintf(stdout, "    .pcode_end = 0x%x\n", method->pcode_end);
-            DumpLocals(method);
-            if (is_v2)
-                DumpCodeRangeV2<false>(method->pcode_start, method->pcode_end);
-            else
-                DumpCodeRangeV1<false>(method->pcode_start, method->pcode_end);
+            if (!is_native) {
+                fprintf(stdout, "    .pcode_start = 0x%x\n", method->pcode_start);
+                fprintf(stdout, "    .pcode_end = 0x%x\n", method->pcode_end);
+            }
+
+            if (method->signature)
+                DumpSignature(method->signature);
+
+            if (methods->row_size >= 24) {
+                if (method->flags & kRttiMethod_Native) {
+                    fprintf(stdout, "    .flags = native\n");
+                } else {
+                    uint8_t visibility = method->flags & kRttiMethodVisibilityMask;
+                    if (visibility == kRttiMethodVisibility_Private)
+                        fprintf(stdout, "    .visibility = private\n");
+                    else if (visibility == kRttiMethodVisibility_Public)
+                        fprintf(stdout, "    .visibility = public\n");
+                    else
+                        fprintf(stdout, "    .visibility = unknown_%u\n", visibility);
+                }
+            }
+
+            if (!is_native) {
+                DumpLocals(method);
+                if (is_v2)
+                    DumpCodeRangeV2(method->pcode_start, method->pcode_end);
+                else
+                    DumpCodeRangeV1<false>(method->pcode_start, method->pcode_end);
+            }
             fprintf(stdout, "}\n");
         }
+    }
+
+    void DumpSignature(uint32_t offset) {
+        auto rtti = smx_->GetTypeParser(offset);
+
+        uint32_t arg_count;
+        if (!rtti.ReadFunctionSignatureArgCount(&arg_count))
+            return;
+
+        uint8_t b;
+        bool variadic = false;
+        if (rtti.GetByte(&b) && b == cb::kLegacyVariadic) {
+            variadic = true;
+            rtti.NextByte();
+        }
+
+        std::string ret_type = DumpType(rtti);
+        fprintf(stdout, "    .signature %s(", ret_type.c_str());
+        for (uint32_t j = 0; j < arg_count; j++) {
+            if (j > 0)
+                fprintf(stdout, ", ");
+            fprintf(stdout, "%s", DumpType(rtti).c_str());
+        }
+        if (variadic) {
+            if (arg_count > 0)
+                fprintf(stdout, ", ");
+            fprintf(stdout, "...");
+        }
+        fprintf(stdout, ")\n");
     }
 
     void DumpLocals(const smx_rtti_method* method) {
@@ -354,9 +411,7 @@ class DumpTool final {
 
     void DumpLegacyCode() {
         auto code = smx_->DescribeCode();
-        if (smx_->hdr()->version >= SmxConsts::SP_VERSION_2)
-            DumpCodeRangeV2<true>(0, code.length);
-        else
+        if (smx_->hdr()->version < SmxConsts::SP_VERSION_2)
             DumpCodeRangeV1<true>(0, code.length);
     }
 
@@ -541,7 +596,6 @@ class DumpTool final {
         }
     }
 
-    template <bool SearchForMethods>
     void DumpCodeRangeV2(uint32_t pcode_start, uint32_t pcode_end) {
         using namespace sp::v2;
         auto code = smx_->DescribeCode();
@@ -553,24 +607,6 @@ class DumpTool final {
 
         while (cip < code_end) {
             OPCODE op = (OPCODE)*cip;
-
-            if (SearchForMethods && (cip == start || op == OP_PROC)) {
-                std::string method_name;
-                uint32_t offset = (uint32_t)(cip - code.bytes);
-                if (auto name = smx_->LookupFunction(offset))
-                    method_name = name;
-                else
-                    method_name = ke::StringPrintf("unknown_method_%u", offset);
-
-                if (cip != start)
-                    fprintf(stdout, "\n}\n");
-
-                fprintf(stdout, ".method %s\n", method_name.c_str());
-                fprintf(stdout, "{\n");
-                fprintf(stdout, "    .pcode_start = 0x%x\n", offset);
-
-                method_start = cip;
-            }
 
             const char* name = nullptr;
             if (op < OPCODES_LAST)
@@ -595,26 +631,12 @@ class DumpTool final {
             else
                 cip++;
         }
-        if (SearchForMethods)
-            fprintf(stdout, "\n}\n");
         fprintf(stdout, "\n");
     }
 
     void DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, v2::OPCODE op) {
         using namespace sp::v2;
-
-        auto readCell = [&cip]() {
-            cell_t val = *reinterpret_cast<const cell_t*>(cip);
-            cip += sizeof(cell_t);
-            return val;
-        };
-        auto readInt16 = [&cip]() {
-            int16_t val = *reinterpret_cast<const int16_t*>(cip);
-            cip += sizeof(int16_t);
-            return val;
-        };
-
-        cip++; // skip opcode
+        BinaryReader reader(cip + 1);
 
         switch (op) {
             case OP_PUSH_C:
@@ -623,71 +645,61 @@ class DumpTool final {
             case OP_HEAP:
             case OP_GENARRAY:
             case OP_GENARRAY_Z:
-            case OP_CONST_PRI:
-            case OP_CONST_ALT:
             case OP_MOVS:
-            case OP_LOAD_PRI:
-            case OP_STOR_PRI:
+            case OP_LOAD_GLB:
+            case OP_LOAD_GLB_I64:
+            case OP_STOR_GLB:
+            case OP_STOR_GLB_I64:
             case OP_FILL:
-                fprintf(stdout, " %d", readCell());
+                fprintf(stdout, " %d", reader.read<cell_t>());
                 break;
 
-            case OP_PUSH_ADR:
-            case OP_PUSH_S:
-            case OP_LOAD_S_PRI:
-            case OP_LOAD_S_ALT:
-            case OP_STOR_S_PRI:
-            case OP_STOR_S_ALT:
-            case OP_ADDR_PRI:
-            case OP_ADDR_ALT:
-            case OP_CVT_I64:
-            case OP_INVERT_I64:
-            case OP_NEG_I64:
-            case OP_SMUL_I64:
-            case OP_ADD_I64:
-            case OP_SUB_ALT_I64:
-            case OP_SHL_I64:
-            case OP_SSHR_I64:
-            case OP_SHR_I64:
-            case OP_OR_I64:
-            case OP_AND_I64:
-            case OP_XOR_I64:
+            case OP_PUSH_C_I8:
+                fprintf(stdout, " %d", (int)reader.read<int8_t>());
+                break;
+
+            case OP_ADDR_S:
+            case OP_LOAD_S:
+            case OP_STOR_S:
             case OP_ZERO_S:
             case OP_ZERO_S_I64:
-            case OP_STOR_S_PRI_I64:
-            case OP_LREF_S_PRI:
-            case OP_SREF_S_PRI:
-                fprintf(stdout, " %d", readInt16());
-                break;
-
-            case OP_SDIV_ALT_I64:
-            case OP_SMOD_ALT_I64:
-                fprintf(stdout, " %d", readInt16());
+            case OP_STOR_S_I64:
+            case OP_LREF_S:
+            case OP_SREF_S:
+            case OP_LOAD_S_I64:
+                fprintf(stdout, " %d", reader.read<int16_t>());
                 break;
 
             case OP_STOR_S_C: {
-                int16_t offset = readInt16();
-                cell_t value = readCell();
+                int16_t offset = reader.read<int16_t>();
+                cell_t value = reader.read<cell_t>();
                 fprintf(stdout, " %d, %d", offset, value);
                 break;
             }
 
             case OP_STOR_S_C_I64: {
-                int16_t slot = readInt16();
-                cell_t cell0 = readCell();
-                cell_t cell1 = readCell();
+                int16_t slot = reader.read<int16_t>();
+                cell_t cell0 = reader.read<cell_t>();
+                cell_t cell1 = reader.read<cell_t>();
                 fprintf(stdout, " %d, %d, %d", slot, cell0, cell1);
                 break;
             }
 
+            case OP_IDXADDR: {
+                uint8_t rank_size = reader.read<uint8_t>();
+                int32_t bounds = reader.read<int32_t>();
+                fprintf(stdout, " %u %d", rank_size, bounds);
+                break;
+            }
+
+            case OP_LOAD_FN:
             case OP_CALL:
             {
-                cell_t offset = readCell();
-                const char* name = smx_->LookupFunction(offset);
-                if (name)
-                    fprintf(stdout, " %s", name);
+                uint32_t method_index = reader.read<uint32_t>();
+                if (auto method = smx_->GetMethod(method_index))
+                    fprintf(stdout, " %s", smx_->names() + method->name);
                 else
-                    fprintf(stdout, " unknown_function_%x", offset);
+                    fprintf(stdout, " unknown_method_%u", method_index);
                 break;
             }
 
@@ -701,33 +713,27 @@ class DumpTool final {
             case OP_JSGEQ:
             case OP_JSLEQ:
             {
-                uint32_t target_offs = readCell();
+                uint32_t target_offs = reader.read<uint32_t>();
                 uint32_t diff = target_offs - (uint32_t)(method_start - smx_->DescribeCode().bytes);
                 fprintf(stdout, " %04x ; %x", diff, target_offs);
                 break;
             }
 
-            case OP_SYSREQ_N:
-            {
-                uint32_t index = (uint32_t)readCell();
-                uint32_t nargs = (uint32_t)readCell();
-                if (index < smx_->natives().length())
-                    fprintf(stdout, " %s", smx_->names() + smx_->natives()[index].name);
-                else
-                    fprintf(stdout, " unknown_native_%u", index);
-                fprintf(stdout, " ; (%d args)", nargs);
-                break;
-            }
-
-            case OP_INITARRAY_ALT: {
-                cell_t v0 = readCell();
-                cell_t v1 = readCell();
-                cell_t v2 = readCell();
-                cell_t v3 = readCell();
-                cell_t v4 = readCell();
+            case OP_INITARRAY: {
+                cell_t v0 = reader.read<cell_t>();
+                cell_t v1 = reader.read<cell_t>();
+                cell_t v2 = reader.read<cell_t>();
+                cell_t v3 = reader.read<cell_t>();
+                cell_t v4 = reader.read<cell_t>();
                 fprintf(stdout, " %d %d %d %d %d", v0, v1, v2, v3, v4);
                 break;
             }
+
+            case OP_POP:
+            case OP_DUP:
+            case OP_SWAP:
+            case OP_DUP_ROTATE:
+                break;
 
             default:
                 break;

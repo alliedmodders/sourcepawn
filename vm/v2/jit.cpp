@@ -267,14 +267,14 @@ CompilerBase::reportError(int err) {
 }
 
 int
-CompilerBase::CompileFromThunk(PluginContext* cx, uint32_t pcode_offs, void** addrp, uint8_t* pc) {
+CompilerBase::CompileFromThunk(PluginContext* cx, uint32_t method_index, void** addrp, uint8_t* pc) {
     // If the watchdog timer has declared a timeout, we must process it now,
     // and possibly refuse to compile, since otherwise we will compile a
     // function that is not patched for timeouts.
     if (!Environment::get()->watchdog()->HandleInterrupt())
         return SP_ERROR_TIMEOUT;
 
-    RefPtr<MethodInfo> method = cx->AcquireMethod(pcode_offs);
+    RefPtr<MethodInfo> method = cx->runtime()->AcquireMethod(method_index);
     if (!method)
         return SP_ERROR_INVALID_ADDRESS;
 

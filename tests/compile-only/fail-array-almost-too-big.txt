@@ -1,1 +1,1 @@
-(2) : error 431: script uses too much memory, cannot compile
+(2) : error 052: array size exceeds memory capacity
