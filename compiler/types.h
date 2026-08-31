@@ -465,6 +465,10 @@ class ArrayType : public Type {
     ArrayType(Type* inner, int size, bool is_flat);
 
     int size() const { return size_; }
+
+    // Note that is_fixed() does not imply flat, but flat does imply fixed.
+    // This is different from TypeDesc where Flat and Fixed are internally
+    // separate types.
     bool is_fixed() const { return size_ != 0; }
     bool is_flat() const { return is_flat_; }
 

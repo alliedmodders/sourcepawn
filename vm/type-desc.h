@@ -163,6 +163,10 @@ class TypeDesc final {
         return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
                kind_ == TypeKind::FlatArray || kind_ == TypeKind::ArraySlice;
     }
+    bool IsNonFlatArray() const {
+        return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
+               kind_ == TypeKind::ArraySlice;
+    }
     bool IsFlatArray() const {
         return kind_ == TypeKind::FlatArray;
     }

@@ -113,6 +113,9 @@ namespace v2 {
      * stack as a cell_t. The resulting address of the array is pushed onto
      * the stack. If the outermost dimension is fixed, no value is popped
      * from the stack.
+     *
+     * If the array's element type is a fixed array, then each element will
+     * be initialized with an array of that type. This happens recursively.
      */ \
     FOR_EACH(NEWARRAY, 66, "newarray", 5) \
     /* Same as newarray, except that there must be N values on the stack,
@@ -121,8 +124,8 @@ namespace v2 {
      * the stack. N must be >= 1, and is encoded as a uint8_t, which is
      * followed by a uint32_t type_id.
      *
-     * This is effectively the same as GENARRAY from the v1 VM - it
-     * initializes a tree of array pointers for the user.
+     * This "bulkier" opcode exists for rarer array initialization cases
+     * where more than one dimension is unspecified.
      *
      * NEWBULKARRAY with N=1 is the same as NEWARRAY.
      */ \

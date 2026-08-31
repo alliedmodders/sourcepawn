@@ -111,7 +111,7 @@ void CodeGenerator::FinishSmx() {
 void CodeGenerator::AddDebugLine(const token_pos_t& pos) {
     if (!fun_)
         return;
-		
+
     auto line = cc_.sources()->GetLineAndCol(pos, nullptr);
     auto method = rtti_->GetMethod(debug_info_.method_index);
     uint32_t rel_addr = asm_.position() - method.pcode_start;
@@ -325,32 +325,39 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
         if (!var->is_emitted())
             continue;
 
-        AddDebugLine(init->pos());
+        if (init)
+            AddDebugLine(init->pos());
 
         if (auto array = var->type()->as<ArrayType>()) {
-            if (array->is_flat())
+            if (array->is_flat()) {
+                if (!init)
+                    continue;
                 __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
-            else if (array->is_fixed())
-                __ emit(OP_LOAD_GLB, VarSlot(var->addr()));
+            }
             EmitArrayCtor(array, init, 0);
-            if (!array->is_fixed())
+            if (!array->is_flat())
                 __ emit(OP_STOR_GLB, VarSlot(var->addr()));
         } else if (var->type()->isEnumStruct()) {
+            if (!init)
+                continue;
             __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
             EmitEnumStructCtor(var->type()->asEnumStruct(), init);
-        } else if (auto n64 = init->as<Number64Expr>()) {
+        } else if (init && init->as<Number64Expr>()) {
+            auto n64 = init->as<Number64Expr>();
             __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
             __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-        } else if (init->val().ident == iCONSTEXPR) {
+        } else if (init && init->val().ident == iCONSTEXPR) {
             __ PUSH_C(init->val().constval());
             __ emit(OP_STOR_GLB, VarSlot(var->addr()));
-        } else {
+        } else if (init) {
             assert(false);
         }
     }
 }
 
-static inline uint32_t DeduceArraySize(Expr* ctor) {
+static inline uint32_t DeduceArraySize(ArrayType* type, Expr* ctor) {
+    if (type->is_fixed())
+        return type->size();
     if (auto array = ctor->as<ArrayExpr>())
         return (uint32_t)array->exprs().size();
     if (auto se = ctor->as<StringExpr>())
@@ -369,70 +376,68 @@ void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
         EmitArrayCtor(type, expr, flags);
         __ emit(OP_ADDR_S, VarSlot(temp_slot));
     } else {
-        auto type_id = rtti_->to_typeid(type);
-        __ emit(OP_NEWARRAY, type_id);
-        __ emit(OP_DUP);
         EmitArrayCtor(type, expr, flags);
     }
 }
 
 void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags) {
-    if (auto new_array = ctor->as<NewArrayExpr>()) {
-        assert(!type->is_fixed());
+    if (auto new_array = Expr::As<NewArrayExpr>(ctor)) {
+        assert(!type->is_flat());
         EmitNewArrayExpr(new_array);
         return;
     }
 
-    if (!type->is_fixed()) {
+    if (!type->is_flat()) {
         // The array has not been allocated yet.
-        uint32_t size = DeduceArraySize(ctor);
         uint32_t type_id = rtti_->to_typeid(type);
-        __ PUSH_C(size);
+        if (!type->is_fixed()) {
+            uint32_t size = DeduceArraySize(type, ctor);
+            __ PUSH_C(size);
+        }
         __ emit(OP_NEWARRAY, type_id);
     } else {
         // Otherwise, the address has been pushed onto the stack by the caller.
     }
 
     if (type->inner()->isEnumStruct()) {
-        ArrayExpr* array = ctor->to<ArrayExpr>();
+        ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
 
         for (size_t i = 0; i < array->exprs().size(); i++) {
             __ emit(OP_DUP);
             __ PUSH_C(i);
             __ emit(OP_IDXADDR);
 
-            EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
+            if (array)
+                EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
         }
 
-        if (type->is_fixed())
+        if (type->is_flat())
             __ emit(OP_POP);
-        return;
-    }
-
-    if (ArrayType* inner = type->inner()->as<ArrayType>()) {
+    } else if (ArrayType* inner = type->inner()->as<ArrayType>()) {
         assert(!inner->is_flat());
-        ArrayExpr* array = ctor->to<ArrayExpr>();
+        ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
 
-        for (size_t i = 0; i < array->exprs().size(); i++) {
+        uint32_t len = array ? (uint32_t)array->exprs().size() : inner->size();
+        for (size_t i = 0; i < len; i++) {
             __ emit(OP_DUP);
             __ PUSH_C(i);
             __ emit(OP_IDXADDR);
 
-            // If the inner array is fixed, then it's already been allocated.
-            if (inner->is_fixed())
+            // If the inner array is flat, then it's already been allocated.
+            if (inner->is_flat())
                 __ emit(OP_LOAD_I_I32);
 
-            EmitArrayCtor(inner, array->exprs().at(i), 0);
+            EmitArrayCtor(inner, array ? array->exprs().at(i) : nullptr, 0);
 
             // Otherwise, the allocation is now on the stack.
-            if (!inner->is_fixed())
+            if (!inner->is_flat())
                 __ emit(OP_STOR_I_I32);
         }
 
         // No longer need the parent address.
-        if (type->is_fixed())
+        if (type->is_flat())
             __ emit(OP_POP);
-    } else {
+    } else if (ctor) {
         uint32_t fill_data_pos;
 
         auto iter = fill_data_cache_.find(ctor);
@@ -450,10 +455,10 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         if (flags & EMIT_REPEATABLE)
             fill_data_cache_.emplace(ctor, fill_data_pos);
 
-        // If this is fixed array, the address was pushed onto the stack by our
+        // If this is a flat array, the address was pushed onto the stack by our
         // caller, and now we're consuming it. Otherwise, the caller expects the
         // address to be returned on the stack.
-        if (!type->is_fixed())
+        if (!type->is_flat())
             __ emit(OP_DUP);
         __ emit(OP_FILLARRAY, fill_data_pos);
     }
@@ -594,14 +599,13 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
 
     auto init_rhs = decl->init_rhs();
     if (auto array = decl->type()->as<ArrayType>()) {
-        if (!init_rhs)
-            return;
-        if (array->is_flat())
+        if (array->is_flat()) {
+            if (!init_rhs)
+                return;
             __ emit(OP_ADDR_S, VarSlot(slot));
-        else if (array->is_fixed())
-            __ emit(OP_LOAD_S, VarSlot(slot));
+        }
         EmitArrayCtor(array, init_rhs, 0);
-        if (!array->is_fixed())
+        if (!array->is_flat())
             __ emit(OP_STOR_S, VarSlot(slot));
     } else if (is_struct) {
         if (init_rhs) {
@@ -1605,11 +1609,6 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
 
                 __ emit(OP_ADDR_S, VarSlot(temp_slot));
             } else {
-                auto type_id = rtti_->to_typeid(arr_type);
-                if (arr_type->size() == 0)
-                    __ emit(OP_PUSH_C, (uint32_t)array->exprs().size());
-                __ emit(OP_NEWARRAY, type_id);
-                __ emit(OP_DUP);
                 EmitArrayCtor(arr_type, array, EMIT_REPEATABLE);
             }
         }
@@ -1628,18 +1627,29 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
 
 void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
     uint32_t type_id = rtti_->to_typeid(expr->type());
-
     const auto& exprs = expr->exprs();
-    for (size_t i = exprs.size() - 1; i < exprs.size(); i--)
+
+    // Find the number of dynamic dimensions leading up to the first fixed
+    // dimension.
+    size_t num_dynamic = 0;
+    ArrayType* type = expr->type()->as<ArrayType>();
+    while (type && !type->is_fixed()) {
+        num_dynamic++;
+        type = type->inner()->as<ArrayType>();
+    }
+
+    // Emit these onto the stack.
+    assert(num_dynamic <= exprs.size());
+    for (size_t i = num_dynamic - 1; i < num_dynamic; i--)
         EmitExpr(exprs[i]);
 
-    if (exprs.size() > std::numeric_limits<uint8_t>::max())
+    if (num_dynamic > std::numeric_limits<uint8_t>::max())
         report(expr, 431);
 
-    if (exprs.size() == 1)
+    if (num_dynamic <= 1)
         __ emit(OP_NEWARRAY, type_id);
     else
-        __ newbulkarray((uint8_t)exprs.size(), type_id);
+        __ newbulkarray((uint8_t)num_dynamic, type_id);
 }
 
 void

@@ -142,15 +142,9 @@ bool Runtime::InitializeGlobals() {
             PubvarEntry entry;
             entry.pubvar.name = image_->names() + global->name;
             entry.global_index = i;
-            if (td->kind() == TypeKind::FixedArray) {
-                uint32_t array_local = *heap_.ToPhysAddr<cell_t*>(ptr);
-                SpArray* array = heap_.ToPhysAddr<SpArray*>(array_local);
-                entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(array->data);
-                entry.local_addr = array_local;
-            } else {
-                entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(ptr);
-                entry.local_addr = ptr;
-            }
+            entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(ptr);
+            entry.local_addr = ptr;
+            entry.td = td;
             pubvars_.push_back(entry);
         }
     }
@@ -347,9 +341,24 @@ uint32_t Runtime::GetPublicsNum() {
     return (uint32_t)publics_.size();
 }
 
+void Runtime::ResolvePubvar(PubvarEntry& entry) {
+    if (entry.resolved)
+        return;
+
+    if (entry.td->IsNonFlatArray()) {
+        uint32_t array_local = *heap_.ToPhysAddr<cell_t*>(entry.local_addr);
+        SpArray* array = heap_.ToPhysAddr<SpArray*>(array_local);
+        entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(array->data);
+        entry.local_addr = array->data;
+    }
+    entry.resolved = true;
+}
+
 int Runtime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out) {
     if (index >= pubvars_.size())
         return SP_ERROR_INDEX;
+
+    ResolvePubvar(pubvars_[index]);
 
     if (out)
         *out = &pubvars_[index].pubvar;
@@ -372,6 +381,8 @@ int Runtime::FindPubvarByName(const char* name, uint32_t* index) {
 int Runtime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) {
     if (index >= pubvars_.size())
         return SP_ERROR_INDEX;
+
+    ResolvePubvar(pubvars_[index]);
 
     *local_addr = pubvars_[index].local_addr;
     if (phys_addr)
@@ -1179,15 +1190,8 @@ uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
         case TypeKind::Array:
         case TypeKind::FlatArray:
         case TypeKind::EnumStruct:
+        case TypeKind::FixedArray:
             break;
-
-        case TypeKind::FixedArray: {
-            auto array = NewArray(td, td->array_size());
-            if (!array)
-                return 0;
-            *reinterpret_cast<uint32_t*>(ptr) = heap_.ToLocalAddr(array);
-            break;
-        }
 
         default:
             assert(false);
@@ -1205,7 +1209,6 @@ const TypeDesc* Runtime::GetTypeOfGlobal(uint16_t index) {
 SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {
     assert(td->kind() == TypeKind::Array ||
            (td->kind() == TypeKind::FixedArray && size == td->array_size()));
-
     uint32_t elt_size = td->array_elt()->element_size();
 
     if (!ke::IsUintMultiplySafe(size, elt_size)) {
@@ -1276,7 +1279,7 @@ SpArray* Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) 
         return array;
 
     auto inner = td->array_elt();
-    if (inner->kind() != TypeKind::Array)
+    if (inner->kind() != TypeKind::Array && inner->kind() != TypeKind::FixedArray)
         return array;
 
     assert(dims > 1);

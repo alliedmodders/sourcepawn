@@ -627,6 +627,10 @@ class Expr : public ParseNode
         return reinterpret_cast<T*>(this);
     }
 
+    template <class T> static T* As(Expr* e) {
+        return e ? e->as<T>() : nullptr;
+    }
+
   protected:
     value val_ = {};
     ExprKind kind_ : 8;

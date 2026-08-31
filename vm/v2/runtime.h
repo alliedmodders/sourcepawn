@@ -196,7 +196,10 @@ class Runtime final : public BaseRuntime,
         sp_pubvar_t pubvar;
         uint32_t global_index;
         cell_t local_addr;
+        const TypeDesc* td;
+        bool resolved = false;
     };
+    void ResolvePubvar(PubvarEntry& entry);
     std::vector<PubvarEntry> pubvars_;
     std::vector<sp_public_t> publics_;
     std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;

@@ -815,6 +815,16 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     ArrayValidator validator(this, decl);
     if (!validator.Validate() || !errors.ok())
         return false;
+
+    // We need an explicit initializer so that EmitArrayCtor() will generate
+    // the appropriate NEWARRAY or NEWBULKARRAY opcode via EmitNewArrayExpr.
+    if (!decl->init_rhs() && decl->vclass() != sARGUMENT) {
+        if (auto array = decl->type()->as<ArrayType>(); array && !array->is_flat()) {
+            if (!AddImplicitDynamicInitializer(decl))
+                return false;
+        }
+    }
+
     return true;
 }
 
