@@ -52,15 +52,15 @@ GraphBuilder::build() {
 
 // Scan the instruction stream for control-flow opcodes. For each such opcode,
 // we push its target onto a stack so it can be visited again later.
-bool
-GraphBuilder::scan() {
-    graph_ = new ControlFlowGraph(rt_, start_at_);
-    current_ = graph_->entry();
-
+bool GraphBuilder::scan() {
     block_map_.init(16);
 
     // Set cip, start at the method entry.
     cip_ = start_at_;
+
+    graph_ = new ControlFlowGraph(rt_);
+    graph_->setEntry(getOrAddBlock(cip_));
+    current_ = graph_->entry();
 
     // Begin an epoch to track which blocks have been visited.
     graph_->newEpoch();
@@ -260,13 +260,13 @@ GraphBuilder::scanSwitchFlow(const uint8_t* insn) -> FlowState {
     return FlowState::Ended;
 }
 
-ke::RefPtr<Block>
-GraphBuilder::getOrAddBlock(const uint8_t* cip) {
+ke::RefPtr<Block> GraphBuilder::getOrAddBlock(const uint8_t* cip) {
     // We use a quick existence test before diving into the hash table.
     uint32_t byte_number = getByteNumber(cip);
     if (!block_bitmap_.test(byte_number)) {
         RefPtr<Block> block = graph_->newBlock(cip);
-        enqueueBlock(block);
+        if (cip != start_at_)
+            enqueueBlock(block);
 
         BlockMap::Insert p = block_map_.findForAdd(cip);
         assert(!p.found());
@@ -281,8 +281,7 @@ GraphBuilder::getOrAddBlock(const uint8_t* cip) {
     return r->value;
 }
 
-void
-GraphBuilder::enqueueBlock(Block* block) {
+void GraphBuilder::enqueueBlock(Block* block) {
     if (block->visited())
         return;
 

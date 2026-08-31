@@ -202,12 +202,11 @@ class ControlFlowGraph : public ke::Refcounted<ControlFlowGraph>
     friend class MethodVerifier;
 
   public:
-    explicit ControlFlowGraph(PluginRuntime* rt, const uint8_t* start_offset);
+    explicit ControlFlowGraph(PluginRuntime* rt);
     ~ControlFlowGraph();
 
-    ke::RefPtr<Block> entry() const {
-        return entry_;
-    }
+    const ke::RefPtr<Block>& entry() const { return entry_; }
+    void setEntry(ke::RefPtr<Block>&& block) { entry_ = std::move(block); }
 
     ke::RefPtr<Block> newBlock(const uint8_t* start);
 

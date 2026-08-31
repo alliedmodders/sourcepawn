@@ -19,11 +19,10 @@ namespace sp::v2 {
 
 using namespace ke;
 
-ControlFlowGraph::ControlFlowGraph(PluginRuntime* rt, const uint8_t* start_offset)
- : rt_(rt)
- , epoch_(1) {
-    entry_ = newBlock(start_offset);
-}
+ControlFlowGraph::ControlFlowGraph(PluginRuntime* rt)
+ : rt_(rt),
+   epoch_(1)
+{}
 
 ControlFlowGraph::~ControlFlowGraph() {
     // This is necessary because blocks contain cycles between each other.
@@ -86,6 +85,7 @@ ControlFlowGraph::computeOrdering() {
 
     // Compute the postorder traversal.
     newEpoch();
+    entry_->setVisited();
     work.push_back(Entry{entry_, 0});
     while (!work.empty()) {
         Block* block = work.back().block;
@@ -159,11 +159,8 @@ ControlFlowGraph::computeDominance() {
         for (auto iter = rpoBegin(); iter != rpoEnd(); iter++) {
             Block* block = *iter;
 
-            if (block->predecessors().empty()) {
-                // There is only one entry block.
-                assert(block == entry_);
+            if (block == entry_)
                 continue;
-            }
 
             // Pick a candidate for this node's dominator.
             Block* idom = nullptr;

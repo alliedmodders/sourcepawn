@@ -222,11 +222,12 @@ A new virtual machine and bytecode has been added to address a number of
 shortcomings and maintenance issues in the old design. The "v2" VM is used for
 all new binaries. The legacy VM is still used for older binaries.
 
- - Instructions are encoded into 8 bits instead of 32, greatly reducing binary
-   size. The compiler no longer performs compression as a result.
  - The virtual machine is now purely stack based. The two-register scheme of the
    legacy VM resulted in needless instructions and a great deal of internal
    complexity.
+ - Instructions are encoded into 8 bits instead of 32, meaning they are no longer
+   cell-aligned. The compiler no longer performs compression as a result as the
+   code stream is much smaller.
  - The interpreter now uses a switch loop for faster execution.
  - Many legacy concepts, such as "AMX frames", have been removed.
  - A new `int64` primitive type is available for 64-bit arithmetic.

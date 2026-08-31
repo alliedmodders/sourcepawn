@@ -567,9 +567,17 @@ MethodVerifier::handleJoins() {
         verify_joins_.push_back(block_);
 
     // If the block had no incoming edges other than backedges, then this would
-    // be an illegal backedge to the entry block.
+    // be a backedge to the entry block, which we allow in V2 as we don't have
+    // entry opcodes anymore (PROC and BREAK are gone).  In this case, we have
+    // to ensure that initial verify data is present.
     if (!found_pred) {
         assert(verify_later);
+
+        VerifyData* data = block_->data<VerifyData>();
+        if (!data->entry) {
+            assert(block_ == graph_->entry());
+            data->entry = std::make_unique<VerifyData>(*data);
+        }
         return true;
     }
     return true;
