@@ -289,32 +289,35 @@ class Type : public PoolObject
 
     bool canOperatorOverload() const;
 
-    uint32_t lit_size() const {
+    // Size of an element in an array.
+    std::optional<uint32_t> maybe_lit_size() const {
         if (isBuiltin()) {
             switch (builtin_type_) {
                 case BuiltinType::Char:
-                    return 1;
+                    return {1};
                 case BuiltinType::Bool:
                 case BuiltinType::Int:
                 case BuiltinType::Float:
                 case BuiltinType::Null:
                 case BuiltinType::Any:
-                    return 4;
+                    return {4};
                 case BuiltinType::Int64:
-                    return 8;
+                    return {8};
                 default:
-                    assert(false);
-                    return 0;
+                    return {};
             }
         }
         switch (kind_) {
             case TypeKind::Methodmap:
             case TypeKind::Enum:
-                return sizeof(cell_t);
+                return {4};
             default:
-                assert(false);
-                return 0;
+                return {};
         }
+    }
+
+    uint32_t lit_size() const {
+        return *maybe_lit_size();
     }
 
     bool coercesToInt() const {

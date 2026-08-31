@@ -40,6 +40,16 @@
 namespace sp {
 namespace cc {
 
+static bool AreSliceElementsCompatible(Type* t1, Type* t2) {
+    if (t1 == t2)
+        return true;
+    auto size1 = t1->maybe_lit_size();
+    auto size2 = t2->maybe_lit_size();
+    if (size1 && size2)
+        return *size1 == *size2;
+    return false;
+}
+
 Semantics::Semantics(CompileContext& cc)
   : cc_(cc)
 {
@@ -1339,12 +1349,14 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     }
 
     auto& out_val = expr->val();
-
     out_val = inner->val();
 
     Type* from_type = out_val.type();
-    if (from_type == to_type)
+    if (from_type == to_type) {
+        if (expr->lvalue())
+            out_val.ident = iADDRESS;
         return true;
+    }
 
     auto actual_array =  from_type->as<ArrayType>();
     if (actual_array) {
@@ -1396,7 +1408,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
             }
             target_elem = iter->inner();
         }
-        if (from_type->lit_size() != target_elem->lit_size()) {
+        if (!AreSliceElementsCompatible(from_type, target_elem)) {
             report(expr, 460) << expr->expr()->val().type() << to_array_type;
             return false;
         }
@@ -3251,7 +3263,7 @@ static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
     if (to && to->is_flat())
         return false;
     if (val.type()->isFlatArray()) {
-        if (to && (val.type()->inner()->lit_size() != to->inner()->lit_size()))
+        if (to && !AreSliceElementsCompatible(val.type()->inner(), to->inner()))
             return false;
         return true;
     }
@@ -3265,7 +3277,7 @@ static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
     if (val.ident == iARRAYELEM) {
         if (val.type()->isEnumStruct() || val.type()->isArray())
             return false;
-        if (to && (val.type()->lit_size() != to->inner()->lit_size()))
+        if (to && !AreSliceElementsCompatible(val.type(), to->inner()))
             return false;
         return true;
     }

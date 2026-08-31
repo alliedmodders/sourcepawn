@@ -1983,6 +1983,8 @@ void CodeGenerator::EmitAddress(const value& lval) {
             else
                 __ emit(OP_LOAD_ELEM_A);
             break;
+        case iADDRESS:
+            break;
         default:
             assert(false);
             break;

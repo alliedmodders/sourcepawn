@@ -574,6 +574,9 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     // value here. This ensures that the code generator recognizes this SymbolExpr
     // as an lvalue and correctly emits OP_LOAD_GLB to load the array address/pointer.
     expr->val().set_variable(var, var->type());
+    if (auto slice = sema_->ParamNeedsSliceWrapper(expr, at_)) {
+        decl_->set_init(slice);
+    }
 
     return true;
 }
