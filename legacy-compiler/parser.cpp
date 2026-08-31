@@ -1863,7 +1863,7 @@ Parser::parse_methodmap()
     lexer_->need('{');
 
     std::vector<MethodmapMethodDecl*> methods;
-    std::vector<MethodmapPropertyDecl*> props;
+    std::vector<PropertyDecl*> props;
     while (!lexer_->match('}')) {
         bool ok = true;
         int tok_id = lexer_->lex();
@@ -1891,7 +1891,7 @@ Parser::parse_methodmap()
     }
 
     new (&decl->methods()) PoolArray<MethodmapMethodDecl*>(methods);
-    new (&decl->properties()) PoolArray<MethodmapPropertyDecl*>(props);
+    new (&decl->properties()) PoolArray<PropertyDecl*>(props);
 
     lexer_->require_newline(TerminatorPolicy::NewlineOrSemicolon);
     return decl;
@@ -1970,7 +1970,7 @@ MethodmapMethodDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     return fun;
 }
 
-MethodmapPropertyDecl*
+PropertyDecl*
 Parser::parse_methodmap_property(MethodmapDecl* map)
 {
     auto pos = lexer_->pos();
@@ -2000,7 +2000,7 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     }
 
     lexer_->require_newline(TerminatorPolicy::Newline);
-    return new MethodmapPropertyDecl(pos, ident, type, getter, setter);
+    return new PropertyDecl(pos, ident, type, getter, setter);
 }
 
 bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,

@@ -31,7 +31,7 @@ namespace cc {
 class Decl;
 class FunctionDecl;
 class LayoutFieldDecl;
-class MethodmapPropertyDecl;
+class PropertyDecl;
 class VarDeclBase;
 
 struct value {
@@ -82,12 +82,12 @@ struct value {
         set_type(type);
     }
 
-    MethodmapPropertyDecl* accessor() const {
+    PropertyDecl* accessor() const {
         if (ident != iACCESSOR)
             return nullptr;
         return accessor_;
     }
-    void set_accessor(MethodmapPropertyDecl* accessor) {
+    void set_accessor(PropertyDecl* accessor) {
         ident = iACCESSOR;
         accessor_ = accessor;
     }
@@ -123,7 +123,7 @@ struct value {
 
     union {
         // when ident == iACCESSOR
-        MethodmapPropertyDecl* accessor_;
+        PropertyDecl* accessor_;
         // when ident == iCONSTEXPR
         cell constval_;
         // when ident == iVARIABLE

@@ -39,7 +39,7 @@ namespace cc {
 class CompileContext;
 class Decl;
 class FunctionDecl;
-class MethodmapPropertyDecl;
+class PropertyDecl;
 class SemaContext;
 struct token_pos_t;
 

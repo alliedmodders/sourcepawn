@@ -437,8 +437,8 @@ void AstPrinter::PrintChangeScopeNode(ChangeScopeNode* node, bool is_last) {
     fprintf(out_, "ChangeScopeNode: %s\n", node->file()->chars());
 }
 
-void AstPrinter::PrintMethodmapPropertyDecl(MethodmapPropertyDecl* node, bool is_last) {
-    fprintf(out_, "MethodmapPropertyDecl: %s\n", node->name()->chars());
+void AstPrinter::PrintPropertyDecl(PropertyDecl* node, bool is_last) {
+    fprintf(out_, "PropertyDecl: %s\n", node->name()->chars());
 }
 
 void AstPrinter::PrintMethodmapMethodDecl(MethodmapMethodDecl* node, bool is_last) {

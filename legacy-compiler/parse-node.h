@@ -1779,17 +1779,17 @@ class EnumStructDecl : public LayoutDecl
     cell_t array_size_ = 0;
 };
 
-class MethodmapPropertyDecl : public Decl {
+class PropertyDecl : public Decl {
   public:
-    MethodmapPropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
-                          MemberFunctionDecl* getter, MemberFunctionDecl* setter)
-      : Decl(StmtKind::MethodmapPropertyDecl, pos, name),
+    PropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
+                 MemberFunctionDecl* getter, MemberFunctionDecl* setter)
+      : Decl(StmtKind::PropertyDecl, pos, name),
         type_(type),
         getter_(getter),
         setter_(setter)
     {}
 
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::MethodmapPropertyDecl; }
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::PropertyDecl; }
 
     Type* property_type() const;
 
@@ -1828,7 +1828,7 @@ class MethodmapDecl : public LayoutDecl
     Decl* FindMember(Atom* name) const;
 
     PoolArray<MethodmapMethodDecl*>& methods() { return methods_; }
-    PoolArray<MethodmapPropertyDecl*>& properties() { return properties_; }
+    PoolArray<PropertyDecl*>& properties() { return properties_; }
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
@@ -1838,14 +1838,14 @@ class MethodmapDecl : public LayoutDecl
     Atom* extends() const { return extends_; }
 
   private:
-    bool BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop);
-    bool BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop);
+    bool BindGetter(SemaContext& sc, PropertyDecl* prop);
+    bool BindSetter(SemaContext& sc, PropertyDecl* prop);
 
   private:
     bool nullable_ : 1;
     bool is_bound_ : 1;
     Atom* extends_;
-    PoolArray<MethodmapPropertyDecl*> properties_;
+    PoolArray<PropertyDecl*> properties_;
     PoolArray<MethodmapMethodDecl*> methods_;
     MethodmapDecl* parent_ = nullptr;
     MethodmapMethodDecl* ctor_ = nullptr;

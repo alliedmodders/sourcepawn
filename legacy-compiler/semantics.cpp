@@ -1595,7 +1595,7 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
         return false;
     }
 
-    if (auto prop = member->as<MethodmapPropertyDecl>()) {
+    if (auto prop = member->as<PropertyDecl>()) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
         if (base->lvalue())

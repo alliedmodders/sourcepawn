@@ -2058,7 +2058,7 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
     }
 }
 
-void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
+void CodeGenerator::InvokeGetter(PropertyDecl* prop) {
     assert(prop->getter());
 
     // :TODO: figure out how to factor this code with EmitCallExpr.

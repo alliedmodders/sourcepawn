@@ -1551,7 +1551,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     EmitExpr(expr);
 
     bool popaddr = false;
-    MethodmapPropertyDecl* accessor = nullptr;
+    PropertyDecl* accessor = nullptr;
     if (expr->lvalue()) {
         if (zap) {
             switch (v.ident) {
@@ -1687,7 +1687,7 @@ CodeGenerator::EmitStore(const value& lval, bool save_pri)
     }
 }
 
-void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
+void CodeGenerator::InvokeGetter(PropertyDecl* prop) {
     assert(prop->getter());
 
     // :TODO: figure out how to factor this code with EmitCallExpr.
@@ -1710,7 +1710,7 @@ void CodeGenerator::InvokeGetter(MethodmapPropertyDecl* prop) {
         __ emit(OP_ADDR_PRI, *hidden_slot);
 }
 
-void CodeGenerator::InvokeSetter(MethodmapPropertyDecl* prop, bool save_pri) {
+void CodeGenerator::InvokeSetter(PropertyDecl* prop, bool save_pri) {
     assert(prop->setter());
 
     if (save_pri)

@@ -205,7 +205,7 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     return nullptr;
 }
 
-Type* MethodmapPropertyDecl::property_type() const {
+Type* PropertyDecl::property_type() const {
     auto types = CompileContext::get().types();
 
     if (getter_)

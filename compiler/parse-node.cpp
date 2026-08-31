@@ -224,7 +224,7 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     return nullptr;
 }
 
-Type* MethodmapPropertyDecl::property_type() const {
+Type* PropertyDecl::property_type() const {
     auto types = CompileContext::get().types();
 
     if (getter_)
@@ -263,8 +263,8 @@ QualType Decl::type() {
             return to<LayoutFieldDecl>()->type();
         case StmtKind::EnumStructDecl:
             return to<EnumStructDecl>()->type();
-        case StmtKind::MethodmapPropertyDecl:
-            return to<MethodmapPropertyDecl>()->type();
+        case StmtKind::PropertyDecl:
+            return to<PropertyDecl>()->type();
         case StmtKind::MethodmapDecl:
             return to<MethodmapDecl>()->type();
         default:

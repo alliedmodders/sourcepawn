@@ -1304,7 +1304,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
     return errors.ok();
 }
 
-bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
+bool MethodmapDecl::BindGetter(SemaContext& sc, PropertyDecl* prop) {
     auto fun = prop->getter();
 
     // There should be no extra arguments.
@@ -1320,7 +1320,7 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
     return true;
 }
 
-bool MethodmapDecl::BindSetter(SemaContext& sc, MethodmapPropertyDecl* prop) {
+bool MethodmapDecl::BindSetter(SemaContext& sc, PropertyDecl* prop) {
     auto fun = prop->setter();
 
     // Must have one extra argument taking the return type.
