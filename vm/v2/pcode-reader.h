@@ -235,11 +235,6 @@ class PcodeReader
                 return visitor_->visitPOP(reg);
             }
 
-            case OP_STACK: {
-                cell_t amount = readCell();
-                return visitor_->visitSTACK(amount);
-            }
-
             case OP_HEAP: {
                 cell_t amount = readCell();
                 return visitor_->visitHEAP(amount);

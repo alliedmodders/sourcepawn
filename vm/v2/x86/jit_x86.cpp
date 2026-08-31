@@ -558,12 +558,6 @@ ConditionCode ToFloatConditionCode(CompareOp op) {
 }
 
 bool
-Compiler::visitSTACK(cell_t amount) {
-    __ addl(stk, amount);
-    return true;
-}
-
-bool
 Compiler::visitHEAP(cell_t amount) {
     // Note: this must not clobber PRI.
     __ movl(alt, Operand(hpAddr()));

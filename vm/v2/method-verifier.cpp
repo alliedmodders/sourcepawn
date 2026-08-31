@@ -64,10 +64,8 @@ MethodVerifier::verify() {
         }
     }
 
-    if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK) {
-        if (!verifyLocalSlots())
-            return nullptr;
-    }
+    if (!verifyLocalSlots())
+        return nullptr;
 
     GraphBuilder gb(rt_, startOffset_);
     graph_ = gb.build();
@@ -350,32 +348,20 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         // Note - STACK and HEAP are verified at runtime.
-        case OP_STACK:
         case OP_HEAP:
         {
-            if (op == OP_STACK && (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK)) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
             cell_t value = readCell();
             if (!ke::IsAligned(value, sizeof(cell_t))) {
                 reportError(SP_ERROR_INSTRUCTION_PARAM);
                 return false;
             }
-            cell_t num_cells = abs(value / (cell_t)sizeof(cell_t));
-            if (op == OP_STACK) {
-                if (value < 0)
-                    return pushStack(num_cells);
-                return popStack(num_cells);
-            } else if (op == OP_HEAP) {
-                if (value < 0) {
-                    reportError(SP_ERROR_INSTRUCTION_PARAM);
-                    return false;
-                }
-                if (!value || value > INT_MAX / 4 || (value % 4) != 0) {
-                    reportError(SP_ERROR_INSTRUCTION_PARAM);
-                    return false;
-                }
+            if (value <= 0) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
+            }
+            if (value > INT_MAX / 4) {
+                reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return false;
             }
             return true;
         }
@@ -589,44 +575,19 @@ MethodVerifier::popStack(uint32_t num_cells) {
 }
 
 bool MethodVerifier::verifyStackOffset(cell_t offset, uint32_t op_size) {
-    if (code_version_ >= SmxConsts::CODE_VERSION_TYPED_STACK) {
-        // Modern stack is typed.
-        if (offset < 0) {
-            uint32_t arg_slot = -offset - 1;
-            if (arg_slot >= arg_count_) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-        } else {
-            if (offset >= local_sizes_.size()) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            if (op_size && local_sizes_[offset] != op_size) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
+    // Modern stack is typed.
+    if (offset < 0) {
+        uint32_t arg_slot = -offset - 1;
+        if (arg_slot >= arg_count_) {
+            reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return false;
         }
     } else {
-        // Legacy stack is anything goes, so we do our best.
-        if (offset >= 0) {
-            // This is a rough estimate, we just make sure it definitely won't go out of
-            // the heap. We can verify this better later with RTTI tables, which store
-            // parameter counts.
-            size_t estimate = size_t((offset < 0) ? -offset : offset);
-            if (estimate >= heapSize_) {
-                reportError(SP_ERROR_INSTRUCTION_PARAM);
-                return false;
-            }
-            return true;
+        if (offset >= local_sizes_.size()) {
+            reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return false;
         }
-
-        uint32_t addr = abs(offset);
-
-        // This is not a rough estimate. We know exactly how much stack space is
-        // available.
-        VerifyData* data = block_->data<VerifyData>();
-        if (addr > data->stack_balance * sizeof(cell_t)) {
+        if (op_size && local_sizes_[offset] != op_size) {
             reportError(SP_ERROR_INSTRUCTION_PARAM);
             return false;
         }

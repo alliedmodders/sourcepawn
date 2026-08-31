@@ -65,7 +65,6 @@ namespace v2 {
     FOR_EACH(PUSH_S, 41, "push.s", 2) \
     FOR_EACH(POP_PRI, 42, "pop.pri", 1) \
     FOR_EACH(POP_ALT, 43, "pop.alt", 1) \
-    FOR_EACH(STACK, 44, "stack", 2) \
     FOR_EACH(HEAP, 45, "heap", 2) \
     FOR_EACH(PROC, 46, "proc", 1) \
     FOR_EACH(RETN, 48, "retn", 1) \

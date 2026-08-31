@@ -330,11 +330,6 @@ bool Compiler::visitPOP(PawnReg dest) {
     return true;
 }
 
-bool Compiler::visitSTACK(cell_t amount) {
-    __ addq(stk, amount);
-    return true;
-}
-
 bool Compiler::visitHEAP(cell_t amount) {
     // Note: this must not clobber PRI.
     __ movl(alt, hpAddr());

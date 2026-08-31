@@ -76,7 +76,6 @@ class Interpreter final : public PcodeVisitor
     bool visitZERO_S(cell_t offset) override;
     bool visitZERO_S_I64(cell_t offset) override;
     bool visitRETN() override;
-    bool visitSTACK(cell_t amount) override;
     bool visitPUSH_S(cell_t offset) override;
     bool visitPUSH_I_I64() override;
     bool visitCONST(PawnReg dest, cell_t imm) override;

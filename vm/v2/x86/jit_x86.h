@@ -63,7 +63,6 @@ class Compiler : public CompilerBase
     bool visitPUSH_C(cell_t value) override;
     bool visitPUSH_S(cell_t offset) override;
     bool visitPOP(PawnReg dest) override;
-    bool visitSTACK(cell_t amount) override;
     bool visitHEAP(cell_t amount) override;
     bool visitRETN() override;
     bool visitCALL(cell_t offset) override;

@@ -55,7 +55,6 @@ class PcodeVisitor
     virtual bool visitPUSH_S(cell_t offset) = 0;
     virtual bool visitPUSH_I_I64() = 0;
     virtual bool visitPOP(PawnReg dest) = 0;
-    virtual bool visitSTACK(cell_t amount) = 0;
     virtual bool visitHEAP(cell_t amount) = 0;
     virtual bool visitRETN() = 0;
     virtual bool visitCALL(cell_t offset) = 0;

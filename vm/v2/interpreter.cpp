@@ -213,11 +213,6 @@ Interpreter::visitZERO_S(cell_t offset) {
     return cx_->setFrameValue(StackOffset(offset), 0);
 }
 
-bool
-Interpreter::visitSTACK(cell_t amount) {
-    return cx_->addStack(amount);
-}
-
 bool Interpreter::visitPUSH_S(cell_t slot) {
     cell_t value;
     if (!cx_->getFrameValue(StackOffset(slot), &value))
