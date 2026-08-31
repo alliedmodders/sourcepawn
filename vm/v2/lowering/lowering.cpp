@@ -1182,8 +1182,9 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg fn_reg = EmitNode(fn_node);
             const TypeDesc* fn_td = fn_node->type;
-            uint32_t arg_count = fn_td->expected_argc();
-            LowerCall(0, {(uint8_t)arg_count}, fn_td, fn_reg);
+            const TypeDesc* sig = fn_td->fn_signature();
+            uint32_t arg_count = sig->expected_argc();
+            LowerCall(0, {(uint8_t)arg_count}, sig, fn_reg);
             break;
         }
 

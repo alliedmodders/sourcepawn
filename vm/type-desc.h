@@ -256,6 +256,10 @@ class TypeDesc final {
 
     bool IsFunction() const { return kind_ == TypeKind::Function || kind_ == TypeKind::Closure; }
     bool IsClosure() const { return kind_ == TypeKind::Closure; }
+    const TypeDesc* fn_signature() const {
+        assert(kind_ == TypeKind::Function || kind_ == TypeKind::Closure);
+        return (kind_ == TypeKind::Closure) ? closure.signature : this;
+    }
     const TypeDesc* closure_signature() const {
         assert(IsClosure());
         return closure.signature;

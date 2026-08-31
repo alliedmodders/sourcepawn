@@ -919,16 +919,17 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* fn;
             if (!popStack(&fn))
                 return false;
-            if (fn->kind() != TypeKind::Function)
+            if (fn->kind() != TypeKind::Function && fn->kind() != TypeKind::Closure)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* sig = fn->fn_signature();
 
-            uint32_t expected_argc = fn->expected_argc();
+            uint32_t expected_argc = sig->expected_argc();
 
             VerifyData* v = block_->data<VerifyData>();
             if (v->stack.size() < expected_argc)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-            auto args = fn->args();
+            auto args = sig->args();
             for (size_t i = 0; i < expected_argc; i++) {
                 const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - i];
                 if (args[i]->IsHeapItem()) {
@@ -938,8 +939,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             }
             if (!popStack(expected_argc))
                 return false;
-            if (fn->return_type()->kind() != TypeKind::Void)
-                return pushStack(fn->return_type());
+            if (sig->return_type()->kind() != TypeKind::Void)
+                return pushStack(sig->return_type());
             return true;
         }
 
