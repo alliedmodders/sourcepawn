@@ -2433,10 +2433,13 @@ void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
 
     for (size_t i = 0; i < fun->NumUpvars(); i++) {
         auto var = fun->GetUpvar(i);
+
+        // We can't BindLvalue because we don't have an expr, but we don't
+        // need one here technically.
         if (var->type()->isCompositeValue())
             EmitAddress(var);
         else
-            __ emit(OP_LOAD_S, VarSlot(var->addr()));
+            EmitRvalue(ExprVal{var});
     }
 
     __ emit(OP_NEWCLOSURE, &fun->cg()->method_id);

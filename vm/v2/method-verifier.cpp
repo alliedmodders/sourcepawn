@@ -379,6 +379,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto td = verifyStackOffset(offset);
             if (!td)
                 return false;
+            if (offset >= 0 && td->IsCompositeValue())
+                return reportError(SP_ERROR_PARAM);
             return pushStack(td);
         }
 
@@ -764,6 +766,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             auto td = rt_->LoadTypeFromId(field->type_id);
             if (!td)
                 return false;
+            if (td->IsCompositeValue())
+                return reportError(SP_ERROR_PARAM);
             return pushStack(td);
         }
         case OP_ADDR_FLD: {
@@ -923,7 +927,10 @@ MethodVerifier::verifyOp(OPCODE op) {
             uint16_t index = read<uint16_t>();
             if (index >= upvar_types_.size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            return pushStack(upvar_types_[index]);
+            const TypeDesc* td = upvar_types_[index];
+            if (td->IsCompositeValue())
+                return reportError(SP_ERROR_PARAM);
+            return pushStack(td);
         }
 
         case OP_STOR_UPVAR: {

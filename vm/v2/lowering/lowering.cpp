@@ -1319,11 +1319,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             FlushEmitStack();
 
             // Pop upvar values in reverse order.
-            std::vector<VReg> upvar_regs;
-            upvar_regs.reserve(num_upvars);
-            for (uint8_t i = 0; i < num_upvars; i++) {
+            std::vector<VReg> upvar_regs(num_upvars);
+            for (int i = num_upvars - 1; i >= 0; i--) {
                 ExprNode* node = popStack();
-                upvar_regs.push_back(EmitNode(node));
+                upvar_regs[i] = EmitNode(node);
             }
 
             // Allocate the SpClosure.

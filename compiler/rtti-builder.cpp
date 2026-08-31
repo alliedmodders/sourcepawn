@@ -205,8 +205,10 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
 
             AppendUint16(&blob, (uint16_t)fun->NumUpvars());
 
-            for (size_t i = 0; i < fun->NumUpvars(); i++)
-                encode_type_into(blob, fun->GetUpvar(i)->type());
+            for (size_t i = 0; i < fun->NumUpvars(); i++) {
+                auto upvar = fun->GetUpvar(i);
+                encode_type_into(blob, upvar->type()->normalize());
+            }
         }
 
         blob.push_back(cb::kLocalSlots);
