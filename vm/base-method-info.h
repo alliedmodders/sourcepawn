@@ -27,6 +27,7 @@ class BaseMethodInfo : public ke::Refcounted<BaseMethodInfo>
 
     virtual uint32_t pcode_offset() const = 0;
     virtual CompiledFunction* jit() const = 0;
+    virtual uint32_t TranslateInterpCip(const uint8_t* cip) const = 0;
 };
 
 } // namespace sp

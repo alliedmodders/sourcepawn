@@ -1676,6 +1676,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
                 assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
 
                 __ emit(OP_LOAD_S, VarSlot(var->addr()));
+                __ emit(OP_SWAP);
                 if (lval.type()->inner()->isInt64())
                     __ emit(OP_STOR_I_I64);
                 else

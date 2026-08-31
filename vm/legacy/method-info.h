@@ -49,6 +49,7 @@ class MethodInfo final : public BaseMethodInfo
 
     int validationError() const { return validation_error_; }
     uint32_t pcode_offset() const override { return pcode_offset_; }
+    uint32_t TranslateInterpCip(const uint8_t* cip) const override;
     int32_t max_stack() const { return max_stack_; }
 
     void setCompiledFunction(CompiledFunction* fun);

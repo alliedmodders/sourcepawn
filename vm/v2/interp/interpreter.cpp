@@ -15,28 +15,42 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
+#include "v2/interp/interpreter.h"
+
 #include <fenv.h>
+#include <inttypes.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include <limits>
+#include <memory>
 #include <utility>
 
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
-#include "v2/objects.h"
-#include "v2/interp/interpreter.h"
+#include "v2/interp/interp-code.h"
+#include "v2/interp/ll-op.h"
+#include "v2/interp/lowering.h"
 #include "v2/method-info.h"
+#include "v2/objects.h"
 #include "v2/pcode-reader.h"
-#include "v2/runtime.h"
 #include "v2/runtime-helpers.h"
+#include "v2/runtime.h"
 #include "watchdog_timer.h"
 
 namespace sp::v2 {
 
-bool
-Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
+bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
+    if (!method->interp()) {
+        ke::RefPtr<ControlFlowGraph> graph = method->BuildGraph();
+        if (!graph)
+            return false;
+        std::unique_ptr<InterpCode> code = LowerMethod(graph);
+        method->setInterpCode(std::move(code));
+    }
+
     Interpreter interpreter(cx, method);
     if (!interpreter.run())
         return false;
@@ -52,7 +66,7 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
    heap_(rt_->heap()),
    method_(std::move(method)),
    code_(rt_->code().bytes),
-   reader_(code_ + method_->pcode_offset(), code_ + rt_->code().length),
+   reader_(method_->interp()->bytes(), method_->interp()->bytes() + method_->interp()->size()),
    has_returned_(false),
    return_value_(0),
    frm_(cx->sp()),
@@ -61,6 +75,7 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
 
 bool Interpreter::run() {
     const uint8_t* insn_begin = reader_.cursor();
+    const uint8_t* ll_code = method_->interp()->bytes();
 
     InterpInvokeFrame ivk(rt_, method_, &insn_begin);
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
@@ -121,22 +136,26 @@ bool Interpreter::run() {
         insn_begin = reader_.cursor();
 
         if (Environment::get()->IsDebugBreakEnabled()) {
-            if (smx_->IsLineBoundary((uint32_t)(insn_begin - code_))) {
+            uint32_t ll_offset = (uint32_t)(insn_begin - ll_code);
+            uint32_t high_offset = method_->interp()->LookupHighOffset(ll_offset);
+            if (smx_->IsLineBoundary(high_offset)) {
                 InvokeDebugger(rt_, nullptr);
                 if (env_->hasPendingException())
                     return false;
             }
         }
 
-        if (env_->spew_interp_ops())
-            SpewOpcode(stdout, rt_, code_, insn_begin);
+        if (env_->spew_interp_ops()) {
+            LLOp op = (LLOp)*reinterpret_cast<const uint16_t*>(insn_begin);
+            fprintf(stdout, "  [%05u] %s\n", (uint32_t)(insn_begin - ll_code), GetLLOpName(op));
+        }
 
-        OPCODE op = (OPCODE)reader_.read<uint8_t>();
+        LLOp op = (LLOp)reader_.read<uint16_t>();
 
         switch (op) {
-            case OP_NOP:
+            case LL_NOP:
                 break;
-            case OP_LOAD_GLB: {
+            case LL_LOAD_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 const TypeDesc* td = rt_->GetTypeOfGlobal(index);
@@ -153,20 +172,17 @@ bool Interpreter::run() {
                 }
                 break;
             }
-            case OP_LOAD_S: {
+            case LL_LOAD_S: {
                 cell_t offset = reader_.readInt16();
                 const TypeDesc* td = method_->GetTypeOfLocal(offset);
-                if (td->IsInt64()) {
-                    int64_t val = getLocalInt64(offset);
-                    pushInt64(val);
-                } else {
-                    cell_t val = getLocalCell(offset);
-                    pushCell(val);
-                }
+                if (td->IsInt64())
+                    pushInt64(getLocalInt64(offset));
+                else
+                    pushCell(getLocalCell(offset));
                 break;
             }
-            case OP_LOAD_I_I32:
-            case OP_LOAD_I_F32: {
+            case LL_LOAD_I_I32:
+            case LL_LOAD_I_F32: {
                 cell_t addr = popCell();
                 cell_t val;
                 if (!rt_->getCellValue(addr, &val))
@@ -174,7 +190,7 @@ bool Interpreter::run() {
                 pushCell(val);
                 break;
             }
-            case OP_LOAD_I_I64: {
+            case LL_LOAD_I_I64: {
                 cell_t addr = popCell();
                 int64_t* ptr = rt_->acquireInt64Addr(addr);
                 if (!ptr)
@@ -182,7 +198,7 @@ bool Interpreter::run() {
                 pushInt64(*ptr);
                 break;
             }
-            case OP_LOAD_I_U8: {
+            case LL_LOAD_I_U8: {
                 cell_t addr = popCell();
                 cell_t val;
                 if (!rt_->getCellValue(addr, &val))
@@ -191,9 +207,9 @@ bool Interpreter::run() {
                 pushCell(val);
                 break;
             }
-            case OP_LOAD_ELEM_A:
-            case OP_LOAD_ELEM_I32:
-            case OP_LOAD_ELEM_F32: {
+            case LL_LOAD_ELEM_A:
+            case LL_LOAD_ELEM_I32:
+            case LL_LOAD_ELEM_F32: {
                 uint32_t index = popCell();
                 uint32_t base = popCell();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
@@ -205,7 +221,7 @@ bool Interpreter::run() {
                 pushCell(*reinterpret_cast<cell_t*>(elt));
                 break;
             }
-            case OP_LOAD_ELEM_I64: {
+            case LL_LOAD_ELEM_I64: {
                 uint32_t index = popCell();
                 uint32_t base = popCell();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
@@ -217,7 +233,7 @@ bool Interpreter::run() {
                 pushInt64(*reinterpret_cast<int64_t*>(elt));
                 break;
             }
-            case OP_LOAD_ELEM_U8: {
+            case LL_LOAD_ELEM_U8: {
                 uint32_t index = popCell();
                 uint32_t base = popCell();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
@@ -229,12 +245,12 @@ bool Interpreter::run() {
                 pushCell(*reinterpret_cast<uint8_t*>(elt));
                 break;
             }
-            case OP_ADDR_GLB: {
+            case LL_ADDR_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
                 pushCell(rt_->GetGlobalAddr(index));
                 break;
             }
-            case OP_STOR_GLB: {
+            case LL_STOR_GLB: {
                 uint16_t index = reader_.read<uint16_t>();
                 cell_t addr = rt_->GetGlobalAddr(index);
                 const TypeDesc* td = rt_->GetTypeOfGlobal(index);
@@ -251,7 +267,7 @@ bool Interpreter::run() {
                 }
                 break;
             }
-            case OP_STOR_S: {
+            case LL_STOR_S: {
                 cell_t offset = reader_.readInt16();
                 const TypeDesc* td = method_->GetTypeOfLocal(offset);
                 if (td->IsInt64()) {
@@ -263,21 +279,21 @@ bool Interpreter::run() {
                 }
                 break;
             }
-            case OP_STOR_S_C: {
+            case LL_STOR_S_C: {
                 cell_t slot = reader_.readInt16();
                 cell_t value = reader_.readCell();
                 setLocalCell(slot, value);
                 break;
             }
-            case OP_STOR_I_I32:
-            case OP_STOR_I_F32: {
+            case LL_STOR_I_I32:
+            case LL_STOR_I_F32: {
                 cell_t val = popCell();
                 cell_t addr = popCell();
                 if (!rt_->setCellValue(addr, val))
                     return false;
                 break;
             }
-            case OP_STOR_I_I64: {
+            case LL_STOR_I_I64: {
                 int64_t val = popInt64();
                 cell_t addr = popCell();
                 int64_t* ptr = rt_->acquireInt64Addr(addr);
@@ -286,7 +302,7 @@ bool Interpreter::run() {
                 *ptr = val;
                 break;
             }
-            case OP_STOR_I_U8: {
+            case LL_STOR_I_U8: {
                 cell_t val = popCell();
                 cell_t addr_val = popCell();
                 uint8_t* addr = rt_->heap().ToPhysAddr<uint8_t*>(addr_val);
@@ -295,8 +311,8 @@ bool Interpreter::run() {
                 *addr = uint8_t(val);
                 break;
             }
-            case OP_STOR_ELEM_I32:
-            case OP_STOR_ELEM_F32: {
+            case LL_STOR_ELEM_I32:
+            case LL_STOR_ELEM_F32: {
                 cell_t val = popCell();
                 uint32_t index = popCell();
                 uint32_t base = popCell();
@@ -309,7 +325,7 @@ bool Interpreter::run() {
                 *reinterpret_cast<cell_t*>(elt) = val;
                 break;
             }
-            case OP_STOR_ELEM_I64: {
+            case LL_STOR_ELEM_I64: {
                 int64_t val = popInt64();
                 uint32_t index = popCell();
                 uint32_t base = popCell();
@@ -322,7 +338,7 @@ bool Interpreter::run() {
                 *reinterpret_cast<int64_t*>(elt) = val;
                 break;
             }
-            case OP_STOR_ELEM_U8: {
+            case LL_STOR_ELEM_U8: {
                 cell_t val = popCell();
                 uint32_t index = popCell();
                 uint32_t base = popCell();
@@ -335,7 +351,7 @@ bool Interpreter::run() {
                 *reinterpret_cast<uint8_t*>(elt) = uint8_t(val);
                 break;
             }
-            case OP_IDXADDR: {
+            case LL_IDXADDR: {
                 uint32_t index = popCell();
                 uint32_t base = popCell();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
@@ -348,7 +364,7 @@ bool Interpreter::run() {
                 pushCell(rt_->heap().ToLocalAddr(elt_addr));
                 break;
             }
-            case OP_SLICE: {
+            case LL_SLICE: {
                 uint32_t index = popCell();
                 uint32_t base = popCell();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
@@ -362,70 +378,70 @@ bool Interpreter::run() {
                 pushCell(rt_->heap().ToLocalAddr(slice));
                 break;
             }
-            case OP_POP: {
+            case LL_POP: {
                 popStack();
                 break;
             }
-            case OP_DUP: {
+            case LL_DUP: {
                 StackValue v = popValue();
                 pushValue(v);
                 pushValue(v);
                 break;
             }
-            case OP_SWAP: {
+            case LL_SWAP: {
                 StackValue b = popValue();
                 StackValue a = popValue();
                 pushValue(b);
                 pushValue(a);
                 break;
             }
-            case OP_PUSH_C: {
+            case LL_PUSH_C: {
                 cell_t val = reader_.readCell();
                 pushCell(val);
                 break;
             }
-            case OP_PUSH_C_I8: {
+            case LL_PUSH_C_I8: {
                 int8_t val = reader_.read<int8_t>();
                 pushCell(val);
                 break;
             }
-            case OP_PUSH_C_I64: {
+            case LL_PUSH_C_I64: {
                 int64_t val = reader_.read<int64_t>();
                 pushInt64(val);
                 break;
             }
-            case OP_CVT_I64: {
+            case LL_CVT_I64: {
                 cell_t val = popCell();
                 pushInt64((int64_t)val);
                 break;
             }
-            case OP_TRUNCATE_I64: {
+            case LL_TRUNCATE_I64: {
                 int64_t val = popInt64();
                 pushCell((cell_t)val);
                 break;
             }
-            case OP_TEST_I64: {
+            case LL_TEST_I64: {
                 int64_t val = popInt64();
                 pushCell(!!val);
                 break;
             }
-            case OP_INVERT_I64: {
+            case LL_INVERT_I64: {
                 int64_t val = popInt64();
                 pushInt64(~val);
                 break;
             }
-            case OP_NEG_I64: {
+            case LL_NEG_I64: {
                 int64_t val = popInt64();
                 pushInt64(-val);
                 break;
             }
-            case OP_SMUL_I64: {
+            case LL_SMUL_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left * right);
                 break;
             }
-            case OP_SDIV_I64: {
+            case LL_SDIV_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 int64_t result;
@@ -437,7 +453,7 @@ bool Interpreter::run() {
                 pushInt64(result);
                 break;
             }
-            case OP_SMOD_I64: {
+            case LL_SMOD_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 int64_t result;
@@ -449,79 +465,79 @@ bool Interpreter::run() {
                 pushInt64(result);
                 break;
             }
-            case OP_ADD_I64: {
+            case LL_ADD_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left + right);
                 break;
             }
-            case OP_SUB_I64: {
+            case LL_SUB_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left - right);
                 break;
             }
-            case OP_SHL_I64: {
+            case LL_SHL_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left << right);
                 break;
             }
-            case OP_SSHR_I64: {
+            case LL_SSHR_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left >> right);
                 break;
             }
-            case OP_SHR_I64: {
+            case LL_SHR_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(uint64_t(left) >> uint64_t(right));
                 break;
             }
-            case OP_OR_I64: {
+            case LL_OR_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left | right);
                 break;
             }
-            case OP_AND_I64: {
+            case LL_AND_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left & right);
                 break;
             }
-            case OP_XOR_I64: {
+            case LL_XOR_I64: {
                 int64_t right = popInt64();
                 int64_t left = popInt64();
                 pushInt64(left ^ right);
                 break;
             }
-            case OP_RETN: {
+            case LL_RETN: {
                 has_returned_ = true;
                 return_value_ = popCell();
                 break;
             }
-            case OP_RETV: {
+            case LL_RETV: {
                 has_returned_ = true;
                 break;
             }
-            case OP_LOAD_FN: {
+            case LL_LOAD_FN: {
                 uint32_t method_index = (uint32_t)reader_.readCell();
                 funcid_t id = (method_index << 1) | 1;
                 pushCell(id);
                 break;
             }
-            case OP_LOAD_STR: {
+            case LL_LOAD_STR: {
                 uint16_t index = reader_.read<uint16_t>();
                 pushCell(rt_->GetStringAddr(index));
                 break;
             }
-            case OP_CALL:
-            case OP_CALLN: {
+            case LL_CALL:
+            case LL_CALLN: {
                 uint32_t method_index = (uint32_t)reader_.readCell();
                 const smx_rtti_method* method = smx_->GetMethod(method_index);
-                if (op == OP_CALLN) {
+                if (op == LL_CALLN) {
                     uint8_t nargs = reader_.read<uint8_t>();
                     pushCell(nargs);
                 } else {
@@ -576,63 +592,63 @@ bool Interpreter::run() {
                     pushCell(result);
                 break;
             }
-            case OP_JUMP: {
+            case LL_JUMP: {
                 cell_t offset = reader_.readCell();
-                if (offset < (cell_t)(insn_begin - code_)) {
+                if (offset < (cell_t)(insn_begin - ll_code)) {
                     if (!Environment::get()->watchdog()->HandleInterrupt()) {
                         rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
                         return false;
                     }
                 }
-                reader_.set_cursor(code_ + offset);
+                reader_.set_cursor(ll_code + offset);
                 break;
             }
-            case OP_JZER:
-            case OP_JNZ:
-            case OP_JEQ:
-            case OP_JNEQ:
-            case OP_JSLESS:
-            case OP_JSLEQ:
-            case OP_JSGRTR:
-            case OP_JSGEQ: {
+            case LL_JZER:
+            case LL_JNZ:
+            case LL_JEQ:
+            case LL_JNEQ:
+            case LL_JSLESS:
+            case LL_JSLEQ:
+            case LL_JSGRTR:
+            case LL_JSGEQ: {
                 cell_t offset = reader_.readCell();
                 cell_t a, b;
                 bool jump = false;
                 switch (op) {
-                    case OP_JZER:
+                    case LL_JZER:
                         a = popCell();
                         jump = a == 0;
                         break;
-                    case OP_JNZ:
+                    case LL_JNZ:
                         a = popCell();
                         jump = a != 0;
                         break;
-                    case OP_JEQ:
+                    case LL_JEQ:
                         b = popCell();
                         a = popCell();
                         jump = a == b;
                         break;
-                    case OP_JNEQ:
+                    case LL_JNEQ:
                         b = popCell();
                         a = popCell();
                         jump = a != b;
                         break;
-                    case OP_JSLESS:
+                    case LL_JSLESS:
                         b = popCell();
                         a = popCell();
                         jump = a < b;
                         break;
-                    case OP_JSLEQ:
+                    case LL_JSLEQ:
                         b = popCell();
                         a = popCell();
                         jump = a <= b;
                         break;
-                    case OP_JSGRTR:
+                    case LL_JSGRTR:
                         b = popCell();
                         a = popCell();
                         jump = a > b;
                         break;
-                    case OP_JSGEQ:
+                    case LL_JSGEQ:
                         b = popCell();
                         a = popCell();
                         jump = a >= b;
@@ -640,41 +656,41 @@ bool Interpreter::run() {
                     default: assert(false);
                 }
                 if (jump) {
-                    if (offset < (cell_t)(insn_begin - code_)) {
+                    if (offset < (cell_t)(insn_begin - ll_code)) {
                         if (!Environment::get()->watchdog()->HandleInterrupt()) {
                             rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
                             return false;
                         }
                     }
-                    reader_.set_cursor(code_ + offset);
+                    reader_.set_cursor(ll_code + offset);
                 }
                 break;
             }
-            case OP_SHL: {
+            case LL_SHL: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a << b);
                 break;
             }
-            case OP_SHR: {
+            case LL_SHR: {
                 cell_t right = popCell();
                 cell_t left = popCell();
                 pushCell(uint32_t(left) >> uint32_t(right));
                 break;
             }
-            case OP_SSHR: {
+            case LL_SSHR: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a >> b);
                 break;
             }
-            case OP_SMUL: {
+            case LL_SMUL: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a * b);
                 break;
             }
-            case OP_SDIV_I32: {
+            case LL_SDIV_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 if (b == 0) {
@@ -688,7 +704,7 @@ bool Interpreter::run() {
                 pushCell(a / b);
                 break;
             }
-            case OP_SMOD_I32: {
+            case LL_SMOD_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 if (b == 0) {
@@ -702,107 +718,107 @@ bool Interpreter::run() {
                 pushCell(a % b);
                 break;
             }
-            case OP_ADD: {
+            case LL_ADD: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a + b);
                 break;
             }
-            case OP_SUB: {
+            case LL_SUB: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a - b);
                 break;
             }
-            case OP_AND: {
+            case LL_AND: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a & b);
                 break;
             }
-            case OP_OR: {
+            case LL_OR: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a | b);
                 break;
             }
-            case OP_XOR: {
+            case LL_XOR: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a ^ b);
                 break;
             }
-            case OP_NOT: {
+            case LL_NOT: {
                 cell_t val = popCell();
                 pushCell(val ? 0 : 1);
                 break;
             }
-            case OP_NEG: {
+            case LL_NEG: {
                 cell_t val = popCell();
                 pushCell(-val);
                 break;
             }
-            case OP_INVERT: {
+            case LL_INVERT: {
                 cell_t val = popCell();
                 pushCell(~val);
                 break;
             }
 
-            case OP_EQ:
-            case OP_NEQ:
-            case OP_SLESS:
-            case OP_SLEQ:
-            case OP_SGRTR:
-            case OP_SGEQ: {
+            case LL_EQ:
+            case LL_NEQ:
+            case LL_SLESS:
+            case LL_SLEQ:
+            case LL_SGRTR:
+            case LL_SGEQ: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 cell_t result = 0;
                 switch (op) {
-                    case OP_SGRTR: result = (a > b) ? 1 : 0; break;
-                    case OP_SGEQ:  result = (a >= b) ? 1 : 0; break;
-                    case OP_SLEQ:  result = (a <= b) ? 1 : 0; break;
-                    case OP_SLESS: result = (a < b) ? 1 : 0; break;
-                    case OP_EQ:    result = (a == b) ? 1 : 0; break;
-                    case OP_NEQ:   result = (a != b) ? 1 : 0; break;
+                    case LL_SGRTR: result = (a > b) ? 1 : 0; break;
+                    case LL_SGEQ:  result = (a >= b) ? 1 : 0; break;
+                    case LL_SLEQ:  result = (a <= b) ? 1 : 0; break;
+                    case LL_SLESS: result = (a < b) ? 1 : 0; break;
+                    case LL_EQ:    result = (a == b) ? 1 : 0; break;
+                    case LL_NEQ:   result = (a != b) ? 1 : 0; break;
                     default: assert(false);
                 }
                 pushCell(result);
                 break;
             }
-            case OP_EQ_I64:
-            case OP_NEQ_I64:
-            case OP_SLESS_I64:
-            case OP_SLEQ_I64:
-            case OP_SGRTR_I64:
-            case OP_SGEQ_I64: {
+            case LL_EQ_I64:
+            case LL_NEQ_I64:
+            case LL_SLESS_I64:
+            case LL_SLEQ_I64:
+            case LL_SGRTR_I64:
+            case LL_SGEQ_I64: {
                 int64_t b = popInt64();
                 int64_t a = popInt64();
                 cell_t result = 0;
                 switch (op) {
-                    case OP_SGRTR_I64: result = (a > b) ? 1 : 0; break;
-                    case OP_SGEQ_I64:  result = (a >= b) ? 1 : 0; break;
-                    case OP_SLEQ_I64:  result = (a <= b) ? 1 : 0; break;
-                    case OP_SLESS_I64: result = (a < b) ? 1 : 0; break;
-                    case OP_EQ_I64:    result = (a == b) ? 1 : 0; break;
-                    case OP_NEQ_I64:   result = (a != b) ? 1 : 0; break;
+                    case LL_SGRTR_I64: result = (a > b) ? 1 : 0; break;
+                    case LL_SGEQ_I64:  result = (a >= b) ? 1 : 0; break;
+                    case LL_SLEQ_I64:  result = (a <= b) ? 1 : 0; break;
+                    case LL_SLESS_I64: result = (a < b) ? 1 : 0; break;
+                    case LL_EQ_I64:    result = (a == b) ? 1 : 0; break;
+                    case LL_NEQ_I64:   result = (a != b) ? 1 : 0; break;
                     default: assert(false);
                 }
                 pushCell(result);
                 break;
             }
-            case OP_TEST_F32: {
+            case LL_TEST_F32: {
                 cell_t val = popCell();
                 FloatCellUnion f(val);
                 pushCell((f.f32 && !ke::IsNaN(f.f32)) ? 1 : 0);
                 break;
             }
-            case OP_NEG_F32: {
+            case LL_NEG_F32: {
                 cell_t val = popCell();
                 FloatCellUnion f(val);
                 pushCell(FloatCellUnion(-f.f32).cell);
                 break;
             }
-            case OP_MUL_F32: {
+            case LL_MUL_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
@@ -810,7 +826,7 @@ bool Interpreter::run() {
                 pushCell(FloatCellUnion(a.f32 * b.f32).cell);
                 break;
             }
-            case OP_DIV_F32: {
+            case LL_DIV_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
@@ -818,7 +834,7 @@ bool Interpreter::run() {
                 pushCell(FloatCellUnion(a.f32 / b.f32).cell);
                 break;
             }
-            case OP_MOD_F32: {
+            case LL_MOD_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
@@ -826,7 +842,7 @@ bool Interpreter::run() {
                 pushCell(FloatCellUnion(fmodf(a.f32, b.f32)).cell);
                 break;
             }
-            case OP_ADD_F32: {
+            case LL_ADD_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
@@ -834,7 +850,7 @@ bool Interpreter::run() {
                 pushCell(FloatCellUnion(a.f32 + b.f32).cell);
                 break;
             }
-            case OP_SUB_F32: {
+            case LL_SUB_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
@@ -842,45 +858,45 @@ bool Interpreter::run() {
                 pushCell(FloatCellUnion(a.f32 - b.f32).cell);
                 break;
             }
-            case OP_EQ_F32:
-            case OP_NEQ_F32:
-            case OP_LESS_F32:
-            case OP_LEQ_F32:
-            case OP_GRTR_F32:
-            case OP_GEQ_F32: {
+            case LL_EQ_F32:
+            case LL_NEQ_F32:
+            case LL_LESS_F32:
+            case LL_LEQ_F32:
+            case LL_GRTR_F32:
+            case LL_GEQ_F32: {
                 cell_t b_val = popCell();
                 cell_t a_val = popCell();
                 FloatCellUnion a(a_val);
                 FloatCellUnion b(b_val);
                 cell_t result = 0;
                 switch (op) {
-                    case OP_GRTR_F32: result = (a.f32 > b.f32); break;
-                    case OP_GEQ_F32:  result = (a.f32 >= b.f32); break;
-                    case OP_LEQ_F32:  result = (a.f32 <= b.f32); break;
-                    case OP_LESS_F32: result = (a.f32 < b.f32); break;
-                    case OP_EQ_F32:    result = (a.f32 == b.f32); break;
-                    case OP_NEQ_F32:   result = (a.f32 != b.f32); break;
+                    case LL_GRTR_F32: result = (a.f32 > b.f32); break;
+                    case LL_GEQ_F32:  result = (a.f32 >= b.f32); break;
+                    case LL_LEQ_F32:  result = (a.f32 <= b.f32); break;
+                    case LL_LESS_F32: result = (a.f32 < b.f32); break;
+                    case LL_EQ_F32:    result = (a.f32 == b.f32); break;
+                    case LL_NEQ_F32:   result = (a.f32 != b.f32); break;
                     default: assert(false);
                 }
                 pushCell(result);
                 break;
             }
-            case OP_CVT_F32: {
+            case LL_CVT_F32: {
                 cell_t val = popCell();
                 pushCell(FloatCellUnion((float)val).cell);
                 break;
             }
-            case OP_INC: {
+            case LL_INC: {
                 cell_t val = popCell();
                 pushCell(val + 1);
                 break;
             }
-            case OP_DEC: {
+            case LL_DEC: {
                 cell_t val = popCell();
                 pushCell(val - 1);
                 break;
             }
-            case OP_COPYARRAY: {
+            case LL_COPYARRAY: {
                 SpArray* src = heap_.ToPhysAddr<SpArray*>(popCell());
                 SpArray* dest = heap_.ToPhysAddr<SpArray*>(popCell());
                 assert(dest->td->kind() == TypeKind::FixedArray);
@@ -899,39 +915,37 @@ bool Interpreter::run() {
                 memcpy(dest_data, src_data, src->length * src_elt->element_size());
                 break;
             }
-            case OP_ADDR_S: {
+            case LL_ADDR_S: {
                 cell_t slot = reader_.readInt16();
                 cell_t address = frm_ + StackOffset(slot);
                 pushCell(address);
                 break;
             }
-            case OP_SWITCH: {
-                cell_t tableOffset = reader_.readCell();
-                BinaryReader table(code_ + tableOffset, code_ + rt_->code().length);
-                cell_t ncases = table.readCell();
-                cell_t defaultOffset = table.readCell();
-                auto cases = reinterpret_cast<const CaseTableEntry*>(table.getBytes(ncases * sizeof(CaseTableEntry)));
+            case LL_SWITCH: {
+                cell_t ncases = reader_.readCell();
+                cell_t defaultOffset = reader_.readCell();
                 cell_t val = popCell();
                 cell_t jumpOffset = defaultOffset;
                 for (cell_t i = 0; i < ncases; i++) {
-                    if (cases[i].value == val) {
-                        jumpOffset = cases[i].address;
-                        break;
+                    cell_t case_val = reader_.readCell();
+                    cell_t case_offset = reader_.readCell();
+                    if (case_val == val) {
+                        jumpOffset = case_offset;
                     }
                 }
-                reader_.set_cursor(code_ + jumpOffset);
+                reader_.set_cursor(ll_code + jumpOffset);
                 break;
             }
-            case OP_HEAP_SAVE: {
+            case LL_HEAP_SAVE: {
                 if (!rt_->enterHeapScope())
                     return false;
                 break;
             }
-            case OP_HEAP_RESTORE: {
+            case LL_HEAP_RESTORE: {
                 rt_->leaveHeapScope();
                 break;
             }
-            case OP_NEWARRAY: {
+            case LL_NEWARRAY: {
                 uint32_t type_id = reader_.read<uint32_t>();
                 auto td = rt_->LoadTypeFromId(type_id);
                 uint32_t size;
@@ -950,7 +964,7 @@ bool Interpreter::run() {
                 pushCell(rt_->heap().ToLocalAddr(array));
                 break;
             }
-            case OP_NEWBULKARRAY: {
+            case LL_NEWBULKARRAY: {
                 uint8_t dims = reader_.read<uint8_t>();
                 uint32_t type_id = reader_.read<uint32_t>();
                 auto td = rt_->LoadTypeFromId(type_id);
@@ -962,7 +976,7 @@ bool Interpreter::run() {
                 pushCell(rt_->heap().ToLocalAddr(array));
                 break;
             }
-            case OP_FILLARRAY: {
+            case LL_FILLARRAY: {
                 uint32_t data_offset = reader_.readCell();
 
                 uint32_t addr = popCell();
@@ -971,7 +985,7 @@ bool Interpreter::run() {
                     return false;
                 break;
             }
-            case OP_ARRAY_TO_NATIVE: {
+            case LL_ARRAY_TO_NATIVE: {
                 uint32_t addr = popCell();
                 assert((addr & kNativePointerTag) == 0);
 

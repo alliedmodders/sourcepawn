@@ -384,21 +384,10 @@ class PcodeReader
             }
 
             case OP_SWITCH: {
-                cell_t tableOffset = readCell();
-
-                const uint8_t* casetbl = code_ + tableOffset;
-
-                const uint8_t* table;
-                cell_t ncases, defaultOffset;
-                {
-                    ke::SaveAndSet<const uint8_t*> saved_pos(&cip_, casetbl);
-
-                    ncases = *reinterpret_cast<const cell_t*>(cip_);
-                    cip_ += sizeof(cell_t);
-                    defaultOffset = *reinterpret_cast<const cell_t*>(cip_);
-                    cip_ += sizeof(cell_t);
-                    table = cip_;
-                }
+                cell_t ncases = readCell();
+                cell_t defaultOffset = readCell();
+                const uint8_t* table = cip_;
+                cip_ += ncases * sizeof(cell_t) * 2;
 
                 return visitor_->visitSWITCH(
                     defaultOffset, reinterpret_cast<const CaseTableEntry*>(table), ncases);

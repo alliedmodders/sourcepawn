@@ -37,7 +37,6 @@ class PcodeVisitor
     virtual bool visitBREAK() = 0;
     virtual bool visitLOAD_GLB(cell_t srcaddr) = 0;
     virtual bool visitLOAD_S(cell_t srcoffs) = 0;
-    virtual bool visitLREF_S(cell_t srcoffs) = 0;
     virtual bool visitLOAD_I_I32() = 0;
     virtual bool visitLOAD_I_U8() = 0;
     virtual bool visitADDR_S(cell_t offset) = 0;

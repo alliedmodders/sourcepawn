@@ -288,13 +288,6 @@ Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
 }
 
 bool
-Compiler::visitLREF_S_PRI(cell_t srcoffs) {
-    __ movl(pri, Operand(frm, StackOffset(srcoffs)));
-    __ movl(pri, Operand(dat, pri, NoScale));
-    return true;
-}
-
-bool
 Compiler::visitCONST(PawnReg dest, cell_t val) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ movl(reg, val);

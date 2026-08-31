@@ -122,8 +122,10 @@ class InterpInvokeFrame final : public InvokeFrame
         return this;
     }
 
+    BaseMethodInfo* method() const { return method_; }
+
   private:
-    cell_t function_cip_;
+    BaseMethodInfo* method_;
     const uint8_t* const* cip_;
     int native_index_;
 };

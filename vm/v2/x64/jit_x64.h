@@ -42,7 +42,6 @@ class Compiler : public CompilerBase
     bool visitBREAK() override;
     bool visitLOAD_PRI(cell_t srcaddr) override;
     bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
-    bool visitLREF_S_PRI(cell_t srcoffs) override;
     bool visitLOAD_I() override;
     bool visitLODB_I() override;
     bool visitCONST(PawnReg dest, cell_t imm) override;

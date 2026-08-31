@@ -12,6 +12,7 @@
 //
 #pragma once
 
+#include <memory>
 #include <optional>
 
 #include <amtl/am-fixedarray.h>
@@ -27,6 +28,8 @@ class SmxImage;
 }
 namespace sp::v2 {
 
+class InterpCode;
+
 class Runtime;
 
 class MethodInfo final : public BaseMethodInfo
@@ -40,15 +43,14 @@ class MethodInfo final : public BaseMethodInfo
         return graph_.take();
     }
 
-    // For interpreter validation, we throw away the unused graph.
     bool Validate() {
         if (!checked_)
             InternalValidate();
-        graph_ = nullptr;
         return *checked_;
     }
 
     uint32_t pcode_offset() const override;
+    uint32_t TranslateInterpCip(const uint8_t* cip) const override;
     int32_t max_stack() const { return max_stack_; }
     uint32_t method_index() const { return method_index_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
@@ -60,7 +62,12 @@ class MethodInfo final : public BaseMethodInfo
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
-        return jit_.get();
+        return code_kind_ == CodeKind::Jit ? code_.jit : nullptr;
+    }
+
+    void setInterpCode(std::unique_ptr<InterpCode> code);
+    InterpCode* interp() const {
+        return code_kind_ == CodeKind::Interp ? code_.interp : nullptr;
     }
 
     void ClearCompilerCache() {
@@ -71,9 +78,15 @@ class MethodInfo final : public BaseMethodInfo
     void InternalValidate();
 
   private:
+    enum class CodeKind { None, Jit, Interp };
+
     Runtime* rt_;
     uint32_t method_index_;
-    std::unique_ptr<CompiledFunction> jit_;
+    union {
+        CompiledFunction* jit;
+        InterpCode* interp;
+    } code_;
+    CodeKind code_kind_;
     ke::RefPtr<ControlFlowGraph> graph_;
 
     std::optional<bool> checked_;

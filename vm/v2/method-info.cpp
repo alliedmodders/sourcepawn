@@ -11,37 +11,55 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "v2/method-info.h"
+
 #include "compiled-function.h"
 #include "environment.h"
 #include "graph-builder.h"
+#include "v2/interp/interp-code.h"
 #include "v2/method-verifier.h"
+
 
 namespace sp::v2 {
 
 MethodInfo::MethodInfo(Runtime* rt, uint32_t method_index)
  : rt_(rt),
    method_index_(method_index),
+   code_kind_(CodeKind::None),
    max_stack_(0),
    max_eval_stack_depth_(0),
    max_eval_stack_bytes_(0)
-{
-}
+ {
+    code_.jit = nullptr;
+ }
 
 uint32_t MethodInfo::pcode_offset() const {
     return rt_->image()->GetMethod(method_index_)->pcode_start;
 }
 
-MethodInfo::~MethodInfo()
-{}
+MethodInfo::~MethodInfo() {
+    if (code_kind_ == CodeKind::Jit)
+        delete code_.jit;
+    else if (code_kind_ == CodeKind::Interp)
+        delete code_.interp;
+}
 
 void
 MethodInfo::setCompiledFunction(CompiledFunction* fun) {
-    assert(!jit_);
+    assert(code_kind_ == CodeKind::None);
 
     // Grab the lock before linking code in, since the watchdog timer will look
     // at this on another thread.
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    jit_.reset(fun);
+    code_.jit = fun;
+    code_kind_ = CodeKind::Jit;
+}
+
+void MethodInfo::setInterpCode(std::unique_ptr<InterpCode> code) {
+    assert(code_kind_ == CodeKind::None);
+
+    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
+    code_.interp = code.release();
+    code_kind_ = CodeKind::Interp;
 }
 
 void
@@ -72,6 +90,14 @@ const TypeDesc* MethodInfo::GetTypeOfLocal(cell_t offset) const {
     }
     assert((uint32_t)offset < local_types_.size());
     return local_types_[offset];
+}
+
+uint32_t MethodInfo::TranslateInterpCip(const uint8_t* cip) const {
+    assert(interp());
+    const uint8_t* ll_bytes = interp()->bytes();
+    assert(cip >= ll_bytes && cip < ll_bytes + interp()->size());
+    uint32_t ll_offset = (uint32_t)(cip - ll_bytes);
+    return interp()->LookupHighOffset(ll_offset);
 }
 
 } // namespace sp::v2

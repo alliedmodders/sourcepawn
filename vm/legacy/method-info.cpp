@@ -81,4 +81,10 @@ cell_t MethodInfo::StackSizeForLocalSlots() {
     return local_offsets_.back();
 }
 
+uint32_t MethodInfo::TranslateInterpCip(const uint8_t* cip) const {
+    auto& code = rt_->code();
+    assert(cip >= code.bytes && cip < code.bytes + code.length);
+    return (uint32_t)(cip - code.bytes);
+}
+
 } // namespace sp::v1

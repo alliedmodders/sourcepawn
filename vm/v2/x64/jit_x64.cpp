@@ -211,12 +211,6 @@ bool Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
     return true;
 }
 
-bool Compiler::visitLREF_S_PRI(cell_t srcoffs) {
-    __ movl(pri, Operand(frm, StackOffset(srcoffs)));
-    __ movl(pri, Operand(dat, pri, NoScale));
-    return true;
-}
-
 bool Compiler::visitLOAD_I() {
     emitCheckAddress(pri);
     __ movl(pri, Operand(dat, pri, NoScale));

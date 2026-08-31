@@ -17,15 +17,17 @@
 //
 #pragma once
 
-#include <amtl/am-refcounting.h>
 #include <assert.h>
-#include <sp_vm_types.h>
+
+#include <amtl/am-refcounting.h>
 #include "binary-reader.h"
 #include "heap-defaults.h"
+#include <sp_vm_types.h>
 #include "stack-frames.h"
 
 namespace sp {
 class Environment;
+class SmxImage;
 }
 namespace sp::v2 {
 

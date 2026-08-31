@@ -11,6 +11,7 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "stack-frames.h"
+
 #include "base-runtime.h"
 #include "compiled-function.h"
 #include "environment.h"
@@ -44,7 +45,7 @@ InvokeFrame::~InvokeFrame() {
 InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method,
                                      const uint8_t* const* cip)
  : InvokeFrame(cx, method->pcode_offset()),
-   function_cip_(method->pcode_offset()),
+   method_(method),
    cip_(cip),
    native_index_(-1) {
 }
@@ -98,21 +99,15 @@ InterpFrameIterator::type() const {
     return current_;
 }
 
-cell_t
-InterpFrameIterator::function_cip() const {
+cell_t InterpFrameIterator::function_cip() const {
     assert(current_ == FrameType::Scripted);
-    return ivk_->function_cip_;
+    return ivk_->method()->pcode_offset();
 }
 
-cell_t
-InterpFrameIterator::cip() const {
+cell_t InterpFrameIterator::cip() const {
     assert(current_ == FrameType::Scripted);
-    auto& code = ivk_->cx()->GetBaseRuntime()->code();
-
     const uint8_t* ptr = *ivk_->cip_;
-    assert(ptr >= code.bytes && ptr < code.bytes + code.length);
-
-    return (cell_t)(ptr - code.bytes);
+    return ivk_->method()->TranslateInterpCip(ptr);
 }
 
 uint32_t

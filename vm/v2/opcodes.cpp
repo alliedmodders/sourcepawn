@@ -85,31 +85,6 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_ADDR_S:
         case OP_LOAD_S:
         case OP_STOR_S:
-        case OP_CVT_I64:
-        case OP_INVERT_I64:
-        case OP_NEG_I64:
-        case OP_SMUL_I64:
-        case OP_ADD_I64:
-        case OP_SUB_I64:
-        case OP_SHL_I64:
-        case OP_SSHR_I64:
-        case OP_SHR_I64:
-        case OP_OR_I64:
-        case OP_AND_I64:
-        case OP_XOR_I64:
-            fprintf(fp, "%d", reader.read<int16_t>());
-            break;
-
-        case OP_IDXADDR:
-        {
-            uint8_t rank_size = reader.read<uint8_t>();
-            int32_t bounds = reader.read<int32_t>();
-            fprintf(fp, "%d, %d", rank_size, bounds);
-            break;
-        }
-
-        case OP_SDIV_I64:
-        case OP_SMOD_I64:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 
