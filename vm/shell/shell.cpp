@@ -352,6 +352,7 @@ static cell_t CallWithFlatArray(IPluginContext* cx, const cell_t* params) {
 
   CallArgs args;
   args.PushArray(flat_array, length);
+  args.PushCell(length);
 
   cell_t rval;
   if (!fn->Invoke(args, &rval))

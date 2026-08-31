@@ -216,20 +216,8 @@ This release contains a number of language changes.
 
 ### SourcePawn 1.13
 
-SourcePawn 1.13 is currently in development.
+SourcePawn 1.13 was released on July X, 2026.
 
-A new virtual machine and bytecode has been added to address a number of
-shortcomings and maintenance issues in the old design. The "v2" VM is used for
-all new binaries. The legacy VM is still used for older binaries.
-
- - The virtual machine is now purely stack based. The two-register scheme of the
-   legacy VM resulted in needless instructions and a great deal of internal
-   complexity.
- - Instructions are encoded into 8 bits instead of 32, meaning they are no longer
-   cell-aligned. The compiler no longer performs compression as a result as the
-   code stream is much smaller.
- - The interpreter now uses a switch loop for faster execution.
- - Many legacy concepts, such as "AMX frames", have been removed.
  - A new `int64` primitive type is available for 64-bit arithmetic.
  - The `float` type is now intrinsically supported, and `float.inc` is no
    longer required for basic float support.
@@ -237,9 +225,33 @@ all new binaries. The legacy VM is still used for older binaries.
  - An x64 JIT backend has been added. It is used on x64 processors supporting
    SSE 4.1 and higher, for plugins compiled on spcomp 1.13 or higher.
  - The x86 JIT will now only run on processors supporting SSE2 and higher.
- - The .pubvars and .publics sections of SMX files are replaced by RTTI
-   sections. References to this RTTI are embedded in the bytecode to enforce
-   type safety.
- - The .natives and rtti.natives sections have been merged into smx\_rtti\_method.
- - The BREAK opcode has been removed in favor of the line number mapping table,
-   which is now per-method rather than global.
+ - The ABI of the C++ interfaces has been cleaned up, removing many obsolete
+   and deprecated functions. Embeddings are now encouraged to statically link
+   rather than use the virtual interfaces through dlopen/LoadLibrary.
+
+### SourcePawn 2.0
+
+SourcePawn 2.0 is currently in development.
+
+This release is a gigantic overhaul of the language and its implementation. For
+a full writeup, see docs/SourcePawn2.md.
+
+On the language itself:
+ - Arrays can now be returned, allocated, and re-assigned without deep copies.
+ - Global arrays can now be reassigned or reallocated.
+ - Array references can be null.
+
+A new virtual machine and bytecode has been added to address a number of
+shortcomings and maintenance issues in the old design. The "v2" VM is used for
+all new binaries. The legacy VM is still used for older binaries.
+
+ - The bytecode is now purely stack based. The two-register scheme of the
+   legacy VM resulted in needless instructions and a great deal of internal
+   complexity.
+ - The bytecode is fully integrated into RTTI, removing the need for many
+   ancillary tables, like .publics, .pubvars, and .natives.
+ - The interpreter and JIT now use a "lowered" bytecode format that is
+   fully typed and register based, for faster execution.
+ - The interpreter now uses a switch loop for faster execution.
+ - Instructions are encoded with 8 bit alignment instead of 32, making the code
+   stream much smaller. 

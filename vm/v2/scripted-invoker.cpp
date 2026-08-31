@@ -112,6 +112,8 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         context_->LeaveHeapScope();
     });
 
+    ke::SaveRestore<uint32_t> save_sp(env->sp());
+
     std::array<cell_t, SP_MAX_EXEC_PARAMS> params;
     assert(args.argc <= params.size());
 
@@ -131,23 +133,21 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         uint32_t nbytes = 0;
         switch (arg.type) {
             case CallArgs::ARG_CELL_BY_REF: {
-                assert(false);
-#if 0
                 nbytes = sizeof(cell_t);
-                if ((addr = context_->heapAllocEx(nbytes, &params[i])) == nullptr)
+                params[i] = env->sp();
+                if (!env->addStack(sizeof(cell_t)))
                     return false;
+                addr = env->heap().ToPhysAddr<void*>(params[i]);
                 *reinterpret_cast<cell_t*>(addr) = *reinterpret_cast<cell_t*>(arg.u.addr);
-#endif
                 break;
             }
             case CallArgs::ARG_INT64: {
-                assert(false);
-#if 0
                 nbytes = sizeof(int64_t);
-                if ((addr = context_->heapAllocEx(nbytes, &params[i])) == nullptr)
+                params[i] = env->sp();
+                if (!env->addStack(sizeof(int64_t)))
                     return false;
-                *reinterpret_cast<int64_t*>(addr) = *reinterpret_cast<int64_t*>(arg.u.addr);
-#endif
+                addr = env->heap().ToPhysAddr<void*>(params[i]);
+                *reinterpret_cast<int64_t*>(addr) = arg.u.i64;
                 break;
             }
             case CallArgs::ARG_ARRAY: {
@@ -155,14 +155,13 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 bool is_flat = (i < expected_arg_types.size() && expected_arg_types[i]->IsFlatArray());
 
                 if (is_flat) {
-                    assert(false);
-#if 0
                     auto expected_td = expected_arg_types[i];
                     uint32_t flat_bytes = expected_td->array_size() * sizeof(cell_t);
-                    if ((addr = context_->heapAllocEx(flat_bytes, &params[i])) == nullptr)
+                    params[i] = env->sp();
+                    if (!env->addStack(flat_bytes))
                         return false;
+                    addr = env->heap().ToPhysAddr<void*>(params[i]);
                     nbytes = std::min<size_t>(arg.array_size * sizeof(cell_t), flat_bytes);
-#endif
                 } else {
                     auto elt_type = env->types()->GetPrimitive(TypeKind::Int32);
                     auto type = env->types()->GetArray(elt_type);
@@ -186,15 +185,15 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 uint32_t max_size;
 
                 if (is_flat) {
-                    assert(false);
-#if 0
                     auto expected_td = expected_arg_types[i];
                     uint32_t flat_bytes = expected_td->array_size() * sizeof(char);
-                    max_size = expected_td->array_size();
-                    if ((addr = context_->heapAllocEx(flat_bytes, &params[i])) == nullptr)
+                    uint32_t aligned_bytes = (flat_bytes + sizeof(cell_t) - 1) & ~(sizeof(cell_t) - 1);
+                    params[i] = env->sp();
+                    if (!env->addStack(aligned_bytes))
                         return false;
+                    addr = env->heap().ToPhysAddr<void*>(params[i]);
+                    max_size = expected_td->array_size();
                     nbytes = std::min<size_t>(arg.array_size, flat_bytes);
-#endif
                 } else {
                     auto elt_type = env->types()->GetPrimitive(TypeKind::Char8);
                     auto type = env->types()->GetArray(elt_type);
@@ -211,14 +210,15 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 }
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
+                    cell_t pointer_tag = is_flat ? 0 : kNativePointerTag;
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
-                        context_->StringToLocalUTF8(params[i] | kNativePointerTag, max_size,
+                        context_->StringToLocalUTF8(params[i] | pointer_tag, max_size,
                                                     reinterpret_cast<const char *>(arg.u.addr),
                                                     NULL);
                     } else if (arg.flags & SM_PARAM_STRING_BINARY) {
                         memcpy(addr, arg.u.addr, nbytes);
                     } else {
-                        context_->StringToLocal(params[i] | kNativePointerTag, max_size,
+                        context_->StringToLocal(params[i] | pointer_tag, max_size,
                                                 reinterpret_cast<const char *>(arg.u.addr));
                     }
                 } else {

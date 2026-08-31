@@ -789,16 +789,22 @@ IPluginFunction* Runtime::GetFunctionByIdOrError(funcid_t func_id) {
 }
 
 int Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
-    uint32_t handle = base & ~kNativePointerTag;
-    *out = heap_.ToPhysAddr<ARRAY_PTR>(handle);
+    *out = reinterpret_cast<ARRAY_PTR>(static_cast<uintptr_t>(base));
     return SP_ERROR_NONE;
 }
 
 void* Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
-    SpArray* array = reinterpret_cast<SpArray*>(handle);
+    cell_t base = static_cast<cell_t>(reinterpret_cast<uintptr_t>(handle));
+    if (base & kNativePointerTag) {
+        uint32_t local_addr = base & ~kNativePointerTag;
+        SpArray* array = heap_.ToPhysAddr<SpArray*>(local_addr);
+        if (size)
+            *size = array->length;
+        return heap_.ToPhysAddr<void*>(array->data);
+    }
     if (size)
-        *size = array->length;
-    return heap_.ToPhysAddr<void*>(array->data);
+        *size = 0;
+    return heap_.ToPhysAddr<void*>(base);
 }
 
 const TypeDesc* Runtime::LoadType(FastRtti& parser) {
