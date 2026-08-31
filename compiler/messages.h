@@ -367,4 +367,5 @@ static const char* errmsg_ex[] = {
     /*485*/ "class may only have one constructor\n",
     /*486*/ "constructors cannot have variadic arguments\n",
     /*487*/ "stack-allocated arrays cannot be passed to dynamically sized arguments that are captured\n",
+    /*488*/ "floating-point literal is not allowed in preprocessor expression\n",
 };

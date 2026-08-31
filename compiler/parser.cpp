@@ -341,7 +341,12 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
     if (!expr->Bind(sc) || !sema.CheckExpr(expr))
         return false;
 
-    if (!expr->val().type()->isInt() && !expr->val().type()->isBool()) {
+    auto val_type = expr->val().type();
+    if (val_type->isFloat() || val_type->isDouble()) {
+        report(488);
+        return false;
+    }
+    if (!val_type->isInt() && !val_type->isBool()) {
         report(135);
         return false;
     }
