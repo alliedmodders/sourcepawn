@@ -183,67 +183,22 @@ class PcodeReader
                 return visitor_->visitPUSH_C_I64(value);
             }
 
+            case OP_PUSH_C_F32:
+            {
+                float value = read<float>();
+                return visitor_->visitPUSH_C_F32(value);
+            }
+
             case OP_CVT_I64: {
                 cell_t slot = readInt16();
                 return visitor_->visitCVT_I64(slot);
             }
             case OP_TRUNCATE_I64:
                 return visitor_->visitTRUNCATE_I64();
-            case OP_TEST_I64:
-                return visitor_->visitTEST_I64();
+            case OP_TEST:
+                return visitor_->visitTEST();
 
-            case OP_INVERT_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitINVERT_I64(slot);
-            }
-            case OP_NEG_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitNEG_I64(slot);
-            }
-            case OP_SMUL_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSMUL_I64(slot);
-            }
-            case OP_SDIV_I64: {
-                cell_t pri_slot = readInt16();
-                return visitor_->visitSDIV_I64(pri_slot);
-            }
-            case OP_SMOD_I64: {
-                cell_t pri_slot = readInt16();
-                return visitor_->visitSMOD_I64(pri_slot);
-            }
-            case OP_ADD_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitADD_I64(slot);
-            }
-            case OP_SUB_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSUB_I64(slot);
-            }
-            case OP_SHL_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSHL_I64(slot);
-            }
-            case OP_SSHR_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSSHR_I64(slot);
-            }
-            case OP_SHR_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitSHR_I64(slot);
-            }
-            case OP_OR_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitOR_I64(slot);
-            }
-            case OP_AND_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitAND_I64(slot);
-            }
-            case OP_XOR_I64: {
-                cell_t slot = readInt16();
-                return visitor_->visitXOR_I64(slot);
-            }
+
 
             case OP_RETN:
                 return visitor_->visitRETN();
@@ -293,10 +248,10 @@ class PcodeReader
 
             case OP_SMUL:
                 return visitor_->visitSMUL();
-            case OP_SDIV_I32:
-                return visitor_->visitSDIV_I32();
-            case OP_SMOD_I32:
-                return visitor_->visitSMOD_I32();
+            case OP_SDIV:
+                return visitor_->visitSDIV();
+            case OP_SMOD:
+                return visitor_->visitSMOD();
             case OP_ADD:
                 return visitor_->visitADD();
             case OP_SUB:
@@ -329,47 +284,14 @@ class PcodeReader
             case OP_SGEQ:
                 return visitor_->visitCompareOp(CompareOp::Sgeq);
 
-            case OP_EQ_I64:
-                return visitor_->visitCompareOp64(CompareOp::Eq);
-            case OP_NEQ_I64:
-                return visitor_->visitCompareOp64(CompareOp::Neq);
-            case OP_SLESS_I64:
-                return visitor_->visitCompareOp64(CompareOp::Sless);
-            case OP_SLEQ_I64:
-                return visitor_->visitCompareOp64(CompareOp::Sleq);
-            case OP_SGRTR_I64:
-                return visitor_->visitCompareOp64(CompareOp::Sgrtr);
-            case OP_SGEQ_I64:
-                return visitor_->visitCompareOp64(CompareOp::Sgeq);
 
-            case OP_TEST_F32:
-                return visitor_->visitTEST_F32();
-            case OP_NEG_F32:
-                return visitor_->visitNEG_F32();
-            case OP_MUL_F32:
-                return visitor_->visitMUL_F32();
-            case OP_DIV_F32:
-                return visitor_->visitDIV_F32();
-            case OP_ADD_F32:
-                return visitor_->visitADD_F32();
-            case OP_SUB_F32:
-                return visitor_->visitSUB_F32();
+
+
+
+
             case OP_CVT_F32:
                 return visitor_->visitCVT_F32();
-            case OP_MOD_F32:
-                return visitor_->visitMOD_F32();
-            case OP_EQ_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Eq);
-            case OP_NEQ_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Neq);
-            case OP_LESS_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Sless);
-            case OP_LEQ_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Sleq);
-            case OP_GRTR_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Sgrtr);
-            case OP_GEQ_F32:
-                return visitor_->visitCompareOpF32(CompareOp::Sgeq);
+
 
             case OP_INC:
                 return visitor_->visitINC();

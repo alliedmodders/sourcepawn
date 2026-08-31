@@ -49,6 +49,7 @@ class PcodeVisitor
     virtual bool visitPUSH_C(cell_t value) = 0;
     virtual bool visitPUSH_C_I8(int8_t value) = 0;
     virtual bool visitPUSH_C_I64(int64_t value) = 0;
+    virtual bool visitPUSH_C_F32(float value) { return false; }
     virtual bool visitPOP() = 0;
     virtual bool visitDUP() = 0;
     virtual bool visitDUP2() = 0;
@@ -65,8 +66,8 @@ class PcodeVisitor
     virtual bool visitSHR() = 0;
     virtual bool visitSSHR() = 0;
     virtual bool visitSMUL() = 0;
-    virtual bool visitSDIV_I32() = 0;
-    virtual bool visitSMOD_I32() = 0;
+    virtual bool visitSDIV() = 0;
+    virtual bool visitSMOD() = 0;
     virtual bool visitADD() = 0;
     virtual bool visitSUB() = 0;
     virtual bool visitAND() = 0;
@@ -87,31 +88,16 @@ class PcodeVisitor
     virtual bool visitHEAP_RESTORE() = 0;
     virtual bool visitCVT_I64(cell_t slot) = 0;
     virtual bool visitTRUNCATE_I64() = 0;
-    virtual bool visitTEST_I64() = 0;
-    virtual bool visitINVERT_I64(cell_t slot) = 0;
-    virtual bool visitNEG_I64(cell_t slot) = 0;
-    virtual bool visitSMUL_I64(cell_t slot) = 0;
-    virtual bool visitSDIV_I64(cell_t pri_slot) = 0;
-    virtual bool visitSMOD_I64(cell_t pri_slot) = 0;
-    virtual bool visitADD_I64(cell_t slot) = 0;
-    virtual bool visitSUB_I64(cell_t slot) = 0;
-    virtual bool visitSHL_I64(cell_t slot) = 0;
-    virtual bool visitSSHR_I64(cell_t slot) = 0;
-    virtual bool visitSHR_I64(cell_t slot) = 0;
-    virtual bool visitOR_I64(cell_t slot) = 0;
-    virtual bool visitAND_I64(cell_t slot) = 0;
-    virtual bool visitXOR_I64(cell_t slot) = 0;
+    virtual bool visitTEST_I64() { return false; }
+    virtual bool visitTEST() { return false; }
+
     virtual bool visitSTOR_S_C(cell_t slot, cell_t value) = 0;
-    virtual bool visitCompareOp64(CompareOp op) = 0;
-    virtual bool visitTEST_F32() = 0;
-    virtual bool visitNEG_F32() = 0;
-    virtual bool visitMUL_F32() = 0;
-    virtual bool visitDIV_F32() = 0;
-    virtual bool visitADD_F32() = 0;
-    virtual bool visitSUB_F32() = 0;
+
+    virtual bool visitTEST_F32() { return false; }
+
+
     virtual bool visitCVT_F32() = 0;
-    virtual bool visitMOD_F32() = 0;
-    virtual bool visitCompareOpF32(CompareOp op) = 0;
+
     virtual bool visitLOAD_ELEM_I32() = 0;
     virtual bool visitLOAD_ELEM_F32() = 0;
     virtual bool visitLOAD_ELEM_I64() = 0;

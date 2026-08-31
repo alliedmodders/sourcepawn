@@ -10,6 +10,8 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
+#include "v2/method-verifier.h"
+
 #include <assert.h>
 #include <limits.h>
 
@@ -17,7 +19,6 @@
 #include "binary-reader.h"
 #include "environment.h"
 #include "graph-builder.h"
-#include "v2/method-verifier.h"
 #include "v2/opcodes.h"
 #include "v2/runtime.h"
 
@@ -222,62 +223,110 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SHL:
         case OP_SHR:
         case OP_SSHR:
+        case OP_AND:
+        case OP_OR:
+        case OP_XOR: {
+            const TypeDesc *b, *a;
+            if (!popStack(&b) || !popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                return pushStack(int64_type());
+            } else if (checkIntOrFloat(a) && checkIntOrFloat(b)) {
+                return pushStack(cell_type());
+            } else {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+        }
+
         case OP_SMUL:
         case OP_ADD:
         case OP_SUB:
-        case OP_AND:
-        case OP_OR:
-        case OP_XOR:
-        case OP_SDIV_I32:
-        case OP_SMOD_I32:
-            return popIntOrFloat() && popIntOrFloat() && pushStack(cell_type());
+        case OP_SDIV:
+        case OP_SMOD: {
+            const TypeDesc *b, *a;
+            if (!popStack(&b) || !popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                return pushStack(float32_type());
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                return pushStack(int64_type());
+            } else if (checkIntOrFloat(a) && checkIntOrFloat(b)) {
+                return pushStack(cell_type());
+            } else {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+        }
 
         case OP_EQ:
         case OP_NEQ:
         case OP_SLESS:
         case OP_SLEQ:
         case OP_SGRTR:
-        case OP_SGEQ:
-        case OP_EQ_F32:
-        case OP_NEQ_F32:
-        case OP_LESS_F32:
-        case OP_LEQ_F32:
-        case OP_GRTR_F32:
-        case OP_GEQ_F32:
-            return popCell() && popCell() && pushStack(cell_type());
+        case OP_SGEQ: {
+            const TypeDesc *b, *a;
+            if (!popStack(&b) || !popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                return pushStack(cell_type());
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                return pushStack(cell_type());
+            } else if (checkCell(a) && checkCell(b)) {
+                return pushStack(cell_type());
+            } else {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+        }
 
-        case OP_MUL_F32:
-        case OP_DIV_F32:
-        case OP_ADD_F32:
-        case OP_SUB_F32:
-        case OP_MOD_F32:
-            return popIntOrFloat() && popIntOrFloat() && pushStack(float32_type());
+
 
         case OP_NOT:
-        case OP_NEG:
-        case OP_INVERT:
-        case OP_INC:
-        case OP_DEC:
             return popIntOrFloat() && pushStack(cell_type());
 
-        case OP_NEG_F32:
+        case OP_INC:
+        case OP_DEC: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Int64)
+                return pushStack(int64_type());
+            else if (checkIntOrFloat(a))
+                return pushStack(a);
+            else
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
+
+        case OP_NEG:
+        case OP_INVERT: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Int64)
+                return pushStack(int64_type());
+            else if (checkIntOrFloat(a))
+                return pushStack(a);
+            else
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
+
         case OP_CVT_F32:
             return popIntOrFloat() && pushStack(float32_type());
 
-        case OP_TEST_F32:
-            return popIntOrFloat() && pushStack(cell_type());
+        case OP_TEST: {
+            const TypeDesc* a;
+            if (!popStack(&a))
+                return false;
+            if (a->kind() == TypeKind::Int64)
+                return pushStack(cell_type());
+            else if (checkIntOrFloat(a))
+                return pushStack(cell_type());
+            else
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+        }
 
         case OP_TRUNCATE_I64:
-        case OP_TEST_I64:
             return popStack(TypeKind::Int64) && pushStack(cell_type());
 
-        case OP_SLESS_I64:
-        case OP_SLEQ_I64:
-        case OP_SGRTR_I64:
-        case OP_SGEQ_I64:
-        case OP_EQ_I64:
-        case OP_NEQ_I64:
-            return popStack(TypeKind::Int64) && popStack(TypeKind::Int64) && pushStack(cell_type());
+
 
         case OP_DUP:
             if (v->stack.empty())
@@ -336,22 +385,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_CVT_I64:
             return popInt32() && pushStack(int64_type());
 
-        case OP_INVERT_I64:
-        case OP_NEG_I64:
-            return popStack(TypeKind::Int64) && pushStack(int64_type());
 
-        case OP_SMUL_I64:
-        case OP_ADD_I64:
-        case OP_SUB_I64:
-        case OP_SHL_I64:
-        case OP_SSHR_I64:
-        case OP_SHR_I64:
-        case OP_OR_I64:
-        case OP_AND_I64:
-        case OP_XOR_I64:
-        case OP_SDIV_I64:
-        case OP_SMOD_I64:
-            return popStack(TypeKind::Int64) && popStack(TypeKind::Int64) && pushStack(int64_type());
 
 
         case OP_LOAD_GLB:
@@ -418,6 +452,11 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_PUSH_C_I64: {
             read<int64_t>();
             return pushStack(int64_type());
+        }
+
+        case OP_PUSH_C_F32: {
+            read<float>();
+            return pushStack(float32_type());
         }
 
         case OP_CALL:
@@ -770,23 +809,17 @@ MethodVerifier::popStack(const TypeDesc** type) {
     return true;
 }
 
-bool MethodVerifier::popCell() {
-    const TypeDesc* td;
-    if (!popStack(&td))
-        return false;
+bool MethodVerifier::checkCell(const TypeDesc* td) {
     switch (td->kind()) {
         case TypeKind::Void:
         case TypeKind::Int64:
-            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return false;
         default:
             return true;
     }
 }
 
-bool MethodVerifier::popIntOrFloat() {
-    const TypeDesc* td;
-    if (!popStack(&td))
-        return false;
+bool MethodVerifier::checkIntOrFloat(const TypeDesc* td) {
     switch (td->kind()) {
         case TypeKind::Bool:
         case TypeKind::Int32:
@@ -795,8 +828,26 @@ bool MethodVerifier::popIntOrFloat() {
         case TypeKind::Any:
             return true;
         default:
-            return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return false;
     }
+}
+
+bool MethodVerifier::popCell() {
+    const TypeDesc* td;
+    if (!popStack(&td))
+        return false;
+    if (!checkCell(td))
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return true;
+}
+
+bool MethodVerifier::popIntOrFloat() {
+    const TypeDesc* td;
+    if (!popStack(&td))
+        return false;
+    if (!checkIntOrFloat(td))
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+    return true;
 }
 
 bool MethodVerifier::popInt32() {

@@ -49,23 +49,23 @@ namespace sp::v2 {
     FOR_EACH(SHL, 25, "shl") \
     FOR_EACH(SHR, 26, "shr") \
     FOR_EACH(SSHR, 27, "sshr") \
-    FOR_EACH(SMUL, 28, "smul") \
+    FOR_EACH(SMUL_I32, 28, "smul.i32") \
     FOR_EACH(SDIV_I32, 29, "sdiv.i32") \
     FOR_EACH(SMOD_I32, 30, "smod.i32") \
-    FOR_EACH(ADD, 31, "add") \
-    FOR_EACH(SUB, 32, "sub") \
+    FOR_EACH(ADD_I32, 31, "add.i32") \
+    FOR_EACH(SUB_I32, 32, "sub.i32") \
     FOR_EACH(AND, 33, "and") \
     FOR_EACH(OR, 34, "or") \
     FOR_EACH(XOR, 35, "xor") \
     FOR_EACH(NOT, 36, "not") \
     FOR_EACH(NEG, 37, "neg") \
     FOR_EACH(INVERT, 38, "invert") \
-    FOR_EACH(EQ, 39, "eq") \
-    FOR_EACH(NEQ, 40, "neq") \
-    FOR_EACH(SLESS, 41, "sless") \
-    FOR_EACH(SLEQ, 42, "sleq") \
-    FOR_EACH(SGRTR, 43, "sgrtr") \
-    FOR_EACH(SGEQ, 44, "sgeq") \
+    FOR_EACH(EQ_I32, 39, "eq.i32") \
+    FOR_EACH(NEQ_I32, 40, "neq.i32") \
+    FOR_EACH(SLESS_I32, 41, "sless.i32") \
+    FOR_EACH(SLEQ_I32, 42, "sleq.i32") \
+    FOR_EACH(SGRTR_I32, 43, "sgrtr.i32") \
+    FOR_EACH(SGEQ_I32, 44, "sgeq.i32") \
     FOR_EACH(INC, 45, "inc") \
     FOR_EACH(DEC, 46, "dec") \
     FOR_EACH(COPYARRAY, 47, "copyarray") \

@@ -111,7 +111,9 @@ class MethodVerifier final
     bool popStack(TypeKind kind);
     bool popStack(const TypeDesc** type);
     bool popCell();
+    bool checkCell(const TypeDesc* td);
     bool popIntOrFloat();
+    bool checkIntOrFloat(const TypeDesc* td);
     bool popInt32();
     bool popStack(uint32_t num_operands);
     bool pushHeap(uint32_t num_cells);

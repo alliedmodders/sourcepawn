@@ -22,29 +22,44 @@
 #include <memory>
 #include <vector>
 
+#include <amtl/am-vector.h>
 #include "binary-reader.h"
 #include "v2/control-flow.h"
 #include "v2/interp/interp-code.h"
 #include "v2/interp/ll-op.h"
 #include "v2/interp/lowering-assembler.h"
+#include "v2/method-info.h"
 #include "v2/opcodes.h"
 #include "v2/pcode-visitor.h"
 #include "v2/runtime.h"
 
 namespace sp::v2 {
 
+struct LoweringData : public IBlockData {
+    LoweringData() {}
+    explicit LoweringData(const std::vector<const TypeDesc*>& stack)
+     : stack(stack)
+    {}
+    std::vector<const TypeDesc*> stack;
+};
+
 class MethodLowerer
 {
   public:
-    MethodLowerer(ControlFlowGraph* graph)
-     : graph_(graph)
+    MethodLowerer(ControlFlowGraph* graph, MethodInfo* method)
+     : graph_(graph),
+       method_(method),
+       cell_type_(graph->rt()->GetPrimitiveType(TypeKind::Int32)),
+       int64_type_(graph->rt()->GetPrimitiveType(TypeKind::Int64)),
+       float32_type_(graph->rt()->GetPrimitiveType(TypeKind::Float32)),
+       reader_(nullptr, nullptr)
     {}
 
     std::unique_ptr<InterpCode> Lower();
 
   private:
-    void LowerBlock(Block* block);
-    void LowerInstruction(OPCODE op, BinaryReader& reader, Block* block);
+    void LowerBlock();
+    void LowerInstruction(OPCODE op);
     void EmitJumpTarget(Block* target_block);
     void PatchJumps();
 
@@ -57,26 +72,49 @@ class MethodLowerer
         masm_.emit<T>(val);
     }
 
+    const TypeDesc* popStack() {
+        return ke::PopBack(&stack_);
+    }
+
+    void pushStack(const TypeDesc* td) {
+        stack_.push_back(td);
+    }
+
   private:
     ControlFlowGraph* graph_;
+    MethodInfo* method_;
     LoweringAssembler masm_;
     std::vector<Block*> blocks_by_id_;
     std::vector<size_t> jumps_to_patch_;
     std::vector<InterpCode::OffsetMapping> mappings_;
+    const TypeDesc* cell_type_ = nullptr;
+    const TypeDesc* int64_type_ = nullptr;
+    const TypeDesc* float32_type_ = nullptr;
+    BinaryReader reader_;
+
+    Block* block_ = nullptr;
+    std::vector<const TypeDesc*> stack_;
 };
 
 std::unique_ptr<InterpCode> MethodLowerer::Lower() {
+    AutoClearBlockData<LoweringData> clear_block_data(graph_);
+
+    // :TODO: the last block has the max ID.
     uint32_t max_id = 0;
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
         if ((*iter)->id() > max_id)
             max_id = (*iter)->id();
     }
     blocks_by_id_.resize(max_id + 1, nullptr);
+
     for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++)
         blocks_by_id_[(*iter)->id()] = *iter;
 
-    for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++)
-        LowerBlock(*iter);
+    for (auto iter = graph_->rpoBegin(); iter != graph_->rpoEnd(); iter++) {
+        block_ = *iter;
+        LowerBlock();
+    }
+    block_ = nullptr;
 
     PatchJumps();
 
@@ -85,224 +123,697 @@ std::unique_ptr<InterpCode> MethodLowerer::Lower() {
     return std::make_unique<InterpCode>(std::move(bytes), masm_.code_size(), std::move(mappings_));
 }
 
-void MethodLowerer::LowerBlock(Block* block) {
-    block->label()->bind(masm_.pc());
+void MethodLowerer::LowerBlock() {
+    block_->label()->bind(masm_.pc());
 
-    const uint8_t* stop_at = block->end();
-    BinaryReader reader(block->start());
+    const uint8_t* stop_at = block_->end();
+    reader_ = BinaryReader(block_->start(), stop_at);
 
-    while (reader.cursor() < stop_at) {
-        uint32_t high_offset = (uint32_t)(reader.cursor() - graph_->rt()->code().bytes);
+    LoweringData* data = block_->data<LoweringData>();
+    if (data)
+        stack_ = data->stack;
+    else
+        stack_.clear();
+
+    while (reader_.cursor() < stop_at) {
+        uint32_t high_offset = (uint32_t)(reader_.cursor() - graph_->rt()->code().bytes);
         mappings_.push_back({(uint32_t)masm_.pc(), high_offset});
 
-        OPCODE op = (OPCODE)reader.read<uint8_t>();
-        LowerInstruction(op, reader, block);
+        OPCODE op = (OPCODE)reader_.read<uint8_t>();
+        LowerInstruction(op);
     }
 
-    if (block->endType() == BlockEnd::Jump) {
-        assert(block->successors().size() == 1);
-        emitOp(LL_JUMP);
-        EmitJumpTarget(block->successors()[0]);
+    // Propagate stack state.
+    for (Block* succ : block_->successors()) {
+        if (succ->id() > block_->id())
+            succ->setData(new LoweringData(stack_));
     }
 }
 
-void MethodLowerer::LowerInstruction(OPCODE op, BinaryReader& reader, Block* block) {
-    LLOp llop = (LLOp)op;
-    emitOp(llop);
-
+void MethodLowerer::LowerInstruction(OPCODE op) {
     switch (op) {
         case OP_NOP:
+            emitOp(LL_NOP);
+            break;
+
         case OP_LOAD_I_I32:
-        case OP_LOAD_I_F32:
-        case OP_LOAD_I_I64:
-        case OP_LOAD_I_U8:
-        case OP_LOAD_ELEM_A:
+        case OP_LOAD_I_F32: {
+            emitOp(op == OP_LOAD_I_I32 ? LL_LOAD_I_I32 : LL_LOAD_I_F32);
+            const TypeDesc* addr = popStack();
+            pushStack(addr->ref_type());
+            break;
+        }
+
+        case OP_LOAD_I_I64: {
+            emitOp(LL_LOAD_I_I64);
+            popStack();
+            pushStack(int64_type_);
+            break;
+        }
+
+        case OP_LOAD_I_U8: {
+            emitOp(LL_LOAD_I_U8);
+            popStack();
+            pushStack(cell_type_);
+            break;
+        }
+
         case OP_LOAD_ELEM_I32:
         case OP_LOAD_ELEM_F32:
         case OP_LOAD_ELEM_I64:
         case OP_LOAD_ELEM_U8:
+        case OP_LOAD_ELEM_A: {
+            LLOp llop = LL_NOP;
+            switch (op) {
+                case OP_LOAD_ELEM_I32: llop = LL_LOAD_ELEM_I32; break;
+                case OP_LOAD_ELEM_F32: llop = LL_LOAD_ELEM_F32; break;
+                case OP_LOAD_ELEM_I64: llop = LL_LOAD_ELEM_I64; break;
+                case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
+                case OP_LOAD_ELEM_A:   llop = LL_LOAD_ELEM_A; break;
+                default: assert(false); break;
+            }
+            emitOp(llop);
+            popStack();
+            const TypeDesc* base = popStack();
+            const TypeDesc* elt = base->array_elt();
+            if (op == OP_LOAD_ELEM_I64) {
+                pushStack(int64_type_);
+            } else if (op == OP_LOAD_ELEM_U8) {
+                pushStack(cell_type_);
+            } else {
+                pushStack(elt);
+            }
+            break;
+        }
+
         case OP_STOR_I_I32:
         case OP_STOR_I_F32:
         case OP_STOR_I_I64:
-        case OP_STOR_I_U8:
+        case OP_STOR_I_U8: {
+            LLOp llop = LL_NOP;
+            switch (op) {
+                case OP_STOR_I_I32: llop = LL_STOR_I_I32; break;
+                case OP_STOR_I_F32: llop = LL_STOR_I_F32; break;
+                case OP_STOR_I_I64: llop = LL_STOR_I_I64; break;
+                case OP_STOR_I_U8:  llop = LL_STOR_I_U8; break;
+                default: assert(false); break;
+            }
+            emitOp(llop);
+            popStack();
+            popStack();
+            break;
+        }
+
         case OP_STOR_ELEM_I32:
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
-        case OP_STOR_ELEM_U8:
-        case OP_POP:
-        case OP_DUP:
-        case OP_SWAP:
-        case OP_TRUNCATE_I64:
-        case OP_TEST_I64:
-        case OP_RETN:
-        case OP_RETV:
+        case OP_STOR_ELEM_U8: {
+            LLOp llop = LL_NOP;
+            switch (op) {
+                case OP_STOR_ELEM_I32: llop = LL_STOR_ELEM_I32; break;
+                case OP_STOR_ELEM_F32: llop = LL_STOR_ELEM_F32; break;
+                case OP_STOR_ELEM_I64: llop = LL_STOR_ELEM_I64; break;
+                case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
+                default: assert(false); break;
+            }
+            emitOp(llop);
+            popStack();
+            popStack();
+            popStack();
+            break;
+        }
+
+        case OP_POP: {
+            emitOp(LL_POP);
+            popStack();
+            break;
+        }
+
+        case OP_DUP: {
+            emitOp(LL_DUP);
+            const TypeDesc* val = stack_.back();
+            pushStack(val);
+            break;
+        }
+
+        case OP_SWAP: {
+            emitOp(LL_SWAP);
+            const TypeDesc* val1 = popStack();
+            const TypeDesc* val2 = popStack();
+            pushStack(val1);
+            pushStack(val2);
+            break;
+        }
+
+        case OP_RETN: {
+            emitOp(LL_RETN);
+            popStack();
+            break;
+        }
+
+        case OP_RETV: {
+            emitOp(LL_RETV);
+            break;
+        }
+
         case OP_SHL:
         case OP_SHR:
         case OP_SSHR:
-        case OP_SMUL:
-        case OP_SDIV_I32:
-        case OP_SMOD_I32:
-        case OP_ADD:
-        case OP_SUB:
         case OP_AND:
         case OP_OR:
-        case OP_XOR:
-        case OP_NOT:
-        case OP_NEG:
-        case OP_INVERT:
+        case OP_XOR: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            LLOp llop = LL_NOP;
+            if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                switch (op) {
+                    case OP_SHL:  llop = LL_SHL_I64; break;
+                    case OP_SHR:  llop = LL_SHR_I64; break;
+                    case OP_SSHR: llop = LL_SSHR_I64; break;
+                    case OP_AND:  llop = LL_AND_I64; break;
+                    case OP_OR:   llop = LL_OR_I64; break;
+                    case OP_XOR:  llop = LL_XOR_I64; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
+                pushStack(int64_type_);
+            } else {
+                switch (op) {
+                    case OP_SHL:  llop = LL_SHL; break;
+                    case OP_SHR:  llop = LL_SHR; break;
+                    case OP_SSHR: llop = LL_SSHR; break;
+                    case OP_AND:  llop = LL_AND; break;
+                    case OP_OR:   llop = LL_OR; break;
+                    case OP_XOR:  llop = LL_XOR; break;
+                    default: assert(false); break;
+                }
+                emitOp(llop);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_SUB: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                emitOp(LL_SUB_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                emitOp(LL_SUB_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_SUB_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_SMUL: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                emitOp(LL_MUL_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                emitOp(LL_SMUL_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_SMUL_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_SDIV: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                emitOp(LL_DIV_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                emitOp(LL_SDIV_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_SDIV_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_SMOD: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                emitOp(LL_MOD_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                emitOp(LL_SMOD_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_SMOD_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_ADD: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                emitOp(LL_ADD_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                emitOp(LL_ADD_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_ADD_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_NOT: {
+            emitOp(LL_NOT);
+            popStack();
+            pushStack(cell_type_);
+            break;
+        }
+
+        case OP_INC:
+        case OP_DEC: {
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32) {
+                emitOp(LL_PUSH_C);
+                emitVal<float>(op == OP_INC ? 1.0f : -1.0f);
+                emitOp(LL_ADD_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64) {
+                emitOp(LL_PUSH_C_I64);
+                emitVal<int64_t>(op == OP_INC ? 1 : -1);
+                emitOp(LL_ADD_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_PUSH_C);
+                emitVal<cell_t>(op == OP_INC ? 1 : -1);
+                emitOp(LL_ADD_I32);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_NEG: {
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32) {
+                emitOp(LL_NEG_F32);
+                pushStack(float32_type_);
+            } else if (a->kind() == TypeKind::Int64) {
+                emitOp(LL_NEG_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_NEG);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_INVERT: {
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Int64) {
+                emitOp(LL_INVERT_I64);
+                pushStack(int64_type_);
+            } else {
+                emitOp(LL_INVERT);
+                pushStack(cell_type_);
+            }
+            break;
+        }
+
+        case OP_TEST: {
+            const TypeDesc* a = popStack();
+            if (a->kind() == TypeKind::Float32)
+                emitOp(LL_TEST_F32);
+            else if (a->kind() == TypeKind::Int64)
+                emitOp(LL_TEST_I64);
+            else
+                assert(false);
+            pushStack(cell_type_);
+            break;
+        }
+
+        case OP_CVT_F32: {
+            emitOp(LL_CVT_F32);
+            popStack();
+            pushStack(float32_type_);
+            break;
+        }
+
+        case OP_ARRAY_TO_NATIVE: {
+            emitOp(LL_ARRAY_TO_NATIVE);
+            break;
+        }
+
+        case OP_COPYARRAY: {
+            emitOp(LL_COPYARRAY);
+            popStack();
+            popStack();
+            break;
+        }
+
+        case OP_SLICE: {
+            emitOp(LL_SLICE);
+            popStack();
+            break;
+        }
+
+        case OP_CVT_I64: {
+            emitOp(LL_CVT_I64);
+            popStack();
+            pushStack(int64_type_);
+            break;
+        }
+
+        case OP_TRUNCATE_I64: {
+            emitOp(LL_TRUNCATE_I64);
+            popStack();
+            pushStack(cell_type_);
+            break;
+        }
+
         case OP_EQ:
         case OP_NEQ:
         case OP_SLESS:
         case OP_SLEQ:
         case OP_SGRTR:
-        case OP_SGEQ:
-        case OP_EQ_I64:
-        case OP_NEQ_I64:
-        case OP_SLESS_I64:
-        case OP_SLEQ_I64:
-        case OP_SGRTR_I64:
-        case OP_SGEQ_I64:
-        case OP_TEST_F32:
-        case OP_NEG_F32:
-        case OP_MUL_F32:
-        case OP_DIV_F32:
-        case OP_ADD_F32:
-        case OP_SUB_F32:
-        case OP_CVT_F32:
-        case OP_MOD_F32:
-        case OP_EQ_F32:
-        case OP_NEQ_F32:
-        case OP_LESS_F32:
-        case OP_LEQ_F32:
-        case OP_GRTR_F32:
-        case OP_GEQ_F32:
-        case OP_INC:
-        case OP_DEC:
-        case OP_HEAP_SAVE:
-        case OP_HEAP_RESTORE:
-        case OP_ARRAY_TO_NATIVE:
-        case OP_COPYARRAY:
-        case OP_SLICE:
-        case OP_CVT_I64:
-        case OP_INVERT_I64:
-        case OP_NEG_I64:
-        case OP_SMUL_I64:
-        case OP_SDIV_I64:
-        case OP_SMOD_I64:
-        case OP_ADD_I64:
-        case OP_SUB_I64:
-        case OP_SHL_I64:
-        case OP_SSHR_I64:
-        case OP_SHR_I64:
-        case OP_OR_I64:
-        case OP_AND_I64:
-        case OP_XOR_I64:
+        case OP_SGEQ: {
+            const TypeDesc* b = popStack();
+            const TypeDesc* a = popStack();
+            LLOp llop = LL_NOP;
+            if (a->kind() == TypeKind::Float32 && b->kind() == TypeKind::Float32) {
+                switch (op) {
+                    case OP_EQ:    llop = LL_EQ_F32; break;
+                    case OP_NEQ:   llop = LL_NEQ_F32; break;
+                    case OP_SLESS: llop = LL_LESS_F32; break;
+                    case OP_SLEQ:  llop = LL_LEQ_F32; break;
+                    case OP_SGRTR: llop = LL_GRTR_F32; break;
+                    case OP_SGEQ:  llop = LL_GEQ_F32; break;
+                    default: assert(false); break;
+                }
+            } else if (a->kind() == TypeKind::Int64 && b->kind() == TypeKind::Int64) {
+                switch (op) {
+                    case OP_EQ:    llop = LL_EQ_I64; break;
+                    case OP_NEQ:   llop = LL_NEQ_I64; break;
+                    case OP_SLESS: llop = LL_SLESS_I64; break;
+                    case OP_SLEQ:  llop = LL_SLEQ_I64; break;
+                    case OP_SGRTR: llop = LL_SGRTR_I64; break;
+                    case OP_SGEQ:  llop = LL_SGEQ_I64; break;
+                    default: assert(false); break;
+                }
+            } else {
+                switch (op) {
+                    case OP_EQ:    llop = LL_EQ_I32; break;
+                    case OP_NEQ:   llop = LL_NEQ_I32; break;
+                    case OP_SLESS: llop = LL_SLESS_I32; break;
+                    case OP_SLEQ:  llop = LL_SLEQ_I32; break;
+                    case OP_SGRTR: llop = LL_SGRTR_I32; break;
+                    case OP_SGEQ:  llop = LL_SGEQ_I32; break;
+                    default: assert(false); break;
+                }
+            }
+            emitOp(llop);
+            pushStack(cell_type_);
             break;
+        }
 
-        case OP_LOAD_GLB:
-        case OP_STOR_GLB:
-        case OP_ADDR_GLB:
-        case OP_LOAD_STR:
-            emitVal<uint16_t>(reader.read<uint16_t>());
+        case OP_LOAD_GLB: {
+            emitOp(LL_LOAD_GLB);
+            uint16_t index = reader_.read<uint16_t>();
+            emitVal<uint16_t>(index);
+            pushStack(graph_->rt()->GetTypeOfGlobal(index));
             break;
+        }
 
-        case OP_LOAD_S:
-        case OP_STOR_S:
-        case OP_ADDR_S:
-            emitVal<int16_t>(reader.read<int16_t>());
+        case OP_STOR_GLB: {
+            emitOp(LL_STOR_GLB);
+            uint16_t index = reader_.read<uint16_t>();
+            emitVal<uint16_t>(index);
+            popStack();
             break;
+        }
+
+        case OP_ADDR_GLB: {
+            emitOp(LL_ADDR_GLB);
+            uint16_t index = reader_.read<uint16_t>();
+            emitVal<uint16_t>(index);
+            pushStack(graph_->rt()->GetReferenceType(graph_->rt()->GetTypeOfGlobal(index)));
+            break;
+        }
+
+        case OP_LOAD_STR: {
+            emitOp(LL_LOAD_STR);
+            uint16_t index = reader_.read<uint16_t>();
+            emitVal<uint16_t>(index);
+            pushStack(graph_->rt()->GetStringLitType(index));
+            break;
+        }
+
+        case OP_LOAD_S: {
+            emitOp(LL_LOAD_S);
+            int16_t offset = reader_.read<int16_t>();
+            emitVal<int16_t>(offset);
+            pushStack(method_->GetTypeOfLocal(offset));
+            break;
+        }
+
+        case OP_STOR_S: {
+            emitOp(LL_STOR_S);
+            int16_t offset = reader_.read<int16_t>();
+            emitVal<int16_t>(offset);
+            popStack();
+            break;
+        }
+
+        case OP_ADDR_S: {
+            emitOp(LL_ADDR_S);
+            int16_t offset = reader_.read<int16_t>();
+            emitVal<int16_t>(offset);
+            pushStack(graph_->rt()->GetReferenceType(method_->GetTypeOfLocal(offset)));
+            break;
+        }
 
         case OP_STOR_S_C: {
-            int16_t offset = reader.read<int16_t>();
-            cell_t value = reader.read<cell_t>();
+            emitOp(LL_STOR_S_C);
+            int16_t offset = reader_.read<int16_t>();
+            cell_t value = reader_.read<cell_t>();
             emitVal<int16_t>(offset);
             emitVal<cell_t>(value);
             break;
         }
 
         case OP_IDXADDR: {
+            emitOp(LL_IDXADDR);
+            popStack();
+            const TypeDesc* base = popStack();
+            pushStack(graph_->rt()->GetReferenceType(base->array_elt()));
             break;
         }
 
-
-        case OP_PUSH_C:
-            emitVal<cell_t>(reader.read<cell_t>());
+        case OP_PUSH_C: {
+            emitOp(LL_PUSH_C);
+            emitVal<cell_t>(reader_.read<cell_t>());
+            pushStack(cell_type_);
             break;
+        }
 
-        case OP_PUSH_C_I8:
-            emitVal<int8_t>(reader.read<int8_t>());
+        case OP_PUSH_C_I8: {
+            emitOp(LL_PUSH_C_I8);
+            emitVal<int8_t>(reader_.read<int8_t>());
+            pushStack(cell_type_);
             break;
+        }
 
-        case OP_PUSH_C_I64:
-            emitVal<int64_t>(reader.read<int64_t>());
+        case OP_PUSH_C_I64: {
+            emitOp(LL_PUSH_C_I64);
+            emitVal<int64_t>(reader_.read<int64_t>());
+            pushStack(int64_type_);
             break;
+        }
+
+        case OP_PUSH_C_F32: {
+            emitOp(LL_PUSH_C);
+            emitVal<float>(reader_.read<float>());
+            pushStack(float32_type_);
+            break;
+        }
 
         case OP_LOAD_FN:
-        case OP_CALL:
         case OP_LOAD_FLD:
-        case OP_ADDR_FLD:
-        case OP_NEWARRAY:
-        case OP_FILLARRAY:
-            emitVal<uint32_t>(reader.read<uint32_t>());
-            break;
-
-        case OP_NEWBULKARRAY: {
-            uint8_t ndims = reader.read<uint8_t>();
-            uint32_t type_id = reader.read<uint32_t>();
-            emitVal<uint8_t>(ndims);
-            emitVal<uint32_t>(type_id);
+        case OP_ADDR_FLD: {
+            LLOp llop = LL_NOP;
+            switch (op) {
+                case OP_LOAD_FN:  llop = LL_LOAD_FN; break;
+                case OP_LOAD_FLD: llop = LL_LOAD_FLD; break;
+                case OP_ADDR_FLD: llop = LL_ADDR_FLD; break;
+                default: assert(false); break;
+            }
+            emitOp(llop);
+            emitVal<uint32_t>(reader_.read<uint32_t>());
+            pushStack(cell_type_);
             break;
         }
 
+        case OP_CALL:
         case OP_CALLN: {
-            uint32_t method_index = reader.read<uint32_t>();
-            uint8_t nargs = reader.read<uint8_t>();
+            emitOp(op == OP_CALL ? LL_CALL : LL_CALLN);
+            uint32_t method_index = reader_.read<uint32_t>();
             emitVal<uint32_t>(method_index);
-            emitVal<uint8_t>(nargs);
+
+            uint32_t arg_count = 0;
+            if (op == OP_CALLN) {
+                uint8_t nargs = reader_.read<uint8_t>();
+                emitVal<uint8_t>(nargs);
+                arg_count = nargs;
+            } else {
+                const smx_rtti_method* method = graph_->rt()->image()->GetMethod(method_index);
+                assert(method != nullptr);
+                auto parser = graph_->rt()->image()->GetTypeParser(method->signature);
+                [[maybe_unused]] bool success = parser.ReadFunctionSignatureArgCount(&arg_count);
+                assert(success);
+            }
+
+            for (uint32_t i = 0; i < arg_count; i++) {
+                popStack();
+            }
+
+            const smx_rtti_method* method = graph_->rt()->image()->GetMethod(method_index);
+            assert(method != nullptr);
+            if (!graph_->rt()->image()->IsVoidMethod(method)) {
+                auto parser = graph_->rt()->image()->GetTypeParser(method->signature);
+                uint32_t unused_argc;
+                parser.ReadFunctionSignatureArgCount(&unused_argc);
+                uint8_t variadic;
+                parser.GetByte(&variadic);
+                if (variadic == cb::kLegacyVariadic) {
+                    parser.NextByte();
+                }
+                const TypeDesc* td = graph_->rt()->LoadType(parser);
+                assert(td != nullptr);
+                pushStack(td);
+            }
+            break;
+        }
+
+        case OP_NEWARRAY: {
+            emitOp(LL_NEWARRAY);
+            uint32_t type_id = reader_.read<uint32_t>();
+            emitVal<uint32_t>(type_id);
+            const TypeDesc* td = graph_->rt()->LoadTypeFromId(type_id);
+            assert(td != nullptr);
+            if (td->kind() == TypeKind::Array) {
+                popStack();
+            }
+            pushStack(td);
+            break;
+        }
+
+        case OP_NEWBULKARRAY: {
+            emitOp(LL_NEWBULKARRAY);
+            uint8_t ndims = reader_.read<uint8_t>();
+            uint32_t type_id = reader_.read<uint32_t>();
+            emitVal<uint8_t>(ndims);
+            emitVal<uint32_t>(type_id);
+            const TypeDesc* td = graph_->rt()->LoadTypeFromId(type_id);
+            assert(td != nullptr);
+            for (uint8_t i = 0; i < ndims; i++) {
+                popStack();
+            }
+            pushStack(td);
+            break;
+        }
+
+        case OP_FILLARRAY: {
+            emitOp(LL_FILLARRAY);
+            uint32_t data_offs = reader_.read<uint32_t>();
+            emitVal<uint32_t>(data_offs);
+            popStack();
+            break;
+        }
+
+        case OP_HEAP_SAVE:
+        case OP_HEAP_RESTORE: {
+            emitOp(op == OP_HEAP_SAVE ? LL_HEAP_SAVE : LL_HEAP_RESTORE);
             break;
         }
 
         case OP_JUMP: {
-            reader.read<cell_t>();
-            Block* target_block = block->successors()[0];
+            emitOp(LL_JUMP);
+            reader_.read<cell_t>();
+            Block* target_block = block_->successors()[0];
             EmitJumpTarget(target_block);
             break;
         }
 
         case OP_JZER:
-        case OP_JNZ:
+        case OP_JNZ: {
+            emitOp(op == OP_JZER ? LL_JZER : LL_JNZ);
+            reader_.read<cell_t>();
+            Block* target_block = block_->successors()[1];
+            EmitJumpTarget(target_block);
+
+            emitOp(LL_JUMP);
+            EmitJumpTarget(block_->successors()[0]);
+
+            popStack();
+            break;
+        }
+
         case OP_JEQ:
         case OP_JNEQ:
         case OP_JSLESS:
         case OP_JSGRTR:
         case OP_JSGEQ:
         case OP_JSLEQ: {
-            reader.read<cell_t>();
-            Block* target_block = block->successors()[1];
+            LLOp llop = LL_NOP;
+            switch (op) {
+                case OP_JEQ:    llop = LL_JEQ; break;
+                case OP_JNEQ:   llop = LL_JNEQ; break;
+                case OP_JSLESS: llop = LL_JSLESS; break;
+                case OP_JSGRTR: llop = LL_JSGRTR; break;
+                case OP_JSGEQ:  llop = LL_JSGEQ; break;
+                case OP_JSLEQ:  llop = LL_JSLEQ; break;
+                default: assert(false); break;
+            }
+            emitOp(llop);
+            reader_.read<cell_t>();
+            Block* target_block = block_->successors()[1];
             EmitJumpTarget(target_block);
 
-            // Emit explicit fallthrough jump.
             emitOp(LL_JUMP);
-            EmitJumpTarget(block->successors()[0]);
+            EmitJumpTarget(block_->successors()[0]);
+
+            popStack();
+            popStack();
             break;
         }
 
         case OP_SWITCH: {
-            cell_t ncases = reader.read<cell_t>();
-            reader.read<cell_t>(); // skip default offset in original stream
+            emitOp(LL_SWITCH);
+            cell_t ncases = reader_.read<cell_t>();
+            reader_.read<cell_t>();
 
             emitVal<cell_t>(ncases);
 
-            Block* default_block = block->successors()[0];
+            Block* default_block = block_->successors()[0];
             EmitJumpTarget(default_block);
 
             for (cell_t i = 0; i < ncases; i++) {
-                cell_t case_value = reader.read<cell_t>();
-                reader.read<cell_t>(); // skip case offset in original stream
+                cell_t case_value = reader_.read<cell_t>();
+                reader_.read<cell_t>();
                 emitVal<cell_t>(case_value);
-                Block* target_block = block->successors()[1 + i];
+                Block* target_block = block_->successors()[1 + i];
                 EmitJumpTarget(target_block);
             }
+            popStack();
             break;
         }
 
@@ -331,8 +842,8 @@ void MethodLowerer::PatchJumps() {
     }
 }
 
-std::unique_ptr<InterpCode> LowerMethod(ControlFlowGraph* graph) {
-    MethodLowerer lowerer(graph);
+std::unique_ptr<InterpCode> LowerMethod(ControlFlowGraph* graph, MethodInfo* method) {
+    MethodLowerer lowerer(graph, method);
     return lowerer.Lower();
 }
 

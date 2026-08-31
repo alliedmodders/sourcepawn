@@ -24,7 +24,8 @@ namespace sp::v2 {
 
 class ControlFlowGraph;
 class InterpCode;
+class MethodInfo;
 
-std::unique_ptr<InterpCode> LowerMethod(ControlFlowGraph* graph);
+std::unique_ptr<InterpCode> LowerMethod(ControlFlowGraph* graph, MethodInfo* method);
 
 } // namespace sp::v2

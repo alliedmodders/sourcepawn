@@ -47,7 +47,7 @@ bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, cell_t* rval) {
         ke::RefPtr<ControlFlowGraph> graph = method->BuildGraph();
         if (!graph)
             return false;
-        std::unique_ptr<InterpCode> code = LowerMethod(graph);
+        std::unique_ptr<InterpCode> code = LowerMethod(graph, method.get());
         method->setInterpCode(std::move(code));
     }
 
@@ -684,7 +684,7 @@ bool Interpreter::run() {
                 pushCell(a >> b);
                 break;
             }
-            case LL_SMUL: {
+            case LL_SMUL_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a * b);
@@ -718,13 +718,13 @@ bool Interpreter::run() {
                 pushCell(a % b);
                 break;
             }
-            case LL_ADD: {
+            case LL_ADD_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a + b);
                 break;
             }
-            case LL_SUB: {
+            case LL_SUB_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 pushCell(a - b);
@@ -764,22 +764,22 @@ bool Interpreter::run() {
                 break;
             }
 
-            case LL_EQ:
-            case LL_NEQ:
-            case LL_SLESS:
-            case LL_SLEQ:
-            case LL_SGRTR:
-            case LL_SGEQ: {
+            case LL_EQ_I32:
+            case LL_NEQ_I32:
+            case LL_SLESS_I32:
+            case LL_SLEQ_I32:
+            case LL_SGRTR_I32:
+            case LL_SGEQ_I32: {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 cell_t result = 0;
                 switch (op) {
-                    case LL_SGRTR: result = (a > b) ? 1 : 0; break;
-                    case LL_SGEQ:  result = (a >= b) ? 1 : 0; break;
-                    case LL_SLEQ:  result = (a <= b) ? 1 : 0; break;
-                    case LL_SLESS: result = (a < b) ? 1 : 0; break;
-                    case LL_EQ:    result = (a == b) ? 1 : 0; break;
-                    case LL_NEQ:   result = (a != b) ? 1 : 0; break;
+                    case LL_SGRTR_I32: result = (a > b) ? 1 : 0; break;
+                    case LL_SGEQ_I32:  result = (a >= b) ? 1 : 0; break;
+                    case LL_SLEQ_I32:  result = (a <= b) ? 1 : 0; break;
+                    case LL_SLESS_I32: result = (a < b) ? 1 : 0; break;
+                    case LL_EQ_I32:    result = (a == b) ? 1 : 0; break;
+                    case LL_NEQ_I32:   result = (a != b) ? 1 : 0; break;
                     default: assert(false);
                 }
                 pushCell(result);
@@ -906,8 +906,8 @@ bool Interpreter::run() {
                     return false;
                 }
 
-                auto src_elt = src->td->array_elt();
-                auto dest_elt = dest->td->array_elt();
+                [[maybe_unused]] auto src_elt = src->td->array_elt();
+                [[maybe_unused]] auto dest_elt = dest->td->array_elt();
                 assert(src_elt->element_size() == dest_elt->element_size());
 
                 auto src_data = heap_.ToPhysAddr<uint8_t*>(src->data);

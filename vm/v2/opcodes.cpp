@@ -82,6 +82,10 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
             fprintf(fp, "%" PRId64, reader.read<int64_t>());
             break;
 
+        case OP_PUSH_C_F32:
+            fprintf(fp, "%f", reader.read<float>());
+            break;
+
         case OP_ADDR_S:
         case OP_LOAD_S:
         case OP_STOR_S:

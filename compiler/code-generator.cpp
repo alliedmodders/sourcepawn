@@ -598,8 +598,12 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
     AutoErrorPos aep(expr->pos());
 
     if (expr->val().ident == iCONSTEXPR) {
-        if (!(flags & EMIT_DISCARD_RESULT))
-            __ PUSH_C(expr->val().constval());
+        if (!(flags & EMIT_DISCARD_RESULT)) {
+            if (expr->val().type()->isFloat())
+                __ emit(OP_PUSH_C_F32, expr->val().constval());
+            else
+                __ PUSH_C(expr->val().constval());
+        }
         return;
     }
 
@@ -737,25 +741,15 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
 
     switch (expr->token()) {
         case '~':
-            if (inner->val().type()->isInt64())
-                __ emit(OP_INVERT_I64);
-            else
-                __ emit(OP_INVERT);
+            __ emit(OP_INVERT);
             break;
         case '!':
-            if (inner->val().type()->isInt64())
-                __ emit(OP_TEST_I64);
-            else if (inner->val().type()->isFloat())
-                __ emit(OP_TEST_F32);
+            if (inner->val().type()->isInt64() || inner->val().type()->isFloat())
+                __ emit(OP_TEST);
             __ emit(OP_NOT);
             break;
         case '-':
-            if (inner->val().type()->isInt64())
-                __ emit(OP_NEG_I64);
-            else if (inner->val().type()->isFloat())
-                __ emit(OP_NEG_F32);
-            else
-                __ emit(OP_NEG);
+            __ emit(OP_NEG);
             break;
         default:
             assert(false);
@@ -820,17 +814,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
         __ emit(OP_STOR_S, VarSlot(*temp_slot));
     }
 
-    if (type->isInt64()) {
-        __ PUSH_C((expr->token() == tINC) ? 1 : -1);
-        __ emit(OP_CVT_I64);
-        __ emit(OP_ADD_I64);
-    } else if (type->isFloat()) {
-        float val = (expr->token() == tINC ? 1.0f : -1.0f);
-        __ PUSH_C(sp_ftoc(val));
-        __ emit(OP_ADD_F32);
-    } else {
-        __ emit(expr->token() == tINC ? OP_INC : OP_DEC);
-    }
+    __ emit(expr->token() == tINC ? OP_INC : OP_DEC);
 
     if (expr->prefix() && !discard) {
         __ emit(OP_DUP);
@@ -846,7 +830,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
         __ emit(OP_LOAD_S, VarSlot(*temp_slot));
 }
 
-static inline bool StackSlotsForLval(const value& v) {
+[[maybe_unused]] static inline bool StackSlotsForLval(const value& v) {
     switch (v.ident) {
         case iVARIABLE:
             return 0;
@@ -954,17 +938,17 @@ void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* r
 
 OPCODE GetFloatBinaryOp(int oper_tok) {
     switch (oper_tok) {
-        case '*': return OP_MUL_F32;
-        case '/': return OP_DIV_F32;
-        case '%': return OP_MOD_F32;
-        case '+': return OP_ADD_F32;
-        case '-': return OP_SUB_F32;
-        case tlEQ: return OP_EQ_F32;
-        case tlNE: return OP_NEQ_F32;
-        case '>': return OP_GRTR_F32;
-        case tlGE: return OP_GEQ_F32;
-        case '<': return OP_LESS_F32;
-        case tlLE: return OP_LEQ_F32;
+        case '*': return OP_SMUL;
+        case '/': return OP_SDIV;
+        case '%': return OP_SMOD;
+        case '+': return OP_ADD;
+        case '-': return OP_SUB;
+        case tlEQ: return OP_EQ;
+        case tlNE: return OP_NEQ;
+        case '>': return OP_SGRTR;
+        case tlGE: return OP_SGEQ;
+        case '<': return OP_SLESS;
+        case tlLE: return OP_SLEQ;
         default:
             assert(false);
             return OP_NOP;
@@ -974,8 +958,8 @@ OPCODE GetFloatBinaryOp(int oper_tok) {
 OPCODE GetInt32BinaryOp(int oper_tok) {
     switch (oper_tok) {
         case '*': return OP_SMUL;
-        case '/': return OP_SDIV_I32;
-        case '%': return OP_SMOD_I32;
+        case '/': return OP_SDIV;
+        case '%': return OP_SMOD;
         case '+': return OP_ADD;
         case '-': return OP_SUB;
         case tSHL: return OP_SHL;
@@ -998,23 +982,23 @@ OPCODE GetInt32BinaryOp(int oper_tok) {
 
 OPCODE GetInt64BinaryOp(int oper_tok) {
     switch (oper_tok) {
-        case '*': return OP_SMUL_I64;
-        case '/': return OP_SDIV_I64;
-        case '%': return OP_SMOD_I64;
-        case '+': return OP_ADD_I64;
-        case '-': return OP_SUB_I64;
-        case tSHL: return OP_SHL_I64;
-        case tSHR: return OP_SSHR_I64;
-        case tSHRU: return OP_SHR_I64;
-        case '&': return OP_AND_I64;
-        case '^': return OP_XOR_I64;
-        case '|': return OP_OR_I64;
-        case tlEQ: return OP_EQ_I64;
-        case tlNE: return OP_NEQ_I64;
-        case '>': return OP_SGRTR_I64;
-        case tlGE: return OP_SGEQ_I64;
-        case '<': return OP_SLESS_I64;
-        case tlLE: return OP_SLEQ_I64;
+        case '*': return OP_SMUL;
+        case '/': return OP_SDIV;
+        case '%': return OP_SMOD;
+        case '+': return OP_ADD;
+        case '-': return OP_SUB;
+        case tSHL: return OP_SHL;
+        case tSHR: return OP_SSHR;
+        case tSHRU: return OP_SHR;
+        case '&': return OP_AND;
+        case '^': return OP_XOR;
+        case '|': return OP_OR;
+        case tlEQ: return OP_EQ;
+        case tlNE: return OP_NEQ;
+        case '>': return OP_SGRTR;
+        case tlGE: return OP_SGEQ;
+        case '<': return OP_SLESS;
+        case tlLE: return OP_SLEQ;
         default:
             assert(false);
             return OP_NOP;
@@ -2131,7 +2115,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
         __ emit(OP_CVT_I64);
     } else if (expr->to()->isBool()) {
         if (from_type->isInt64())
-            __ emit(OP_TEST_I64);
+            __ emit(OP_TEST);
         else
             assert(false);
     } else {

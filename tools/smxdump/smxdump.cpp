@@ -736,6 +736,10 @@ class DumpTool final {
                 fprintf(stdout, " %" PRId64, reader.read<int64_t>());
                 break;
 
+            case OP_PUSH_C_F32:
+                fprintf(stdout, " %f", reader.read<float>());
+                break;
+
             case OP_ADDR_S:
             case OP_LOAD_S:
             case OP_STOR_S:
