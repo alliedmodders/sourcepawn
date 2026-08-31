@@ -1563,8 +1563,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     }
 
     if (call->token() == tNEW && call->ctor_type()) {
-        uint32_t type_id = rtti_->to_typeid(call->ctor_type());
-        __ emit(OP_NEWOBJ, type_id);
+        uint32_t classdef_index = rtti_->classdef_index(call->ctor_type());
+        __ emit(OP_NEWOBJ, classdef_index << 1);
         if (discard)
             __ emit(OP_POP);
         return;

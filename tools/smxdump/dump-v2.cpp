@@ -236,6 +236,16 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
             break;
         }
 
+        case OP_NEWOBJ: {
+            uint32_t operand = reader.read<uint32_t>();
+            uint32_t classdef_index = operand >> 1;
+            if (auto cls = smx_->getClassdef(classdef_index))
+                fprintf(stdout, " %s", smx_->names() + cls->name);
+            else
+                fprintf(stdout, " unknown_class_%u", classdef_index);
+            break;
+        }
+
         case OP_LOAD_FLD:
         case OP_ADDR_FLD:
         case OP_STOR_FLD:

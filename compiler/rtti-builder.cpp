@@ -296,6 +296,11 @@ uint32_t RttiBuilder::add_class(Type* type) {
     return cls_index;
 }
 
+uint32_t RttiBuilder::classdef_index(Type* type) {
+    assert(type->isClass());
+    return add_class(type);
+}
+
 uint32_t
 RttiBuilder::add_struct(Type* type)
 {

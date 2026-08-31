@@ -77,6 +77,8 @@ class RttiBuilder
         return to_typeid(QualType(type));
     }
 
+    uint32_t classdef_index(Type* type);
+
   private:
     uint32_t add_enum(Type* type);
     uint32_t add_typeset(Type* type, funcenum_t* fe);

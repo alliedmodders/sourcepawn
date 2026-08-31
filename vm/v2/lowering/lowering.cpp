@@ -1296,8 +1296,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_NEWOBJ: {
-            uint32_t type_id = reader_.read<uint32_t>();
-            const TypeDesc* td = graph_->rt()->LoadTypeFromId(type_id);
+            uint32_t operand = reader_.read<uint32_t>();
+            uint32_t classdef_index = operand >> 1;
+            auto classdef = image_->getClassdef(classdef_index);
+            const TypeDesc* td = rt_->GetClassdefType(classdef);
 
             FlushEmitStack();
 
