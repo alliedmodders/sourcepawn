@@ -425,7 +425,7 @@ std::string DumpTool::DumpType(FastRtti& rtti) {
                 type_inner = "typeset todo";
                 break;
             }
-            case cb::kClassdef:
+            case cb::kClassDef:
             case cb::kEnumStruct:
             case cb::kClass:
             {

@@ -881,10 +881,10 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_NEWOBJ: {
-            uint32_t operand = read<uint32_t>();
-            if (operand & 1)
+            uint32_t table_id = readCell();
+            if (GetTableIdSelector(table_id) != kTableId_RttiClassDef)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            uint32_t classdef_index = operand >> 1;
+            uint32_t classdef_index = GetTableIdIndex(table_id);
             auto classdef = smx_->getClassdef(classdef_index);
             if (!classdef || (classdef->flags & kClassType_Mask) != kClassType_Class)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);

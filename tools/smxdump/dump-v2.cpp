@@ -243,8 +243,8 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         }
 
         case OP_NEWOBJ: {
-            uint32_t operand = reader.read<uint32_t>();
-            uint32_t classdef_index = operand >> 1;
+            uint32_t table_id = reader.read<uint32_t>();
+            uint32_t classdef_index = GetTableIdIndex(table_id);
             if (auto cls = smx_->getClassdef(classdef_index))
                 fprintf(stdout, " %s", smx_->names() + cls->name);
             else

@@ -75,6 +75,7 @@ static constexpr uint32_t kMaxTableIndex = (1 << kTableId_IndexBits) - 1;
 // List of table identifiers.
 static constexpr uint32_t kTableId_RttiField = 0x00;
 static constexpr uint32_t kTableId_RttiMethod = 0x01;
+static constexpr uint32_t kTableId_RttiClassDef = 0x02;
 
 static inline uint32_t GetTableIdSelector(uint32_t table_id) {
     return table_id & ((1 << kTableId_SelectorBits) - 1);
@@ -270,7 +271,7 @@ static const uint8_t kFunctionPtr = 0x33;
 static const uint8_t kEnum = 0x42;       // rtti.enums
 static const uint8_t kObsoleteTypedef = 0x43;
 static const uint8_t kTypeset = 0x44;    // rtti.typesets
-static const uint8_t kClassdef = 0x45;   // rtti.classdefs
+static const uint8_t kClassDef = 0x45;   // rtti.classdefs
 static const uint8_t kEnumStruct = 0x46; // rtti.classdefs (rtti.enumstructs in v1)
 static const uint8_t kClass = 0x47;      // rtti.classdefs (heap-allocated class)
 

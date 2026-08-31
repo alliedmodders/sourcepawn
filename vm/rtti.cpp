@@ -297,7 +297,7 @@ RttiParser::decode() {
         case cb::kEnum:
         case cb::kObsoleteTypedef:
         case cb::kTypeset:
-        case cb::kClassdef:
+        case cb::kClassDef:
         case cb::kEnumStruct:
         case cb::kClass:
         case cb::kFunctionPtr: {
@@ -390,7 +390,7 @@ RttiParser::validate() {
         case cb::kEnum:
         case cb::kObsoleteTypedef:
         case cb::kTypeset:
-        case cb::kClassdef:
+        case cb::kClassDef:
         case cb::kEnumStruct:
         case cb::kClass:
         case cb::kFunctionPtr:

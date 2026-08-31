@@ -852,7 +852,7 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             // Rewrite to int32 for now.
             return GetPrimitiveType(TypeKind::Int32);
         }
-        case cb::kClassdef:
+        case cb::kClassDef:
         case cb::kEnumStruct: {
             uint32_t index;
             if (!parser.ReadUint32_Leb128(&index)) {

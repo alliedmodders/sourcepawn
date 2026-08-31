@@ -394,7 +394,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 void
 RttiBuilder::encode_struct_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.push_back(cb::kClassdef);
+    bytes.push_back(cb::kClassDef);
     CompactEncodeUint32(bytes, add_struct(type));
 }
 

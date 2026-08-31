@@ -1570,7 +1570,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
     if (call->token() == tNEW && call->ctor_type()) {
         uint32_t classdef_index = rtti_->classdef_index(call->ctor_type());
-        __ emit(OP_NEWOBJ, classdef_index << 1);
+        uint32_t table_id = MakeTableId(kTableId_RttiClassDef, classdef_index);
+        __ emit(OP_NEWOBJ, table_id);
         if (discard)
             __ emit(OP_POP);
         return;

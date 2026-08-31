@@ -245,6 +245,9 @@ RttiBuilder::add_enumstruct(Type* type)
 
     auto es_decl = type->asEnumStruct();
     uint32_t es_index = classdefs_->count();
+    if (es_index > kMaxTableIndex)
+        report(es_decl, 484);
+
     typeid_cache_.add(p, type, es_index);
 
     smx_rtti_classdef classdef;
@@ -289,6 +292,9 @@ uint32_t RttiBuilder::add_class(Type* type) {
 
     auto cls_decl = type->asClass();
     uint32_t cls_index = classdefs_->count();
+    if (cls_index > kMaxTableIndex)
+        report(cls_decl, 484);
+
     typeid_cache_.add(p, type, cls_index);
 
     smx_rtti_classdef classdef;
@@ -338,10 +344,13 @@ RttiBuilder::add_struct(Type* type)
     if (p.found())
         return p->value;
 
-    uint32_t struct_index = classdefs_->count();
-    typeid_cache_.add(p, type, struct_index);
-
     auto ps = type->asPstruct();
+
+    uint32_t struct_index = classdefs_->count();
+    if (struct_index > kMaxTableIndex)
+        report(ps, 484);
+
+    typeid_cache_.add(p, type, struct_index);
 
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
@@ -522,7 +531,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 void
 RttiBuilder::encode_struct_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.push_back(cb::kClassdef);
+    bytes.push_back(cb::kClassDef);
     CompactEncodeUint32(bytes, add_struct(type));
 }
 
