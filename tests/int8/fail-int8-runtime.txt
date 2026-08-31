@@ -1,0 +1,2 @@
+error 450: no viable conversion from 'int' to 'int8'
+error 450: no viable conversion from 'int16' to 'int8'

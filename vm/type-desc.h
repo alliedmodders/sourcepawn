@@ -28,6 +28,7 @@ enum class TypeKind : uint8_t {
     IntPtr,
     Float32,
     Char8,
+    Int8,
     Int16,
     Any,
     Function,
@@ -169,6 +170,9 @@ class TypeDesc final {
             case TypeKind::Char8:
                 return sizeof(char);
 
+            case TypeKind::Int8:
+                return sizeof(int8_t);
+
             case TypeKind::Int16:
                 return sizeof(int16_t);
 
@@ -194,6 +198,7 @@ class TypeDesc final {
     bool IsInt64() const { return kind_ == TypeKind::Int64; }
     bool IsIntPtr() const { return kind_ == TypeKind::IntPtr; }
     bool IsInt16() const { return kind_ == TypeKind::Int16; }
+    bool IsInt8() const { return kind_ == TypeKind::Int8; }
 
     bool IsWideInt() const {
         return IsInt64() || (IsIntPtr() && sizeof(void*) == 8);

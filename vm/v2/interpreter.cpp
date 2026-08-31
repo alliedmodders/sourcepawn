@@ -245,51 +245,38 @@ bool Interpreter::run_internal() {
             case LL_LOAD_I_F32: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
-                vregs_[dest] = *ptr;
+                vregs_[dest] = *heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
                 break;
             }
             case LL_LOAD_I_I64: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                int64_t* ptr = heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
-                *reinterpret_cast<int64_t*>(&vregs_[dest]) = *ptr;
+                *reinterpret_cast<int64_t*>(&vregs_[dest]) = *heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
                 break;
             }
             case LL_LOAD_I_U8: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
-                vregs_[dest] = *ptr & 0xff;
+                vregs_[dest] = *heap_.ToPhysAddr<uint8_t*>(vregs_[addr]);
+                break;
+            }
+            case LL_LOAD_I_I8: {
+                uint16_t addr = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = *reinterpret_cast<int8_t*>(heap_.ToPhysAddr<int8_t*>(vregs_[addr]));
                 break;
             }
             case LL_LOAD_I_I16: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
-                vregs_[dest] = *reinterpret_cast<int16_t*>(ptr);
+                vregs_[dest] = *heap_.ToPhysAddr<int16_t*>(vregs_[addr]);
                 break;
             }
             case LL_LOAD_ELEM_A:
             case LL_LOAD_ELEM_I32:
             case LL_LOAD_ELEM_F32:
             case LL_LOAD_ELEM_I64:
+            case LL_LOAD_ELEM_I8:
             case LL_LOAD_ELEM_U8:
             case LL_LOAD_ELEM_I16: {
                 uint16_t base_reg = reader_.read<uint16_t>();
@@ -315,6 +302,8 @@ bool Interpreter::run_internal() {
                         heap_.ToPhysAddr<HeapItem*>(obj)->AddRef();
                 } else if (op == LL_LOAD_ELEM_I64) {
                     *reinterpret_cast<int64_t*>(&vregs_[dest_reg]) = *reinterpret_cast<int64_t*>(elt);
+                } else if (op == LL_LOAD_ELEM_I8) {
+                    vregs_[dest_reg] = *reinterpret_cast<int8_t*>(elt);
                 } else if (op == LL_LOAD_ELEM_U8) {
                     vregs_[dest_reg] = *reinterpret_cast<uint8_t*>(elt);
                 } else if (op == LL_LOAD_ELEM_I16) {
@@ -368,10 +357,6 @@ bool Interpreter::run_internal() {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
                 *ptr = vregs_[val];
                 break;
             }
@@ -379,32 +364,20 @@ bool Interpreter::run_internal() {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 int64_t* ptr = heap_.ToPhysAddr<int64_t*>(vregs_[addr]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
                 *ptr = *reinterpret_cast<int64_t*>(&vregs_[val]);
                 break;
             }
             case LL_STOR_I_I8: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
-                uint8_t* dest_addr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[addr]);
-                if (!dest_addr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
-                *dest_addr = uint8_t(vregs_[val]);
+                int8_t* dest_addr = rt_->heap().ToPhysAddr<int8_t*>(vregs_[addr]);
+                *dest_addr = int8_t(vregs_[val]);
                 break;
             }
             case LL_STOR_I_I16: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 int16_t* dest_addr = rt_->heap().ToPhysAddr<int16_t*>(vregs_[addr]);
-                if (!dest_addr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
                 *dest_addr = int16_t(vregs_[val] & 0xffff);
                 break;
             }
@@ -412,10 +385,6 @@ bool Interpreter::run_internal() {
                 uint16_t addr_reg = reader_.read<uint16_t>();
                 uint16_t val_reg = reader_.read<uint16_t>();
                 cell_t* ptr = heap_.ToPhysAddr<cell_t*>(vregs_[addr_reg]);
-                if (!ptr) {
-                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
-                    return false;
-                }
                 auto new_item = heap_.ToPhysAddr<HeapItem*>(vregs_[val_reg]);
                 if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
                     rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
@@ -477,7 +446,7 @@ bool Interpreter::run_internal() {
                 if (op == LL_STOR_ELEM_I64) {
                     *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
                 } else if (op == LL_STOR_ELEM_I8) {
-                    *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
+                    *reinterpret_cast<int8_t*>(elt) = int8_t(vregs_[val_reg]);
                 } else if (op == LL_STOR_ELEM_I16) {
                     *reinterpret_cast<int16_t*>(elt) = int16_t(vregs_[val_reg] & 0xffff);
                 } else if (op == LL_STOR_ELEM_A) {
@@ -617,6 +586,11 @@ bool Interpreter::run_internal() {
                 vregs_[args.dest_reg] = *elt;
                 break;
             }
+            case LL_LOAD_ELEM_FLAT_I8: {
+                LOAD_ELEM_FLAT(int8_t);
+                vregs_[args.dest_reg] = *elt;
+                break;
+            }
             case LL_LOAD_ELEM_FLAT_I16: {
                 LOAD_ELEM_FLAT(int16_t);
                 vregs_[args.dest_reg] = *elt;
@@ -647,6 +621,11 @@ bool Interpreter::run_internal() {
 
             case LL_LOAD_ELEM_FLAT_I_U8: {
                 LOAD_ELEM_FLAT_I(uint8_t);
+                vregs_[args.dest_reg] = *elt;
+                break;
+            }
+            case LL_LOAD_ELEM_FLAT_I_I8: {
+                LOAD_ELEM_FLAT_I(int8_t);
                 vregs_[args.dest_reg] = *elt;
                 break;
             }
@@ -684,8 +663,8 @@ bool Interpreter::run_internal() {
                 break;
             }
             case LL_STOR_ELEM_FLAT_I8: {
-                STOR_ELEM_FLAT(uint8_t);
-                *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
+                STOR_ELEM_FLAT(int8_t);
+                *elt = static_cast<int8_t>(vregs_[args.val_reg]);
                 break;
             }
             case LL_STOR_ELEM_FLAT_I16: {
@@ -717,8 +696,8 @@ bool Interpreter::run_internal() {
                 break;
             }
             case LL_STOR_ELEM_FLAT_I_I8: {
-                STOR_ELEM_FLAT_I(uint8_t);
-                *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
+                STOR_ELEM_FLAT_I(int8_t);
+                *elt = static_cast<int8_t>(vregs_[args.val_reg]);
                 break;
             }
             case LL_STOR_ELEM_FLAT_I_I16: {
@@ -1261,6 +1240,12 @@ bool Interpreter::run_internal() {
                 uint16_t src = reader_.read<uint16_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 vregs_[dest] = (cell_t)(int16_t)vregs_[src];
+                break;
+            }
+            case LL_CVT_I8: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = (cell_t)(int8_t)vregs_[src];
                 break;
             }
             case LL_TRUNCATE_I64: {

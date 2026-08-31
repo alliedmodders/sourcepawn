@@ -209,7 +209,7 @@ static const char* errmsg[] = {
     /*176*/ "non-static method or property '%s' must be called with a value of type '%s'\n",
     /*177*/ "static method '%s' must be invoked via its type (try '%s.%s')\n",
     /*178*/ "unused\n",
-    /*179*/ "value %d is outside the range [-32768, 32767] of int16\n",
+    /*179*/ "value %d is outside the range [%d, %d] of %s\n",
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",
     /*181*/ "function argument named '%s' differs from prototype\n",
     /*182*/ "functions that return arrays cannot be used as callbacks\n",

@@ -127,6 +127,8 @@ bool CastExpr::FoldToConstant() {
         return false;
     if (type()->isInt16())
         val = (cell_t)(int16_t)val;
+    else if (type()->isInt8())
+        val = (cell_t)(int8_t)val;
     val_.set_constval(val);
     val_.ident = iCONSTEXPR;
     val_.set_type(type());

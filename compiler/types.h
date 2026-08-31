@@ -59,6 +59,7 @@ enum IdentifierKind {
 enum class BuiltinType : uint8_t {
     Bool,
     Char,
+    Int8,
     Int16,
     Int,
     Float,
@@ -275,11 +276,12 @@ class Type : public PoolObject
     bool isBuiltin() const { return kind_ == TypeKind::Builtin; }
     bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
     bool isInt() const { return isBuiltin(BuiltinType::Int); }
+    bool isInt8() const { return isBuiltin(BuiltinType::Int8); }
     bool isInt16() const { return isBuiltin(BuiltinType::Int16); }
     bool isInt64() const { return isBuiltin(BuiltinType::Int64); }
     bool isIntPtr() const { return isBuiltin(BuiltinType::IntPtr); }
     bool isWideInt() const { return isInt64() || isIntPtr(); }
-    bool isIntN() const { return isInt() || isIntPtr() || isInt16(); }
+    bool isIntN() const { return isInt() || isInt64() || isIntPtr() || isInt16() || isInt8(); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
@@ -318,6 +320,7 @@ class Type : public PoolObject
         if (isBuiltin()) {
             switch (builtin_type_) {
                 case BuiltinType::Char:
+                case BuiltinType::Int8:
                     return {1};
                 case BuiltinType::Int16:
                     return {2};
@@ -350,6 +353,7 @@ class Type : public PoolObject
             return -1;
         switch (builtin_type_) {
             case BuiltinType::Char:
+            case BuiltinType::Int8:
                 return 1;
             case BuiltinType::Int16:
                 return 2;
@@ -381,6 +385,7 @@ class Type : public PoolObject
         switch (builtin_type_) {
             case BuiltinType::Bool:
             case BuiltinType::Char:
+            case BuiltinType::Int8:
             case BuiltinType::Int16:
             case BuiltinType::Int:
                 return true;
@@ -621,6 +626,7 @@ class TypeManager
     Type* type_int64() const { return type_int64_; }
     Type* type_intptr() const { return type_intptr_; }
     Type* type_int16() const { return type_int16_; }
+    Type* type_int8() const { return type_int8_; }
 
     Type* GetBuiltin(BuiltinType type) const { return builtin_types_[(int)type]; }
 
@@ -648,6 +654,7 @@ class TypeManager
     Type* type_int64_ = nullptr;
     Type* type_intptr_ = nullptr;
     Type* type_int16_ = nullptr;
+    Type* type_int8_ = nullptr;
 
     struct ArrayCachePolicy {
         typedef ArrayType* Payload;

@@ -2837,6 +2837,9 @@ Parser::parse_new_typename(const full_token_t* tok, TypenameInfo* out)
         case tINT:
             *out = TypenameInfo{types_->type_int()};
             return true;
+        case tINT8:
+            *out = TypenameInfo{types_->type_int8()};
+            return true;
         case tCHAR:
             *out = TypenameInfo{types_->type_char()};
             return true;

@@ -553,15 +553,15 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
-        case OP_LOAD_I_U8: {
+        case OP_LOAD_I_U8:
             LowerUnary(LL_LOAD_I_U8, cell_type_);
             break;
-        }
-
-        case OP_LOAD_I_I16: {
+        case OP_LOAD_I_I8:
+            LowerUnary(LL_LOAD_I_I8, cell_type_);
+            break;
+        case OP_LOAD_I_I16:
             LowerUnary(LL_LOAD_I_I16, cell_type_);
             break;
-        }
 
         case OP_LOAD_ELEM_I32:
         case OP_LOAD_ELEM_F32:
@@ -569,6 +569,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
         case OP_LOAD_ELEM_I16:
+        case OP_LOAD_ELEM_I8:
         case OP_LOAD_ELEM_A: {
             ExprNode* index = popStack();
             ExprNode* base_node = popStack();
@@ -590,6 +591,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_FLAT_U8; break;
                     case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_FLAT_I16; break;
+                    case OP_LOAD_ELEM_I8:  llop = LL_LOAD_ELEM_FLAT_I8; break;
                     default: assert(false); break;
                 }
             } else {
@@ -603,6 +605,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
                     case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_I16; break;
+                    case OP_LOAD_ELEM_I8:  llop = LL_LOAD_ELEM_I8; break;
                     case OP_LOAD_ELEM_A:   llop = LL_LOAD_ELEM_A; break;
                     default: assert(false); break;
                 }
@@ -981,6 +984,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_CVT_I16: {
             ExprNode* val = popStack();
             pushStack(CreateOpNode(cell_type_, LL_CVT_I16, val, nullptr));
+            break;
+        }
+        case OP_CVT_I8: {
+            ExprNode* val = popStack();
+            pushStack(CreateOpNode(cell_type_, LL_CVT_I8, val, nullptr));
             break;
         }
 
@@ -2139,6 +2147,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                         case LL_LOAD_ELEM_FLAT_I64: iop = LL_LOAD_ELEM_FLAT_I_I64; break;
                         case LL_LOAD_ELEM_FLAT_U8:  iop = LL_LOAD_ELEM_FLAT_I_U8; break;
                         case LL_LOAD_ELEM_FLAT_I16: iop = LL_LOAD_ELEM_FLAT_I_I16; break;
+                        case LL_LOAD_ELEM_FLAT_I8:  iop = LL_LOAD_ELEM_FLAT_I_I8; break;
                         default: assert(false); break;
                     }
                     emit(iop, LoadElemFlatArgs{

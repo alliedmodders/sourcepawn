@@ -566,6 +566,8 @@ uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
         return cb::kAny;
     if (type->isChar())
         return cb::kChar8;
+    if (type->isInt8())
+        return cb::kInt8;
     if (type->isInt16())
         return cb::kInt16;
     if (type->isFloat())

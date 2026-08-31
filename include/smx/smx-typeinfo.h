@@ -248,6 +248,7 @@ static const uint8_t kInt16 = 0x05;
 static const uint8_t kInt32 = 0x06;
 static const uint8_t kInt64 = 0x07;
 static const uint8_t kIntPtr = 0x08;
+static const uint8_t kInt8 = 0x09;
 static const uint8_t kFloat32 = 0x0c;
 static const uint8_t kChar8 = 0x0e;
 static const uint8_t kAny = 0x10;

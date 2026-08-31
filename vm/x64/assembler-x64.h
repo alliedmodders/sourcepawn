@@ -678,6 +678,11 @@ class Assembler : public AssemblerBase
     }
 
     template <typename SrcType>
+    void movsxb(Register dest, const SrcType& src) {
+        emit2(0x0f, 0xbe, dest, src);
+    }
+
+    template <typename SrcType>
     void movsxw(Register dest, const SrcType& src) {
         emit2(0x0f, 0xbf, dest, src);
     }

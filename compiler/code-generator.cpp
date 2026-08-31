@@ -949,6 +949,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
             __ emit(OP_INVERT);
             if (inner->val().type()->isInt16())
                 __ emit(OP_CVT_I16);
+            else if (inner->val().type()->isInt8())
+                __ emit(OP_CVT_I8);
             break;
         case '!':
             if (inner->val().type()->isInt64() || inner->val().type()->isFloat())
@@ -959,6 +961,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
             __ emit(OP_NEG);
             if (inner->val().type()->isInt16())
                 __ emit(OP_CVT_I16);
+            else if (inner->val().type()->isInt8())
+                __ emit(OP_CVT_I8);
             break;
         default:
             assert(false);
@@ -1166,6 +1170,8 @@ void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* r
     BuiltinType type = BuiltinType::Int;
     if (effective->isInt16())
         type = BuiltinType::Int16;
+    else if (effective->isInt8())
+        type = BuiltinType::Int8;
     else if (effective->isInt64())
         type = BuiltinType::Int64;
     else if (effective->isFloat())
@@ -1255,6 +1261,8 @@ void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
 
     if (type == BuiltinType::Int16 && !IsCompare(oper_tok))
         __ emit(OP_CVT_I16);
+    else if (type == BuiltinType::Int8 && !IsCompare(oper_tok))
+        __ emit(OP_CVT_I8);
 }
 
 void
@@ -1923,6 +1931,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_ELEM_U8);
             else if (lval.type()->isInt16())
                 __ emit(OP_LOAD_ELEM_I16);
+            else if (lval.type()->isInt8())
+                __ emit(OP_LOAD_ELEM_I8);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_ELEM_I64);
             else if (lval.type()->isIntPtr())
@@ -1945,6 +1955,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_I_U8);
             else if (lval.type()->isInt16())
                 __ emit(OP_LOAD_I_I16);
+            else if (lval.type()->isInt8())
+                __ emit(OP_LOAD_I_I8);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_I_I64);
             else if (lval.type()->isIntPtr())
@@ -2043,6 +2055,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_ELEM_I8);
             else if (lval.type()->isInt16())
                 __ emit(OP_STOR_ELEM_I16);
+            else if (lval.type()->isInt8())
+                __ emit(OP_STOR_ELEM_I8);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_ELEM_I64);
             else if (lval.type()->isIntPtr())
@@ -2060,6 +2074,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
                 __ emit(OP_STOR_I_I8);
             else if (lval.type()->isInt16())
                 __ emit(OP_STOR_I_I16);
+            else if (lval.type()->isInt8())
+                __ emit(OP_STOR_I_I8);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_I_I64);
             else if (lval.type()->isIntPtr())
@@ -2586,6 +2602,9 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
         // int16 is sign-extended on the stack, so no conversion needed.
         // promotion to int64/intptr is handled via EmitCastExpr.
         assert(from_type->isInt());
+    } else if (to_type->isInt8()) {
+        // similar to int16, this is sign-extended on the stack.
+        assert(from_type->isInt() || from_type->isInt16());
     } else if (to_type->isBool()) {
         if (from_type->isInt64())
             __ emit(OP_TEST);
@@ -2626,6 +2645,12 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
             // -> int16: truncate any wider integer to the low 16 bits and
             // sign-extend. Only reachable via an explicit view_as<int16>().
             __ emit(OP_CVT_I16);
+        } else if (to->isInt8() &&
+                   (from_type->isIntN() || from_type->isChar() || from_type->isAny()))
+        {
+            // -> int8: truncate any wider integer (or char) to the low 8 bits
+            // and sign-extend. Only reachable via an explicit view_as<int8>().
+            __ emit(OP_CVT_I8);
         }
     }
 }

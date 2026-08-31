@@ -275,7 +275,12 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_ELEM_FLAT_I16, 169, "load.elem.flat.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_ELEM_FLAT_I_I16, 170, "load.elem.flat.i.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_ELEM_FLAT_I_I16, 171, "stor.elem.flat.i.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(CVT_I16, 172, "cvt.i16", {LL_FMT_REG, LL_FMT_REG})
+    FOR_EACH(CVT_I16, 172, "cvt.i16", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_I_I8, 173, "load.i.i8", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_I8, 174, "load.elem.i8", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_FLAT_I8, 175, "load.elem.flat.i8", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_FLAT_I_I8, 176, "load.elem.flat.i.i8", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(CVT_I8, 177, "cvt.i8", {LL_FMT_REG, LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

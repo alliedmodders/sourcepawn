@@ -1018,6 +1018,12 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         {
             val.set_expr(types_->type_int());
         }
+        if (val.type()->isInt8() &&
+            (folded < std::numeric_limits<int8_t>::min() ||
+             folded > std::numeric_limits<int8_t>::max()))
+        {
+            val.set_expr(types_->type_int());
+        }
         val.set_constval(folded);
     }
 
@@ -1328,12 +1334,14 @@ static inline bool IsValidIntWidthChange(Type* from, Type* to) {
     if (from->isWideInt()) {
         return to->isInt() ||
                to->isInt16() ||
+               to->isInt8() ||
                to->isWideInt();
     }
     if (to->isWideInt()) {
         return from->isInt() ||
                from->isAny() ||
-               from->isInt16();
+               from->isInt16() ||
+               from->isInt8();
     }
     return false;
 }
@@ -1342,6 +1350,8 @@ static inline bool CastNeedsRvalue(const ExprVal& out_val, Type* to_type) {
     if (out_val.ident == iACCESSOR)
         return true;
     if (out_val.type()->isWideInt() || to_type->isWideInt())
+        return true;
+    if (out_val.type()->isChar())
         return true;
     if (out_val.type()->podLoadSize() != to_type->podLoadSize())
         return true;

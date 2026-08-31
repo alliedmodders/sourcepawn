@@ -49,6 +49,13 @@ std::optional<ConversionKind> Semantics::FindConstantConversion(Expr* source, Ty
         if (v >= std::numeric_limits<int16_t>::min() && v <= std::numeric_limits<int16_t>::max())
             return ConversionKind::Numeric;
     }
+    if (to->isInt8() && source->val().ident == iCONSTEXPR &&
+        (from_type->isInt() || from_type->isInt16()))
+    {
+        cell_t v = source->val().constval();
+        if (v >= std::numeric_limits<int8_t>::min() && v <= std::numeric_limits<int8_t>::max())
+            return ConversionKind::Numeric;
+    }
     return std::nullopt;
 }
 
@@ -210,7 +217,20 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
     if (formal->isInt16() && actual->isInt() && node->val().ident == iCONSTEXPR) {
         cell_t v = node->val().constval();
         if (v < std::numeric_limits<int16_t>::min() || v > std::numeric_limits<int16_t>::max()) {
-            report(node->pos(), 179) << v;
+            report(node->pos(), 179) << v
+                                     << std::numeric_limits<int16_t>::min()
+                                     << std::numeric_limits<int16_t>::max()
+                                     << "int16";
+            return;
+        }
+    }
+    if (formal->isInt8() && actual->isInt() && node->val().ident == iCONSTEXPR) {
+        cell_t v = node->val().constval();
+        if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
+            report(node->pos(), 179) << v
+                                     << std::numeric_limits<int8_t>::min()
+                                     << std::numeric_limits<int8_t>::max()
+                                     << "int8";
             return;
         }
     }

@@ -301,6 +301,7 @@ void TypeManager::init() {
     type_int64_ = defineBuiltin("int64", BuiltinType::Int64);
     type_intptr_ = defineBuiltin("intptr", BuiltinType::IntPtr);
     type_int16_ = defineBuiltin("int16", BuiltinType::Int16);
+    type_int8_ = defineBuiltin("int8", BuiltinType::Int8);
 }
 
 Type* TypeManager::defineFunction(Atom* name, funcenum_t* fe) {

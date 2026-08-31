@@ -159,6 +159,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
         case OP_LOAD_ELEM_I16:
+        case OP_LOAD_ELEM_I8:
         case OP_LOAD_ELEM_A: {
             if (!popInt32())
                 return false;
@@ -182,6 +183,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (op == OP_LOAD_ELEM_U8)
                 return pushStack(cell_type());
             if (op == OP_LOAD_ELEM_I16)
+                return pushStack(cell_type());
+            if (op == OP_LOAD_ELEM_I8)
                 return pushStack(cell_type());
             return pushStack(elt);
         }
@@ -400,6 +403,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(cell_type());
         }
 
+        case OP_CVT_I8: {
+            const TypeDesc* td;
+            if (!popStack(&td))
+                return false;
+            if (!checkCell(td) && !td->IsInt64() && !td->IsIntPtr())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+
         case OP_DUP:
             if (v->stack.empty())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -528,6 +540,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&addr))
                 return false;
             if (!addr->IsReference() || !addr->ref_type()->IsInt16())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+
+        case OP_LOAD_I_I8: {
+            const TypeDesc* addr;
+            if (!popStack(&addr))
+                return false;
+            if (!addr->IsReference() || !addr->ref_type()->IsInt8())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(cell_type());
         }
@@ -1054,6 +1075,7 @@ static inline bool IsPodType(const TypeDesc* type) {
         case TypeKind::IntPtr:
         case TypeKind::Float32:
         case TypeKind::Char8:
+        case TypeKind::Int8:
         case TypeKind::Int16:
         case TypeKind::Any:
             return true;
@@ -1233,6 +1255,7 @@ bool MethodVerifier::checkIntOrFloat(const TypeDesc* td) {
         case TypeKind::Int32:
         case TypeKind::Float32:
         case TypeKind::Char8:
+        case TypeKind::Int8:
         case TypeKind::Int16:
         case TypeKind::Any:
             return true;

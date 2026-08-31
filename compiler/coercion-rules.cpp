@@ -36,11 +36,12 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
         case BuiltinType::Bool:
             if (to->isAny())
                 return ConversionKind::Trivial;
-            if (to->isInt() && (IsReturnOrAssign(why) || why == CvtContext::Argument))
+            if ((to->isInt() || to->isInt16() || to->isInt8()) &&
+                (IsReturnOrAssign(why) || why == CvtContext::Argument))
+            {
                 return ConversionKind::Trivial;
-            if (to->isInt16() && (IsReturnOrAssign(why) || why == CvtContext::Argument))
-                return ConversionKind::Trivial;
-            if (to->isEnum() || to->isMethodmap() || to->isChar() || to->isInt() || to->isInt16())
+            }
+            if (to->isEnum() || to->isMethodmap() || to->isChar() || to->isInt())
                 return ConversionKind::TagMismatch;
             break;
 
@@ -53,6 +54,15 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
                 return ConversionKind::TagMismatch;
             break;
 
+        case BuiltinType::Int8:
+            if (to->isAny() || to->isInt() || to->isInt16())
+                return ConversionKind::Trivial;
+            if (to->isBool() && (why == CvtContext::Return || why == CvtContext::Argument))
+                return ConversionKind::Trivial;
+            if (to->isFloat() || to->isInt64() || to->isIntPtr())
+                return ConversionKind::Numeric;
+            break;
+
         case BuiltinType::Int16:
             if (to->isAny() || to->isInt())
                 return ConversionKind::Trivial;
@@ -60,8 +70,6 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
                 return ConversionKind::Trivial;
             if (to->isFloat() || to->isInt64() || to->isIntPtr())
                 return ConversionKind::Numeric;
-            if (to->isEnum() || to->isMethodmap())
-                return ConversionKind::TagMismatch;
             break;
 
         case BuiltinType::Int:

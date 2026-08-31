@@ -447,6 +447,9 @@ void Compiler::EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
             __ movl(rax, 0);
             __ set(not_zero, r8_al);
             break;
+        case LL_CVT_I8:
+            __ movsxb(rax, rax);
+            break;
         case LL_CVT_I16:
             __ movsxw(rax, rax);
             break;
@@ -807,6 +810,10 @@ void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
             __ movq(rax, HeapAddr(rax));
             __ movq(RegAddr(dest_reg), rax);
             break;
+        case LL_LOAD_I_I8:
+            __ movsxb(rax, HeapAddr(rax));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
         case LL_LOAD_I_I16:
             __ movsxw(rax, HeapAddr(rax));
             __ movl(RegAddr(dest_reg), rax);
@@ -1034,6 +1041,10 @@ void Compiler::EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) {
             __ movzxb(rax, Operand(frm, rcx, NoScale, base_offset));
             __ movl(RegAddr(args.dest_reg), rax);
             break;
+        case LL_LOAD_ELEM_FLAT_I8:
+            __ movsxb(rax, Operand(frm, rcx, NoScale, base_offset));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
         case LL_LOAD_ELEM_FLAT_I16:
             __ movsxw(rax, Operand(frm, rcx, ScaleTwo, base_offset));
             __ movl(RegAddr(args.dest_reg), rax);
@@ -1066,6 +1077,10 @@ void Compiler::EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) {
             break;
         case LL_LOAD_ELEM_FLAT_I_U8:
             __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movl(RegAddr(args.dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_FLAT_I_I8:
+            __ movsxb(rax, Operand(rdx, rcx, NoScale));
             __ movl(RegAddr(args.dest_reg), rax);
             break;
         case LL_LOAD_ELEM_FLAT_I_I16:
@@ -1172,6 +1187,10 @@ void Compiler::EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             break;
         case LL_LOAD_ELEM_U8:
             __ movzxb(rax, Operand(rdx, rcx, NoScale));
+            __ movl(RegAddr(dest_reg), rax);
+            break;
+        case LL_LOAD_ELEM_I8:
+            __ movsxb(rax, Operand(rdx, rcx, NoScale));
             __ movl(RegAddr(dest_reg), rax);
             break;
         case LL_LOAD_ELEM_I16:

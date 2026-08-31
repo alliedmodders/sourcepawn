@@ -346,6 +346,12 @@ class Assembler : public AssemblerBase
     void movsxw(Register dest, const Register src) {
         emit2(0x0f, 0xbf, dest.code, src.code);
     }
+    void movsxb(Register dest, const Operand& src) {
+        emit2(0x0f, 0xbe, dest.code, src);
+    }
+    void movsxb(Register dest, const Register src) {
+        emit2(0x0f, 0xbe, dest.code, src.code);
+    }
     void movaps(FloatRegister dest, const FloatRegister src) {
         emit2(0x0f, 0x28, dest.code, src.code);
     }
