@@ -649,6 +649,24 @@ bool Expr::HasSideEffects() {
         }
         case ExprKind::CastExpr:
             return to<CastExpr>()->expr()->HasSideEffects();
+        case ExprKind::NamedArgExpr:
+            return to<NamedArgExpr>()->expr->HasSideEffects();
+        case ExprKind::StructInitFieldExpr:
+            return to<StructInitFieldExpr>()->value->HasSideEffects();
+        case ExprKind::SimpleCastExpr:
+            return to<SimpleCastExpr>()->from()->HasSideEffects();
+        case ExprKind::SliceExpr: {
+            auto e = to<SliceExpr>();
+            return e->expr()->HasSideEffects() || e->index()->HasSideEffects();
+        }
+        case ExprKind::StructExpr: {
+            auto e = to<StructExpr>();
+            for (const auto& field : e->fields()) {
+                if (field->value->HasSideEffects())
+                    return true;
+            }
+            return false;
+        }
         case ExprKind::CommaExpr: {
             auto e = to<CommaExpr>();
             return cc::HasSideEffects(e->exprs());
@@ -680,7 +698,11 @@ bool Expr::HasSideEffects() {
         case ExprKind::SymbolExpr:
         case ExprKind::TaggedValueExpr:
         case ExprKind::Number64Expr:
+        case ExprKind::DoubleExpr:
         case ExprKind::ThisExpr:
+        case ExprKind::DefaultArgExpr:
+        case ExprKind::SpreadArgsExpr:
+        case ExprKind::FunctionExpr:
             return false;
         default:
             assert(false);
