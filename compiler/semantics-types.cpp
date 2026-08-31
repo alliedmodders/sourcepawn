@@ -214,6 +214,19 @@ void Semantics::ReportConversionDiagnostic(const token_pos_t& pos, QualType form
 }
 
 void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual) {
+    // Print a better error message for when function signatures match but
+    // we're trying to convert a closure to a legacy ID.
+    if (auto actual_ft = actual->as<FunctionType>()) {
+        if (auto formal_ft = formal->as<FunctionType>()) {
+            if (actual_ft->conv() == FunctionType::Closure &&
+                formal_ft->conv() == FunctionType::Legacy)
+            {
+                report(node->pos(), 43);
+                return;
+            }
+        }
+    }
+
     // Build a more helpful message for specific cases.
     if (formal->isInt16() && actual->isInt() && node->val().ident == iCONSTEXPR) {
         cell_t v = node->val().constval();

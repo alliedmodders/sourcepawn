@@ -281,10 +281,13 @@ static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContex
             {
                 return ConversionKind::LegacyToFunc;
             }
-            if (from->conv() != FunctionType::Legacy &&
-                other->conv() == FunctionType::Legacy)
-            {
-                return ConversionKind::FuncToLegacy;
+            if (other->conv() == FunctionType::Legacy) {
+                if (from->conv() == FunctionType::Typed) {
+                    return ConversionKind::FuncToLegacy;
+                }
+                if (from->conv() == FunctionType::Closure) {
+                    return ConversionKind::Illegal;
+                }
             }
         }
         return ck;

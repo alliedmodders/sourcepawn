@@ -1565,6 +1565,11 @@ void Compiler::EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) {
     __ testl(rdx, rdx);
     JumpOnError(zero, SP_ERROR_NULL_DEREF);
 
+    __ movq(rcx, HeapAddr(rdx, offsetof(SpFunction, td)));
+    __ movzxb(rcx, Operand(rcx, TypeDesc::OffsetOfKind()));
+    __ cmpl(rcx, static_cast<uint8_t>(TypeKind::Closure));
+    JumpOnError(equal, SP_ERROR_PARAM);
+
     __ movq(rdx, HeapAddr(rdx, offsetof(SpFunction, method)));
     __ testq(rdx, rdx);
     JumpOnError(zero, SP_ERROR_NULL_DEREF);

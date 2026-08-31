@@ -828,6 +828,11 @@ void Compiler::EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) {
     __ testl(edx, edx);
     JumpOnError(zero, SP_ERROR_NULL_DEREF);
 
+    __ movl(ecx, Operand(edx, offsetof(SpFunction, td)));
+    __ movzxb(ecx, Operand(ecx, TypeDesc::OffsetOfKind()));
+    __ cmpl(ecx, static_cast<uint8_t>(TypeKind::Closure));
+    JumpOnError(equal, SP_ERROR_PARAM);
+
     __ movl(edx, Operand(edx, offsetof(SpFunction, method)));
     __ testl(edx, edx);
     JumpOnError(zero, SP_ERROR_NULL_DEREF);

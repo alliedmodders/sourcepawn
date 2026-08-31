@@ -1,0 +1,1 @@
+error 043: closures cannot be passed through natives or varargs

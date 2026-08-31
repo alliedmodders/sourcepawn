@@ -842,6 +842,10 @@ bool Interpreter::run_internal() {
                     rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
                     return false;
                 }
+                if (fn->td->IsClosure()) {
+                    rt_->ReportErrorNumber(SP_ERROR_PARAM);
+                    return false;
+                }
                 vregs_[dest] = (fn->method->method_index() << 1) | 1;
                 break;
             }
