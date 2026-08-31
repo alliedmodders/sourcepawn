@@ -226,7 +226,7 @@ class Config(object):
             '/EHsc',
             '/GR-',
             '/TP',
-            '/std:c++17',
+            '/std:c++20',
         ]
         cxx.linkflags += [
             'kernel32.lib',

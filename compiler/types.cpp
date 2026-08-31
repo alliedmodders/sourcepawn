@@ -214,7 +214,7 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
         builtin_types_.resize(index + 1);
     builtin_types_[index] = ptr;
 
-    auto result = builtins_.emplace(name_atom, ptr);
+    [[maybe_unused]] auto result = builtins_.emplace(name_atom, ptr);
     assert(result.second);
     return ptr;
 }
