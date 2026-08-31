@@ -1161,6 +1161,8 @@ Parser::primary()
     }
 
     int tok = lexer_->lex();
+    if (tok == 0)
+        return nullptr;
     if (tok == tTHIS)
         return new ThisExpr(lexer_->pos());
     if (tok == tSYMBOL)
@@ -1222,8 +1224,10 @@ Parser::constant()
                     ellipses = true;
                     break;
                 }
-                if (Expr* child = hier14())
-                    exprs.emplace_back(child);
+                Expr* child = hier14();
+                if (!child)
+                    break;
+                exprs.emplace_back(child);
             } while (lexer_->match(','));
             if (!lexer_->need('}'))
                 lexer_->lexclr(FALSE);

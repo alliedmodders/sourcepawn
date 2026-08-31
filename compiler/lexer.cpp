@@ -1585,6 +1585,7 @@ int Lexer::lex() {
     if (using_injected_tokens_) {
         if (!injected_token_stream_.empty())
             return LexInjectedToken();
+        current_token()->id = 0;
         return 0;
     }
 
