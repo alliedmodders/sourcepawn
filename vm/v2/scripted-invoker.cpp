@@ -102,7 +102,6 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         return false;
     }
     if (!AcquireMethod()->Validate()) {
-        env->ReportError(SP_ERROR_NOT_RUNNABLE);
         return false;
     }
     if (args.error) {

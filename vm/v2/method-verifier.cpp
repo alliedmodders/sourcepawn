@@ -183,6 +183,9 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!verifyArrayType(base))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
+            if ((op == OP_LOAD_ELEM_A) != base->array_elt()->IsHeapItem())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
             const TypeDesc* elt = base->array_elt();
             if (op == OP_LOAD_ELEM_I64) {
                 if (!elt->IsInt64())
@@ -1560,6 +1563,8 @@ bool MethodVerifier::verifyLocalSlots() {
         auto td = rt_->LoadType(parser);
         if (!td)
             return false;
+        if (td->IsFlatArray() && td->array_elt()->IsHeapItem())
+            return reportError(SP_ERROR_RTTI);
         // :TODO: forbid references
         local_types_[i] = td;
    }

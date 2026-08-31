@@ -1903,6 +1903,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 __ emit(OP_LOAD_ELEM_F64);
             else if (lval.type()->isFloat())
                 __ emit(OP_LOAD_ELEM_F32);
+            else if (lval.type()->isHeapItem())
+                __ emit(OP_LOAD_ELEM_A);
             else if (!lval.type()->isComposite())
                 __ emit(OP_LOAD_ELEM_I32);
             else if (lval.type()->isCompositeValue())

@@ -50,6 +50,7 @@ enum ScopeKind {
     sARGUMENT = 3,    /* function argument (this is never stored anywhere) */
     sENUMFIELD = 4,   /* for analysis purposes only (not stored anywhere) */
     sFILE_STATIC = 5, /* only appears on SymbolScope, to clarify sSTATIC */
+    sCLASSFIELD = 6,  /* field of a class (heap-allocated object with GC) */
 };
 
 static inline bool IsLocal(int kind) {

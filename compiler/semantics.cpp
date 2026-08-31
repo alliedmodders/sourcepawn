@@ -3232,6 +3232,9 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     bool ok = CheckStmt(body);
 
+    // All type information is available, validate upvar types now.
+    ok &= info->CheckUpvarTypes();
+
     // This must be after evaluating the body, since we won't know the types of
     // let statements until after type deduction.
     info->UpdateSharedClassFieldTypes();
@@ -3278,6 +3281,32 @@ void FunctionDecl::AddUpvarsForSharedObjects() {
 
         upvar_decl->set_shared_obj_upvar_index(shared_obj_upvar->upvar_index());
     }
+}
+
+// We don't allow copy capture of arrays that are >2D, since we have never
+// supported copying arrays of more than one dimension.
+bool CheckArrayCapture(VarDeclBase* var, Type* type) {
+    if (var->is_shared())
+        return true;
+    auto* array = type->as<ArrayType>();
+    if (!array)
+        return true;
+    if (array->is_fixed() && !array->is_flat() && array->inner()->isArray()) {
+        report(var->pos(), 481) << var->name()->chars();
+        return false;
+    }
+    return true;
+}
+
+bool FunctionDecl::CheckUpvarTypes() {
+    bool ok = true;
+    for (const auto& [var, upvar_decl] : upvar_decls_) {
+        Type* var_type = var->type_info().type;
+        assert(var_type);
+
+        ok &= CheckArrayCapture(var, var_type);
+    }
+    return ok;
 }
 
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {

@@ -1711,8 +1711,11 @@ class FunctionDecl : public Decl
     LayoutFieldDecl* GetSharedVarField(VarDeclBase* var);
     size_t NumUpvars() const { return upvars_.size(); }
     VarDeclBase* GetUpvar(size_t index) const { return upvars_[index]; }
+
     // Adds shared object handles as copy-capture upvars, so codegen treats them uniformly.
     void AddUpvarsForSharedObjects();
+
+    bool CheckUpvarTypes();
 
     FunctionDecl* outer() const { return outer_; }
 

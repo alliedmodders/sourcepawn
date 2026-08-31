@@ -74,6 +74,15 @@ class ArrayTypeResolver
 static constexpr int kSizeUnknown = -1;
 static constexpr int kSizeIndeterminate = -2;
 
+// Flat arrays store their elements inline without GC tracking, so they
+// can never contain heap items. Otherwise the runtime would miss those
+// references during finalization.
+static bool CanUseFlatArray(Type* element_type) {
+    if (element_type->isHeapItem())
+        return false;
+    return true;
+}
+
 ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, VarDeclBase* decl)
   : sema_(sema),
     types_(sema->cc().types()),
@@ -121,7 +130,7 @@ bool ArrayTypeResolver::Resolve() {
     // Always build a Type, so we don't have a null type lying around.
     auto types = CompileContext::get().types();
     if (computed_.size() == 1) {
-        if (computed_[0] > 0)
+        if (computed_[0] > 0 && CanUseFlatArray(type_->type))
             type_->type = types->defineFlatArray(type_->type, computed_[0]);
         else
             type_->type = types->defineArray(type_->type, computed_[0]);

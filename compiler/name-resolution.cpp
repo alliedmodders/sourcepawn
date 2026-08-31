@@ -580,18 +580,6 @@ bool SymbolExpr::DoBind(SemaContext& sc, bool is_lval) {
         if (var->is_shared())
             rs.enclosure->AddSharedVar(var);
 
-        // Fixed, non-flat arrays must be captured by reference. Otherwise,
-        // the semantics are pretty subtle because of how 1D and 2D arrays
-        // are different.
-        if (!var->is_shared()) {
-            if (auto* array = var->type()->as<ArrayType>()) {
-                if (array->is_fixed() && !array->is_flat()) {
-                    report(pos_, 481) << var->name()->chars();
-                    return false;
-                }
-            }
-        }
-
         decl_ = sc.func()->AddUpvar(pos_, rs.enclosure, var);
     }
 
@@ -1148,7 +1136,7 @@ bool ClassDecl::EnterNames(SemaContext& sc) {
 
         if (!field->type_info().dim_exprs.empty()) {
             if (!ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(),
-                                  sENUMFIELD)) {
+                                  sCLASSFIELD)) {
                 continue;
             }
         }

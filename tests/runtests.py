@@ -245,11 +245,15 @@ class Test(object):
       self.stdout_file = smx_expected_base + '.out'
     elif os.path.exists(base_path + '.out'):
       self.stdout_file = base_path + '.out'
+    elif os.path.exists(smx_expected_base + '.smx.out'):
+      self.stdout_file = smx_expected_base + '.smx.out'
 
     if os.path.exists(smx_expected_base + '.err'):
       self.stderr_file = smx_expected_base + '.err'
     elif os.path.exists(base_path + '.err'):
       self.stderr_file = base_path + '.err'
+    elif os.path.exists(smx_expected_base + '.smx.err'):
+      self.stderr_file = smx_expected_base + '.smx.err'
 
     if os.path.exists(base_path + '.txt'):
       self.txtout_file = base_path + '.txt'
@@ -295,6 +299,10 @@ class Test(object):
   def expectedReturnCode(self):
     if 'returnCode' in self.local_manifest_:
       return int(self.local_manifest_['returnCode'])
+    # A bare .err file (no .out, no .sp manifest) implies the test expects
+    # an error: exit code 1.
+    if self.stderr_file is not None and self.stdout_file is None:
+      return 1
     return 0
   
   @property
