@@ -1939,6 +1939,7 @@ class PropertyDecl : public Decl {
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
     LayoutDecl* parent() const {
+        assert(getter_ || setter_);
         return getter_ ? getter_->parent() : setter_->parent();
     }
 

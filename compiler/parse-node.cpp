@@ -292,7 +292,7 @@ Type* PropertyDecl::property_type() const {
 
     if (getter_)
         return getter_->type_info().type;
-    if (setter_->args().size() != 2)
+    if (!setter_ || setter_->args().size() != 2)
         return types->type_void();
     ArgDecl* valp = setter_->args()[1];
     return *valp->type();
