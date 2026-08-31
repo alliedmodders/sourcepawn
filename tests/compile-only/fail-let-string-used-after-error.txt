@@ -1,0 +1,2 @@
+(4) : error 020: cannot infer type of array literal; use explicit type
+(5) : error 450: no viable conversion from 'int' to 'char[]'

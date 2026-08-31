@@ -316,6 +316,13 @@ static bool IsArrayLiteralExpr(Expr* expr) {
            expr->is(ExprKind::StructExpr);
 }
 
+static typeinfo_t ErrorTypeinfo() {
+    typeinfo_t ti;
+    ti.type = CompileContext::get().types()->type_int();
+    ti.resolved = true;
+    return ti;
+}
+
 bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
@@ -326,17 +333,14 @@ bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
 
     if (IsArrayLiteralExpr(decl->init_rhs())) {
         report(decl->pos(), 20);
+        *decl->mutable_type_info() = ErrorTypeinfo();
         return false;
     }
 
     // Analyze the RHS to determine its type.
     Expr* init_rhs = decl->init_rhs();
     if (!CheckExpr(init_rhs)) {
-        // Use int as a dummy type to avoid crashes.
-        auto* ti = decl->mutable_type_info();
-        ti->type = types_->type_int();
-        ti->resolved = true;
-        ti->is_auto = false;
+        *decl->mutable_type_info() = ErrorTypeinfo();
         return false;
     }
 
