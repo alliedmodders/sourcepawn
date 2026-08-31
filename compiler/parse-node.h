@@ -583,7 +583,6 @@ class Expr : public ParseNode
     explicit Expr(ExprKind kind, const token_pos_t& pos)
       : ParseNode(pos),
         kind_(kind),
-        lvalue_(false),
         can_alloc_heap_(false)
     {}
 
@@ -609,10 +608,12 @@ class Expr : public ParseNode
 
     value& val() { return val_; }
     const value& val() const { return val_; }
-    bool lvalue() const { return lvalue_; }
-    void set_lvalue(bool lvalue) { lvalue_ = lvalue; }
     bool can_alloc_heap() const { return can_alloc_heap_; }
     void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
+
+    // Returns whether this is an l-value (eg can appear on the left-hand
+    // side of an assignment).
+    inline bool lvalue() const;
 
     ExprKind kind() const { return kind_; }
     bool is(ExprKind k) const { return kind() == k; }
@@ -630,7 +631,6 @@ class Expr : public ParseNode
   protected:
     value val_ = {};
     ExprKind kind_ : 8;
-    bool lvalue_ : 1;
     bool can_alloc_heap_ : 1;
 };
 
@@ -1837,6 +1837,20 @@ class MethodmapMethodDecl : public MemberFunctionDecl {
     bool is_ctor_ : 1;
     bool is_dtor_ : 1;
 };
+
+inline bool Expr::lvalue() const {
+    switch (val_.ident) {
+        case iVARIABLE:
+        case iARRAYCHAR:
+        case iARRAYCELL:
+        case iACCESSOR:
+            if (kind() == ExprKind::RvalueExpr)
+                return false;
+            return true;
+        default:
+            return false;
+    }
+}
 
 } // namespace cc
 } // namespace sp

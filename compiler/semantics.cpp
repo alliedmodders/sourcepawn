@@ -412,7 +412,6 @@ bool Semantics::CheckWrappedExpr(Expr* outer, Expr* inner) {
         return false;
 
     outer->val() = inner->val();
-    outer->set_lvalue(inner->lvalue());
     return true;
 }
 
@@ -574,6 +573,7 @@ RvalueExpr::RvalueExpr(Expr* lval)
     lval_(lval)
 {
     assert(lval_->lvalue());
+    assert(!lval->as<RvalueExpr>());
 
     val_ = lval_->val();
     if (val_.ident == iACCESSOR) {
@@ -1280,7 +1280,6 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     auto& out_val = expr->val();
 
     out_val = inner->val();
-    expr->set_lvalue(inner->lvalue());
 
     Type* ltype = out_val.type();
     if (atype == ltype)
@@ -1327,10 +1326,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
             report(expr, 460) << out_val.type() << atype;
             return false;
         }
-        if (inner->lvalue()) {
+        if (inner->lvalue())
             expr->set_expr(new RvalueExpr(inner));
-            expr->set_lvalue(false);
-        }
         out_val.ident = iEXPRESSION;
     }
 
@@ -1356,11 +1353,10 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 
     auto& val = expr->val();
     switch (decl->kind()) {
-        case StmtKind::ArgDecl:
         case StmtKind::VarDecl:
-            val.ident = iVARIABLE;
-            expr->set_lvalue(true);
-            break;
+        case StmtKind::ArgDecl:
+            val.set_variable(decl, decl->type());
+            return true;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
             val.ident = iCONSTEXPR;
@@ -1430,30 +1426,19 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
 bool Semantics::CheckCommaExpr(CommaExpr* comma) {
     AutoErrorPos aep(comma->pos());
 
-    for (const auto& expr : comma->exprs()) {
+    size_t index = 0;
+    for (auto& expr : comma->exprs()) {
         if (!CheckRvalue(expr))
             return false;
-    }
-
-    Expr* last = comma->exprs().back();
-    if (comma->exprs().size() > 1 && last->lvalue()) {
-        last = new RvalueExpr(last);
-        comma->exprs().back() = last;
-    }
-
-    for (size_t i = 0; i < comma->exprs().size() - 1; i++) {
-        auto expr = comma->exprs().at(i);
+        if (expr->lvalue())
+            expr = new RvalueExpr(expr);
         if (!expr->HasSideEffects())
-            report(expr, 231) << i;
+            report(expr, 231) << index;
+        index++;
     }
 
-    comma->val() = last->val();
-    comma->set_lvalue(last->lvalue());
-
-    // Don't propagate a constant if it would cause Emit() to shortcut and not
-    // emit other expressions.
-    if (comma->exprs().size() > 1 && comma->val().ident == iCONSTEXPR)
-        comma->val().ident = iEXPRESSION;
+    const auto& last = comma->exprs().back();
+    comma->val().set_expr(last->val().qualified());
     return true;
 }
 
@@ -1556,8 +1541,6 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
     else
         out_val.set_slice(iARRAYCELL, base_val.sym);
     out_val.set_type(array->inner());
-
-    expr->set_lvalue(true);
     return true;
 }
 
@@ -1566,10 +1549,7 @@ bool Semantics::CheckThisExpr(ThisExpr* expr) {
     assert(sym->as<ArgDecl>());
 
     auto& val = expr->val();
-    val.ident = iVARIABLE;
-    val.sym = sym;
-    val.set_type(sym->type());
-    expr->set_lvalue(true);
+    val.set_variable(sym, sym->type());
     return true;
 }
 
@@ -1681,7 +1661,6 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
             base = expr->set_base(new RvalueExpr(base));
         val.set_type(prop->property_type());
         val.set_accessor(prop);
-        expr->set_lvalue(true);
         return true;
     }
 
@@ -1841,7 +1820,6 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     } else {
         // Need LOAD_I to convert to r-value.
         val.ident = iARRAYCELL;
-        expr->set_lvalue(true);
     }
     return true;
 }

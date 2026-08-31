@@ -56,15 +56,26 @@ struct value {
 
     IdentifierKind ident : 6;
     Decl* sym;
-    Type* type_;
+    QualType type_;
 
-    Type* type() const { return type_; }
-    void set_type(Type* type) { type_ = type; }
-    void set_type(QualType type) { type_ = *type; }
+    Type* type() const { return *type_; }
+    QualType qualified() const { return type_; }
+    void set_type(Type* type) { type_ = QualType(type); }
+    void set_type(QualType type) { type_ = type; }
 
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
     bool canRematerialize() const;
+
+    void set_variable(Decl* decl, QualType type) {
+        this->ident = iVARIABLE;
+        this->sym = decl;
+        set_type(type);
+    }
+    void set_expr(QualType type) {
+        this->ident = iEXPRESSION;
+        set_type(type);
+    }
 
     MethodmapPropertyDecl* accessor() const {
         if (ident != iACCESSOR)
