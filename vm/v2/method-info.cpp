@@ -34,7 +34,10 @@ uint32_t MethodInfo::pcode_offset() const {
     return rt_->image()->GetMethod(method_index_)->pcode_start;
 }
 
-MethodInfo::~MethodInfo() = default;
+MethodInfo::~MethodInfo() {
+    if (fn_obj_)
+        fn_obj_->method = nullptr;
+}
 
 void MethodInfo::setCompiledFunction(CompiledFunction* fun) {
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
@@ -44,6 +47,15 @@ void MethodInfo::setCompiledFunction(CompiledFunction* fun) {
 void MethodInfo::set_llcode(std::unique_ptr<LLCode> code) {
     std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
     llcode_ = std::move(code);
+}
+
+const Handle<SpFunction>& MethodInfo::GetFunction() {
+    if (!fn_obj_) {
+        fn_obj_ = rt_->heap().New<SpFunction>(signature());
+        if (fn_obj_)
+            fn_obj_->method = this;
+    }
+    return fn_obj_;
 }
 
 void

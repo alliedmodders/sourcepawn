@@ -42,7 +42,9 @@ struct CompileOptions {
     int compression = 9;
     bool show_includes = false;
     bool print_ast = false;
-    bool syntax_only = false;    int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
+    bool syntax_only = false;
+    int verbosity = 1;             /* verbosity level, 0=quiet, 1=normal, 2=verbose */
+    bool sema_only = false;
     std::vector<std::pair<std::string, std::string>> predefines;
 };
 

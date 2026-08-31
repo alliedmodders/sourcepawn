@@ -21,6 +21,7 @@
 #pragma once
 
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "coercion-rules.h"
@@ -57,6 +58,10 @@ class SemaContext
     {
         cc_prev_sc_ = cc_.sema();
         cc_.set_sema(this);
+        if (parent.func() != nullptr) {
+            while (scope_ && !scope_->IsGlobalOrFileStatic())
+                scope_ = scope_->parent();
+        }
     }
 
     ~SemaContext() {
@@ -141,6 +146,7 @@ class Semantics final
                        CvtContext why);
     bool CheckCoercion(ParseNode* node, QualType formal, QualType actual,
                        CvtContext why);
+    Expr* TryConversion(Expr* expr, QualType formal, CvtContext why);
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }
@@ -171,6 +177,7 @@ class Semantics final
     bool CheckReturnStmt(ReturnStmt* stmt);
     bool CheckCompoundReturnStmt(ReturnStmt* stmt);
     bool CheckNativeCompoundReturn(FunctionDecl* info);
+    void ReportInvalidNativeArgument(ParseNode* node, Type* type);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
@@ -207,6 +214,8 @@ class Semantics final
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                         bool from_call);
+    bool CheckFunctionExpr(FunctionExpr* expr);
+
     bool CheckRvalue(Expr* expr, Type* target = nullptr);
     bool CheckRvalue(const token_pos_t& pos, const value& val);
 
@@ -224,11 +233,11 @@ class Semantics final
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    Expr* CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
+    Expr* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
                         ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     FunctionDecl* BindNewTarget(Expr* target);
-    FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
+    CallTarget BindCallTarget(CallExpr* call, Expr* target);
     SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
     Expr* AnalyzeForTest(Expr* expr);
@@ -275,6 +284,7 @@ class Semantics final
     tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;
     sp::Atom* this_atom_ = nullptr;
+    int fun_expr_count_ = 0;
 };
 
 class AutoEnterScope final
@@ -316,7 +326,6 @@ void ReportFunctionReturnError(FunctionDecl* decl);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
-bool check_operatortag(int opertok, Type* result_type, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
 bool IsLegacyEnumType(SymbolScope* scope, Type* type);
 bool IsValidIndexType(Type* type);

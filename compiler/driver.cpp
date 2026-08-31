@@ -75,6 +75,8 @@ args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
                                  "Disable opcode verification (for debugging).");
 args::ToggleOption opt_print_ast(nullptr, "--print-ast", Some(false),
                                  "Print the Abstract Syntax Tree");
+args::ToggleOption opt_sema_only(nullptr, "--sema-only", Some(false),
+                                 "Stop after perforing semantic analysis.");
 
 /* set_extension
  * Set the default extension, or force an extension. To erase the
@@ -119,6 +121,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
     }
 
     cc.options()->syntax_only = opt_syntax_only.value();
+    cc.options()->sema_only = opt_sema_only.value();
     cc.options()->need_semicolon = opt_semicolons.value();
     cc.options()->tabsize = opt_tabsize.value();
     cc.options()->warnings_are_errors = opt_warnings_as_errors.value();

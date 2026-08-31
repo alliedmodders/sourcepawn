@@ -81,31 +81,6 @@ Decl* FindEnumStructField(Type* type, Atom* name) {
     return nullptr;
 }
 
-bool check_operatortag(int opertok, Type* result_type, const char* opername) {
-    assert(opername != NULL && strlen(opername) > 0);
-    switch (opertok) {
-        case '!':
-        case '<':
-        case '>':
-        case tlEQ:
-        case tlNE:
-        case tlLE:
-        case tlGE:
-            if (!result_type->isBool()) {
-                report(63) << opername << "bool"; /* operator X requires a "bool:" result tag */
-                return false;
-            }
-            break;
-        case '~':
-            if (!result_type->isInt()) {
-                report(63) << opername << "int"; /* operator "~" requires a "_:" result tag */
-                return false;
-            }
-            break;
-    }
-    return true;
-}
-
 enum class NewNameStatus {
     Ok,
     Shadowed,

@@ -102,8 +102,13 @@ bool SemaContext::BindType(const token_pos_t& pos, Atom* atom, bool is_label, Ty
         return false;
     }
 
-    if (type->isTypedef())
+    if (type->isTypedef()) {
+        if (!type->inner()) {
+            report(pos, 139) << atom;
+            return false;
+        }
         type = type->inner();
+    }
 
     *out_type = type;
     return true;
@@ -113,8 +118,40 @@ bool
 ParseTree::ResolveNames(SemaContext& sc)
 {
     bool ok = true;
+    ok &= stmts_->EnterTypes(sc);
     ok &= stmts_->EnterNames(sc);
     ok &= stmts_->Bind(sc);
+    return ok;
+}
+
+static bool DoEnterTypes(Stmt* stmt, SemaContext& sc) {
+    switch (stmt->kind()) {
+        case StmtKind::ChangeScopeNode:
+            sc.set_scope(stmt->to<ChangeScopeNode>()->scope());
+            return true;
+        case StmtKind::EnumDecl:
+            return stmt->to<EnumDecl>()->EnterTypes(sc);
+        case StmtKind::PstructDecl:
+            return stmt->to<PstructDecl>()->EnterTypes(sc);
+        case StmtKind::TypedefDecl:
+            return stmt->to<TypedefDecl>()->EnterTypes(sc);
+        case StmtKind::TypesetDecl:
+            return stmt->to<TypesetDecl>()->EnterTypes(sc);
+        case StmtKind::EnumStructDecl:
+            return stmt->to<EnumStructDecl>()->EnterTypes(sc);
+        case StmtKind::MethodmapDecl:
+            return stmt->to<MethodmapDecl>()->EnterTypes(sc);
+        case StmtKind::StmtList:
+            return stmt->to<StmtList>()->EnterTypes(sc);
+        default:
+            return true;
+    }
+}
+
+bool StmtList::EnterTypes(SemaContext& sc) {
+    bool ok = true;
+    for (const auto& stmt : stmts_)
+        ok &= DoEnterTypes(stmt, sc);
     return ok;
 }
 
@@ -150,21 +187,36 @@ BlockStmt::Bind(SemaContext& sc)
     return StmtList::Bind(sc);
 }
 
+bool EnumDecl::EnterTypes(SemaContext& sc) {
+    auto types = sc.cc().types();
+    if (label_) {
+        type_ = types->find(label_);
+        if (!type_)
+            type_ = types->defineEnumTag(label_->chars());
+    }
+    if (name_) {
+        type_ = types->find(name_);
+        if (!type_)
+            type_ = types->defineEnumTag(name_->chars());
+    }
+    if (!type_)
+        type_ = types->type_int();
+    return true;
+}
+
 bool EnumDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
     auto types = sc.cc().types();
 
     if (label_) {
-        type_ = types->find(label_);
-        if (!type_) {
-            type_ = types->defineEnumTag(label_->chars());
-        } else if (type_->isInt()) {
+        Type* label_type = types->find(label_);
+        if (label_type->isInt()) {
             // No implicit-int allowed.
             report(pos_, 169);
             label_ = nullptr;
-        } else if (type_->kind() != TypeKind::Methodmap && type_->kind() != TypeKind::Enum) {
-            report(pos_, 432) << label_ << type_->kindName();
+        } else if (label_type->kind() != TypeKind::Methodmap && label_type->kind() != TypeKind::Enum) {
+            report(pos_, 432) << label_;
         }
     }
 
@@ -172,20 +224,12 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         if (label_)
             error(pos_, 168);
 
-        if (auto type = types->find(name_)) {
-            if (type->kind() != TypeKind::Methodmap && type->kind() != TypeKind::Enum)
-                report(pos_, 432) << name_ << type->kindName();
-            type_ = type;
-        } else {
-            type_ = types->defineEnumTag(name_->chars());
-        }
+        if (type_->kind() != TypeKind::Methodmap && type_->kind() != TypeKind::Enum)
+            report(pos_, 432) << name_;
     } else {
         // The name is automatically the label.
         name_ = label_;
     }
-
-    if (!type_)
-        type_ = types->type_int();
 
     if (name_) {
         bool is_methodmap = false;
@@ -237,24 +281,30 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 bool
 EnumDecl::Bind(SemaContext& sc)
 {
-    if (vclass_ == sLOCAL)
+    if (vclass_ == sLOCAL) {
+        if (!EnterTypes(sc))
+            return false;
         return EnterNames(sc);
+    }
     return true;
 }
 
-bool
-PstructDecl::EnterNames(SemaContext& sc)
-{
-    if (auto type = sc.cc().types()->find(name_)) {
-        report(pos_, 432) << name_ << type->kindName();
+bool PstructDecl::EnterTypes(SemaContext& sc) {
+    if (sc.cc().types()->find(name_)) {
+        report(pos_, 432) << name_;
         return false;
     }
     if (!isupper(*name_->chars())) {
         report(pos_, 109) << "struct";
         return false;
     }
-
     type_ = sc.cc().types()->definePstruct(this);
+    return true;
+}
+
+bool PstructDecl::EnterNames(SemaContext& sc) {
+    if (!type_)
+        return false;  // EnterTypes failed; error already reported
 
     size_t position = 0;
     for (auto& field : fields_) {
@@ -294,16 +344,21 @@ bool PstructDecl::Bind(SemaContext& sc) {
     return ok;
 }
 
-bool
-TypedefDecl::EnterNames(SemaContext& sc)
-{
-    if (Type* prev_type = sc.cc().types()->find(name_)) {
-        report(pos_, 432) << name_ << prev_type->kindName();
+bool TypedefDecl::EnterTypes(SemaContext& sc) {
+    if (sc.cc().types()->find(name_)) {
+        report(pos_, 432) << name_;
         return false;
     }
+    placeholder_ = sc.cc().types()->declareTypedef(name_);
+    return true;
+}
 
+bool TypedefDecl::EnterNames(SemaContext& sc) {
     if (type_) {
-        fe_ = funcenums_add(sc.cc(), name_, false);
+        auto ft = type_->Bind(sc);
+        if (!ft)
+            return false;
+        sc.cc().types()->updateTypedef(placeholder_, ft);
     } else {
         if (!sc.BindType(pos(), ti_))
             return false;
@@ -313,19 +368,12 @@ TypedefDecl::EnterNames(SemaContext& sc)
             report(this, 465) << ti_->type;
             return false;
         }
-        sc.cc().types()->defineTypedef(name_, ti_->type);
+        sc.cc().types()->updateTypedef(placeholder_, ti_->type);
     }
     return true;
 }
 
 bool TypedefDecl::Bind(SemaContext& sc) {
-    if (type_) {
-        auto ft = type_->Bind(sc);
-        if (!ft)
-            return false;
-
-        new (&fe_->entries) PoolArray<FunctionType*>({ft});
-    }
     return true;
 }
 
@@ -348,18 +396,19 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
             ft_args.emplace_back(arg->type.qualified());
     }
 
-    return sc.cc().types()->defineFunction(QualType(ret_type.type()), ft_args, variadic);
+    return sc.cc().types()->defineFunction(QualType(ret_type.type()), ft_args, variadic, conv);
 }
 
-bool
-TypesetDecl::EnterNames(SemaContext& sc)
-{
-    if (Type* prev_type = sc.cc().types()->find(name_)) {
-        report(pos_, 432) << name_ << prev_type->kindName();
+bool TypesetDecl::EnterTypes(SemaContext& sc) {
+    if (sc.cc().types()->find(name_)) {
+        report(pos_, 432) << name_;
         return false;
     }
-
     fe_ = funcenums_add(sc.cc(), name_, false);
+    return true;
+}
+
+bool TypesetDecl::EnterNames(SemaContext& sc) {
     return true;
 }
 
@@ -756,6 +805,10 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
     return nullptr;
 }
 
+bool FunctionExpr::Bind(SemaContext& sc) {
+    return decl_->Bind(sc);
+}
+
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
@@ -794,6 +847,10 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!ok)
         return false;
 
+    // For inner functions, enter the name into the enclosing function's local scope.
+    if (outer_sc.func() && name())
+        DefineSymbol(outer_sc, this, sLOCAL);
+
     if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
         // :TODO: deprecate this syntax.
         is_public_ = true;  // implicit public function
@@ -807,7 +864,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     });
     sc.sema()->set_context(&sc);
 
-    if (name_->str() == uMAINFUNC) {
+    if (name_ && name_->str() == uMAINFUNC) {
         if (!args_.empty())
             error(pos_, 5);     /* "main()" functions may not have any arguments */
         is_live_ = true;
@@ -825,6 +882,21 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         if (this_type_ && ok)
             markusage(args_[0], uREAD);
     }
+
+    // Create FunctionType from resolved signature. This must happen after
+    // arg->Bind(), which resolves array dimensions into the arg types.
+    std::vector<QualType> ft_args;
+    bool variadic = false;
+    for (const auto& arg : args_) {
+        if (arg->type_info().is_varargs) {
+            variadic = true;
+        } else {
+            ft_args.emplace_back(arg->type());
+        }
+    }
+    auto ft = outer_sc.cc().types()->defineFunction(
+        QualType(decl_.type.type, decl_.type.is_const), ft_args, variadic, FunctionType::Convention::Typed);
+    set_function_type(ft);
 
     ok &= BindArgs(sc);
 
@@ -869,6 +941,18 @@ bool FunctionDecl::BindArgs(SemaContext& sc) {
         return errors.ok();
     }
     if (!canonical()->compared_prototype_args) {
+        if (this == impl() &&
+            prototype()->return_type()->isVoid() &&
+            return_type()->isInt() &&
+            !type_info().is_new)
+        {
+	    // We got something like:
+	    //    forward void X();
+	    //    public X()
+	    //
+	    // Switch our decl type to void.
+            update_return_type(prototype()->return_type());
+        }
         auto impl_fun = impl();
         auto proto_fun = prototype();
         for (size_t i = 0; i < impl_argc; i++) {
@@ -898,10 +982,13 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
     return names_.size() == symbols_.size();
 }
 
+bool EnumStructDecl::EnterTypes(SemaContext& sc) {
+    type_ = sc.cc().types()->defineEnumStruct(name_, this);
+    return true;
+}
+
 bool EnumStructDecl::EnterNames(SemaContext& sc) {
     AutoCountErrors errors;
-
-    type_ = sc.cc().types()->defineEnumStruct(name_, this);
 
     AutoErrorPos error_pos(pos_);
 
@@ -949,6 +1036,9 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
         seen.emplace(field->name());
+
+        if (!field->type()->isAllowedInNativeCall())
+            type_->forbidInNativeCall();
     }
 
     if (fields_.empty())
@@ -986,19 +1076,22 @@ Decl::DecorateInnerName(Atom* parent_name, Atom* field_name)
     return CompileContext::get().atom(full_name);
 }
 
+bool MethodmapDecl::EnterTypes(SemaContext& sc) {
+    auto& cc = sc.cc();
+    if (auto type = cc.types()->find(name_)) {
+        if (!type->isEnum()) {
+            report(pos_, 432) << name_;
+            return false;
+        }
+    }
+    type_ = cc.types()->defineMethodmap(name_, this);
+    return true;
+}
+
 bool MethodmapDecl::EnterNames(SemaContext& sc) {
     AutoErrorPos error_pos(pos_);
 
     auto& cc = sc.cc();
-    if (auto type = cc.types()->find(name_)) {
-        if (!type->isEnum()) {
-            report(pos_, 432) << name_ << type->kindName();
-            return false;
-        }
-    }
-
-    type_ = cc.types()->defineMethodmap(name_, this);
-
     if (auto prev_decl = FindSymbol(cc.globals(), name_)) {
         auto ed = prev_decl->as<EnumDecl>();
         if (!ed) {

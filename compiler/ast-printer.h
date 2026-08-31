@@ -53,6 +53,7 @@ class AstPrinter
     void PrintIndent(bool is_last);
     void PrintType(const typeinfo_t& type);
     void PrintExprInline(Expr* expr);
+    void PrintEscapedString(const char* s);
 
 #define _(Name) void Print##Name(Name* node, bool is_last);
     AST_STMT_TYPE_LIST(_)

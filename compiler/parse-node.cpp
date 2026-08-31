@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include "compile-context.h"
 #include "errors.h"
 
 namespace sp {
@@ -130,6 +131,10 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
 {
 }
 
+void FunctionDecl::update_return_type(Type* type) {
+    signature_ = CompileContext::get().types()->UpdateReturnType(signature_, QualType(type));
+}
+
 int FunctionDecl::FindNamedArg(Atom* name) const {
     for (size_t i = 0; i < args_.size() && !args_[i]->type_info().is_varargs; i++) {
         if (args_[i]->name() == name)
@@ -182,6 +187,14 @@ auto FunctionDecl::cg() -> CGInfo* {
     if (!cg_)
         cg_ = new CGInfo();
     return cg_;
+}
+
+FunctionType* CallExpr::callee_type() {
+    if (auto p = std::get_if<FunctionType*>(&resolved_target_))
+        return *p;
+    if (auto p = std::get_if<FunctionDecl*>(&resolved_target_))
+        return (*p)->signature();
+    return nullptr;
 }
 
 FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)

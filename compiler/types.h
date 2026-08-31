@@ -130,7 +130,9 @@ struct TypenameInfo {
     static constexpr uintptr_t kAtomFlag = 0x1;
     static constexpr uintptr_t kLabelFlag = 0x2;
 
-    TypenameInfo() {}
+    TypenameInfo() {
+        impl.raw = nullptr;
+    }
     explicit TypenameInfo(Type* type) {
         impl.type = type;
     }
@@ -237,7 +239,12 @@ class Type : public PoolObject
     friend class TypeManager;
 
   public:
-    Type(Atom* name, TypeKind kind);
+    Type(Atom* name, TypeKind kind)
+      : name_(name),
+        kind_(kind),
+        allowed_in_native_call_(true),
+        inner_type_(nullptr)
+    {}
 
     Atom* declName() const { return name_; }
     TypeKind kind() const { return kind_; }
@@ -272,7 +279,7 @@ class Type : public PoolObject
     bool isBool() const { return isBuiltin(BuiltinType::Bool); }
     bool isReference() const { return kind_ == TypeKind::Reference; }
     bool isArray() const { return kind_ == TypeKind::Array; }
-    bool isHeapItem() const { return isArray(); }
+    bool isHeapItem();
     bool isTypedef() const { return kind_ == TypeKind::Typedef; }
     bool isCharArray() const;
     bool isNonHeapNullable() const;
@@ -291,7 +298,8 @@ class Type : public PoolObject
 
     bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
 
-    bool canOperatorOverload() const;
+    bool isAllowedInNativeCall() const { return allowed_in_native_call_; }
+    void forbidInNativeCall() { allowed_in_native_call_ = false; }
 
     BuiltinType builtin_type() const {
         assert(isBuiltin());
@@ -440,18 +448,18 @@ class Type : public PoolObject
         inner_type_ = inner;
     }
     void setTypedef(Type* inner) {
-        assert(!inner->isTypedef());
         assert(kind_ == TypeKind::Typedef);
+        assert(!inner->isTypedef());
         inner_type_ = inner;
     }
 
     void resetPtr();
 
-  private:
-    Atom* name_;
-    TypeKind kind_;
-
   protected:
+    Atom* name_;
+    TypeKind kind_ : 8;
+    bool allowed_in_native_call_ : 1;
+
     union {
         funcenum_t* funcenum_ptr_;
         MethodmapDecl* methodmap_ptr_;
@@ -465,24 +473,35 @@ class Type : public PoolObject
 
 class FunctionType : public Type {
   public:
+    enum Convention {
+        Legacy,
+        Typed,
+        Closure
+    };
+
     FunctionType(QualType return_type, const std::vector<QualType>& args,
-                 bool variadic)
+                 bool variadic, Convention conv)
       : Type(nullptr, TypeKind::FunctionSignature),
+        conv_(conv),
         variadic_(variadic)
     {
         return_type_ = return_type;
         new (&args_) decltype(args_)(args);
+        allowed_in_native_call_ = (conv == Legacy);
     }
 
     QualType return_type() const { return return_type_; }
     unsigned int nargs() const { return (unsigned int)args_.size(); }
     QualType arg_type(unsigned int i) { return args_[i]; }
     bool variadic() const { return variadic_; }
+    Convention conv() const { return conv_; }
+    bool needs_hidden_arg() const;
 
     static bool is_a(const Type* type) { return type->kind() == TypeKind::FunctionSignature; }
 
   private:
     PoolArray<QualType> args_;
+    Convention conv_;
     bool variadic_;
 };
 
@@ -528,6 +547,8 @@ class TypeManager
     Type* definePstruct(PstructDecl* decl);
     Type* defineReference(Type* inner);
     Type* defineTypedef(Atom* name, Type* inner);
+    Type* declareTypedef(Atom* name);
+    void updateTypedef(Type* placeholder, Type* inner);
     ArrayType* defineArray(Type* element_type, int dim);
     ArrayType* defineArray(Type* element_type, const int* dim_vec, int numdim);
     ArrayType* defineArray(Type* element_type, const PoolArray<int>& dim_vec);
@@ -535,7 +556,8 @@ class TypeManager
     ArrayType* redefineArray(Type* element_type, ArrayType* old_type);
     FunctionType* defineFunction(QualType return_type,
                                  const std::vector<QualType>& args,
-                                 bool variadic);
+                                 bool variadic, FunctionType::Convention conv);
+    FunctionType* UpdateReturnType(FunctionType* ft, QualType new_return_type);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }
@@ -595,6 +617,7 @@ class TypeManager
             QualType return_type;
             const std::vector<QualType>* args;
             bool variadic;
+            FunctionType::Convention conv;
         };
 
         static bool matches(const Lookup& lookup, FunctionType* type);

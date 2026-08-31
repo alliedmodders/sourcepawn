@@ -459,6 +459,18 @@ IPluginFunction* Runtime::GetFunctionByName(const char* public_name) {
     return GetScriptedInvoker(publics_[index].funcid);
 }
 
+Handle<SpFunction> Runtime::CastFunctionId(funcid_t id, const TypeDesc* td) {
+    uint32_t method_index = id >> 1;
+
+    auto callee = AcquireMethod(method_index);
+    if (!callee || callee->signature() != td) {
+        ReportErrorNumber(SP_ERROR_PARAM);
+        return {};
+    }
+
+    return callee->GetFunction();
+}
+
 bool Runtime::IsDebugging() {
     return true;
 }
@@ -821,7 +833,7 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
         case cb::kAny:
             return GetPrimitiveType(TypeKind::Any);
         case cb::kTopFunction:
-            return GetPrimitiveType(TypeKind::TopFunction);
+            return GetPrimitiveType(TypeKind::Int32);
         case cb::kEnum: {
             uint32_t index;
             if (!parser.ReadUint32_Leb128(&index))
@@ -881,7 +893,8 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
                 ReportError("Invalid type data");
                 return nullptr;
             }
-            return GetPrimitiveType(TypeKind::TopFunction);
+            auto sig_parser = image_->GetTypeParser(index);
+            return LoadFunctionSignature(sig_parser, false);
         }
         case cb::kTypeset: {
             uint32_t index;
@@ -889,7 +902,7 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
                 ReportError("Invalid type data");
                 return nullptr;
             }
-            return GetPrimitiveType(TypeKind::TopFunction);
+            return GetPrimitiveType(TypeKind::Int32);
         }
         default:
             assert(false);
@@ -938,10 +951,11 @@ const TypeDesc* Runtime::LoadMethodSignature(uint32_t method_index) {
         return nullptr;
     }
 
-    // :TODO: acquire method
-
     auto parser = image_->GetTypeParser(method->signature);
+    return LoadFunctionSignature(parser, (method->flags & kRttiMethod_Native) != 0);
+}
 
+const TypeDesc* Runtime::LoadFunctionSignature(FastRtti& parser, bool is_native) {
     uint32_t expected_argc;
     if (!parser.ReadFunctionSignatureArgCount(&expected_argc)) {
         ReportError("invalid function signature");
@@ -984,7 +998,7 @@ const TypeDesc* Runtime::LoadMethodSignature(uint32_t method_index) {
     if (variadic == cb::kLegacyVariadic)
         args.push_back(GetPrimitiveType(TypeKind::LegacyVarArgs));
 
-    return env_->types()->CreateFunction(return_type, args, (method->flags & kRttiMethod_Native) != 0);
+    return env_->types()->CreateFunction(return_type, args, is_native);
 }
 
 const TypeDesc* Runtime::GetReferenceType(const TypeDesc* td) {

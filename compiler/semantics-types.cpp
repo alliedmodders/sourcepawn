@@ -195,6 +195,19 @@ void Semantics::ReportConversionDiagnostic(ParseNode* node, QualType formal, Qua
     ReportConversionDiagnosticImpl(node, formal, actual);
 }
 
+Expr* Semantics::TryConversion(Expr* expr, QualType formal, CvtContext why) {
+    auto ck = FindConversion(expr->val().type(), *formal, why);
+    if (HasImplicitConversion(ck)) {
+        if (!IsNopConversion(ck))
+            return BuildConversion(expr, ck, *formal);
+        if (ck == ConversionKind::TagMismatch)
+            report(expr->pos(), 213) << formal << expr->val().type();
+        return expr;
+    }
+    ReportConversionDiagnostic(expr->pos(), formal, expr->val().type());
+    return nullptr;
+}
+
 bool Semantics::CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
                               CvtContext why)
 {

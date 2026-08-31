@@ -99,8 +99,7 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
             break;
         }
 
-
-        case OP_LOAD_FN:
+        case OP_LOADFN:
         case OP_CALL:
         case OP_CALLN:
         case OP_CALLVA:

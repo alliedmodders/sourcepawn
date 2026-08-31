@@ -587,8 +587,30 @@ void AstPrinter::PrintNumber64Expr(Number64Expr* node, bool is_last) {
         fprintf(out_, "Number64Expr: %lld\n", (long long)node->ToInt64().value_or(0));
 }
 
+void AstPrinter::PrintEscapedString(const char* s) {
+    for (; *s; s++) {
+        unsigned char c = *s;
+        switch (c) {
+            case '\n': fputs("\\n", out_); break;
+            case '\r': fputs("\\r", out_); break;
+            case '\t': fputs("\\t", out_); break;
+            case '"':  fputs("\\\"", out_); break;
+            case '\\': fputs("\\\\", out_); break;
+            default:
+                if (c < 0x20)
+                    fprintf(out_, "\\x%02x", c);
+                else
+                    fputc(c, out_);
+                break;
+        }
+    }
+}
+
 void AstPrinter::PrintStringExpr(StringExpr* node, bool is_last) {
-    fprintf(out_, "StringExpr: \"%s\"\n", node->text()->chars());
+    fprintf(out_, "StringExpr: \"");
+    PrintEscapedString(node->text()->chars());
+    fputc('"', out_);
+    fputc('\n', out_);
 }
 
 void AstPrinter::PrintNewArrayExpr(NewArrayExpr* node, bool is_last) {

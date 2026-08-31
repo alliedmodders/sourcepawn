@@ -167,7 +167,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
             break;
         }
 
-        case OP_LOAD_FN:
+        case OP_LOADFN:
         case OP_CALL:
         case OP_CALLN:
         case OP_CALLVA:

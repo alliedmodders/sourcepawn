@@ -23,6 +23,7 @@
 #include <list>
 #include <string>
 #include <optional>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -109,7 +110,7 @@ class CodeGenerator final
     void EmitSymbolExpr(SymbolExpr* expr);
     void EmitIndexExpr(IndexExpr* expr);
     void EmitSliceExpr(SliceExpr* expr);
-    bool IsElidableSlice(Expr* expr, FunctionDecl* fun, ArgDecl* arg);
+    bool IsElidableSlice(Expr* expr, FunctionDecl* fun, QualType arg);
     void EmitElidedSliceExpr(SliceExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
     void EmitCallExpr(CallExpr* expr, unsigned int flags);
@@ -123,13 +124,14 @@ class CodeGenerator final
     void EmitCommaExpr(CommaExpr* expr, unsigned int flags);
     void EmitArrayExpr(ArrayExpr* expr, unsigned int flags);
     void EmitSizeofExpr(SizeofExpr* expr, unsigned int flags);
+    void EmitFunctionExpr(FunctionExpr* expr);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
     void EmitLogicalExprTest(LogicalExpr* expr, bool jump_on_true, sp::Label* target);
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
-    void EmitCall(FunctionDecl* fun, cell nargs, bool is_spread = false);
+    void EmitCall(const CallTarget& target, cell nargs, bool is_spread = false);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void EmitRvalue(const value& lval);
     void EmitStore(ParseNode* node, const value& lval);
@@ -145,6 +147,7 @@ class CodeGenerator final
     void AddDebugLine(const token_pos_t& pos);
     void AddDebugSymbol(Decl* sym, uint32_t pc);
     void AddDebugSymbols(tr::vector<DebugSymbol>* list);
+    void AddFunctionToQueue(FunctionDecl* decl);
     void EnqueueDebugSymbol(Decl* decl, uint32_t pc);
     uint32_t AddNativeEntry(FunctionDecl* decl);
     smx_rtti_debug_method AddFunctionEntry(FunctionDecl* decl, uint32_t pcode_offset);
@@ -251,6 +254,7 @@ class CodeGenerator final
     RefPtr<SmxDataSection> smx_data_;
     RefPtr<SmxCodeSection> code_;
     std::unique_ptr<RttiBuilder> rtti_;
+    std::queue<FunctionDecl*> fun_queue_;
 
     smx_rtti_debug_method debug_info_;
     SymbolStack local_syms_;
@@ -273,7 +277,6 @@ class CodeGenerator final
 
     cell_t max_array_size_ = 0;
 
-    CallGraph callgraph_;
     LocalSlotSignature locals_;
 
     AutoCountErrors errors_;

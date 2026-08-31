@@ -816,11 +816,37 @@ bool Interpreter::run_internal() {
                     vregs_[frame->dest_reg] = result;
                 break;
             }
-            case LL_LOAD_FN: {
+            case LL_LOADFN: {
                 uint32_t method_index = reader_.read<uint32_t>();
                 uint16_t dest = reader_.read<uint16_t>();
-                funcid_t id = (method_index << 1) | 1;
-                vregs_[dest] = id;
+                auto method = rt_->AcquireMethod(method_index);
+                Handle<SpFunction> fn = method->GetFunction();
+                if (!fn)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(fn.release());
+                break;
+            }
+            case LL_GETFUNCID: {
+                uint16_t src = reader_.read<uint16_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                SpFunction* fn = rt_->heap().ToPhysAddr<SpFunction*>(vregs_[src]);
+                if (!fn || !fn->method) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
+                vregs_[dest] = (fn->method->method_index() << 1) | 1;
+                break;
+            }
+            case LL_GETFNOBJ: {
+                uint16_t src = reader_.read<uint16_t>();
+                const TypeDesc* td = reader_.read<const TypeDesc*>();
+                uint16_t dest = reader_.read<uint16_t>();
+
+                Handle<SpFunction> fun = rt_->CastFunctionId(vregs_[src], td);
+                if (!fun)
+                    return false;
+
+                vregs_[dest] = rt_->heap().ToLocalAddr(fun.release());
                 break;
             }
             case LL_LOAD_STR: {
@@ -961,14 +987,24 @@ bool Interpreter::run_internal() {
 
                 break;
             }
+            case LL_CALLI:
             case LL_CALL: {
-                const smx_rtti_method* method = reader_.read<const smx_rtti_method*>();
+                RefPtr<MethodInfo> target;
+                if (op == LL_CALL) {
+                    auto* method = reader_.read<const smx_rtti_method*>();
+                    target = rt_->AcquireMethod(smx_->GetIndexOfMethod(method));
+                } else {
+                    uint16_t fn_reg = reader_.read<uint16_t>();
+                    auto* sp_fn = rt_->heap().ToPhysAddr<SpFunction*>(vregs_[fn_reg]);
+                    if (!sp_fn || !sp_fn->method) {
+                        rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                        return false;
+                    }
+                    target = sp_fn->method;
+                }
                 uint8_t nargs = reader_.read<uint8_t>();
                 uint16_t dest = reader_.read<uint16_t>();
 
-                uint32_t method_index = smx_->GetIndexOfMethod(method);
-
-                RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
                 if (!target->Validate())
                     return false;
 

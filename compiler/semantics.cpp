@@ -118,10 +118,14 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
     decl.type.type = types_->type_void();
 
     auto fun = new FunctionDecl(token_pos_t{}, decl);
+    auto ft = types_->defineFunction(QualType(types_->type_void(), false), {}, false,
+                                     FunctionType::Typed);
+    fun->set_function_type(ft);
 
     std::vector<Stmt*> stmts;
     for (const auto& file_ctor : file_ctors) {
         auto call = new CallExpr(fun->pos(), '(', file_ctor, {});
+        call->val().set_expr(types_->type_void());
         stmts.emplace_back(new ExprStmt(fun->pos(), call));
     }
     fun->set_body(new BlockStmt(fun->pos(), stmts));
@@ -143,6 +147,9 @@ FunctionDecl* Semantics::GenerateInitFunction(const std::vector<VarDeclBase*>& v
     decl.type.type = types_->type_void();
 
     auto fun = new FunctionDecl(vars[0]->pos(), decl);
+    auto ft = types_->defineFunction(QualType(types_->type_void(), false), {}, false,
+                                     FunctionType::Typed);
+    fun->set_function_type(ft);
     auto init = new GlobalInitStmt(fun->pos(), vars);
     fun->set_body(init);
     fun->set_is_live();
@@ -472,6 +479,8 @@ bool Semantics::CheckExpr(Expr* expr) {
             return true;
         case ExprKind::NamedArgExpr:
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
+        case ExprKind::FunctionExpr:
+            return CheckFunctionExpr(expr->to<FunctionExpr>());
         default:
             assert(false);
             report(expr, 420) << (int)expr->kind();
@@ -580,6 +589,7 @@ bool Expr::HasSideEffects() {
         case ExprKind::StringExpr:
         case ExprKind::SymbolExpr:
         case ExprKind::TaggedValueExpr:
+        case ExprKind::Number64Expr:
         case ExprKind::ThisExpr:
             return false;
         default:
@@ -1360,15 +1370,13 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return false;
         }
 
-        funcenum_t* fe = funcenum_for_symbol(cc_, fun);
-
-        // New-style "closure".
         val.ident = iEXPRESSION;
-        val.set_type(fe->type);
+        val.set_type(fun->type());
 
         // Mark as being indirectly invoked. Direct invocations go through
         // BindCallTarget.
         fun->set_is_callback();
+        markusage(fun, uREAD);
     }
 
     if (val.ident == iTYPENAME) {
@@ -1655,19 +1663,19 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     return true;
 }
 
-FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
+CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
         case ExprKind::FieldAccessExpr: {
             auto expr = target->to<FieldAccessExpr>();
             if (!CheckFieldAccessExpr(expr, true))
-                return nullptr;
+                return {};
 
             auto& val = expr->val();
             if (val.ident != iFUNCTN) {
                 report(target, 12);
-                return nullptr;
+                return {};
             }
 
             // The static accessor (::) is offsetof(), so it can't return functions.
@@ -1678,7 +1686,7 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 auto map = method->parent()->as<MethodmapDecl>();
                 if (map->ctor() == method) {
                     report(call, 84) << method->parent()->name();
-                    return nullptr;
+                    return {};
                 }
             }
 
@@ -1701,31 +1709,41 @@ FunctionDecl* Semantics::BindCallTarget(CallExpr* call, Expr* target) {
                 if (!mm->ctor()) {
                     // Immediately fatal - no function to call.
                     report(target, 172) << decl->name();
-                    return nullptr;
+                    return {};
                 }
                 if (mm->nullable()) {
                     // Keep going, this is basically a style thing.
                     report(target, 170) << decl->name();
-                    return nullptr;
+                    return {};
                 }
                 return mm->ctor();
             }
-            auto fun = decl->as<FunctionDecl>();
-            if (!fun) {
-                report(target, 12);
-                return nullptr;
+            if (auto fun = decl->as<FunctionDecl>()) {
+                fun = fun->canonical();
+                if (!(fun->is_native() || fun->is_builtin()) && !fun->impl()) {
+                    report(target, 4) << decl->name();
+                    return {};
+                }
+                return fun;
+            }
+            [[fallthrough]];
+        }
+        default: {
+            if (!CheckRvalue(target))
+                return {};
+
+            if (target->lvalue())
+                target = new RvalueExpr(target);
+
+            if (auto ft = target->val().type()->as<FunctionType>()) {
+                if (ft->conv() == FunctionType::Legacy)
+                    report(target, 33);
+                return target;
             }
 
-            fun = fun->canonical();
-            if (!(fun->is_native() || fun->is_builtin()) && !fun->impl()) {
-                report(target, 4) << decl->name();
-                return nullptr;
-            }
-            return fun;
-        }
-        default:
             report(target, 12);
-            return nullptr;
+            return {};
+        }
     }
 }
 
@@ -1919,50 +1937,61 @@ static inline bool IsValidInt64RefArg(Type* param) {
 bool Semantics::CheckCallExpr(CallExpr* call) {
     AutoErrorPos aep(call->pos());
 
-    // Note: we do not Analyze the call target. We leave this to the
-    // implementation of BindCallTarget.
-    FunctionDecl* fun;
-    if (call->token() == tNEW)
+    FunctionDecl* fun = nullptr;
+    Expr* target = nullptr;
+
+    if (call->token() == tNEW) {
         fun = BindNewTarget(call->target());
-    else
-        fun = BindCallTarget(call, call->target());
-    if (!fun)
-        return false;
-
-    assert(fun->canonical() == fun);
-
-    call->set_fun(fun);
-
-    if (fun->return_type()->isArray() || fun->return_type()->isEnumStruct()) {
-        // We need to know the size of the returned array. Recursively analyze
-        // the function.
-        if (fun->is_analyzing() || !CheckFunctionDecl(fun)) {
-            report(call, 411);
+        if (!fun)
+            return false;
+    } else {
+        auto result = BindCallTarget(call, call->target());
+        if (auto target_fun = std::get_if<FunctionDecl*>(&result)) {
+            fun = *target_fun;
+        } else if (auto target_expr = std::get_if<Expr*>(&result)) {
+            target = *target_expr;
+        } else {
             return false;
         }
     }
 
-    markusage(fun, uREAD);
+    if (fun) {
+        assert(fun->canonical() == fun);
+        call->set_callee(fun);
+
+        if (fun->return_type()->isArray() || fun->return_type()->isEnumStruct()) {
+            if (fun->is_analyzing() || !CheckFunctionDecl(fun)) {
+                report(call, 411);
+                return false;
+            }
+        }
+
+        markusage(fun, uREAD);
+
+        if (fun->deprecate())
+            report(call, 234) << fun->name() << fun->deprecate();
+    } else {
+        call->set_target(target);
+        call->set_callee(target->val().type()->to<FunctionType>());
+    }
+
+    // Note: must read function_type() after CheckFunctionDecl, since
+    // recursive analysis can update the return type.
+    FunctionType* ft = call->callee_type();
 
     auto& val = call->val();
-    val.ident = iEXPRESSION;
-    val.set_type(fun->return_type());
-
-    // We don't have canonical decls yet, so get the one attached to the symbol.
-    if (fun->deprecate())
-        report(call, 234) << fun->name() << fun->deprecate();
+    val.set_expr(ft->return_type());
 
     ParamState ps;
 
     unsigned int nargs = 0;
     unsigned int argidx = 0;
-    auto& arglist = fun->args();
     if (call->implicit_this()) {
-        if (arglist.empty()) {
+        if (ft->nargs() == 0) {
             report(call->implicit_this(), 92);
             return false;
         }
-        Expr* param = CheckArgument(call, arglist[0], call->implicit_this(), &ps, 0);
+        Expr* param = CheckArgument(call, ft, ft->arg_type(0), call->implicit_this(), &ps, 0);
         if (!param)
             return false;
         ps.argv[0] = param;
@@ -1976,6 +2005,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
         Expr* param = entry;
         if (auto named = param->as<NamedArgExpr>()) {
+            if (!fun) {
+                report(call, 421);
+                continue;
+            }
             int pos = fun->FindNamedArg(named->name);
             if (pos < 0) {
                 report(call, 17) << named->name;
@@ -1990,8 +2023,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
                 return false;
             }
             argpos = nargs;
-            if (argidx >= arglist.size()) {
-                report(param->pos(), 92);
+            if (!ft->variadic() && argidx >= ft->nargs()) {
+                report(param, 92);
                 return false;
             }
         }
@@ -2006,16 +2039,16 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         }
 
         // Add the argument to |argv| and perform type checks.
-        auto result = CheckArgument(call, arglist[argidx], param, &ps, argpos);
+        auto formal = argidx < ft->nargs() ? ft->arg_type(argidx) : QualType{};
+        auto result = CheckArgument(call, ft, formal, param, &ps, argpos);
         if (!result)
             return false;
 
         ps.argv[argpos] = result;
-
         nargs++;
 
-        // Don't iterate past terminators (0 or varargs).
-        if (!arglist[argidx]->type_info().is_varargs)
+        // Don't iterate past the varargs position.
+        if (!ft->variadic() || argidx < ft->nargs())
             argidx++;
     }
 
@@ -2026,12 +2059,9 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     // Check for missing or invalid extra arguments, and fill in default
     // arguments.
-    for (unsigned int argidx = 0; argidx < arglist.size(); argidx++) {
-        auto arg = arglist[argidx];
-        if (arg->type_info().is_varargs)
-            break;
+    for (unsigned int argidx = 0; argidx < ft->nargs(); argidx++) {
         if (argidx >= ps.argv.size() || !ps.argv[argidx]) {
-            auto result = CheckArgument(call, arg, nullptr, &ps, argidx);
+            auto result = CheckArgument(call, ft, ft->arg_type(argidx), nullptr, &ps, argidx);
             if (!result)
                 return false;
             ps.argv[argidx] = result;
@@ -2048,8 +2078,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     return true;
 }
 
-Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
-                               ParamState* ps, unsigned int pos)
+// Note: currently formal is null for variadic arguments. We don't really
+// bother checking legacy vararg types anymore.
+Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal,
+                               Expr* param, ParamState* ps, unsigned int pos)
 {
     while (pos >= ps->argv.size())
         ps->argv.push_back(nullptr);
@@ -2057,14 +2089,16 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     unsigned int visual_pos = call->implicit_this() ? pos : pos + 1;
 
     if (!param || param->as<DefaultArgExpr>()) {
-        if (arg->type_info().is_varargs) {
+        if (!formal) {
             report(call, 92); // argument count mismatch
             return nullptr;
         }
-        if (!arg->init_rhs()) {
+        auto fun = call->fun();
+        if (!fun || !fun->args()[pos]->init_rhs()) {
             report(call, 34) << visual_pos; // argument has no default value
             return nullptr;
         }
+        auto arg = fun->args()[pos];
 
         if (!param)
             param = new DefaultArgExpr(call->pos(), arg);
@@ -2079,7 +2113,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     }
 
     if (param->as<SpreadArgsExpr>()) {
-        if (!call->fun()->IsVariadic()) {
+        if (!ft->variadic()) {
             report(param, 474);
             return nullptr;
         }
@@ -2095,8 +2129,13 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
     }
 
     if (param != call->implicit_this()) {
-        if (!CheckRvalue(param, *arg->type()))
-            return nullptr;
+        if (formal) {
+            if (!CheckRvalue(param, *formal))
+                return nullptr;
+        } else {
+            if (!CheckExpr(param))
+                return nullptr;
+        }
     }
 
     AutoErrorPos aep(param->pos());
@@ -2113,12 +2152,13 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
 
     const auto* val = &param->val();
     bool lvalue = param->lvalue();
-    if (arg->type_info().is_varargs) {
+    if (!formal) {
+        // We don't pass down a type for variadic arguments.
         assert(!handling_this);
 
         // Always pass by reference.
         if (val->ident == iVARIABLE) {
-            if (val->sym()->is_const() && !arg->type_info().is_const) {
+            if (val->sym()->is_const() && !formal.is_const()) {
                 // Treat a "const" variable passed to a function with a
                 // non-const "variable argument list" as a constant here.
                 if (!lvalue) {
@@ -2138,7 +2178,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         } else if (type->isArray()) {
             // Arrays are allowed in varargs.
         } else {
-            CheckCoercion(param, arg->type(), QualType(type), CvtContext::Argument);
+            // Varargs have no specific type to coerce against.
         }
         if (auto slice = ParamNeedsSliceWrapper(param, nullptr))
             param = slice;
@@ -2146,7 +2186,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             param = new RvalueExpr(param);
             val = &param->val();
         }
-    } else if (arg->type()->isReference()) {
+    } else if (formal->isReference()) {
         assert(!handling_this);
 
         if (!lvalue ||
@@ -2156,24 +2196,24 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
-        if (val->sym() && val->sym()->is_const() && !arg->type_info().is_const) {
+        if (val->sym() && val->sym()->is_const() && !formal.is_const()) {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
 
-        if (arg->type()->inner()->isInt64()) {
+        if (formal->inner()->isInt64()) {
             if (!IsValidInt64RefArg(val->type())) {
-                report(param, 134) << arg->type() << val->type();
+                report(param, 134) << *formal << val->type();
                 return nullptr;
             }
         } else {
             if (IsValidInt64RefArg(val->type())) {
-                report(param, 134) << arg->type() << val->type();
+                report(param, 134) << *formal << val->type();
                 return nullptr;
             }
-            CheckCoercion(param, arg->type()->inner(), QualType(val->type()), CvtContext::Argument);
+            CheckCoercion(param, formal->inner(), QualType(val->type()), CvtContext::Argument);
         }
-    } else if (auto to_array = arg->type()->as<ArrayType>()) {
+    } else if (auto to_array = formal->as<ArrayType>()) {
         if (auto slice = ParamNeedsSliceWrapper(param, to_array))
             param = slice;
         if (param->lvalue())
@@ -2182,7 +2222,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         val = &param->val();
 
         auto type = val->type();
-        if (!CheckCoercion(param, arg->type(), QualType(type), CvtContext::Argument))
+        if (!CheckCoercion(param, *formal, QualType(type), CvtContext::Argument))
             return nullptr;
 
         if (auto array = param->as<ArrayExpr>()) {
@@ -2192,7 +2232,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             }
         }
 
-        if (val->sym() && val->sym()->is_const() && !arg->type_info().is_const) {
+        if (val->sym() && val->sym()->is_const() && !formal.is_const()) {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
@@ -2202,16 +2242,23 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             val = &param->val();
         }
 
-        if (val->type()->isInt() && arg->type()->isInt64()) {
+        if (val->type()->isInt() && formal->isInt64()) {
             param = BuildSimpleCast(param, BuiltinType::Int64);
             val = &param->val();
         }
 
-        if (!CheckCoercion(param, arg->type(), QualType(val->type()), CvtContext::Argument))
+        if (!(param = TryConversion(param, *formal, CvtContext::Argument)))
             return nullptr;
+        val = &param->val();
     }
-    if (param)
-        param = CoerceNull(param, *arg->type());
+
+    if ((call->fun() && call->fun()->is_native()) || !formal) {
+        if (!val->type()->isAllowedInNativeCall())
+            ReportInvalidNativeArgument(param, val->type());
+    }
+
+    if (formal && param)
+        param = CoerceNull(param, *formal);
     return param;
 }
 
@@ -2471,18 +2518,15 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         return true;
     }
 
-    const auto& v = expr->val();
-
     // Check that the return statement matches the declared return type.
     // If a return statement has already been checked, the function's return type
     // is now fixed. We use Assignment to prevent returning a flat array to a
     // dynamic array return type, while the first return uses Return to allow
     // updating the return type.
     CvtContext why = already_returned ? CvtContext::Assignment : CvtContext::Return;
-    if (!CheckCoercion(stmt, fun->return_type(), v.type(), why))
+    if ((expr = TryConversion(expr, fun->return_type(), why)) == nullptr)
         return false;
-
-    expr = stmt->set_expr(CoerceNull(expr, fun->return_type()));
+    stmt->set_expr(expr);
 
     if (expr->val().type()->isEnumStruct() || expr->val().type()->isFixedArray()) {
         if (!CheckCompoundReturnStmt(stmt))
@@ -2516,8 +2560,6 @@ bool Semantics::CheckCompoundReturnStmt(ReturnStmt* stmt) {
         auto info = new FunctionDecl::ReturnArrayInfo;
         curfunc->set_return_array(info);
         curfunc->update_return_type(val.type());
-        if (val.type()->isFlatArray() || val.type()->isEnumStruct())
-            curfunc->set_needs_hidden_arg();
     }
     return true;
 }
@@ -2782,6 +2824,13 @@ void ReportFunctionReturnError(FunctionDecl* decl) {
     }
 }
 
+void Semantics::ReportInvalidNativeArgument(ParseNode* node, Type* type) {
+    if (type->isFunctionLike())
+        report(node, 43);
+    else
+        report(node, 48) << type;
+}
+
 bool
 FunctionDecl::IsVariadic() const
 {
@@ -2806,17 +2855,9 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     SemaContext sc(*sc_, info);
     ke::SaveAndSet<SemaContext*> push_sc(&sc_, &sc);
 
-    auto& decl = info->decl();
     if (info->is_public() || info->is_forward()) {
-        if (decl.type.dim_exprs.size() > 0)
+        if (info->return_type()->isArray())
             report(info->pos(), 141);
-    }
-
-    if (info->return_type()->isFlatArray() ||
-        info->return_type()->isEnumStruct() ||
-        info->return_type()->isInt64())
-    {
-        info->set_needs_hidden_arg();
     }
 
     auto canonical = info->canonical();
@@ -2845,6 +2886,11 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         auto rt = info->return_type();
         if ((rt->isArray() || rt->isEnumStruct()) && !CheckNativeCompoundReturn(info))
             return false;
+
+        for (const auto& arg : info->args()) {
+            if (arg->type() && !arg->type()->isAllowedInNativeCall())
+                ReportInvalidNativeArgument(arg, *arg->type());
+        }
         return true;
     }
 
@@ -2872,23 +2918,10 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
 
     info->set_returns_value(sc_->returns_value());
 
-    if (!info->returns_value()) {
-        if (fwd && fwd->return_type()->isVoid() && decl.type.type->isInt() &&
-            !decl.type.is_new)
-        {
-            // We got something like:
-            //    forward void X();
-            //    public X()
-            //
-            // Switch our decl type to void.
-            decl.type.set_type(types_->type_void());
-        }
-    }
-
     // Make sure that a public return type matches the forward (if any).
     if (fwd && info->is_public()) {
-        if (fwd->return_type() != decl.type.type)
-            report(info->pos(), 180) << fwd->return_type() << decl.type.type;
+        if (fwd->return_type() != info->return_type())
+            report(info->pos(), 180) << fwd->return_type() << info->return_type();
     }
 
     // For globals, we test arguments in a later pass, since we need to know
@@ -2912,6 +2945,31 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
 
     if (info->MustReturnValue())
         ReportFunctionReturnError(info);
+}
+
+bool Semantics::CheckFunctionExpr(FunctionExpr* expr) {
+    auto fun = expr->decl();
+    if (!CheckFunctionDecl(fun))
+        return false;
+
+    fun->set_is_live();
+
+    if (!fun->name()) {
+        auto enclosing = sc_->func();
+        uint32_t file_idx = cc_.sources()->GetSourceFileIndex(expr->pos());
+        std::string name = ".fn_expr@";
+        name += cc_.sources()->opened_files()[file_idx]->basename();
+        name += ":";
+        name += std::to_string(expr->pos().line);
+        name += ".";
+        name += std::to_string(enclosing ? enclosing->next_lambda_id()
+                                         : fun_expr_count_++);
+        fun->set_name(cc_.atom(name));
+    }
+
+    auto& v = expr->val();
+    v.set_expr(fun->type());
+    return true;
 }
 
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
@@ -3091,13 +3149,18 @@ Expr* Semantics::BuildConversion(Expr* from, const Conversion& cv) {
 }
 
 Expr* Semantics::BuildConversion(Expr* from, ConversionKind ck, Type* to) {
-    if (ck == ConversionKind::Numeric) {
-        assert(to->isBuiltin());
-        return BuildSimpleCast(from, to->builtin_type());
+    switch (ck) {
+        case ConversionKind::Numeric:
+            assert(to->isBuiltin());
+            return BuildSimpleCast(from, to->builtin_type());
+        case ConversionKind::FuncToLegacy:
+        case ConversionKind::LegacyToFunc:
+            return new SimpleCastExpr(from, to);
+        case ConversionKind::CoerceNull:
+            return CoerceNull(from, to);
+        default:
+            return from;
     }
-    if (ck == ConversionKind::CoerceNull)
-        return CoerceNull(from, to);
-    return from;
 }
 
 Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
@@ -3114,13 +3177,12 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
         to = new SimpleCastExpr(from, types_->GetBuiltin(type));
     }
 
-    to->val().ident = iEXPRESSION;
-    to->val().set_type(types_->GetBuiltin(type));
+    to->val().set_expr(types_->GetBuiltin(type));
     return to;
 }
 
 Expr* Semantics::CoerceNull(Expr* expr, Type* formal) {
-    if (expr->val().type()->isNull() && !formal->isNonFlatArray()) {
+    if (expr->val().type()->isNull() && !formal->isHeapItem()) {
         expr->val().set_type(types_->type_int());
         expr->val().set_constval(0);
     }

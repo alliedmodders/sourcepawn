@@ -108,7 +108,7 @@ ConversionKind FindArrayConversion(ArrayType* from, ArrayType* to, CvtContext wh
     if ((IsReturnOrAssign(why) || why == CvtContext::Argument) &&
         from->isCharArray() && to->isCharArray() && from->size() && from->size() <= to->size())
     {
-        return ConversionKind::None;
+        return ConversionKind::Trivial;
     }
 
     ArrayType* from_iter = from;
@@ -153,7 +153,7 @@ ConversionKind FindArrayConversion(ArrayType* from, ArrayType* to, CvtContext wh
             return ck;
         return ConversionKind::Illegal;
     }
-    return ConversionKind::None;
+    return ConversionKind::Trivial;
 }
 
 static ConversionKind FindEnumConversion(Type* from, Type* to, CvtContext why) {
@@ -185,9 +185,24 @@ static ConversionKind FindEnumConversion(Type* from, Type* to, CvtContext why) {
     }
 }
 
+static inline bool AllowReturnTypeMismatch(FunctionType* from, FunctionType* to) {
+    if (from->conv() != FunctionType::Closure &&
+        to->conv() == FunctionType::Legacy &&
+        to->return_type()->isVoid() && from->return_type()->isInt())
+    {
+        return true;
+    }
+    return false;
+}
+
 static ConversionKind CheckFunctions(FunctionType* from, FunctionType* to, CvtContext why) {
     if (from->variadic() != to->variadic())
         return ConversionKind::Illegal;
+
+    if (from->return_type() != to->return_type()) {
+        if (!AllowReturnTypeMismatch(from, to))
+            return ConversionKind::Illegal;
+    }
 
     if (from->nargs() != to->nargs())
         return ConversionKind::Illegal;
@@ -199,16 +214,39 @@ static ConversionKind CheckFunctions(FunctionType* from, FunctionType* to, CvtCo
         auto ck = FindConversion(*from_arg, *to_arg, CvtContext::FuncArg);
         if (ck != ConversionKind::None && ck != ConversionKind::Trivial)
             return ConversionKind::Illegal;
+
+        // No fuzzy matching for typed signatures, unless downgrading to a legacy type.
+        if (to->conv() != FunctionType::Legacy) {
+            if (ck != ConversionKind::None)
+                return ConversionKind::Illegal;
+        }
     }
     return best;
 }
 
 static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContext why) {
-    if (to->isCanonicalFunction())
-        return ConversionKind::Trivial;
+    if (to->isCanonicalFunction()) {
+        return from->conv() == FunctionType::Legacy
+               ? ConversionKind::Trivial
+               : ConversionKind::FuncToLegacy;
+    }
 
-    if (auto other = to->as<FunctionType>())
-        return CheckFunctions(from, other, why);
+    if (auto other = to->as<FunctionType>()) {
+        auto ck = CheckFunctions(from, other, why);
+        if (ck != ConversionKind::Illegal) {
+            if (from->conv() == FunctionType::Legacy &&
+                other->conv() != FunctionType::Legacy)
+            {
+                return ConversionKind::LegacyToFunc;
+            }
+            if (from->conv() != FunctionType::Legacy &&
+                other->conv() == FunctionType::Legacy)
+            {
+                return ConversionKind::FuncToLegacy;
+            }
+        }
+        return ck;
+    }
 
     if (!to->isFunction())
         return ConversionKind::Illegal;
@@ -223,12 +261,22 @@ static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContex
         if (best == ConversionKind::None)
             break;
     }
+
+    if (best != ConversionKind::Illegal && from->conv() != FunctionType::Legacy)
+        return ConversionKind::FuncToLegacy;
+
     return best;
 }
 
 static ConversionKind FindFuncConversion(funcenum_t* fe, Type* to, CvtContext why) {
     if (to->isCanonicalFunction())
         return ConversionKind::Trivial;
+
+    if (auto to_ft = to->as<FunctionType>()) {
+        // typesets must never convert to typed functions, since the union allows unsafe casts.
+        if (to_ft->conv() != FunctionType::Legacy)
+            return ConversionKind::Illegal;
+    }
 
     ConversionKind best = ConversionKind::Illegal;
     for (const auto& from : fe->entries) {
@@ -280,7 +328,12 @@ ConversionKind FindConversion(Type* from, Type* to, CvtContext why) {
 
         case TypeKind::FunctionSignature:
             if (to->isAny())
-                return ConversionKind::Trivial;
+            {
+                auto from_ft = from->to<FunctionType>();
+                return from_ft->conv() == FunctionType::Legacy
+                       ? ConversionKind::Trivial
+                       : ConversionKind::FuncToLegacy;
+            }
             return FindFuncConversion(from->to<FunctionType>(), to, why);
 
         case TypeKind::Typedef:

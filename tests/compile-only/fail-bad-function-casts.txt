@@ -1,10 +1,10 @@
 (13) : error 473: no viable conversion from 'char[3]' (stack array) to 'any[]' (heap array)
 (14) : error 473: no viable conversion from 'any[3]' (stack array) to 'char[]' (heap array)
-(17) : error 450: no viable conversion from 'function void(char[])' to 'TestAny'
-(18) : error 450: no viable conversion from 'function void(any[])' to 'TestChar'
-(20) : error 450: no viable conversion from 'function void(char[])' to 'TestAny'
-(21) : error 450: no viable conversion from 'function void(any[])' to 'TestChar'
-(23) : error 450: no viable conversion from 'TestChar' to 'TestAny'
-(24) : error 450: no viable conversion from 'TestAny' to 'TestChar'
-(26) : error 450: no viable conversion from 'function void(char[])' to 'TestAny'
-(28) : error 450: no viable conversion from 'function void(any[])' to 'TestChar'
+(17) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(18) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(20) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(21) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(23) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(24) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(26) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(28) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'

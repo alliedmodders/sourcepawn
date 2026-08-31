@@ -159,6 +159,7 @@ class StmtList : public Stmt
         stmts_(stmts)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -458,6 +459,7 @@ class EnumDecl : public Decl
         multiplier_(multiplier)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -491,6 +493,7 @@ class PstructDecl : public Decl
   public:
     PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields);
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -510,14 +513,16 @@ class PstructDecl : public Decl
 
 struct TypedefInfo : public PoolObject {
     TypedefInfo(const token_pos_t& pos, const TypenameInfo& ret_type,
-                const std::vector<declinfo_t*>& args)
+                const std::vector<declinfo_t*>& args, FunctionType::Convention conv)
      : pos(pos),
        ret_type(ret_type),
-       args(args)
+       args(args),
+       conv(conv)
     {}
     token_pos_t pos;
     TypenameInfo ret_type;
     PoolArray<declinfo_t*> args;
+    FunctionType::Convention conv;
 
     FunctionType* Bind(SemaContext& sc);
 };
@@ -534,6 +539,7 @@ class TypedefDecl : public Decl
         ti_(ti)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -545,7 +551,7 @@ class TypedefDecl : public Decl
   private:
     TypedefInfo* type_ = nullptr;
     typeinfo_t* ti_ = nullptr;
-    funcenum_t* fe_ = nullptr;
+    Type* placeholder_ = nullptr;
 };
 
 // Unsafe typeset - only supports function types. This is a transition hack for SP2.
@@ -558,6 +564,7 @@ class TypesetDecl : public Decl
         types_(types)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -899,6 +906,8 @@ class NamedArgExpr : public Expr
     Expr* expr;
 };
 
+using CallTarget = std::variant<std::monostate, FunctionDecl*, FunctionType*, Expr*>;
+
 class CallExpr final : public Expr
 {
   public:
@@ -913,7 +922,7 @@ class CallExpr final : public Expr
         token_(token),
         target_(nullptr),
         args_(args),
-        fun_(target)
+        resolved_target_(target)
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -922,11 +931,20 @@ class CallExpr final : public Expr
 
     PoolArray<Expr*>& args() { return args_; }
     Expr* target() const { return target_; }
+    void set_target(Expr* target) { target_ = target; }
     int token() const { return token_; }
     Expr* implicit_this() const { return implicit_this_; }
     void set_implicit_this(Expr* expr) { implicit_this_ = expr; }
-    FunctionDecl* fun() const { return fun_; }
-    void set_fun(FunctionDecl* fun) { fun_ = fun; }
+
+    FunctionDecl* fun() const {
+        if (auto p = std::get_if<FunctionDecl*>(&resolved_target_))
+            return *p;
+        return nullptr;
+    }
+    void set_callee(FunctionDecl* fun) { resolved_target_ = fun; }
+    void set_callee(FunctionType* ft) { resolved_target_ = ft; }
+    const CallTarget& callee() const { return resolved_target_; }
+    FunctionType* callee_type();
 
   private:
     bool ProcessArg(SemaContext& sc, VarDecl* arg, Expr* param, unsigned int pos);
@@ -934,7 +952,7 @@ class CallExpr final : public Expr
     int token_;
     Expr* target_;
     PoolArray<Expr*> args_;
-    FunctionDecl* fun_ = nullptr;
+    CallTarget resolved_target_;
     Expr* implicit_this_ = nullptr;
 };
 
@@ -1293,7 +1311,7 @@ class FunctionExpr final : public Expr
         decl_(decl)
     {}
 
-    bool Bind(SemaContext& sc) override { return true; }
+    bool Bind(SemaContext& sc) override;
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::FunctionExpr; }
 
@@ -1554,6 +1572,7 @@ class FunctionDecl : public Decl
     void set_tokens(TokenCache* tokens) { tokens_ = tokens; }
 
     void set_name(Atom* name) { name_ = name; }
+    int next_lambda_id() { return lambda_count_++; }
 
     // The undecorated name.
     Atom* decl_name() const { return decl_.name; }
@@ -1593,13 +1612,17 @@ class FunctionDecl : public Decl
     declinfo_t& decl() { return decl_; }
     const declinfo_t& decl() const { return decl_; }
 
-    QualType type() const { return QualType(return_type()); }
-    Type* return_type() const { return decl_.type.type; }
+    QualType type() const { return QualType(signature_); }
+    Type* return_type() const { return signature_->return_type().unqualified(); }
+    FunctionType* signature() const { return signature_; }
+
+    FunctionType* function_type() const { return signature_; }
+    void set_function_type(FunctionType* ft) { signature_ = ft; }
 
     // Only to be called when updating the type for return arrays.
     // This should be removed when arrays are fully dynamic, or if type
     // resolution becomes fully recursive.
-    void update_return_type(Type* type) { decl_.type.type = type; }
+    void update_return_type(Type* type);
 
     const typeinfo_t& type_info() const { return decl_.type; }
     typeinfo_t& mutable_type_info() { return decl_.type; }
@@ -1624,8 +1647,6 @@ class FunctionDecl : public Decl
     void set_is_global_ctor() { is_global_ctor_ = true; }
     bool maybe_used() const { return maybe_used_; }
     void set_maybe_used() { maybe_used_ = true; }
-    bool needs_hidden_arg() const { return needs_hidden_arg_; }
-    void set_needs_hidden_arg() { needs_hidden_arg_ = true; }
 
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
@@ -1656,6 +1677,7 @@ class FunctionDecl : public Decl
 
     struct CGInfo : public PoolObject {
         Label method_id;
+        bool in_queue = false;
     };
     CGInfo* cg();
 
@@ -1670,6 +1692,7 @@ class FunctionDecl : public Decl
     PoolArray<ArgDecl*> args_;
     SymbolScope* scope_ = nullptr;
     Type* this_type_ = nullptr;
+    FunctionType* signature_ = nullptr;
     PoolString* deprecate_ = nullptr;
     TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
@@ -1697,10 +1720,10 @@ class FunctionDecl : public Decl
     bool retvalue_used_ SP_BITFIELD(1);
     bool is_callback_ SP_BITFIELD(1);
     bool returns_value_ SP_BITFIELD(1);  // whether any path returns a value
+    int lambda_count_ = 0;
     bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
     bool is_global_ctor_ SP_BITFIELD(1); // global constructor (.ctor)
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
-    bool needs_hidden_arg_ SP_BITFIELD(1);
     bool checked_one_signature SP_BITFIELD(1);
     bool compared_prototype_args SP_BITFIELD(1);
 };
@@ -1776,6 +1799,7 @@ class EnumStructDecl : public LayoutDecl
       : LayoutDecl(StmtKind::EnumStructDecl, pos, name)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 
@@ -1831,6 +1855,7 @@ class MethodmapDecl : public LayoutDecl
         extends_(extends)
     {}
 
+    bool EnterTypes(SemaContext& sc);
     bool EnterNames(SemaContext& sc) override;
     bool Bind(SemaContext& sc) override;
 

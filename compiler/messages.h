@@ -21,9 +21,6 @@
  *  Version: $Id$
  */
 
-// To find unused errors, try this:
-//   for i in {1..182}; do echo -n "Error $i:" ; grep error compiler/*.cpp | grep -E "\b$i\b" | wc -l; done
-
 static const char* errmsg[] = {
     /*001*/ "expected token: \"%s\", but found \"%s\"\n",
     /*002*/ "only a single statement (or expression) can follow each \"case\"\n",
@@ -57,7 +54,7 @@ static const char* errmsg[] = {
     /*030*/ "compound statement not closed at the end of file (started at line %d)\n",
     /*031*/ "unknown directive\n",
     /*032*/ "array index out of bounds\n",
-    /*033*/ "unused\n",
+    /*033*/ "callable type uses legacy function typedef\n",
     /*034*/ "argument does not have a default value (argument %d)\n",
     /*035*/ "argument type mismatch (argument %d)\n",
     /*036*/ "empty statement\n",
@@ -67,12 +64,12 @@ static const char* errmsg[] = {
     /*040*/ "duplicate \"case\" label (value %d)\n",
     /*041*/ "invalid ellipsis, array size is not known\n",
     /*042*/ "invalid combination of class specifiers\n",
-    /*043*/ "unused\n",
+    /*043*/ "closures cannot be passed through natives or varargs\n",
     /*044*/ "positional parameters must precede all named parameters\n",
     /*045*/ "too many function arguments\n",
     /*046*/ "cannot assign to array of unknown size\n",
     /*047*/ "array sizes do not match, or destination array is too small\n",
-    /*048*/ "unused\n",
+    /*048*/ "type '%s' cannot be passed through natives or varargs\n",
     /*049*/ "invalid line continuation\n",
     /*050*/ "missing function call, cannot use non-static member function as a value\n",
     /*051*/ "unused\n",
@@ -303,7 +300,7 @@ static const char* errmsg_ex[] = {
     /*418*/ "deprecated syntax; see https://wiki.alliedmods.net/SourcePawn_Transitional_Syntax#Typedefs\n",
     /*419*/ "cannot write to file: \"%s\"\n",
     /*420*/ "unhandled AST type: %d\n",
-    /*421*/ "unused\n",
+    /*421*/ "named arguments are not supported for indirect function calls\n",
     /*422*/ "no more source locations, too much source text\n",
     /*423*/ "internal compiler error: error propagated with no message\n",
     /*424*/ "integer literal contains no digits\n",
@@ -314,7 +311,7 @@ static const char* errmsg_ex[] = {
     /*429*/ "wrong number of macro arguments (expected %s, got %s)\n",
     /*430*/ "invalid macro definition\n",
     /*431*/ "script uses too much memory, cannot compile\n",
-    /*432*/ "type %s was already declared as %s\n",
+    /*432*/ "type %s was already declared\n",
     /*433*/ "struct variable must have struct initializer\n",
     /*434*/ "constructor cannot have a return type\n",
     /*435*/ "unused\n",

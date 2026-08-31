@@ -34,6 +34,10 @@ enum class ConversionKind : uint32_t {
     Illegal,
     // Conversion is possible with an explicit cast.
     NeedsCast,
+    // Convert SpFunction to legacy funcid_t (OP_GETFUNCID).
+    FuncToLegacy,
+    // Convert legacy funcid_t to SpFunction (OP_GETFNOBJ).
+    LegacyToFunc,
     // Trivial conversion that would yield a tag warning in the tag system.
     TagMismatch,
     // A numeric conversion operation is needed.

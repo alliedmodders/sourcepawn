@@ -39,14 +39,8 @@ namespace cc {
 
 using namespace ke;
 
-Type::Type(Atom* name, TypeKind kind)
- : name_(name),
-   kind_(kind)
-{
-}
-
 const char* Type::prettyName() {
-  if (kind_ == TypeKind::Function)
+  if (kind_ == TypeKind::Function || kind_ == TypeKind::FunctionSignature)
     return kindName();
   if (kind_ == TypeKind::Array && !name_) {
       std::string suffix;
@@ -89,13 +83,11 @@ Type::kindName() const
         return "function";
       }
       return "function";
+    case TypeKind::FunctionSignature:
+      return "function";
     default:
       return "type";
   }
-}
-
-bool Type::canOperatorOverload() const {
-    return isEnum() || isMethodmap() || isFloat() || isInt();
 }
 
 bool Type::isCharArray() const {
@@ -141,6 +133,14 @@ bool Type::isAddressType() const {
     return isReference() || (isArray() && !isCompositeValue());
 }
 
+bool Type::isHeapItem() {
+    if (auto at = as<ArrayType>())
+        return !at->is_flat();
+    if (auto ft = as<FunctionType>())
+        return ft->conv() != FunctionType::Legacy;
+    return false;
+}
+
 ArrayType::ArrayType(Type* inner, int size, bool is_flat)
   : Type(nullptr, TypeKind::Array)
 {
@@ -151,6 +151,13 @@ ArrayType::ArrayType(Type* inner, int size, bool is_flat)
         rank_ = child->rank() + 1;
     else
         rank_ = 0;
+    allowed_in_native_call_ = inner->isAllowedInNativeCall();
+}
+
+bool FunctionType::needs_hidden_arg() const {
+    return return_type_->isFlatArray() ||
+           return_type_->isEnumStruct() ||
+           return_type_->isInt64();
 }
 
 TypeManager::TypeManager(CompileContext& cc)
@@ -366,19 +373,35 @@ Type* TypeManager::defineTypedef(Atom* name, Type* inner) {
     return type;
 }
 
+Type* TypeManager::declareTypedef(Atom* name) {
+    assert(find(name) == nullptr);
+    return add(name, TypeKind::Typedef);
+}
+
+void TypeManager::updateTypedef(Type* placeholder, Type* inner) {
+    placeholder->setTypedef(inner);
+}
+
 FunctionType* TypeManager::defineFunction(QualType return_type,
                                           const std::vector<QualType>& args,
-                                          bool variadic)
+                                          bool variadic, FunctionType::Convention conv)
 {
-    FunctionCachePolicy::Lookup lookup{return_type, &args, variadic};
+    FunctionCachePolicy::Lookup lookup{return_type, &args, variadic, conv};
     auto p = function_cache_.findForAdd(lookup);
     if (!p.found()) {
-        auto ft = new FunctionType(return_type, args, variadic);
+        auto ft = new FunctionType(return_type, args, variadic, conv);
         RegisterType(ft, false);
 
         function_cache_.add(p, ft);
     }
     return *p;
+}
+
+FunctionType* TypeManager::UpdateReturnType(FunctionType* ft, QualType new_return_type) {
+    std::vector<QualType> args;
+    for (unsigned i = 0; i < ft->nargs(); i++)
+        args.push_back(ft->arg_type(i));
+    return defineFunction(new_return_type, args, ft->variadic(), ft->conv());
 }
 
 bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
@@ -411,6 +434,10 @@ bool TypeManager::FunctionCachePolicy::matches(const Lookup& lookup, FunctionTyp
         if (lookup.args->at(i) != fun->arg_type(i))
             return false;
     }
+    if (lookup.variadic != fun->variadic())
+        return false;
+    if (lookup.conv != fun->conv())
+        return false;
     return true;
 }
 

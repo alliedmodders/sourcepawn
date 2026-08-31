@@ -28,7 +28,6 @@ enum class TypeKind : uint8_t {
     Float32,
     Char8,
     Any,
-    TopFunction,
     Function,
     LegacyVarArgs,
     Null,
@@ -118,7 +117,6 @@ class TypeDesc final {
                 return (array.size * array.elt->element_size() + 3) & ~3;
             case TypeKind::EnumStruct:
                 return clsdef.total_size;
-            case TypeKind::Function:
             case TypeKind::LegacyVarArgs:
                 assert(false);
                 return 0;
@@ -144,7 +142,7 @@ class TypeDesc final {
                 return sizeof(char);
 
             // Pointer types.
-            case TypeKind::TopFunction:
+            case TypeKind::Function:
             case TypeKind::Array:
             case TypeKind::FixedArray:
             case TypeKind::FlatArray:
@@ -214,6 +212,14 @@ class TypeDesc final {
         assert(IsFunction());
         return func.is_native;
     }
+    bool is_variadic() const {
+        assert(IsFunction());
+        return func.args.size() > 0 && func.args.back()->IsLegacyVarArgs();
+    }
+    uint32_t expected_argc() const {
+        assert(IsFunction());
+        return func.args.size() - (is_variadic() ? 1 : 0);
+    }
 
     bool IsLegacyVarArgs() const { return kind_ == TypeKind::LegacyVarArgs; }
 
@@ -222,6 +228,7 @@ class TypeDesc final {
             case TypeKind::ArraySlice:
             case TypeKind::FixedArray:
             case TypeKind::Array:
+            case TypeKind::Function:
                 return true;
             default:
                 return false;

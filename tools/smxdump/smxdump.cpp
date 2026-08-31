@@ -550,9 +550,8 @@ static int Dump(const char* file) {
 
         auto smx = std::make_unique<SmxImage>(fp.get());
         if (!smx->validate()) {
-            fprintf(stderr, "Could not parse %s: %s\n", file,
+            fprintf(stderr, "Warning: %s failed validation: %s\n", file,
                     (eh.Message() ? eh.Message() : "unknown error"));
-            return 1;
         }
 
         DumpTool tool(file, std::move(smx));

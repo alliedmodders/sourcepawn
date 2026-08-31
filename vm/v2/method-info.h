@@ -19,6 +19,8 @@
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <sp_vm_types.h>
+#include "handle.h"
+#include "objects.h"
 #include <utils/bitset.h>
 #include "base-method-info.h"
 #include "control-flow.h"
@@ -83,6 +85,8 @@ class MethodInfo final : public BaseMethodInfo
         return llcode_.get();
     }
 
+    const Handle<SpFunction>& GetFunction();
+
     const char* GetName() const override;
     const char* GetFilePath() const override;
 
@@ -100,6 +104,7 @@ class MethodInfo final : public BaseMethodInfo
     std::unique_ptr<LLCode> llcode_;
     ke::RefPtr<ControlFlowGraph> graph_;
 
+    Handle<SpFunction> fn_obj_;
     std::optional<bool> checked_;
     int32_t max_stack_;
     uint32_t max_eval_stack_depth_;

@@ -192,6 +192,10 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
             SemaContext sc(&sema);
             sema.set_context(&sc);
 
+            if (!tree->stmts()->EnterTypes(sc) || !errors.ok())
+                goto cleanup;
+
+            errors.Reset();
             if (!tree->stmts()->EnterNames(sc) || !errors.ok())
                 goto cleanup;
 
@@ -225,14 +229,15 @@ cleanup:
     cc.set_shutting_down();
     cc.reports()->DumpErrorReport(true);
 
+    bool skip_cg = options->syntax_only || options->sema_only;
+
     CodeGenerator cg(cc, tree);
-    if (tree && compile_ok)
+    if (tree && compile_ok && !skip_cg)
         compile_ok = cg.Generate();
 
     // Write the binary file.
-    if (!options->syntax_only && compile_ok) {
+    if (compile_ok && !skip_cg)
         compile_ok &= assemble(cc, cg, cc.outfname().c_str(), options->compression);
-    }
 
     errnum += cc.reports()->NumErrorMessages();
     cc.reports()->DumpErrorReport(true);
@@ -371,7 +376,7 @@ static void setconfig(const char* root) {
 void setcaption() {
     printf("SourcePawn Compiler %s\n", SM_VERSION_STRING);
     printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-    printf("Copyright (c) 2004-2024 AlliedModders LLC\n\n");
+    printf("Copyright (c) 2004-2026 AlliedModders LLC\n\n");
 }
 
 } // namespace cc

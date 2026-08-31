@@ -48,6 +48,7 @@ class SourceFile : public std::enable_shared_from_this<SourceFile>
 
     const char* name() const { return name_.c_str(); }
     const std::string& path() const { return name_; }
+    std::string basename() const;
     size_t size() const { return data_.size(); }
     uint32_t sources_index() const { return sources_index_.get(); }
 

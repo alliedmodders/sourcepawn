@@ -1,4 +1,4 @@
-(8) : error 450: no viable conversion from 'function void(any&)' to 'CallbackCell'
-(11) : error 450: no viable conversion from 'function void(int&)' to 'CallbackCell'
-(14) : error 450: no viable conversion from 'function void(any)' to 'CallbackRef'
-(17) : error 450: no viable conversion from 'function void(int)' to 'CallbackRef'
+(8) : error 450: no viable conversion from 'function void(any&)' to 'function void(any)'
+(11) : error 450: no viable conversion from 'function void(int&)' to 'function void(any)'
+(14) : error 450: no viable conversion from 'function void(any)' to 'function void(any&)'
+(17) : error 450: no viable conversion from 'function void(int)' to 'function void(any&)'

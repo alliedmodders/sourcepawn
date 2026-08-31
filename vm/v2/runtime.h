@@ -111,6 +111,7 @@ class Runtime final : public BaseRuntime,
     ke::RefPtr<BaseMethodInfo> GetMethodByIndex(uint32_t method_index) const;
     RefPtr<MethodInfo> AcquireMethod(uint32_t method_index);
     const TypeDesc* LoadMethodSignature(uint32_t method_index);
+    const TypeDesc* LoadFunctionSignature(FastRtti& parser, bool is_native);
     const std::vector<RefPtr<MethodInfo>>& AllMethods() const;
 
     ScriptedInvoker* GetScriptedInvoker(funcid_t func_id);
@@ -134,6 +135,7 @@ class Runtime final : public BaseRuntime,
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 
+    Handle<SpFunction> CastFunctionId(funcid_t func_id, const TypeDesc* td);
     Handle<SpArray> NewArray(const TypeDesc* td, uint32_t size);
     Handle<SpArray> NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
     void FillArray(SpArray* array, uint32_t data_offset);

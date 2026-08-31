@@ -15,9 +15,13 @@
 #include <assert.h>
 #include <stdint.h>
 
+#include <sp_vm_types.h>
 #include "type-desc.h"
 
 namespace sp {
+namespace v2 {
+class MethodInfo;
+} // namespace v2
 
 struct HeapItem {
     friend class CodeStubs;
@@ -61,6 +65,11 @@ struct SpArray : public HeapItem {
 };
 
 struct SpObject : public HeapItem {
+};
+
+struct SpFunction : public HeapItem {
+    // RefPtr here would create a cycle, so we use a raw pointer.
+    sp::v2::MethodInfo* method;
 };
 
 } // namespace sp

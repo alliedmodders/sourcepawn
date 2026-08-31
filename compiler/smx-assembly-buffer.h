@@ -123,7 +123,7 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
   }
   void load_hidden_arg(FunctionDecl* decl) {
-    assert(decl->needs_hidden_arg());
+    assert(decl->signature()->needs_hidden_arg());
     emit(OP_LOAD_S, VarSlot(-1));
   }
   void newbulkarray(uint8_t count, uint32_t type_id) {

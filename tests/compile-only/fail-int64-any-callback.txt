@@ -1,2 +1,2 @@
-(12) : error 450: no viable conversion from 'function void(int64)' to 'Callback'
-(13) : error 450: no viable conversion from 'function void(any)' to 'OtherCallback'
+(12) : error 450: no viable conversion from 'function void(int64)' to 'function void(any)'
+(13) : error 450: no viable conversion from 'function void(any)' to 'function void(int64)'

@@ -377,7 +377,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
 
     Type* hidden_arg = nullptr;
     Type* return_type = fun->return_type();
-    if (fun->needs_hidden_arg()) {
+    if (fun->signature()->needs_hidden_arg()) {
         hidden_arg = return_type;
         return_type = types_->type_void();
         argc++;
@@ -525,7 +525,22 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, boo
         if (funcenum_t* fe = type->toFunction())
             encode_funcenum_into(bytes, type, fe);
         else
-            bytes.push_back(cb::kTopFunction);
+            bytes.push_back(cb::kInt32);
+        return;
+    }
+
+    if (auto ft = type->as<FunctionType>()) {
+        if (ft->conv() == FunctionType::Convention::Legacy) {
+            bytes.push_back(cb::kInt32);
+            return;
+        }
+
+        std::vector<uint8_t> signature;
+        encode_signature_into(signature, ft);
+        uint32_t index = type_pool_.add(signature);
+
+        bytes.push_back(cb::kFunctionPtr);
+        CompactEncodeUint32(bytes, index);
         return;
     }
 
@@ -542,18 +557,9 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, boo
 void
 RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
 {
-    if (fe->entries.size() == 1) {
-        std::vector<uint8_t> signature;
-        encode_signature_into(signature, fe->entries.back());
-        uint32_t index = type_pool_.add(signature);
-
-        bytes.push_back(cb::kFunctionPtr);
-        CompactEncodeUint32(bytes, index);
-    } else {
-        uint32_t index = add_typeset(type, fe);
-        bytes.push_back(cb::kTypeset);
-        CompactEncodeUint32(bytes, index);
-    }
+    uint32_t index = add_typeset(type, fe);
+    bytes.push_back(cb::kTypeset);
+    CompactEncodeUint32(bytes, index);
 }
 
 void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft) {

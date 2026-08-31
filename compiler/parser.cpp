@@ -530,9 +530,7 @@ Parser::parse_pstruct()
     return new PstructDecl(pos, ident, fields);
 }
 
-Decl*
-Parser::parse_typedef()
-{
+Decl* Parser::parse_typedef() {
     auto pos = lexer_->pos();
 
     Atom* ident;
@@ -1473,7 +1471,8 @@ Parser::parse_stmt(bool allow_decl)
 
             auto pos = lexer_->pos();
             declinfo_t decl = {};
-            if (!parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION))
+
+            if (!lexer_->needsymbol(&decl.name))
                 return nullptr;
 
             auto fun = new FunctionDecl(pos, decl);
@@ -1866,10 +1865,7 @@ Expr* Parser::parse_function_expr() {
     decl.type.is_new = true;
     decl.type.set_type(types_->type_void());
 
-    if (!lexer_->peek('(')) {
-        if (!parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION))
-            return nullptr;
-    }
+    lexer_->matchsymbol(&decl.name);
 
     auto fun = new FunctionDecl(pos, decl);
     fun->set_is_stock();
@@ -1893,7 +1889,9 @@ bool Parser::parse_function_impl(FunctionDecl* fun)
     if (lexer_->match(tARROW)) {
         TypenameInfo ret_type;
         if (parse_new_typename(nullptr, &ret_type) && ret_type.type())
-            fun->update_return_type(ret_type.type());
+            fun->mutable_type_info().set_type(ret_type.type());
+    } else {
+        fun->mutable_type_info().set_type(types_->type_void());
     }
 
     if (!lexer_->match('{')) {
@@ -2206,22 +2204,26 @@ Parser::consume_line(bool consume_term)
 }
 
 /**
- * function-type ::= "(" function-type-inner ")"
- *                 | function-type-inner
- * function-type-inner ::= "function" type-expr "(" new-style-args ")"
+ * function-type ::= closure-function-type
+ *                 | static-function-type
+ * closure-function-type ::= "(" new-style-args ")" closure-return?
+ * closure-return ::= "->" type-expr
+ * static-function-type ::= "function" type-expr "(" new-style-args ")"
  */
-TypedefInfo*
-Parser::parse_function_type()
-{
-    int lparen = lexer_->match('(');
-    if (!lexer_->need(tFUNCTION))
-        return nullptr;
+TypedefInfo* Parser::parse_function_type() {
+    bool closure = lexer_->peek('(');
 
     auto info_pos = lexer_->pos();
     TypenameInfo ret_type;
     std::vector<declinfo_t*> args;
 
-    parse_new_typename(nullptr, &ret_type);
+    if (!closure) {
+        // Legacy function type.
+        if (!lexer_->need(tFUNCTION))
+            return nullptr;
+
+        parse_new_typename(nullptr, &ret_type);
+    }
 
     if (!lexer_->need('(')) {
         // If this was an accidental name, skip it (but keep error).
@@ -2253,13 +2255,20 @@ Parser::parse_function_type()
     if (args.size() >= SP_MAX_EXEC_PARAMS)
         report(45);
 
-    if (lparen)
-        lexer_->need(')');
+    if (closure) {
+        if (lexer_->match(tARROW)) {
+            parse_new_typename(nullptr, &ret_type);
+        } else {
+            ret_type = TypenameInfo(types_->type_void());
+        }
+    }
 
     lexer_->require_newline(TerminatorPolicy::Semicolon);
     cc_.reports()->ResetErrorFlag();
 
-    return new TypedefInfo(info_pos, ret_type, args);
+    FunctionType::Convention conv = closure ? FunctionType::Typed : FunctionType::Legacy;
+
+    return new TypedefInfo(info_pos, ret_type, args, conv);
 }
 
 // Parse a declaration.

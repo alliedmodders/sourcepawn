@@ -681,11 +681,67 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;
 
-        case OP_LOAD_FN: {
+        case OP_LOADFN: {
             uint32_t method_index = readCell();
             if (!smx_->GetMethod(method_index))
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* td = rt_->LoadMethodSignature(method_index);
+            if (!td)
+                return false;
+            return pushStack(td);
+        }
+
+        case OP_GETFNOBJ: {
+            // Pops a raw method ID (cell from OP_LOADFN), validates the type_id
+            // encodes a function type, and pushes the typed function object.
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td)
+                return false;
+            if (td->kind() != TypeKind::Function)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (!popCell())
+                return false;
+            return pushStack(td);
+        }
+
+        case OP_GETFUNCID: {
+            const TypeDesc* td;
+            if (!popStack(&td))
+                return false;
+            if (td->kind() != TypeKind::Function)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(cell_type());
+        }
+
+        case OP_CALLI: {
+            // Indirect call: pops a typed function object (from OP_GETFNOBJ),
+            // verifies arguments against its signature, and pushes the return value.
+            const TypeDesc* fn;
+            if (!popStack(&fn))
+                return false;
+            if (fn->kind() != TypeKind::Function)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            uint32_t expected_argc = fn->expected_argc();
+
+            VerifyData* v = block_->data<VerifyData>();
+            if (v->stack.size() < expected_argc)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            auto args = fn->args();
+            for (size_t i = 0; i < expected_argc; i++) {
+                const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - i];
+                if (args[i]->IsHeapItem()) {
+                    if (!ValidateStore(args[i], arg_td, StoreContext::CallSite))
+                        return false;
+                }
+            }
+            if (!popStack(expected_argc))
+                return false;
+            if (fn->return_type()->kind() != TypeKind::Void)
+                return pushStack(fn->return_type());
+            return true;
         }
 
         case OP_LOAD_STR: {
@@ -841,7 +897,6 @@ static inline bool IsPodType(const TypeDesc* type) {
         case TypeKind::Float32:
         case TypeKind::Char8:
         case TypeKind::Any:
-        case TypeKind::TopFunction:
             return true;
         default:
             return false;
@@ -864,7 +919,7 @@ bool MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
             const TypeDesc* other_t = (t1->kind() == TypeKind::Null) ? t2 : t1;
             if (other_t->kind() == TypeKind::Null) {
                 // both null — no change
-            } else if (other_t->IsHeapItem() || other_t->kind() == TypeKind::TopFunction) {
+            } else if (other_t->IsHeapItem()) {
                 first->stack[i] = other_t;
             } else {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
@@ -1266,7 +1321,7 @@ bool MethodVerifier::verifyLocalSlots() {
 
 bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, StoreContext ctx) {
     if (src->kind() == TypeKind::Null) {
-        if (dest->IsHeapItem() || dest->kind() == TypeKind::TopFunction)
+        if (dest->IsHeapItem())
             return true;
         return reportError(SP_ERROR_INVALID_INSTRUCTION);
     }
@@ -1297,6 +1352,12 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, St
         case TypeKind::FlatArray:
         case TypeKind::ArraySlice:
         case TypeKind::Reference:
+            if (dest != src)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            return true;
+        case TypeKind::Function:
+            if (src->kind() != TypeKind::Function)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             if (dest != src)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;

@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include "source-file.h"
 
+#include <filesystem>
+
 #include <assert.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -187,6 +189,10 @@ tr::string SourceFile::GetLine(uint32_t line) {
         end = data_.size();
 
     return data_.substr(offset, end - offset);
+}
+
+std::string SourceFile::basename() const {
+    return std::filesystem::path(name_).filename().string();
 }
 
 } // namespace cc

@@ -61,6 +61,13 @@ bool CodeGenerator::Generate() {
 
     EmitStmtList(tree_->stmts());
 
+    while (!fun_queue_.empty()) {
+        auto fun = fun_queue_.front();
+        fun_queue_.pop();
+
+        EmitFunctionDecl(fun);
+    }
+
     for (const auto& ctor : tree_->global_ctors())
         EmitFunctionDecl(ctor);
 
@@ -197,9 +204,14 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::FunctionDecl:
         case StmtKind::MemberFunctionDecl:
-        case StmtKind::MethodmapMethodDecl:
-            EmitFunctionDecl(stmt->to<FunctionDecl>());
+        case StmtKind::MethodmapMethodDecl: {
+            auto fun = stmt->to<FunctionDecl>();
+            if (fun_ && fun->is_live())
+                AddFunctionToQueue(fun);
+            else
+                EmitFunctionDecl(fun);
             break;
+        }
         case StmtKind::EnumStructDecl:
             EmitEnumStructDecl(stmt->to<EnumStructDecl>());
             break;
@@ -804,6 +816,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         case ExprKind::SpreadArgsExpr:
             assert(false);
             break;
+        case ExprKind::FunctionExpr:
+            EmitFunctionExpr(expr->to<FunctionExpr>());
+            break;
 
         default:
             assert(false);
@@ -1402,7 +1417,7 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
         assert(!fun->is_native());
         assert(fun->is_live());
 
-        __ emit(OP_LOAD_FN, &fun->cg()->method_id);
+        __ emit(OP_LOADFN, &fun->cg()->method_id);
     } else if (auto var = sym->as<VarDeclBase>()) {
         if (sym->type()->isCompositeValue())
             EmitAddress(var);
@@ -1417,11 +1432,10 @@ void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
 }
 
 void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
-    if (slice->expr()->lvalue()) {
+    if (slice->expr()->lvalue())
         EmitRvalueFromLvalue(slice->expr());
-    } else {
+    else
         EmitExpr(slice->expr());
-    }
 
     auto es = slice->expr()->val().type()->asEnumStruct();
     if (es) {
@@ -1439,24 +1453,24 @@ void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
     }
 }
 
-bool CodeGenerator::IsElidableSlice(Expr* expr, FunctionDecl* fun, ArgDecl* arg) {
-    if (!fun->is_native())
+bool CodeGenerator::IsElidableSlice(Expr* expr, FunctionDecl* fun, QualType arg) {
+    if (!fun || !fun->is_native())
         return false;
     if (expr->kind() != ExprKind::SliceExpr)
         return false;
-    if (arg->type_info().is_varargs)
+    if (!arg) // variadic argument
         return false;
-    if (!arg->type_info().type->isFlatArray())
+    if (!arg->isFlatArray())
         return false;
     return expr->to<SliceExpr>()->expr()->val().type()->isFlatArray();
 }
 
 void CodeGenerator::EmitElidedSliceExpr(SliceExpr* slice) {
-    if (slice->expr()->lvalue()) {
+    if (slice->expr()->lvalue())
         EmitRvalueFromLvalue(slice->expr());
-    } else {
+    else
         EmitExpr(slice->expr());
-    }
+
     if (slice->index()) {
         EmitExpr(slice->index());
         __ emit(OP_IDXADDR);
@@ -1492,11 +1506,12 @@ static inline Type* UnwrapRef(Type* type) {
 }
 
 void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
-    auto return_type = call->fun()->return_type();
+    auto return_type = call->val().type();
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
-    if (call->fun()->is_builtin()) {
-        auto iter = builtins_.find(call->fun()->name());
+    auto fun = call->fun();
+    if (fun && fun->is_builtin()) {
+        auto iter = builtins_.find(fun->name());
         assert(iter != builtins_.end());
 
         (this->*(iter->second))(call);
@@ -1515,22 +1530,19 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     if (is_spread)
         nargs--;
 
+    auto ft = call->callee_type();
+
     const auto& argv = call->args();
-    const auto& arginfov = call->fun()->args();
     for (size_t i = nargs - 1; i < nargs; i--) {
         const auto& expr = argv[i];
 
-        ArgDecl* arg;
-        if (i < arginfov.size()) {
-            arg = arginfov[i];
-        } else {
-            arg = arginfov.back();
-            assert(arg->type_info().is_varargs);
-        }
+        QualType arg;
+        if (i < ft->nargs())
+            arg = ft->arg_type(i);
 
         // Don't generate "slice ; array2native" sequences on local arrays,
         // since "slice" and "array2native" cancel each other out.
-        bool is_elided_slice = IsElidableSlice(expr, call->fun(), arg);
+        bool is_elided_slice = IsElidableSlice(expr, fun, arg);
         if (is_elided_slice) {
             EmitElidedSliceExpr(expr->to<SliceExpr>());
         } else {
@@ -1547,14 +1559,15 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         const auto& val = expr->val();
 
         bool needs_temp = false;
-        if (arg->type_info().is_varargs) {
+        if (!arg) {
+            // Legacy variadic arguments.
             bool lvalue = expr->lvalue();
             if (val.ident == iVARIABLE && !val.type()->isComposite()) {
                 assert(val.sym());
                 assert(lvalue);
                 /* treat a "const" variable passed to a function with a non-const
                  * "variable argument list" as a constant here */
-                if (val.sym()->is_const() && !arg->type_info().is_const)
+                if (val.sym()->is_const() && !arg.is_const())
                     needs_temp = true;
             } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
                 needs_temp = !val.type()->isComposite();
@@ -1574,16 +1587,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                 __ emit(OP_STOR_S, VarSlot(slot));
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
-        } else if (arg->type_info().type->isReference()) {
+        } else if (arg->isReference()) {
             if (val.ident == iVARIABLE && !val.type()->isComposite())
                 EmitAddress(val.sym());
         }
 
         // Always pass int64s by reference, as a hack for backward compatibility
         // with natives and GetLocalParams.
-        if (arg->type_info().type->isInt64()) {
-            assert(val.type()->isInt64());
-
+        if (val.type()->isInt64() && !needs_temp && !expr->lvalue()) {
             auto slot = AcquireTempSlot(expr, BuiltinType::Int64);
             __ emit(OP_STOR_S, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
@@ -1592,7 +1603,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
     std::optional<uint32_t> hidden_slot;
 
-    if (call->fun()->needs_hidden_arg()) {
+    if (ft->needs_hidden_arg()) {
         if (return_type->isCompositeValue()) {
             auto slot = AcquireTempSlot(call, return_type);
             __ emit(OP_ADDR_S, VarSlot(slot));
@@ -1613,10 +1624,20 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         nargs++;
     }
 
-    EmitCall(call->fun(), nargs, is_spread);
+    if (!fun) {
+        auto target = call->target();
+        EmitExpr(call->target());
+        auto ft = target->val().type()->to<FunctionType>();
+        if (ft->conv() == FunctionType::Convention::Legacy) {
+            uint32_t type_id = rtti_->to_typeid(target->val().type());
+            __ emit(OP_GETFNOBJ, type_id);
+        }
+    }
+
+    EmitCall(call->callee(), nargs, is_spread);
 
     if (discard) {
-        if (!return_type->isVoid() && !call->fun()->needs_hidden_arg())
+        if (!return_type->isVoid() && !ft->needs_hidden_arg())
             __ emit(OP_POP);
     } else if (hidden_slot) {
         if (return_type->isCompositeValue()) {
@@ -1737,7 +1758,7 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
 void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
     if (stmt->expr()) {
         const auto& v = stmt->expr()->val();
-        if (fun_->needs_hidden_arg()) {
+        if (fun_->signature()->needs_hidden_arg()) {
             if (v.type()->isEnumStruct() || v.type()->isArray()) {
                 EmitReturnArrayStmt(stmt);
             } else if (v.type()->isInt64()) {
@@ -2229,7 +2250,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
         AutoEnterScope arg_scope(this, &local_syms_);
 
         cell_t arg_index = 0;
-        if (info->needs_hidden_arg())
+        if (info->signature()->needs_hidden_arg())
             arg_index++;
 
         for (const auto& fun_arg : info->args()) {
@@ -2261,6 +2282,23 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     rtti_->finish_method(info, debug_info_, std::move(locals_), pcode_end);
 }
 
+void CodeGenerator::AddFunctionToQueue(FunctionDecl* fun) {
+    assert(fun->is_live());
+    assert(!fun->cg()->method_id.bound());
+    assert(!fun->cg()->in_queue);
+
+    fun_queue_.push(fun);
+    fun->cg()->in_queue = true;
+}
+
+void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
+    auto fun = expr->decl();
+    AddFunctionToQueue(fun);
+
+    __ emit(OP_LOADFN, &fun->cg()->method_id);
+
+}
+
 void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {
     for (const auto& fun : decl->methods())
         EmitFunctionDecl(fun);
@@ -2279,30 +2317,32 @@ CodeGenerator::EmitMethodmapDecl(MethodmapDecl* decl)
         EmitFunctionDecl(method);
 }
 
-void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs, bool is_spread) {
-    assert(fun->is_live());
+void CodeGenerator::EmitCall(const CallTarget& target, cell nargs, bool is_spread) {
+    FunctionDecl* fun = nullptr;
+    if (auto p = std::get_if<FunctionDecl*>(&target))
+        fun = *p;
 
-    if (fun->is_native()) {
-        if (!fun->cg()->method_id.bound()) {
-            auto entry = rtti_->add_method(fun, 0);
-            rtti_->finish_method(fun, entry, LocalSlotSignature{}, 0);
+    assert(!fun || fun->is_live());
 
-            __ bind_to(&fun->cg()->method_id, entry.method_index);
+    if (fun) {
+        if (fun->is_native()) {
+            if (!fun->cg()->method_id.bound()) {
+                auto entry = rtti_->add_method(fun, 0);
+                rtti_->finish_method(fun, entry, LocalSlotSignature{}, 0);
+
+                __ bind_to(&fun->cg()->method_id, entry.method_index);
+            }
         }
-    } else {
-        auto node = callgraph_.find(fun_);
-        if (node == callgraph_.end())
-            callgraph_.emplace(fun_, tr::vector<FunctionDecl*>{fun});
-        else
-            node->second.emplace_back(fun);
-    }
 
-    if (is_spread)
-        __ emit(OP_CALLVA, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
-    else if (fun->IsVariadic())
-        __ emit(OP_CALLN, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
-    else
-        __ emit(OP_CALL, &fun->cg()->method_id);
+        if (is_spread)
+            __ emit(OP_CALLVA, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
+        else if (fun->IsVariadic())
+            __ emit(OP_CALLN, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
+        else
+            __ emit(OP_CALL, &fun->cg()->method_id);
+    } else {
+        __ emit(OP_CALLI);
+    }
 }
 
 void CodeGenerator::EmitNumber64Expr(Number64Expr* expr) {
@@ -2313,11 +2353,23 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     EmitExpr(expr->from());
 
     Type* from_type = expr->from()->val().type();
+    Type* to_type = expr->to();
 
-    if (expr->to()->isInt64()) {
+    if (from_type->isFunctionLike()) {
+        auto ft = to_type->as<FunctionType>();
+        if (!ft || ft->conv() == FunctionType::Convention::Legacy) {
+            __ emit(OP_GETFUNCID);
+        } else {
+            uint32_t type_id = rtti_->to_typeid(to_type);
+            __ emit(OP_GETFNOBJ, type_id);
+        }
+        return;
+    }
+
+    if (to_type->isInt64()) {
         assert(from_type->isInt() || from_type->isAny());
         __ emit(OP_CVT_I64);
-    } else if (expr->to()->isBool()) {
+    } else if (to_type->isBool()) {
         if (from_type->isInt64())
             __ emit(OP_TEST);
         else

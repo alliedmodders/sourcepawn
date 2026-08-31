@@ -76,7 +76,6 @@ class Heap {
 
     template <typename T> Handle<T> New(const TypeDesc* td, uint32_t payload_bytes = 0) {
         static_assert(std::is_base_of_v<HeapItem, T>, "Must be derived from HeapItem");
-        assert(td->IsArrayish());
         assert(ke::IsUintAddSafe(static_cast<uint32_t>(sizeof(T)), payload_bytes));
 
         auto obj = reinterpret_cast<HeapItem*>(AllocRaw(sizeof(T) + payload_bytes));
