@@ -592,8 +592,8 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
 
         auto bytes = str->text()->length() + 1;
-        auto cells = char_array_cells(bytes);
-        if (!AddCells(cells))
+        // The string initializer contributes |bytes| char elements.
+        if (!AddCells(bytes))
             return false;
 
         if (rank->size() && bytes > static_cast<size_t>(rank->size())) {
@@ -603,13 +603,11 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         return true;
     }
 
-    cell rank_size = 0;
-    if (int dim_size = rank->size()) {
-        if (rank->isCharArray())
-            rank_size = char_array_cells(dim_size);
-        else
-            rank_size = dim_size;
-    }
+    // |rank_size| is the declared element count (0 if unbounded). It is used
+    // both to bound the number of initializer elements and to track storage
+    // size for the overflow guard. The compiler reasons in elements, not bytes;
+    // byte layout is the VM's concern, so this is a plain element count.
+    cell rank_size = rank->size();
 
     ArrayExpr* array = init->as<ArrayExpr>();
     if (!array) {

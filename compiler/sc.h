@@ -96,10 +96,6 @@ const char* type_to_name(int tag);
 void setcaption();
 int RunCompiler(int argc, char** argv, CompileContext& cc);
 
-constexpr cell char_array_cells(cell size) {
-    return (size + sizeof(cell) - 1) / sizeof(cell);
-}
-
 static constexpr cell kMaxCells = (INT_MAX / 4) / sizeof(cell_t);
 
 // Disable this to enable easy watchpoints on bitfield members.
