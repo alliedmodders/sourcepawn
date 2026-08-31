@@ -24,7 +24,9 @@
 #include <amtl/am-vector.h>
 
 #include <optional>
+#include <tuple>
 #include <variant>
+#include <vector>
 
 #include "ast-types.h"
 #include "coercion-rules.h"
@@ -45,6 +47,7 @@ class LayoutFieldDecl;
 class MemberFunctionDecl;
 class MethodmapDecl;
 class PropertyDecl;
+class UpvarDecl;
 class SemaContext;
 class SymbolScope;
 class VarDeclBase;
@@ -311,11 +314,27 @@ class Decl : public Stmt
 
 class BinaryExpr;
 
+enum VarDeclFlags {
+    VARDECL_DEFAULT = 0x0,
+    VARDECL_PUBLIC = 0x1,
+    VARDECL_STATIC = 0x2,
+    VARDECL_STOCK  = 0x4,
+    VARDECL_SHARED = 0x8,
+};
+
+inline VarDeclFlags operator|(VarDeclFlags a, VarDeclFlags b) {
+    return VarDeclFlags(static_cast<int>(a) | static_cast<int>(b));
+}
+inline VarDeclFlags& operator|=(VarDeclFlags& a, VarDeclFlags b) {
+    a = a | b;
+    return a;
+}
+
 class VarDeclBase : public Decl
 {
   public:
     VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name, const typeinfo_t& type,
-                int vclass, bool is_public, bool is_static, bool is_stock, Expr* initializer);
+                int vclass, VarDeclFlags flags, Expr* initializer);
 
     bool Bind(SemaContext& sc) override;
     bool EnterNames(SemaContext& sc) override;
@@ -355,6 +374,10 @@ class VarDeclBase : public Decl
 
     bool is_emitted() const { return is_emitted_; }
     void set_is_emitted() { is_emitted_ = true; }
+    bool is_shared() const { return is_shared_; }
+    void set_is_shared() { is_shared_ = true; }
+    bool is_captured() const { return is_captures_; }
+    void set_is_captured() { is_captures_ = true; }
 
   protected:
     typeinfo_t type_;
@@ -367,6 +390,8 @@ class VarDeclBase : public Decl
     bool is_read_ : 1;
     bool is_written_ : 1;
     bool implicit_dynamic_array_ : 1;
+    bool is_shared_ : 1;
+    bool is_captures_ : 1;
     bool already_bound_ : 1;
     bool is_emitted_ : 1;
     Label addr_;
@@ -376,14 +401,12 @@ class VarDecl : public VarDeclBase
 {
   public:
     VarDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
-            bool is_public, bool is_static, bool is_stock, Expr* initializer)
-      : VarDeclBase(StmtKind::VarDecl, pos, name, type, vclass, is_public, is_static, is_stock,
-                    initializer)
+            VarDeclFlags flags, Expr* initializer)
+      : VarDeclBase(StmtKind::VarDecl, pos, name, type, vclass, flags, initializer)
     {}
     VarDecl(StmtKind kind, const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
-            bool is_public, bool is_static, bool is_stock, Expr* initializer)
-      : VarDeclBase(kind, pos, name, type, vclass, is_public, is_static, is_stock,
-                    initializer)
+            VarDeclFlags flags, Expr* initializer)
+      : VarDeclBase(kind, pos, name, type, vclass, flags, initializer)
     {}
 
     static bool is_a(Stmt* node) {
@@ -395,9 +418,8 @@ class ArgDecl : public VarDeclBase
 {
   public:
     ArgDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
-            bool is_public, bool is_static, bool is_stock, Expr* initializer)
-      : VarDeclBase(StmtKind::ArgDecl, pos, name, type, vclass, is_public, is_static, is_stock,
-                    initializer)
+            VarDeclFlags flags, Expr* initializer)
+      : VarDeclBase(StmtKind::ArgDecl, pos, name, type, vclass, flags, initializer)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ArgDecl; }
@@ -408,7 +430,7 @@ class ConstDecl : public VarDecl
   public:
     ConstDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type, int vclass,
               Expr* expr)
-      : VarDecl(StmtKind::ConstDecl, pos, name, type, vclass, false, false, false, nullptr),
+       : VarDecl(StmtKind::ConstDecl, pos, name, type, vclass, VARDECL_DEFAULT, nullptr),
         expr_(expr),
         already_bound_(false)
     {}
@@ -790,7 +812,7 @@ class IncDecExpr : public Expr
     {}
 
     bool Bind(SemaContext& sc) override {
-        return expr_->Bind(sc);
+        return expr_->BindLval(sc);
     }
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::IncDecExpr; }
@@ -882,6 +904,7 @@ class SymbolExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SymbolExpr; }
 
     Decl* decl() const { return decl_; }
+    void set_decl(Decl* decl) { decl_ = decl; }
     Atom* name() const { return name_; }
 
   private:
@@ -1582,6 +1605,9 @@ class FunctionDecl : public Decl
     Stmt* body() const { return body_; }
     void set_body(Stmt* body) { body_ = body; }
 
+    PoolList<Stmt*>& prebody() { return prebody_; }
+    const PoolList<Stmt*>& prebody() const { return prebody_; }
+
     TokenCache* tokens() const { return tokens_; }
     void set_tokens(TokenCache* tokens) { tokens_ = tokens; }
 
@@ -1662,6 +1688,16 @@ class FunctionDecl : public Decl
     bool maybe_used() const { return maybe_used_; }
     void set_maybe_used() { maybe_used_ = true; }
 
+    void AddSharedVar(VarDeclBase* var);
+    UpvarDecl* AddUpvar(const token_pos_t& pos, FunctionDecl* owner, VarDeclBase* var);
+    LayoutFieldDecl* GetSharedVarField(VarDeclBase* var);
+    size_t NumUpvars() const { return upvars_.size(); }
+    VarDeclBase* GetUpvar(size_t index) const { return upvars_[index]; }
+    // Adds shared object handles as copy-capture upvars, so codegen treats them uniformly.
+    void AddUpvarsForSharedObjects();
+
+    FunctionDecl* outer() const { return outer_; }
+
     void set_deprecate(const std::string& deprecate) { deprecate_ = new PoolString(deprecate); }
     const char* deprecate() const {
         return deprecate_ ? deprecate_->chars() : nullptr;
@@ -1671,6 +1707,8 @@ class FunctionDecl : public Decl
 
     void CheckReturnUsage();
     bool IsVariadic();
+    bool GenerateSharedClass(SemaContext& sc);
+    void UpdateSharedClassFieldTypes();
 
     struct ReturnArrayInfo : public PoolObject {
         cell_t iv_size = 0;
@@ -1695,6 +1733,10 @@ class FunctionDecl : public Decl
     };
     CGInfo* cg();
 
+    // Generated shared class and hidden local for captured shared vars.
+    ClassDecl* shared_class() const { return shared_class_; }
+    VarDeclBase* shared_object() const { return shared_object_; }
+
   protected:
     bool BindArgs(SemaContext& sc);
     FunctionDecl* CanRedefine(Decl* other);
@@ -1702,6 +1744,7 @@ class FunctionDecl : public Decl
   protected:
     token_pos_t end_pos_;
     declinfo_t decl_;
+    PoolList<Stmt*> prebody_;
     Stmt* body_ = nullptr;
     PoolArray<ArgDecl*> args_;
     SymbolScope* scope_ = nullptr;
@@ -1714,6 +1757,21 @@ class FunctionDecl : public Decl
 
     // Other symbols that this symbol refers to.
     PoolForwardList<FunctionDecl*>* refers_to_ = nullptr;
+
+    // Enclosing function (immediate parent in the nesting chain).
+    FunctionDecl* outer_ = nullptr;
+
+    // Variables this function has copy-captured from an outer function.
+    PoolList<VarDeclBase*> upvars_;
+    PoolMap<VarDeclBase*, UpvarDecl*> upvar_decls_;
+
+    // Local variables that were captured by reference in inner functions.
+    PoolMap<VarDeclBase*, LayoutFieldDecl*> shared_vars_;
+    PoolList<VarDeclBase*> shared_var_list_;
+
+    // Generated shared class and hidden local for captured shared vars.
+    ClassDecl* shared_class_ = nullptr;
+    VarDeclBase* shared_object_ = nullptr;
 
     // Set during codegen.
     CGInfo* cg_ = nullptr;
@@ -1913,6 +1971,34 @@ class PropertyDecl : public Decl {
     MemberFunctionDecl* setter_;
 };
 
+class UpvarDecl : public Decl
+{
+  public:
+    UpvarDecl(const token_pos_t& pos, VarDeclBase* var, FunctionDecl* enclosure)
+      : Decl(StmtKind::UpvarDecl, pos, var->name()),
+        var_(var),
+        enclosure_(enclosure)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::UpvarDecl; }
+
+    VarDeclBase* var() const { return var_; }
+    FunctionDecl* enclosure() const { return enclosure_; }
+    QualType type() const { return var_->type(); }
+
+    uint16_t upvar_index() const { return upvar_index_; }
+    void set_upvar_index(uint16_t index) { upvar_index_ = index; }
+
+    uint16_t shared_obj_upvar_index() const { return shared_obj_upvar_index_; }
+    void set_shared_obj_upvar_index(uint16_t index) { shared_obj_upvar_index_ = index; }
+
+  private:
+    VarDeclBase* var_;
+    FunctionDecl* enclosure_;
+    uint16_t upvar_index_ = 0;
+    uint16_t shared_obj_upvar_index_ = 0;
+};
+
 class MethodmapDecl : public LayoutDecl
 {
   public:
@@ -1958,6 +2044,7 @@ inline bool Expr::lvalue() const {
         case iARRAYELEM:
         case iFIELD:
         case iADDRESS:
+        case iUPVAR:
             if (kind() == ExprKind::RvalueExpr)
                 return false;
             return true;

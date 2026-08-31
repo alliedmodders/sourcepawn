@@ -166,7 +166,7 @@ This is a very nuanced change due to the difficult compatibility landscape of
 the SourcePawn type system. By default, all functions now have what is referred
 to as a "typed" signature. A typed signature can be declared with a new typedef syntax:
 
-    typedef Callback = function (int) -> Action;
+    typedef Callback = (int) -> Action;
 
 Typed signatures can be called indirectly. For example:
 

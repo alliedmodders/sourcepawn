@@ -267,6 +267,22 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
             break;
         }
 
+        case OP_LOAD_UPVAR:
+        case OP_STOR_UPVAR:
+        case OP_ADDR_UPVAR:
+            fprintf(stdout, " %u", reader.read<uint16_t>());
+            break;
+
+        case OP_NEWCLOSURE:
+        {
+            uint32_t method_index = reader.read<uint32_t>();
+            if (auto method = smx_->GetMethod(method_index))
+                fprintf(stdout, " %s", method->name ? smx_->names() + method->name : "unknown");
+            else
+                fprintf(stdout, " unknown_method_%u", method_index);
+            break;
+        }
+
         case OP_POP:
         case OP_DUP:
         case OP_SWAP:

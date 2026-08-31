@@ -367,7 +367,8 @@ bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& me
     return v1::Interpreter::Run(cx, method, result);
 }
 
-bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, uint32_t frm, cell_t* result) {
+bool Environment::Invoke(v2::Runtime* cx, Handle<SpFunction> fn, uint32_t frm, cell_t* result) {
+    auto* method = fn->method;
 #if defined(SP_JIT_V2)
     if (jit_allowed_ && v2::CompilerBase::IsSupported()) {
         if (v2::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
@@ -375,7 +376,7 @@ bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, 
                 return false;
         }
 
-        if (CompiledFunction* fn = method->jit()) {
+        if (CompiledFunction* jit_fn = method->jit()) {
             JitInvokeFrame ivkframe(cx);
 
             assert(top_ && top_->cx() == cx);
@@ -383,7 +384,7 @@ bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, 
             ke::SaveRestore<uint32_t> save_sp(sp_, std::move(frm));
 
             InvokeStubV2Fn invoke = code_stubs_->InvokeStubV2();
-            invoke(cx, fn->GetEntryAddress(), result);
+            invoke(cx, jit_fn->GetEntryAddress(), result);
 
             return exception_code_ == SP_ERROR_NONE;
         }
@@ -396,7 +397,7 @@ bool Environment::Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, 
             return false;
     }
 
-    return v2::Interpreter::Run(cx, method, frm, result);
+    return v2::Interpreter::Run(cx, std::move(fn), frm, result);
 }
 
 static BaseRuntime* LoadImage(std::shared_ptr<SmxImage> image, const char* file,

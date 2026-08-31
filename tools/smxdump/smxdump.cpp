@@ -213,6 +213,7 @@ void DumpTool::DumpRttiMethods() {
 
     for (uint32_t i = 0; i < methods->row_count; i++) {
         auto method = smx()->getRttiRow<smx_rtti_method>(methods, i);
+
         fprintf(stdout, ".method %s ; index %u", smx()->names() + method->name, i);
         if (show_name_offsets.value())
             fprintf(stdout, ", name_offset = %u", method->name);
@@ -232,9 +233,11 @@ void DumpTool::DumpRttiMethods() {
             DumpSignature(method->signature);
 
         if (methods->row_size >= 24) {
-            if (method->flags & kRttiMethod_Native) {
+            if (method->flags & kRttiMethod_Native)
                 fprintf(stdout, "    .flags = native\n");
-            } else {
+            if (method->flags & kRttiMethod_Closure)
+                fprintf(stdout, "    .flags = closure\n");
+            if (!(method->flags & kRttiMethod_Native)) {
                 uint8_t visibility = method->flags & kRttiMethodVisibilityMask;
                 if (visibility == kRttiMethodVisibility_Private)
                     fprintf(stdout, "    .visibility = private\n");
@@ -291,12 +294,38 @@ void DumpTool::DumpSignature(uint32_t offset) {
     fprintf(stdout, ")\n");
 }
 
+void DumpTool::DumpUpvars(sp::FastRtti& rtti, uint16_t count) {
+    for (uint16_t i = 0; i < count; i++) {
+        fprintf(stdout, "    .upvar %d ", i);
+        auto type = DumpType(rtti);
+        if (!type.empty())
+            fprintf(stdout, "%s", type.c_str());
+        else
+            fprintf(stdout, "ERROR");
+        fprintf(stdout, "\n");
+    }
+}
+
 void DumpTool::DumpLocals(const smx_rtti_method* method) {
     if (smx()->code()->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK || !method->locals)
         return;
 
-    uint16_t locals;
     auto rtti = smx()->GetTypeParser(method->locals);
+
+    // For closure methods, upvar slots precede kLocalSlots.
+    uint8_t b;
+    if (rtti.GetByte(&b) && b == cb::kClosureSlots) {
+        rtti.NextByte();
+        union u {
+            uint16_t value;
+            uint8_t bytes[2];
+        } u;
+        if (rtti.GetNextByte(&u.bytes[0]) && rtti.GetNextByte(&u.bytes[1])) {
+            DumpUpvars(rtti, u.value);
+        }
+    }
+
+    uint16_t locals;
     if (!rtti.ReadLocalSlotCount(&locals)) {
         fprintf(stdout, "    .locals ERROR\n");
         return;

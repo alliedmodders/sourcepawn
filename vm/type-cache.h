@@ -85,6 +85,15 @@ struct FunctionLookupKey {
     bool is_native;
 };
 
+struct ClosureLookupKey {
+    ClosureLookupKey(const TypeDesc* signature, std::span<const TypeDesc* const> upvar_types)
+      : signature(signature), upvar_types(upvar_types)
+    {}
+
+    const TypeDesc* signature;
+    std::span<const TypeDesc* const> upvar_types;
+};
+
 class TypeCache final {
   public:
     TypeCache();
@@ -97,6 +106,7 @@ class TypeCache final {
     const TypeDesc* GetReference(const TypeDesc* elt);
     const TypeDesc* GetClassdef(v2::Runtime* rt, const smx_rtti_classdef* classdef, TypeKind kind);
     const TypeDesc* CreateFunction(const TypeDesc* return_type, const std::vector<const TypeDesc*>& args, bool is_native);
+    const TypeDesc* GetClosure(const TypeDesc* signature, std::span<const TypeDesc* const> upvar_types);
 
   private:
     PoolAllocator pool_;
@@ -134,6 +144,19 @@ class TypeCache final {
             }
             return true;
         }
+        static bool matches(const ClosureLookupKey& key, const TypeDesc* td) {
+            if (!td->IsClosure())
+                return false;
+            if (td->closure_signature() != key.signature)
+                return false;
+            if (td->upvar_types().size() != key.upvar_types.size())
+                return false;
+            for (size_t i = 0; i < key.upvar_types.size(); i++) {
+                if (td->upvar_types()[i] != key.upvar_types[i])
+                    return false;
+            }
+            return true;
+        }
         static uintptr_t hash(const TypeCacheKey& key) {
             uintptr_t h = ke::HashIntPtr((uint8_t)key.kind);
             if (key.kind == TypeKind::EnumStruct || key.kind == TypeKind::Object) {
@@ -152,9 +175,18 @@ class TypeCache final {
                 h = ke::HashCombine(h, ke::HashPointer(arg));
             return h;
         }
+        static uintptr_t hash(const ClosureLookupKey& key) {
+            uintptr_t h = ke::HashPointer(key.signature);
+            h = ke::HashCombine(h, ke::HashIntPtr(key.upvar_types.size()));
+            for (const auto& ut : key.upvar_types)
+                h = ke::HashCombine(h, ke::HashPointer(ut));
+            return h;
+        }
         static uintptr_t hash(const TypeDesc* td) {
             if (td->IsFunction())
                 return hash(FunctionLookupKey(td->return_type(), td->args(), td->is_native()));
+            if (td->IsClosure())
+                return hash(ClosureLookupKey(td->closure_signature(), td->upvar_types()));
             uintptr_t h = ke::HashIntPtr((uint8_t)td->kind());
             if (td->kind() == TypeKind::EnumStruct || td->kind() == TypeKind::Object) {
                 h = ke::HashCombine(h, ke::HashPointer(td->cls()));

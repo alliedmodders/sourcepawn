@@ -111,6 +111,7 @@ class Runtime final : public BaseRuntime,
     ke::RefPtr<BaseMethodInfo> GetMethodByIndex(uint32_t method_index) const;
     RefPtr<MethodInfo> AcquireMethod(uint32_t method_index);
     const TypeDesc* LoadMethodSignature(uint32_t method_index);
+    const TypeDesc* LoadClosureType(uint32_t method_index);
     const TypeDesc* LoadFunctionSignature(FastRtti& parser, bool is_native);
     const std::vector<RefPtr<MethodInfo>>& AllMethods() const;
 
@@ -145,6 +146,7 @@ class Runtime final : public BaseRuntime,
     Handle<SpArray> NewSlice(SpArray* array, uint32_t index);
     Handle<SpArray> NewSliceEs(uint32_t data, uint32_t size);
     Handle<SpArray> NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
+    Handle<SpFunction> NewClosure(const TypeDesc* td, MethodInfo* method);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }
     Runtime* context() const { return const_cast<Runtime*>(this); }

@@ -43,6 +43,7 @@ class MethodVerifier final
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
     ke::FixedArray<const TypeDesc*>&& local_types() { return std::move(local_types_); }
     ke::FixedArray<const TypeDesc*>&& arg_types() { return std::move(arg_types_); }
+    ke::FixedArray<const TypeDesc*>&& upvar_types() { return std::move(upvar_types_); }
     BitSet&& mutated_args() { return std::move(mutated_args_); }
 
     const TypeDesc* cell_type() const;
@@ -147,6 +148,7 @@ class MethodVerifier final
     const smx_rtti_method* method_ = nullptr;
     ke::FixedArray<const TypeDesc*> local_types_;
     ke::FixedArray<const TypeDesc*> arg_types_;
+    ke::FixedArray<const TypeDesc*> upvar_types_;
     BitSet mutated_args_;
     std::vector<Block*> verify_joins_;
     const TypeDesc* return_type_ = nullptr;

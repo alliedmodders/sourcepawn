@@ -40,6 +40,11 @@ struct Int64Value {
     int64_t value;
 };
 
+struct UpvarIndex {
+    explicit UpvarIndex(uint16_t index) : index(index) {}
+    uint16_t index;
+};
+
 class SmxAssemblyBuffer : public ByteBuffer
 {
  public:
@@ -112,6 +117,10 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<uint8_t>(static_cast<uint8_t>(op));
     encodeAbsoluteAddress(address);
     write<uint8_t>(param);
+  }
+  void emit(OPCODE op, UpvarIndex param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<uint16_t>(param.index);
   }
 
   void PUSH_C(cell_t value) {

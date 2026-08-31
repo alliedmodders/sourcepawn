@@ -38,6 +38,7 @@ enum class TypeKind : uint8_t {
     Reference,
     EnumStruct,
     Object,
+    Closure,
 };
 
 struct HeapItem;
@@ -109,6 +110,20 @@ class TypeDesc final {
         func.return_type = return_type;
         func.args = args;
         func.is_native = is_native;
+    }
+
+    TypeDesc(const TypeDesc* signature, std::span<const TypeDesc*> upvar_types,
+             std::span<uint32_t> upvar_slot_offsets)
+      : kind_(TypeKind::Closure),
+        can_global_cache_(false)
+    {
+        closure.signature = signature;
+        closure.upvar_types = upvar_types;
+        closure.upvar_slot_offsets = upvar_slot_offsets;
+        uint32_t size = 0;
+        for (const TypeDesc* td : upvar_types)
+            size += td->slot_size();
+        closure.total_size = size;
     }
 
     // Size needed to store a value of this type into a variable slot.
@@ -206,27 +221,55 @@ class TypeDesc final {
         return ref;
     }
 
-    bool IsFunction() const { return kind_ == TypeKind::Function; }
+    bool IsFunction() const { return kind_ == TypeKind::Function || kind_ == TypeKind::Closure; }
+    bool IsClosure() const { return kind_ == TypeKind::Closure; }
+    const TypeDesc* closure_signature() const {
+        assert(IsClosure());
+        return closure.signature;
+    }
+    std::span<const TypeDesc*> upvar_types() const {
+        assert(IsClosure());
+        return closure.upvar_types;
+    }
+    const TypeDesc* upvar_type(uint32_t index) const {
+        assert(IsClosure());
+        assert(index < closure.upvar_types.size());
+        return closure.upvar_types[index];
+    }
+    uint32_t upvar_slot_offset(uint32_t index) const {
+        assert(IsClosure());
+        assert(index < closure.upvar_slot_offsets.size());
+        return closure.upvar_slot_offsets[index];
+    }
+    uint32_t closure_upvar_size() const {
+        assert(IsClosure());
+        return closure.total_size;
+    }
     bool IsObject() const { return kind_ == TypeKind::Object; }
     const TypeDesc* return_type() const {
-        assert(IsFunction());
-        return func.return_type;
+        if (IsFunction())
+            return func.return_type;
+        return closure_signature()->return_type();
     }
     std::span<const TypeDesc*> args() const {
-        assert(IsFunction());
-        return func.args;
+        if (IsFunction())
+            return func.args;
+        return closure.signature->args();
     }
     bool is_native() const {
-        assert(IsFunction());
-        return func.is_native;
+        if (IsFunction())
+            return func.is_native;
+        return closure.signature->is_native();
     }
     bool is_variadic() const {
-        assert(IsFunction());
-        return func.args.size() > 0 && func.args.back()->IsLegacyVarArgs();
+        if (IsFunction())
+            return func.args.size() > 0 && func.args.back()->IsLegacyVarArgs();
+        return closure.signature->is_variadic();
     }
     uint32_t expected_argc() const {
-        assert(IsFunction());
-        return func.args.size() - (is_variadic() ? 1 : 0);
+        if (IsFunction())
+            return func.args.size() - (is_variadic() ? 1 : 0);
+        return closure.signature->expected_argc();
     }
 
     bool IsLegacyVarArgs() const { return kind_ == TypeKind::LegacyVarArgs; }
@@ -238,6 +281,7 @@ class TypeDesc final {
             case TypeKind::Array:
             case TypeKind::Function:
             case TypeKind::Object:
+            case TypeKind::Closure:
                 return true;
             default:
                 return false;
@@ -310,6 +354,12 @@ class TypeDesc final {
             std::span<const TypeDesc*> args;
             bool is_native;
         } func;
+        struct {
+            const TypeDesc* signature;
+            std::span<const TypeDesc*> upvar_types;
+            std::span<const uint32_t> upvar_slot_offsets;
+            uint32_t total_size;
+        } closure;
     };
 };
 

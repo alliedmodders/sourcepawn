@@ -56,10 +56,18 @@ static inline bool IsLocal(int kind) {
     return kind == sLOCAL || kind == sARGUMENT;
 }
 
+struct ResolvedSymbol {
+    Decl* decl = nullptr;
+    SymbolScope* scope = nullptr;
+    FunctionDecl* enclosure = nullptr;
+};
+bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* resolved);
+
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);
 
 void markusage(Decl* decl, int usage);
+void markusage(const value& val, int usage);
 Decl* FindEnumStructField(Type* type, Atom* name);
 Decl* FindClassField(Type* type, Atom* name);
 

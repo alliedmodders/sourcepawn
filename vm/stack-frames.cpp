@@ -17,6 +17,7 @@
 #include "environment.h"
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
+#include "objects.h"
 #include "v2/method-info.h"
 #if defined(KE_ARCH_X86)
 #    include "x86/frames-x86.h"
@@ -32,7 +33,8 @@ using namespace SourcePawn;
 
 InvokeFrame::InvokeFrame(BaseRuntime* cx)
  : prev_(Environment::get()->top()),
-   cx_(cx) {
+   cx_(cx)
+{
     Environment::get()->enterInvoke(this);
 }
 
@@ -41,16 +43,28 @@ InvokeFrame::~InvokeFrame() {
     Environment::get()->leaveInvoke();
 }
 
-InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method,
+InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method,
                                      const uint8_t* const* cip)
- : InvokeFrame(cx),
-   method_(method),
-   cip_(cip),
-   native_index_(-1) {
+  : InvokeFrame(cx),
+    cip_(cip),
+    native_index_(-1)
+{
+    legacy_method_ = method;
 }
+
+InterpInvokeFrame::InterpInvokeFrame(BaseRuntime* cx, SpFunction* fn, const uint8_t* const* cip)
+  : InvokeFrame(cx),
+    callee_(fn),
+    cip_(cip),
+    native_index_(-1)
+{}
 
 InterpInvokeFrame::~InterpInvokeFrame() {
     assert(native_index_ == -1);
+}
+
+BaseMethodInfo* InterpInvokeFrame::method() const {
+    return legacy_method_;
 }
 
 void

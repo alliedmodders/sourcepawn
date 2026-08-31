@@ -70,6 +70,7 @@ class MethodInfo final : public BaseMethodInfo
     const TypeDesc* GetTypeOfLocal(cell_t offset) const;
     const ke::FixedArray<const TypeDesc*>& local_types() const { return local_types_; }
     const ke::FixedArray<const TypeDesc*>& arg_types() const { return arg_types_; }
+    const ke::FixedArray<const TypeDesc*>& upvar_types() const { return upvar_types_; }
     ke::FixedArray<int32_t>& local_offsets() { return local_offsets_; }
 
     void SetMutatedArgs(BitSet&& mutated_args) { mutated_args_ = std::move(mutated_args); }
@@ -114,6 +115,7 @@ class MethodInfo final : public BaseMethodInfo
     uint32_t max_eval_stack_bytes_;
     ke::FixedArray<const TypeDesc*> local_types_;
     ke::FixedArray<const TypeDesc*> arg_types_;
+    ke::FixedArray<const TypeDesc*> upvar_types_;
     ke::FixedArray<int32_t> local_offsets_;
     BitSet mutated_args_;
     const TypeDesc* signature_;

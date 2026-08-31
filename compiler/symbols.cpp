@@ -34,6 +34,11 @@ namespace sp {
 namespace cc {
 
 void markusage(Decl* decl, int usage) {
+    if (auto upvar = decl->as<UpvarDecl>()) {
+        markusage(upvar->var(), usage);
+        return;
+    }
+
     if (auto var = decl->as<VarDeclBase>()) {
         if (usage & uREAD)
             var->set_is_read();
@@ -63,6 +68,21 @@ void markusage(Decl* decl, int usage) {
 
     assert(parent_func->canonical() == parent_func);
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
+}
+
+void markusage(const value& val, int usage) {
+    if (val.ident == iVARIABLE) {
+        markusage(val.sym(), usage);
+    } else if (val.ident == iUPVAR) {
+        markusage(val.upvar(), usage);
+    } else if (val.ident == iACCESSOR) {
+        if (val.accessor()->getter())
+            markusage(val.accessor()->getter(), uREAD);
+        if ((usage & uWRITTEN) && val.accessor()->setter())
+            markusage(val.accessor()->setter(), uREAD);
+    } else if (val.ident == iFUNCTN) {
+        markusage(val.fun(), usage);
+    }
 }
 
 Decl* FindEnumStructField(Type* type, Atom* name) {
@@ -145,15 +165,67 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     return true;
 }
 
-Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
-    for (auto iter = scope; iter; iter = iter->parent()) {
+static inline bool IsUpvar(Decl* decl) {
+    switch (decl->kind()) {
+        case StmtKind::VarDecl:
+        case StmtKind::ArgDecl:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* rs) {
+    SymbolScope* global = nullptr;
+
+    SymbolScope* iter = scope;
+    while (iter && !iter->IsGlobalOrFileStatic()) {
         if (auto decl = iter->Find(name)) {
-            if (found)
-                *found = iter;
-            return decl;
+            rs->decl = decl;
+            rs->scope = iter;
+            return true;
+        }
+        iter = iter->parent();
+    }
+
+    // Save the global scope, we'll come back to it later.
+    global = iter;
+
+    auto sc_iter = sc ? sc->outer() : nullptr;
+    while (sc_iter && sc_iter->func()) {
+        // Search enclosing scopes.
+        auto scope_iter = sc_iter->scope();
+        while (scope_iter && !scope_iter->IsGlobalOrFileStatic()) {
+            auto decl = scope_iter->Find(name);
+            if (decl && IsUpvar(decl)) {
+                rs->decl = decl;
+                rs->scope = scope_iter;
+                rs->enclosure = sc_iter->func();
+                return true;
+            }
+            scope_iter = scope_iter->parent();
+        }
+        sc_iter = sc_iter->outer();
+    }
+
+    for (auto iter = global; iter; iter = iter->parent()) {
+        if (auto decl = iter->Find(name)) {
+            rs->decl = decl;
+            rs->scope = iter;
+            return true;
         }
     }
-    return nullptr;
+    return false;
+}
+
+Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
+    ResolvedSymbol rs;
+    if (!ResolveSymbol(nullptr, scope, name, &rs))
+        return nullptr;
+    if (found)
+        *found = rs.scope;
+    assert(!rs.enclosure);
+    return rs.decl;
 }
 
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {

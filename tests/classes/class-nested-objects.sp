@@ -26,9 +26,9 @@ class Outer {
 
 public void main() {
     Outer outer = new Outer();
-    Inner shared = new Inner();
-    shared.SetValue(42);
+    Inner inner = new Inner();
+    inner.SetValue(42);
 
-    outer.SetInner(shared);
+    outer.SetInner(inner);
     outer.GetInner().PrintValue();
 }

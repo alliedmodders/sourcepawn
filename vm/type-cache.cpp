@@ -49,7 +49,10 @@ const TypeDesc* TypeCache::GetPrimitive(TypeKind kind) {
     return primitives_[index];
 }
 
-const TypeDesc* TypeCache::CreateFunction(const TypeDesc* return_type, const std::vector<const TypeDesc*>& args, bool is_native) {
+const TypeDesc* TypeCache::CreateFunction(const TypeDesc* return_type,
+                                          const std::vector<const TypeDesc*>& args,
+                                          bool is_native)
+{
     FunctionLookupKey key(return_type, std::span<const TypeDesc* const>(args.data(), args.size()), is_native);
     auto p = cache_.findForAdd(key);
     if (p.found())
@@ -63,6 +66,44 @@ const TypeDesc* TypeCache::CreateFunction(const TypeDesc* return_type, const std
     }
     std::span<const TypeDesc*> args_span(args_copy, args.size());
     TypeDesc* td = NewTypeDesc(pool_, return_type, args_span, is_native);
+
+    cache_.add(p, td);
+    return td;
+}
+
+const TypeDesc* TypeCache::GetClosure(const TypeDesc* signature,
+                                      std::span<const TypeDesc* const> upvar_types)
+{
+    ClosureLookupKey key(signature, upvar_types);
+    auto p = cache_.findForAdd(key);
+    if (p.found())
+        return *p;
+
+    const TypeDesc** upvars_copy = nullptr;
+    if (!upvar_types.empty()) {
+        upvars_copy = pool_.alloc<const TypeDesc*>(upvar_types.size());
+        for (size_t i = 0; i < upvar_types.size(); i++)
+            upvars_copy[i] = upvar_types[i];
+    }
+
+    // Compute slot offsets (in bytes).
+    uint32_t offset = 0;
+    std::vector<uint32_t> slot_offsets;
+    for (const TypeDesc* td : upvar_types) {
+        slot_offsets.push_back(offset);
+        offset += td->slot_size();
+    }
+
+    uint32_t* slot_offsets_copy = nullptr;
+    if (!slot_offsets.empty()) {
+        slot_offsets_copy = pool_.alloc<uint32_t>(slot_offsets.size());
+        for (size_t i = 0; i < slot_offsets.size(); i++)
+            slot_offsets_copy[i] = slot_offsets[i];
+    }
+
+    std::span<const TypeDesc*> upvar_span(upvars_copy, upvar_types.size());
+    std::span<uint32_t> offset_span(slot_offsets_copy, slot_offsets.size());
+    TypeDesc* td = NewTypeDesc(pool_, signature, upvar_span, offset_span);
 
     cache_.add(p, td);
     return td;

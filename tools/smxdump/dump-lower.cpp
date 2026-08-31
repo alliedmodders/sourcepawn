@@ -248,6 +248,21 @@ std::string DumpTool::DumpType(const TypeDesc* td) {
             return "any";
         case TypeKind::Void:
             return "void";
+        case TypeKind::Null:
+            return "null";
+        case TypeKind::Function: {
+            std::string sig = DumpType(td->return_type());
+            sig += "(";
+            auto args = td->args();
+            for (size_t i = 0; i < args.size(); i++) {
+                if (i) sig += ", ";
+                sig += DumpType(args[i]);
+            }
+            sig += ")";
+            return sig;
+        }
+        case TypeKind::Closure:
+            return "closure";
         case TypeKind::Array:
             return DumpType(td->array_elt()) + "[]";
         case TypeKind::FixedArray:

@@ -360,4 +360,7 @@ static const char* errmsg_ex[] = {
     /*478*/ "dynamic array declarations require an initializer\n",
     /*479*/ "natives are not allowed in class declarations\n",
     /*480*/ "cannot access private member '%s' of class '%s'\n",
+    /*481*/ "fixed arrays captured by a closure must be marked as 'shared' (variable \"%s\")\n",
+    /*482*/ "shared variable \"%s\" is not captured by any closure\n",
+    /*483*/ "function arguments cannot be marked as shared\n",
 };

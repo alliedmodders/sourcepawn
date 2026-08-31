@@ -28,13 +28,15 @@ bool FastRtti::ReadLocalSlotCount(uint16_t* out) {
     if (!GetNextByte(&b) || b != cb::kLocalSlots)
         return false;
 
+    return ReadUint16(out);
+}
+
+bool FastRtti::ReadUint16(uint16_t* out) {
     union u {
         uint16_t value;
         uint8_t bytes[2];
     } u;
-    if (!GetNextByte(&u.bytes[0]))
-        return false;
-    if (!GetNextByte(&u.bytes[1]))
+    if (!GetNextByte(&u.bytes[0]) || !GetNextByte(&u.bytes[1]))
         return false;
     *out = u.value;
     return true;

@@ -212,9 +212,26 @@ namespace v2 {
      * resulting heap address is pushed onto the stack.
      */ \
     FOR_EACH(NEWOBJ, 95, "newobj", 5) \
+    /* Creates a closure object. Operand is uint32 method_id. num_upvars is
+     * derived from the method's kClosureSlots header. Pops num_upvars values
+     * from the stack. Pushes SpFunction* onto the stack.
+     */ \
+    FOR_EACH(NEWCLOSURE, 96, "newclosure", 5) \
+    /* Loads upvar[index] from the current closure object and pushes it.
+     * Operand is uint16 index.
+     */ \
+    FOR_EACH(LOAD_UPVAR, 97, "load.upvar", 3) \
+    /* Pops a value and stores it into upvar[index] of the current closure.
+     * Operand is uint16 index.
+     */ \
+    FOR_EACH(STOR_UPVAR, 98, "stor.upvar", 3) \
+    /* Loads the address of upvar[index] from the current closure object.
+     * Operand is uint16 index. Pushes a pointer to the upvar cell.
+     */ \
+    FOR_EACH(ADDR_UPVAR, 99, "addr.upvar", 3) \
 
 
-enum OPCODE {
+ enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
     OPCODE_LIST_V2(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE

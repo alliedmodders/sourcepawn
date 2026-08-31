@@ -573,7 +573,8 @@ SmxImage::validateRttiMethods() {
         }
         if (rtti_methods_->row_size >= 24) {
             uint32_t supported_flags = kRttiMethodVisibilityMask |
-                                       kRttiMethod_Native;
+                                       kRttiMethod_Native |
+                                       kRttiMethod_Closure;
             uint32_t unknown_flags = method->flags & ~supported_flags;
             if (unknown_flags)
                 return error("invalid method flags");

@@ -124,6 +124,8 @@ void RttiBuilder::AddDebugLine(uint16_t addr, uint16_t line) {
 void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_start, uint32_t code_end) {
     std::optional<cell> addr;
     if (auto var = decl->as<VarDeclBase>()) {
+        if (var->is_shared())
+            return;
         if (auto cv = var->as<ConstDecl>())
             addr.emplace(cv->const_val());
         else
@@ -183,22 +185,35 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_
     return debug;
 }
 
+static inline void AppendUint16(std::vector<uint8_t>* out, uint16_t value) {
+    out->push_back(static_cast<uint8_t>(value & 0xff));
+    out->push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+}
+
 void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
                                 LocalSlotSignature&& locals, uint32_t pcode_end)
 {
     auto& method = methods_->at(entry.method_index);
     method.pcode_end = pcode_end;
 
-    if (locals.count) {
-        union {
-            int16_t value;
-            uint8_t bytes[2];
-        } u;
-        u.value = locals.count;
-        locals.types[0] = cb::kLocalSlots;
-        locals.types[1] = u.bytes[0];
-        locals.types[2] = u.bytes[1];
-        method.locals = type_pool_.add(locals.types);
+    if (locals.count || fun->NumUpvars()) {
+        std::vector<uint8_t> blob;
+
+        // For closures, upvar slots precede local slots.
+        if (fun->NumUpvars()) {
+            blob.push_back(cb::kClosureSlots);
+
+            AppendUint16(&blob, (uint16_t)fun->NumUpvars());
+
+            for (size_t i = 0; i < fun->NumUpvars(); i++)
+                encode_type_into(blob, fun->GetUpvar(i)->type());
+        }
+
+        blob.push_back(cb::kLocalSlots);
+        AppendUint16(&blob, locals.count);
+        blob.insert(blob.end(), locals.types.begin(), locals.types.end());
+
+        method.locals = type_pool_.add(blob);
     } else {
         method.locals = 0;
     }
@@ -208,6 +223,8 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
         method.flags = kRttiMethodVisibility_Public;
     else if (fun->is_native())
         method.flags = kRttiMethod_Native;
+    if (fun->signature()->conv() == FunctionType::Closure)
+        method.flags |= kRttiMethod_Closure;
 
     // Only add a method table entry if we actually had locals or lines.
     if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
@@ -429,6 +446,7 @@ uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     }
 
     bytes.push_back((uint8_t)argc);
+
     if (fun->IsVariadic())
         bytes.push_back(cb::kLegacyVariadic);
 

@@ -1359,6 +1359,7 @@ const char* sc_tokens[] = {"*=",
                            "readonly",
                            "return",
                            "sealed",
+                           "shared",
                            "sizeof",
                            "static",
                            "static_assert",
@@ -2004,7 +2005,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     char first_char = advance();
     assert(alpha(first_char) || first_char == '#');
 
-    bool maybe_keyword = (first_char != PUBLIC_CHAR) && allow_keywords_;
+    bool maybe_keyword = allow_keywords_;
     while (true) {
         char c = peek();
         if (IsDigit(c)) {
@@ -2020,10 +2021,6 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     }
 
     size_t len = char_stream() - token_start;
-    if (len == 1 && first_char == PUBLIC_CHAR) {
-        tok->id = PUBLIC_CHAR;
-        return;
-    }
 
     // Handle preprocessor keywords (ugh).
     Atom* atom = cc_.atom((const char *)token_start, len);
@@ -2451,7 +2448,7 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
 int
 alpha(char c)
 {
-    return (isalpha(c) || c == '_' || c == PUBLIC_CHAR);
+    return (isalpha(c) || c == '_');
 }
 
 /*  alphanum

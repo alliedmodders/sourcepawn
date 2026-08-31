@@ -510,13 +510,13 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     return true;
 }
 
-bool Semantics::CheckExpr(Expr* expr) {
+bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
     AutoErrorPos aep(expr->pos());
     switch (expr->kind()) {
         case ExprKind::UnaryExpr:
             return CheckUnaryExpr(expr->to<UnaryExpr>());
         case ExprKind::IncDecExpr:
-            return CheckIncDecExpr(expr->to<IncDecExpr>());
+            return CheckIncDecExpr(expr->to<IncDecExpr>(), flags);
         case ExprKind::BinaryExpr:
             return CheckBinaryExpr(expr->to<BinaryExpr>());
         case ExprKind::LogicalExpr:
@@ -811,7 +811,7 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     return true;
 }
 
-bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
+bool Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
     AutoErrorPos aep(incdec->pos());
 
     auto expr = incdec->expr();
@@ -830,6 +830,9 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec) {
             report(incdec, 22); /* assignment to const argument */
             return false;
         }
+        markusage(expr_val, uWRITTEN);
+        if (!(flags & EXPR_DISCARD_RESULT))
+            markusage(expr_val, uREAD);
     } else {
         if (!expr_val.accessor()->setter()) {
             report(incdec, 152) << expr_val.accessor()->name();
@@ -881,9 +884,8 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
 
     if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
+        markusage(state.left->val(), uWRITTEN);
         if (Decl* sym = state.left->val().sym()) {
-            markusage(sym, uWRITTEN);
-
             // If it's an outparam, also mark it as read.
             if (sym->vclass() == sARGUMENT &&
                 (sym->type()->isReference() ||
@@ -1466,6 +1468,9 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             val.set_typename(decl);
             break;
         }
+        case StmtKind::UpvarDecl:
+            val.set_upvar(decl->as<UpvarDecl>(), decl->type());
+            return true;
         default:
             assert(false);
     }
@@ -2559,7 +2564,7 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
 
 bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckRvalue(expr))
+    if (!CheckRvalue(expr, nullptr, EXPR_DISCARD_RESULT))
         return false;
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
@@ -3100,6 +3105,11 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         return false;
     }
 
+    if (!info->GenerateSharedClass(sc))
+        return false;
+
+    info->AddUpvarsForSharedObjects();
+
     // We never warn about unused member functions.
     if (info->as<MemberFunctionDecl>())
         maybe_used_.emplace_back(info);
@@ -3113,6 +3123,10 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         report(info->pos(), 234) << info->name() << fwd->deprecate();
 
     bool ok = CheckStmt(body);
+
+    // This must be after evaluating the body, since we won't know the types of
+    // let statements until after type deduction.
+    info->UpdateSharedClassFieldTypes();
 
     info->set_returns_value(sc_->returns_value());
 
@@ -3137,6 +3151,27 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     return ok;
 }
 
+void FunctionDecl::AddUpvarsForSharedObjects() {
+    std::unordered_map<VarDeclBase*, UpvarDecl*> seen;
+    for (const auto& [var, upvar_decl] : upvar_decls_) {
+        if (!var->is_shared())
+            continue;
+
+        auto owner = upvar_decl->enclosure();
+        auto shared_obj = owner->shared_object();
+
+        UpvarDecl* shared_obj_upvar = nullptr;
+
+        auto iter = seen.find(shared_obj);
+        if (iter != seen.end())
+            shared_obj_upvar = iter->second;
+        else
+            shared_obj_upvar = AddUpvar(upvar_decl->pos(), owner, shared_obj);
+
+        upvar_decl->set_shared_obj_upvar_index(shared_obj_upvar->upvar_index());
+    }
+}
+
 void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
     if (info->returns_value() && info->body()->flow_type() == Flow_Return)
         return;
@@ -3151,19 +3186,6 @@ bool Semantics::CheckFunctionExpr(FunctionExpr* expr) {
         return false;
 
     fun->set_is_live();
-
-    if (!fun->name()) {
-        auto enclosing = sc_->func();
-        uint32_t file_idx = cc_.sources()->GetSourceFileIndex(expr->pos());
-        std::string name = ".fn_expr@";
-        name += cc_.sources()->opened_files()[file_idx]->basename();
-        name += ":";
-        name += std::to_string(expr->pos().line);
-        name += ".";
-        name += std::to_string(enclosing ? enclosing->next_lambda_id()
-                                         : fun_expr_count_++);
-        fun->set_name(cc_.atom(name));
-    }
 
     auto& v = expr->val();
     v.set_expr(fun->type());
@@ -3322,7 +3344,7 @@ void Semantics::DeduceMaybeUsed() {
     }
 }
 
-bool Semantics::CheckRvalue(Expr* expr, Type* target) {
+bool Semantics::CheckRvalue(Expr* expr, Type* target, uint32_t flags) {
     switch (expr->kind()) {
         case ExprKind::ArrayExpr:
             return CheckArrayExpr(expr->to<ArrayExpr>(), target);
@@ -3334,7 +3356,7 @@ bool Semantics::CheckRvalue(Expr* expr, Type* target) {
             break;
     }
 
-    if (!CheckExpr(expr))
+    if (!CheckExpr(expr, flags))
         return false;
     return CheckRvalueAccess(expr);
 }
@@ -3471,6 +3493,62 @@ bool HasTagOnInheritanceChain(Type* type, Type* other) {
             return true;
     }
     return false;
+}
+
+bool FunctionDecl::GenerateSharedClass(SemaContext& sc) {
+    if (shared_var_list_.empty())
+        return true;
+
+    auto& cc = sc.cc();
+
+    // Generate a unique class name.
+    std::string class_name =
+        ke::StringPrintf("__shared_%s_%d", name_->chars(),
+                         sc.sema()->next_shared_class_count());
+    auto class_atom = cc.atom(class_name);
+    shared_class_ = new ClassDecl(pos(), class_atom);
+
+    // Create fields for every captured shared variable.
+    std::vector<LayoutFieldDecl*> fields;
+    for (auto var : shared_var_list_) {
+        declinfo_t field_info{};
+        field_info.name = var->name();
+        field_info.type = var->type_info();
+        fields.push_back(new LayoutFieldDecl(pos(), field_info, shared_class_));
+        shared_vars_.emplace(var, fields.back());
+    }
+    new (&shared_class_->fields()) PoolArray<LayoutFieldDecl*>(fields);
+
+    // Note: we don't need EnterNames or Bind since this isn't exposed anywhere.
+    shared_class_->EnterTypes(sc);
+
+    // Create a hidden local variable of the shared class type.
+    auto hidden_name = cc.atom(class_name + "_inst");
+    typeinfo_t hidden_type{};
+    hidden_type.type = shared_class_->type().unqualified();
+    hidden_type.is_const = false;
+
+    shared_object_ = new VarDecl(pos(), hidden_name, hidden_type, sLOCAL, VARDECL_DEFAULT, nullptr);
+    prebody().push_back(shared_object_);
+
+    // Synthesize "new SharedClass()" and attach as initializer.
+    {
+        auto target = new SymbolExpr(pos(), shared_class_->name());
+        target->set_decl(shared_class_);
+
+        auto call = new CallExpr(pos(), tNEW, target, {});
+        call->set_ctor_type(shared_class_->type().unqualified());
+        shared_object_->set_init(call);
+    }
+
+    return true;
+}
+
+void FunctionDecl::UpdateSharedClassFieldTypes() {
+    for (auto var : shared_var_list_) {
+        auto field = GetSharedVarField(var);
+        field->mutable_type_info() = var->type_info();
+    }
 }
 
 } // namespace cc

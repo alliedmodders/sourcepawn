@@ -335,6 +335,10 @@ uint16_t CodeGenerator::AcquireGlobalSlot(VarDeclBase* decl) {
     return index;
 }
 
+static bool CanUseEmitArrayCtor(ArrayType* array, Expr* init) {
+    return array->is_fixed() || !init || init->as<NewArrayExpr>();
+}
+
 void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
     for (const auto& var : stmt->vars()) {
         auto init = var->init_rhs();
@@ -351,7 +355,7 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
                     continue;
                 __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
                 EmitArrayCtor(array, init, 0);
-            } else if (array->is_fixed() || !init || init->as<NewArrayExpr>()) {
+            } else if (CanUseEmitArrayCtor(array, init)) {
                 EmitArrayCtor(array, init, 0);
                 __ emit(OP_STOR_GLB, VarSlot(var->addr()));
             } else {
@@ -541,17 +545,14 @@ void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
         auto field_type = field->type_info().type;
         __ emit(OP_DUP);
         if (auto field_array = field_type->as<ArrayType>()) {
-            uint32_t ref = rtti_->AddFieldRef(field);
-            __ emit(OP_ADDR_FLD, ref);
+            EmitAddrField(field);
             EmitArrayCtor(field_array, expr, 0);
         } else if (auto field_es = field_type->asEnumStruct()) {
-            uint32_t ref = rtti_->AddFieldRef(field);
-            __ emit(OP_ADDR_FLD, ref);
+            EmitAddrField(field);
             EmitEnumStructCtor(field_es, expr);
         } else {
             EmitExpr(expr);
-            uint32_t ref = rtti_->AddFieldRef(field);
-            __ emit(OP_STOR_FLD, ref);
+            EmitStoreField(field);
         }
     }
 
@@ -652,6 +653,11 @@ static bool CanEmitArrayCtor(Expr* ctor) {
 }
 
 void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
+    if (decl->is_shared()) {
+        EmitLocalSharedVar(decl);
+        return;
+    }
+
     BinaryExpr* init = decl->init();
 
     bool is_struct = decl->type()->isEnumStruct();
@@ -678,7 +684,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             } else {
                 EmitExpr(init);
             }
-        } else if (array->is_fixed() || !init_rhs || init_rhs->as<NewArrayExpr>()) {
+        } else if (CanUseEmitArrayCtor(array, init_rhs)) {
             EmitArrayCtor(array, init_rhs, 0);
             __ emit(OP_STOR_S, VarSlot(slot));
         } else {
@@ -716,6 +722,36 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
             __ emit(OP_STOR_S, VarSlot(slot));
         }
     }
+}
+
+void CodeGenerator::EmitLocalSharedVar(VarDeclBase* decl) {
+    // Shared variables live inside the shared object, not in their own slot.
+    if (!decl->init())
+        return;
+
+    // Store to the shared object.
+    auto field = fun_->GetSharedVarField(decl);
+    auto init_rhs = decl->init_rhs();
+
+    if (auto array = field->type()->as<ArrayType>()) {
+        if (array->is_flat() && init_rhs) {
+            __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+            EmitAddrField(field);
+            EmitArrayCtor(array, init_rhs, 0);
+            return;
+        }
+    }
+    __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+    if (auto array = decl->type()->as<ArrayType>()) {
+        if (CanUseEmitArrayCtor(array, init_rhs))
+            EmitArrayCtor(array, init_rhs, 0);
+        else
+            EmitExpr(init_rhs);
+    } else {
+        EmitExpr(init_rhs);
+    }
+    EmitStoreField(field);
+    return;
 }
 
 void
@@ -987,6 +1023,13 @@ value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
         case iACCESSOR:
             EmitExpr(expr, EMIT_ALLOW_LVALUE);
             break;
+        case iUPVAR: {
+            auto upvar = expr->val().upvar();
+            if (upvar->var()->is_shared()) {
+                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
+            }
+            break;
+        }
         case iFIELD: {
             auto fe = expr->as<FieldAccessExpr>();
             EmitExpr(fe->base());
@@ -1046,6 +1089,9 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     switch (v.ident) {
         case iVARIABLE:
             return 0;
+        case iUPVAR:
+            // For shared upvars we push the shared object ref on the stack.
+            return v.upvar()->var()->is_shared() ? 1 : 0;
         case iACCESSOR:
         case iADDRESS:
         case iEXPRESSION:
@@ -1443,9 +1489,7 @@ void CodeGenerator::EmitTernaryExpr(TernaryExpr* expr, unsigned int flags) {
     __ bind(&flab2);
 }
 
-void
-CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
-{
+void CodeGenerator::EmitSymbolExpr(SymbolExpr* expr) {
     Decl* sym = expr->decl();
     if (auto fun = sym->as<FunctionDecl>()) {
         assert(fun == fun->canonical());
@@ -1457,6 +1501,8 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
     } else if (auto var = sym->as<VarDeclBase>()) {
         if (sym->type()->isCompositeValue())
             EmitAddress(var);
+    } else if (sym->as<UpvarDecl>()) {
+        // Nothing to do, we handle this in l/r-value emit code.
     } else {
         assert(false);
     }
@@ -1516,8 +1562,7 @@ void CodeGenerator::EmitElidedSliceExpr(SliceExpr* slice) {
 void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
     if (expr->token() == tDBLCOLON) {
         LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>();
-        uint32_t ref = rtti_->AddFieldRef(field);
-        __ emit(OP_LOAD_FLD_OFFSET, ref);
+        EmitLoadFieldOffset(field);
         return;
     }
 
@@ -1627,9 +1672,11 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                     EmitRvalue(val);
                 else if (val.ident == iVARIABLE)
                     EmitAddress(val.sym());
-                else if (val.ident == iFIELD)
-                    EmitAddress(val);
-            }
+                 else if (val.ident == iFIELD)
+                     EmitAddress(val);
+                 else if (val.ident == iUPVAR)
+                     EmitAddress(val);
+             }
 
             if (needs_temp) {
                 auto slot = AcquireTempSlot(expr, UnwrapRef(val.type()));
@@ -1637,9 +1684,11 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
         } else if (arg->isReference()) {
-            if (val.ident == iVARIABLE && !val.type()->isComposite())
-                EmitAddress(val.sym());
-        }
+             if (val.ident == iVARIABLE && !val.type()->isComposite())
+                 EmitAddress(val.sym());
+             else if (val.ident == iUPVAR)
+                 EmitAddress(val);
+         }
 
         // Always pass int64s by reference, as a hack for backward compatibility
         // with natives and GetLocalParams.
@@ -1911,16 +1960,32 @@ void CodeGenerator::EmitRvalue(const value& lval) {
             break;
         case iFIELD: {
             auto field = lval.field();
-            uint32_t ref = rtti_->AddFieldRef(field);
             if (lval.type()->isCompositeValue())
-                __ emit(OP_ADDR_FLD, ref);
+                EmitAddrField(field);
             else
-                __ emit(OP_LOAD_FLD, ref);
+                EmitLoadField(field);
             break;
         }
         case iACCESSOR:
             InvokeGetter(lval.accessor());
             break;
+        case iUPVAR: {
+            auto upvar = lval.upvar();
+            if (upvar->var()->is_shared()) {
+                // Shared object ref is already on the stack from BindLvalue.
+                auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
+                if (lval.type()->isCompositeValue())
+                    EmitAddrField(field);
+                else
+                    EmitLoadField(field);
+            } else {
+                if (lval.type()->isCompositeValue())
+                    __ emit(OP_ADDR_UPVAR, UpvarIndex(upvar->upvar_index()));
+                else
+                    __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->upvar_index()));
+            }
+            break;
+        }
         case iVARIABLE: {
             if (lval.type()->isReference()) {
                 auto var = lval.sym();
@@ -1939,7 +2004,14 @@ void CodeGenerator::EmitRvalue(const value& lval) {
         }
         default: {
             auto var = lval.sym();
-            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
+            if (var->is_shared()) {
+                __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+                auto field = fun_->GetSharedVarField(var);
+                if (lval.type()->isCompositeValue())
+                    EmitAddrField(field);
+                else
+                    EmitLoadField(field);
+            } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
                 if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
                     // int64 arguments are passed by-ref for compatibility.
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
@@ -1991,8 +2063,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
             break;
         case iFIELD: {
             auto field = lval.field();
-            uint32_t ref = rtti_->AddFieldRef(field);
-            __ emit(OP_STOR_FLD, ref);
+            EmitStoreField(field);
             break;
         }
         case iACCESSOR:
@@ -2007,6 +2078,18 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
             __ emit(OP_SWAP);
             EmitCall(lval.accessor()->setter(), 2);
             break;
+        case iUPVAR: {
+            auto upvar = lval.upvar();
+            if (upvar->var()->is_shared()) {
+                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
+                __ emit(OP_SWAP);
+                auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
+                EmitStoreField(field);
+            } else {
+                __ emit(OP_STOR_UPVAR, UpvarIndex(upvar->upvar_index()));
+            }
+            break;
+        }
         case iVARIABLE: {
             if (lval.type()->isReference()) {
                 auto var = lval.sym();
@@ -2026,7 +2109,12 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
         }
         default: {
             auto var = lval.sym();
-            if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
+            if (var->is_shared()) {
+                __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+                __ emit(OP_SWAP);
+                auto field = fun_->GetSharedVarField(var);
+                EmitStoreField(field);
+            } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
                 if (var->type()->isInt64() && var->vclass() == sARGUMENT) {
                     __ emit(OP_LOAD_S, VarSlot(var->addr()));
                     __ emit(OP_SWAP);
@@ -2050,8 +2138,7 @@ void CodeGenerator::EmitAddress(const value& lval) {
             break;
         case iFIELD: {
             auto field = lval.field();
-            uint32_t ref = rtti_->AddFieldRef(field);
-            __ emit(OP_ADDR_FLD, ref);
+            EmitAddrField(field);
             break;
         }
         case iARRAYELEM:
@@ -2060,16 +2147,31 @@ void CodeGenerator::EmitAddress(const value& lval) {
             else
                 __ emit(OP_LOAD_ELEM_A);
             break;
-        case iADDRESS:
-            break;
-        default:
-            assert(false);
-            break;
-    }
-}
+         case iADDRESS:
+             break;
+         case iUPVAR: {
+             auto upvar = lval.upvar();
+             if (upvar->var()->is_shared()) {
+                 __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
+                 auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
+                 EmitAddrField(field);
+             } else {
+                 __ emit(OP_ADDR_UPVAR, UpvarIndex(upvar->upvar_index()));
+             }
+             break;
+         }
+         default:
+             assert(false);
+             break;
+     }
+ }
 
 void CodeGenerator::EmitAddress(VarDeclBase* decl) {
-    if (decl->vclass() == sARGUMENT) {
+    if (decl->is_shared()) {
+        __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+        auto field = fun_->GetSharedVarField(decl);
+        EmitAddrField(field);
+    } else if (decl->vclass() == sARGUMENT) {
         if (decl->type()->isPassByRef())
             __ emit(OP_LOAD_S, VarSlot(decl->addr()));
         else
@@ -2087,6 +2189,26 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
         else
             __ emit(OP_ADDR_GLB, VarSlot(slot));
     }
+}
+
+void CodeGenerator::EmitLoadField(LayoutFieldDecl* field) {
+    uint32_t ref = rtti_->AddFieldRef(field);
+    __ emit(OP_LOAD_FLD, ref);
+}
+
+void CodeGenerator::EmitLoadFieldOffset(LayoutFieldDecl* field) {
+    uint32_t ref = rtti_->AddFieldRef(field);
+    __ emit(OP_LOAD_FLD_OFFSET, ref);
+}
+
+void CodeGenerator::EmitStoreField(LayoutFieldDecl* field) {
+    uint32_t ref = rtti_->AddFieldRef(field);
+    __ emit(OP_STOR_FLD, ref);
+}
+
+void CodeGenerator::EmitAddrField(LayoutFieldDecl* field) {
+    uint32_t ref = rtti_->AddFieldRef(field);
+    __ emit(OP_ADDR_FLD, ref);
 }
 
 void CodeGenerator::InvokeGetter(PropertyDecl* prop) {
@@ -2312,6 +2434,8 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
             arg_index++;
         }
 
+        for (auto stmt : info->prebody())
+            EmitStmt(stmt);
         EmitStmt(info->body());
     }
 
@@ -2341,12 +2465,27 @@ void CodeGenerator::AddFunctionToQueue(FunctionDecl* fun) {
     fun->cg()->in_queue = true;
 }
 
-void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
-    auto fun = expr->decl();
+void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
     AddFunctionToQueue(fun);
 
-    __ emit(OP_LOAD_FN, &fun->cg()->method_id);
+    if (fun->NumUpvars() == 0) {
+        __ emit(OP_LOAD_FN, &fun->cg()->method_id);
+        return;
+    }
 
+    for (size_t i = 0; i < fun->NumUpvars(); i++) {
+        auto var = fun->GetUpvar(i);
+        if (var->type()->isCompositeValue())
+            EmitAddress(var);
+        else
+            __ emit(OP_LOAD_S, VarSlot(var->addr()));
+    }
+
+    __ emit(OP_NEWCLOSURE, &fun->cg()->method_id);
+}
+
+void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
+    EmitNewClosure(expr->decl());
 }
 
 void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {

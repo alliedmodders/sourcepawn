@@ -63,7 +63,9 @@ struct ExprNode {
         kSlotOp,
         kLoadElem,
         kCall,
-        kLoadFn
+        kLoadFn,
+        kLoadUpvar,
+        kLoadField,
     };
 
     ExprNode() : kind(kInvalid), type(nullptr) {}
@@ -129,6 +131,13 @@ struct ExprNode {
         struct {
             uint32_t fn_id;
         } load_fn;
+        struct {
+            uint32_t index;
+        } load_upvar;
+        struct {
+            ExprNode* base;
+            uint32_t offset;
+        } load_field;
     };
 };
 
@@ -239,7 +248,7 @@ class MethodLowerer
     }
 
     uint16_t GetCellCount(const TypeDesc* type) const {
-        uint32_t cells = type->slot_size() / 4;
+        uint32_t cells = type->slot_size() / sizeof(cell_t);
         assert(cells <= UINT16_MAX);
         return cells;
     }
@@ -281,6 +290,23 @@ class MethodLowerer
         node->call.args_to_free = std::move(args_to_free);
         node->call.spread_reg = VReg();
         node->call.method_index = 0;
+        return node;
+    }
+
+    ExprNode* CreateLoadUpvarNode(const TypeDesc* type, uint32_t index) {
+        ExprNode* node = pool_.make<ExprNode>();
+        node->kind = ExprNode::kLoadUpvar;
+        node->type = type;
+        node->load_upvar.index = index;
+        return node;
+    }
+
+    ExprNode* CreateLoadFieldNode(const TypeDesc* type, ExprNode* base, uint32_t offset) {
+        ExprNode* node = pool_.make<ExprNode>();
+        node->kind = ExprNode::kLoadField;
+        node->type = type;
+        node->load_field.base = base;
+        node->load_field.offset = offset;
         return node;
     }
 
@@ -1112,19 +1138,8 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             ExprNode* base_node = popStack();
             FlushEmitStack();
-            VReg base_reg = EmitNode(base_node);
 
-            VReg dest = AllocateTemp(field_td);
-
-            LLOp llop = LL_LOAD_FLD_X32;
-            if (field_td->IsHeapItem())
-                llop = LL_LOAD_FLD_A;
-            else if (field_td->IsInt64())
-                llop = LL_LOAD_FLD_X64;
-            emit(llop, offset, base_reg, dest);
-
-            FreeReg(base_reg);
-            pushStack(CreateTempNode(field_td, dest));
+            pushStack(CreateLoadFieldNode(field_td, base_node, offset));
             break;
         }
 
@@ -1292,6 +1307,118 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             if (size_node)
                 FreeReg(size_reg);
             pushStack(CreateTempNode(td, dest));
+            break;
+        }
+
+        case OP_NEWCLOSURE: {
+            uint32_t method_id = reader_.read<uint32_t>();
+            const TypeDesc* closure_td = rt_->LoadClosureType(method_id);
+            uint8_t num_upvars = (uint8_t)closure_td->upvar_types().size();
+
+            // Flush everything on the stack below the upvar values.
+            FlushEmitStack();
+
+            // Pop upvar values in reverse order.
+            std::vector<VReg> upvar_regs;
+            upvar_regs.reserve(num_upvars);
+            for (uint8_t i = 0; i < num_upvars; i++) {
+                ExprNode* node = popStack();
+                upvar_regs.push_back(EmitNode(node));
+            }
+
+            // Allocate the SpClosure.
+            VReg closure_reg = AllocateTemp(closure_td);
+            emit(LL_NEWCLOSURE, method_id, closure_reg);
+
+            // Store each upvar into its slot. For flat arrays and enum structs,
+            // we have to perform a deep copy.
+            for (uint8_t i = 0; i < num_upvars; i++) {
+                const TypeDesc* upvar_td = closure_td->upvar_type(i);
+                VReg val_reg = upvar_regs[i];
+
+                uint32_t offset = closure_td->upvar_slot_offset(i);
+
+                if (upvar_td->IsCompositeValue()) {
+                    VReg slot_addr_reg = AllocateTemp(upvar_td);
+                    emit(LL_ADDR_UPVAR, UpvarArgs{offset, closure_reg.index, slot_addr_reg.index});
+                    if (upvar_td->kind() == TypeKind::FlatArray) {
+                        if (upvar_td->array_elt()->IsHeapItem()) {
+                            emit(LL_COPYARRAY_FLAT_A, upvar_td->array_size(), val_reg, slot_addr_reg);
+                        } else {
+                            uint32_t bytes = upvar_td->array_size() * upvar_td->array_elt()->element_size();
+                            emit(LL_COPYARRAY_FLAT, bytes, val_reg, slot_addr_reg);
+                        }
+                    } else if (upvar_td->kind() == TypeKind::EnumStruct) {
+                        emit(LL_COPYOBJ, upvar_td->cls_size(), val_reg, slot_addr_reg);
+                    } else {
+                        assert(false);
+                    }
+                    FreeReg(slot_addr_reg);
+                } else {
+                    LLOp llop;
+                    if (upvar_td->IsHeapItem())
+                        llop = LL_STOR_UPVAR_A;
+                    else if (upvar_td->IsInt64())
+                        llop = LL_STOR_UPVAR_X64;
+                    else
+                        llop = LL_STOR_UPVAR_X32;
+                    emit(llop, UpvarArgs{offset, closure_reg.index, val_reg.index});
+                }
+                FreeReg(val_reg);
+            }
+
+            pushStack(CreateTempNode(closure_td, closure_reg));
+            break;
+        }
+
+        case OP_LOAD_UPVAR: {
+            uint16_t index = reader_.read<uint16_t>();
+            const TypeDesc* closure_td = rt_->LoadClosureType(method_->method_index());
+            uint32_t offset = closure_td->upvar_slot_offset(index);
+            const TypeDesc* upvar_td = closure_td->upvar_type(index);
+
+            pushStack(CreateLoadUpvarNode(upvar_td, offset));
+            break;
+        }
+
+        case OP_STOR_UPVAR: {
+            uint16_t index = reader_.read<uint16_t>();
+            const TypeDesc* closure_td = rt_->LoadClosureType(method_->method_index());
+            uint32_t offset = closure_td->upvar_slot_offset(index);
+            ExprNode* val = popStack();
+
+            FlushEmitStack();
+
+            VReg val_reg = EmitNode(val);
+            VReg callee_reg = AllocateTempCells(1, false);
+            emit(LL_CALLEE, callee_reg);
+
+            LLOp llop;
+            if (val->type->IsHeapItem())
+                llop = LL_STOR_UPVAR_A;
+            else if (val->type->IsInt64())
+                llop = LL_STOR_UPVAR_X64;
+            else
+                llop = LL_STOR_UPVAR_X32;
+            emit(llop, UpvarArgs{offset, callee_reg.index, val_reg.index});
+            FreeReg(val_reg);
+            break;
+        }
+
+        case OP_ADDR_UPVAR: {
+            uint16_t index = reader_.read<uint16_t>();
+            const TypeDesc* closure_td = rt_->LoadClosureType(method_->method_index());
+            uint32_t offset = closure_td->upvar_slot_offset(index);
+            const TypeDesc* upvar_td = closure_td->upvar_type(index);
+            const TypeDesc* ptr_type = upvar_td->IsCompositeValue() ? upvar_td : rt_->GetReferenceType(upvar_td);
+
+            VReg callee_reg = AllocateTempCells(1, false);
+            VReg dest = AllocateTemp(ptr_type);
+
+            emit(LL_CALLEE, callee_reg);
+            emit(LL_ADDR_UPVAR, UpvarArgs{offset, callee_reg.index, dest.index});
+
+            pushStack(CreateTempNode(ptr_type, dest));
             break;
         }
 
@@ -1685,8 +1812,7 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
     if (package_variadic) {
         uint32_t variadic_count = arg_count - expected_argc;
 
-        const TypeDesc* flat_array_td = rt_->GetFlatArrayType(cell_type_, variadic_count + 1);
-        VReg array_reg = AllocateTemp(flat_array_td);
+        VReg array_reg = AllocateTempCells(variadic_count + 1);
         emit(LL_LOAD_CONST, (uint32_t)variadic_count, array_reg.index);
         for (uint32_t i = 0; i < variadic_count; i++) {
             VReg array_slot(array_reg.index + 1 + i, 1, false);
@@ -1847,6 +1973,41 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
             return dest;
         }
 
+        case ExprNode::kLoadUpvar: {
+            VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
+            VReg callee_reg = AllocateTempCells(1, false);
+
+            LLOp llop;
+            if (node->type->IsHeapItem())
+                llop = LL_LOAD_UPVAR_A;
+            else if (node->type->IsInt64())
+                llop = LL_LOAD_UPVAR_X64;
+            else
+                llop = LL_LOAD_UPVAR_X32;
+            emit(LL_CALLEE, callee_reg);
+            emit(llop, UpvarArgs{node->load_upvar.index, callee_reg.index, dest.index});
+
+            FreeReg(callee_reg);
+            return dest;
+        }
+
+        case ExprNode::kLoadField: {
+            VReg dest = target_reg.valid() ? target_reg : AllocateTemp(node->type);
+            VReg base_reg = EmitNode(node->load_field.base);
+
+            LLOp llop;
+            if (node->type->IsHeapItem())
+                llop = LL_LOAD_FLD_A;
+            else if (node->type->IsInt64())
+                llop = LL_LOAD_FLD_X64;
+            else
+                llop = LL_LOAD_FLD_X32;
+            emit(llop, node->load_field.offset, base_reg, dest);
+
+            FreeReg(base_reg);
+            return dest;
+        }
+
         case ExprNode::kLoadElem: {
             VReg index_reg = EmitNode(node->load_elem.index);
 
@@ -1902,9 +2063,17 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
     }
 }
 
-
 VReg MethodLowerer::AllocateTemp(const TypeDesc* type) {
-    return AllocateTempCells(GetCellCount(type), type->IsHeapItem());
+    // Temporaries are used for the operand stack, and the operand stack only
+    // ever has cells, addresses (also cells), or int64s.
+    //
+    // Enum structs and flat arrays are only ever pushed to the stack as
+    // addresses as well.
+    uint32_t cells = 1;
+    if (type->IsInt64())
+        cells = 2;
+
+    return AllocateTempCells(cells, type->IsHeapItem());
 }
 
 VReg MethodLowerer::AllocateTempCells(uint16_t cells, bool is_gcobj) {

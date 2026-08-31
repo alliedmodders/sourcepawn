@@ -34,9 +34,8 @@ using namespace SourcePawn;
 
 class BaseMethodInfo;
 class BaseRuntime;
-namespace legacy { class MethodInfo; }
-namespace v2 { class MethodInfo; }
 struct FrameLayout;
+struct SpFunction;
 
 namespace v1 {
 class MethodInfo;
@@ -103,12 +102,13 @@ class InvokeFrame
 };
 
 // Created by the interpreter. These are 1:1 with interpreter frames, for now.
-class InterpInvokeFrame final : public InvokeFrame
+class InterpInvokeFrame : public InvokeFrame
 {
     friend class InterpFrameIterator;
 
   public:
-    InterpInvokeFrame(BaseRuntime* cx, BaseMethodInfo* method, const uint8_t* const* cip);
+    InterpInvokeFrame(BaseRuntime* cx, v1::MethodInfo* method, const uint8_t* const* cip);
+    InterpInvokeFrame(BaseRuntime* cx, SpFunction* sp_fn, const uint8_t* const* cip);
     ~InterpInvokeFrame();
 
     void enterNativeCall(uint32_t native_index);
@@ -118,16 +118,15 @@ class InterpInvokeFrame final : public InvokeFrame
         return this;
     }
 
-    BaseMethodInfo* method() const { return method_; }
-    legacy::MethodInfo* legacy_method() const { return legacy_method_; }
-    v2::MethodInfo* v2_method() const { return v2_method_; }
+    virtual BaseMethodInfo* method() const;
+    SpFunction* callee() const { return callee_; }
+    v1::MethodInfo* legacy_method() const { return legacy_method_; }
     void setCip(const uint8_t* const* cip) { cip_ = cip; }
 
-  private:
+  protected:
     union {
-        BaseMethodInfo* method_;
-        legacy::MethodInfo* legacy_method_;
-        v2::MethodInfo* v2_method_;
+        v1::MethodInfo* legacy_method_;
+        SpFunction* callee_;
     };
     const uint8_t* const* cip_;
     int native_index_;

@@ -22,6 +22,8 @@
 #include <errno.h>
 #include <stdlib.h>
 
+#include <unordered_map>
+
 #include "compile-context.h"
 #include "errors.h"
 
@@ -29,19 +31,20 @@ namespace sp {
 namespace cc {
 
 VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
-                         const typeinfo_t& type, int vclass, bool is_public, bool is_static,
-                         bool is_stock, Expr* initializer)
- : Decl(kind, pos, name),
-   type_(type),
-   vclass_(vclass),
-   is_public_(is_public),
-   is_static_(is_static),
-   is_stock_(is_stock),
-   autozero_(true),
-   is_read_(false),
-   is_written_(false),
-   already_bound_(false),
-   is_emitted_(false)
+                         const typeinfo_t& type, int vclass, VarDeclFlags flags, Expr* initializer)
+  : Decl(kind, pos, name),
+    type_(type),
+    vclass_(vclass),
+    is_public_((flags & VARDECL_PUBLIC) == VARDECL_PUBLIC),
+    is_static_((flags & VARDECL_STATIC) == VARDECL_STATIC),
+    is_stock_((flags & VARDECL_STOCK) == VARDECL_STOCK),
+    autozero_(true),
+    is_read_(false),
+    is_written_(false),
+    implicit_dynamic_array_(false),
+    is_shared_((flags & VARDECL_SHARED) == VARDECL_SHARED),
+    already_bound_(false),
+    is_emitted_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)
@@ -189,6 +192,37 @@ auto FunctionDecl::cg() -> CGInfo* {
     return cg_;
 }
 
+void FunctionDecl::AddSharedVar(VarDeclBase* var) {
+    if (var->is_captured())
+        return;
+
+    shared_var_list_.push_back(var);
+    var->set_is_captured();
+}
+
+UpvarDecl* FunctionDecl::AddUpvar(const token_pos_t& pos, FunctionDecl* owner, VarDeclBase* var) {
+    if (auto iter = upvar_decls_.find(var); iter != upvar_decls_.end())
+        return iter->second;
+
+    auto upvar_decl = new UpvarDecl(pos, var, owner);
+    upvar_decls_.emplace(var, upvar_decl);
+
+    if (!var->is_shared()) {
+        uint16_t index = static_cast<uint16_t>(upvars_.size());
+        upvar_decl->set_upvar_index(index);
+        upvars_.push_back(var);
+    }
+
+    var->set_is_captured();
+    return upvar_decl;
+}
+
+LayoutFieldDecl* FunctionDecl::GetSharedVarField(VarDeclBase* var) {
+    auto iter = shared_vars_.find(var);
+    assert(iter != shared_vars_.end());
+    return iter->second;
+}
+
 FunctionType* CallExpr::callee_type() {
     if (auto p = std::get_if<FunctionType*>(&resolved_target_))
         return *p;
@@ -266,6 +300,8 @@ QualType Decl::type() {
             return to<PropertyDecl>()->type();
         case StmtKind::MethodmapDecl:
             return to<MethodmapDecl>()->type();
+        case StmtKind::UpvarDecl:
+            return to<UpvarDecl>()->type();
         default:
             assert(false);
             return QualType(nullptr);

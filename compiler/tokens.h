@@ -116,6 +116,7 @@ enum TokenKind {
     tREADONLY,
     tRETURN,
     tSEALED,
+    tSHARED,
     tSIZEOF,
     tSTATIC,
     tSTATIC_ASSERT,

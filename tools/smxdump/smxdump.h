@@ -62,6 +62,7 @@ class DumpTool final {
     void DumpRttiEnums();
     const char* GetClassdefPrefix(uint32_t flags);
     void DumpRttiClassdefs();
+    void DumpUpvars(sp::FastRtti& rtti, uint16_t count);
     void DumpRttiGlobals();
     void DumpLegacyCode();
     void DumpLoweredCode(uint32_t method_index);

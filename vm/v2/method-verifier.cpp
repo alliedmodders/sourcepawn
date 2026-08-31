@@ -895,6 +895,56 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(td);
         }
 
+        case OP_NEWCLOSURE: {
+            uint32_t method_index = readCell();
+            const smx_rtti_method* target = smx_->GetMethod(method_index);
+            if (!target)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (!(target->flags & kRttiMethod_Closure))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            const TypeDesc* closure_td = rt_->LoadClosureType(method_index);
+            if (!closure_td)
+                return false;
+
+            auto upvar_types = closure_td->upvar_types();
+            for (uint32_t i = upvar_types.size() - 1; i < upvar_types.size(); i--) {
+                const TypeDesc* val;
+                if (!popStack(&val))
+                    return false;
+                if (!ValidateStore(upvar_types[i], val))
+                    return false;
+            }
+
+            return pushStack(closure_td);
+        }
+
+        case OP_LOAD_UPVAR: {
+            uint16_t index = read<uint16_t>();
+            if (index >= upvar_types_.size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(upvar_types_[index]);
+        }
+
+        case OP_STOR_UPVAR: {
+            uint16_t index = read<uint16_t>();
+            if (index >= upvar_types_.size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* val;
+            if (!popStack(&val))
+                return false;
+            return ValidateStore(upvar_types_[index], val);
+        }
+
+        case OP_ADDR_UPVAR: {
+            uint16_t index = read<uint16_t>();
+            if (index >= upvar_types_.size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            const TypeDesc* upvar_td = upvar_types_[index];
+            const TypeDesc* ptr_type = upvar_td->IsCompositeValue() ? upvar_td : rt_->GetReferenceType(upvar_td);
+            return pushStack(ptr_type);
+        }
+
         default:
             // Should have been caught earlier.
             return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -1316,6 +1366,25 @@ bool MethodVerifier::verifyLocalSlots() {
 
     parser = rt_->image()->GetTypeParser(method_->locals);
 
+    // Check for closure upvar slots before local slots.
+    {
+        uint8_t b;
+        if (parser.GetByte(&b) && b == cb::kClosureSlots) {
+            parser.NextByte();
+            uint16_t upvar_count;
+            if (!parser.ReadUint16(&upvar_count))
+                return reportError(SP_ERROR_FILE_FORMAT);
+
+            upvar_types_ = ke::FixedArray<const TypeDesc*>(upvar_count);
+            for (uint16_t i = 0; i < upvar_count; i++) {
+                auto td = rt_->LoadType(parser);
+                if (!td)
+                    return false;
+                upvar_types_[i] = td;
+            }
+        }
+    }
+
     uint16_t count;
     if (!parser.ReadLocalSlotCount(&count))
         return reportError(SP_ERROR_FILE_FORMAT);
@@ -1368,11 +1437,21 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, St
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;
         case TypeKind::Function:
-            if (src->kind() != TypeKind::Function)
+            if (src->kind() != TypeKind::Function) {
+                if (src->kind() == TypeKind::Closure && src->closure_signature() == dest)
+                    return true;
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            }
+            if (dest != src)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            return true;
+        case TypeKind::Closure:
+            if (src->kind() != TypeKind::Closure)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             if (dest != src)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;
+        case TypeKind::EnumStruct:
         case TypeKind::Object:
             if (dest != src)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);

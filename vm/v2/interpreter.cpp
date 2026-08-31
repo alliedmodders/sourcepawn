@@ -119,16 +119,17 @@
 
 namespace sp::v2 {
 
-bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm, cell_t* rval) {
+bool Interpreter::Run(Runtime* cx, Handle<SpFunction> fn, uint32_t frm, cell_t* rval) {
+    auto* method = fn->method;
     if (!method->llcode()) {
         ke::RefPtr<ControlFlowGraph> graph = method->BuildGraph();
         if (!graph)
             return false;
-        std::unique_ptr<LLCode> code = LowerMethod(graph, method.get());
+        std::unique_ptr<LLCode> code = LowerMethod(graph, method);
         method->set_llcode(std::move(code));
     }
 
-    Interpreter interpreter(cx, method, frm);
+    Interpreter interpreter(cx, std::move(fn), frm);
     if (!interpreter.run_internal())
         return false;
 
@@ -136,18 +137,18 @@ bool Interpreter::Run(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm, cell
     return true;
 }
 
-Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method, uint32_t frm)
- : env_(Environment::get()),
-   rt_(cx),
-   smx_(rt_->image()),
-   heap_(rt_->heap()),
-   method_(std::move(method)),
-   code_(rt_->code().bytes),
-   reader_(method_->llcode()->bytes(), method_->llcode()->bytes() + method_->llcode()->size()),
-   has_returned_(false),
-   return_value_(0),
-   frm_(frm),
-   phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_))
+Interpreter::Interpreter(Runtime* cx, Handle<SpFunction> fn, uint32_t frm)
+  : env_(Environment::get()),
+    rt_(cx),
+    smx_(rt_->image()),
+    heap_(rt_->heap()),
+    code_(rt_->code().bytes),
+    reader_(fn->method->llcode()->bytes(), fn->method->llcode()->bytes() + fn->method->llcode()->size()),
+    has_returned_(false),
+    return_value_(0),
+    frm_(frm),
+    phys_frm_(cx->heap().ToPhysAddr<cell_t*>(frm_)),
+    entry_fn_(std::move(fn))
 {}
 
 bool Interpreter::CheckTimeout() {
@@ -160,43 +161,21 @@ bool Interpreter::CheckTimeout() {
 
 bool Interpreter::run_internal() {
     const uint8_t* insn_begin = reader_.cursor();
-    const uint8_t* ll_code = method_->llcode()->bytes();
+    const uint8_t* ll_code = entry_fn_->method->llcode()->bytes();
 
-    InterpInvokeFrame ivk(rt_, method_, &insn_begin);
-    ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
+    InterpFrame ivk(entry_fn_.get(), rt_, &insn_begin, nullptr, 0, 0);
+    ke::SaveAndSet<InterpFrame*> enterIvk(&ivk_, &ivk);
 
     std::span<cell_t> root_vregs;
 
-    ke::ScopeGuard guard([&, root_method = method_]() -> void {
-        while (env_->top() != &ivk) {
-            InvokeFrame* top = env_->top();
-            if (auto* interp_ivk = top->AsInterpInvokeFrame()) {
-                InterpFrame* frame = reinterpret_cast<InterpFrame*>(reinterpret_cast<uint8_t*>(interp_ivk) - offsetof(InterpFrame, ivk));
-                auto method = interp_ivk->v2_method();
-                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                cell_t* unwound_vregs = reinterpret_cast<cell_t*>(reinterpret_cast<uint8_t*>(frame) + frame_size);
-
-                method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
-                    cell_t val = unwound_vregs[reg];
-                    if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
-                        item->Release();
-                });
-            }
-            top->AsInterpInvokeFrame()->~InterpInvokeFrame();
-        }
-        if (!has_returned_ && !root_vregs.empty()) {
-            root_method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
-                cell_t val = root_vregs[reg];
-                if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
-                    item->Release();
-            });
-        }
+    ke::ScopeGuard guard([this, &ivk, &root_vregs]() -> void {
+        UnwindStack(&ivk, entry_fn_->method, root_vregs);
     });
 
     ke::SaveRestore<uint32_t> saveSp(env_->sp());
 
-    uint32_t num_params = method_->arg_types().size();
-    uint32_t num_regs = method_->llcode()->num_regs();
+    uint32_t num_params = entry_fn_->method->arg_types().size();
+    uint32_t num_regs = entry_fn_->method->llcode()->num_regs();
     uint32_t callee_regs = num_regs - num_params;
 
     if (callee_regs > 0) {
@@ -214,8 +193,9 @@ bool Interpreter::run_internal() {
         insn_begin = reader_.cursor();
 
         if (env_->IsDebugBreakEnabled()) {
+            auto method = ivk_->callee()->method;
             uint32_t ll_offset = (uint32_t)(insn_begin - ll_code);
-            uint32_t high_offset = method_->llcode()->LookupHighOffset(ll_offset);
+            uint32_t high_offset = method->llcode()->LookupHighOffset(ll_offset);
             if (smx_->IsLineBoundary(high_offset)) {
                 InvokeDebugger(rt_, nullptr);
                 if (env_->hasPendingException())
@@ -797,7 +777,8 @@ bool Interpreter::run_internal() {
                     }
                 }
 
-                method_->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
+                auto method = ivk_->callee()->method;
+                method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
                     cell_t val = vregs_[reg];
                     if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
                         item->Release();
@@ -809,31 +790,34 @@ bool Interpreter::run_internal() {
                     break;
                 }
 
-                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
-                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_ - frame_size);
-                ivk_->~InterpInvokeFrame();
+                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_ - InterpFrame::AlignedSize());
+                InterpFrame* prev = static_cast<InterpFrame*>(frame->prev());
 
-                ivk_ = env_->top()->AsInterpInvokeFrame();
-                ivk_->setCip(&insn_begin);
-
-                method_ = frame->caller_method;
-
-                const uint8_t* caller_code = method_->llcode()->bytes();
-                reader_ = BinaryReader(caller_code, caller_code + method_->llcode()->size());
+                auto prev_method = prev->callee()->method;
+                const uint8_t* caller_code = prev_method->llcode()->bytes();
+                reader_ = BinaryReader(caller_code, caller_code + prev_method->llcode()->size());
                 reader_.set_cursor(frame->saved_cip);
                 ll_code = caller_code;
 
-                uint32_t stack_amount = env_->sp() - (frm_ - frame_size);
+                uint32_t stack_amount = env_->sp() - (frm_ - InterpFrame::AlignedSize());
                 if (!env_->dropStack(stack_amount))
                     return false;
 
                 frm_ = frame->prev_frame;
 
-                uint32_t num_caller_regs = method_->llcode()->num_regs();
+                uint32_t num_caller_regs = prev_method->llcode()->num_regs();
                 vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(frm_), num_caller_regs);
 
                 if (frame->dest_reg != 0xFFFF)
                     vregs_[frame->dest_reg] = result;
+
+                // Done reading the outgoing frame, we can pop it.
+                frame->~InterpFrame();
+
+                // Restore our pointer to the old frame.
+                assert(prev == static_cast<InterpFrame*>(env_->top()));
+                ivk_ = prev;
+                ivk_->setCip(&insn_begin);
                 break;
             }
             case LL_LOAD_FN: {
@@ -1010,6 +994,7 @@ bool Interpreter::run_internal() {
             case LL_CALLI:
             case LL_CALL: {
                 RefPtr<MethodInfo> target;
+                SpFunction* indirect_callee = nullptr;
                 if (op == LL_CALL) {
                     auto* method = reader_.read<const smx_rtti_method*>();
                     target = rt_->AcquireMethod(smx_->GetIndexOfMethod(method));
@@ -1020,6 +1005,7 @@ bool Interpreter::run_internal() {
                         rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
                         return false;
                     }
+                    indirect_callee = sp_fn;
                     target = sp_fn->method;
                 }
                 uint8_t nargs = reader_.read<uint8_t>();
@@ -1036,42 +1022,40 @@ bool Interpreter::run_internal() {
                     target->set_llcode(std::move(code));
                 }
 
-                size_t frame_size = ke::Align(sizeof(InterpFrame), alignof(std::max_align_t));
                 uint32_t target_nargs = target->arg_types().size();
                 uint32_t callee_regs = target->llcode()->num_regs() - target_nargs;
-                uint32_t stack_amount = frame_size + target_nargs * sizeof(cell_t) + callee_regs * sizeof(cell_t);
+                uint32_t stack_amount = InterpFrame::AlignedSize() +
+                                        target_nargs * sizeof(cell_t) +
+                                        callee_regs * sizeof(cell_t);
 
                 uint32_t frame_base = env_->sp();
                 if (!env_->addStack(stack_amount))
                     return false;
 
-                uint32_t new_frm = frame_base + frame_size;
+                uint32_t new_frm = frame_base + InterpFrame::AlignedSize();
                 cell_t* new_vregs = rt_->heap().ToPhysAddr<cell_t*>(new_frm);
                 for (uint8_t i = 0; i < nargs; i++) {
                     uint16_t arg_reg = reader_.read<uint16_t>();
                     new_vregs[i] = vregs_[arg_reg];
                 }
 
-                InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frame_base);
-                frame->caller_method = method_.get();
-                frame->saved_cip = reader_.cursor();
-                frame->dest_reg = dest;
-                frame->prev_frame = frm_;
+                SpFunction* callee = (op == LL_CALLI) ? indirect_callee : target->GetFunction().get();
+                InterpFrame* frame = new (rt_->heap().ToPhysAddr<uint8_t*>(frame_base))
+                    InterpFrame(callee, rt_, &insn_begin,
+                                reader_.cursor(), dest, frm_);
 
                 if (callee_regs > 0)
                     memset(&new_vregs[nargs], 0, callee_regs * sizeof(cell_t));
 
                 ivk_->setCip(&frame->saved_cip);
 
-                new (&frame->ivk) InterpInvokeFrame(rt_, target.get(), &insn_begin);
-
                 frm_ = new_frm;
-                ivk_ = &frame->ivk;
+                ivk_ = frame;
                 vregs_ = std::span<cell_t>(new_vregs, target->llcode()->num_regs());
-                method_ = target;
 
-                const uint8_t* callee_code = method_->llcode()->bytes();
-                reader_ = BinaryReader(callee_code, callee_code + method_->llcode()->size());
+                auto method = frame->callee()->method;
+                const uint8_t* callee_code = method->llcode()->bytes();
+                reader_ = BinaryReader(callee_code, callee_code + method->llcode()->size());
                 ll_code = callee_code;
                 continue;
             }
@@ -1390,6 +1374,76 @@ bool Interpreter::run_internal() {
                 vregs_[dest_reg] = vregs_[src_reg];
                 break;
             }
+            case LL_CALLEE: {
+                uint16_t dest = reader_.read<uint16_t>();
+                vregs_[dest] = rt_->heap().ToLocalAddr(ivk_->callee());
+                break;
+            }
+            case LL_NEWCLOSURE: {
+                uint32_t method_id = reader_.read<uint32_t>();
+                uint16_t dest = reader_.read<uint16_t>();
+                auto method = rt_->AcquireMethod(method_id);
+                const TypeDesc* closure_td = rt_->LoadClosureType(method_id);
+                auto fn = rt_->NewClosure(closure_td, method.get());
+                if (!fn)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(fn.release());
+                break;
+            }
+            case LL_ADDR_UPVAR: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                cell_t* upvar_addr = reinterpret_cast<cell_t*>(fn->upvars() + args.slot);
+                vregs_[args.reg] = rt_->heap().ToLocalAddr(upvar_addr);
+                break;
+            }
+            case LL_LOAD_UPVAR_X32: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                vregs_[args.reg] = *reinterpret_cast<cell_t*>(fn->upvars() + args.slot);
+                break;
+            }
+            case LL_LOAD_UPVAR_X64: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                *reinterpret_cast<int64_t*>(&vregs_[args.reg]) =
+                    *reinterpret_cast<int64_t*>(fn->upvars() + args.slot);
+                break;
+            }
+            case LL_LOAD_UPVAR_A: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                cell_t val = *reinterpret_cast<cell_t*>(fn->upvars() + args.slot);
+                if (val)
+                    heap_.ToPhysAddr<HeapItem*>(val)->AddRef();
+                vregs_[args.reg] = val;
+                break;
+            }
+            case LL_STOR_UPVAR_X32: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                *reinterpret_cast<cell_t*>(fn->upvars() + args.slot) = vregs_[args.reg];
+                break;
+            }
+            case LL_STOR_UPVAR_X64: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                *reinterpret_cast<int64_t*>(fn->upvars() + args.slot) =
+                    *reinterpret_cast<int64_t*>(&vregs_[args.reg]);
+                break;
+            }
+            case LL_STOR_UPVAR_A: {
+                auto args = reader_.read<UpvarArgs>();
+                SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
+                cell_t* slot = reinterpret_cast<cell_t*>(fn->upvars() + args.slot);
+                cell_t val = vregs_[args.reg];
+                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(val))
+                    new_item->AddRef();
+                if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*slot))
+                    old_item->Release();
+                *slot = val;
+                break;
+            }
 
             default:
                 fprintf(stderr, "Unimplemented opcode: %s\n", GetLLOpName(op));
@@ -1401,6 +1455,47 @@ bool Interpreter::run_internal() {
     return true;
 }
 
+void Interpreter::UnwindStack(InterpInvokeFrame* root_ivk, MethodInfo* root_method,
+                               std::span<cell_t> root_vregs)
+{
+    while (env_->top() != root_ivk) {
+        InterpFrame* frame = static_cast<InterpFrame*>(env_->top());
+        SpFunction* callee = frame->callee();
+        cell_t* unwound_vregs = frame->vregs();
 
+        callee->method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
+            cell_t val = unwound_vregs[reg];
+            if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
+                item->Release();
+        });
+
+        frame->~InterpFrame();
+    }
+    if (!has_returned_ && !root_vregs.empty()) {
+        root_method->llcode()->gcobj_regs().for_each([&](uintptr_t reg) {
+            cell_t val = root_vregs[reg];
+            if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(val))
+                item->Release();
+        });
+    }
+}
+
+InterpFrame::InterpFrame(SpFunction* sp_fn, BaseRuntime* cx, const uint8_t** initial_cip,
+                         const uint8_t* saved_cip, uint32_t dest_reg, uint32_t prev_frame)
+ : InterpInvokeFrame(cx, sp_fn, initial_cip),
+   saved_cip(saved_cip),
+   dest_reg(dest_reg),
+   prev_frame(prev_frame)
+{
+    callee_->AddRef();
+}
+
+InterpFrame::~InterpFrame() {
+    callee_->Release();
+}
+
+BaseMethodInfo* InterpFrame::method() const {
+    return callee_->method;
+}
 
 } // namespace sp::v2

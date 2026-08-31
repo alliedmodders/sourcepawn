@@ -350,25 +350,28 @@ void AstPrinter::PrintPragmaUnusedStmt(PragmaUnusedStmt* node, bool is_last) {
     fprintf(out_, "\n");
 }
 
-void AstPrinter::PrintFunctionDecl(FunctionDecl* node, bool is_last) {
-    fprintf(out_, "FunctionDecl: %s (args: %d)\n", node->name()->chars(), (int)node->args().size());
+void AstPrinter::PrintFunctionBody(FunctionDecl* node, bool is_last) {
     stack_.push_back(is_last);
+    const auto& prebody = node->prebody();
+    bool has_after_args = !prebody.empty() || node->body();
     for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
+        Print(node->args()[i], (i == node->args().size() - 1) && !has_after_args);
+    for (size_t i = 0; i < prebody.size(); i++)
+        Print(prebody[i], (i == prebody.size() - 1) && !node->body());
     if (node->body())
         Print(node->body(), true);
     stack_.pop_back();
 }
 
+void AstPrinter::PrintFunctionDecl(FunctionDecl* node, bool is_last) {
+    fprintf(out_, "FunctionDecl: %s (args: %d)\n", node->name()->chars(), (int)node->args().size());
+    PrintFunctionBody(node, is_last);
+}
+
 void AstPrinter::PrintMemberFunctionDecl(MemberFunctionDecl* node, bool is_last) {
     fprintf(out_, "MemberFunctionDecl: %s::%s (ctor: %d, dtor: %d)\n", node->parent()->name()->chars(), node->name()->chars(),
             node->is_ctor(), node->is_dtor());
-    stack_.push_back(is_last);
-    for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
-    if (node->body())
-        Print(node->body(), true);
-    stack_.pop_back();
+    PrintFunctionBody(node, is_last);
 }
 
 void AstPrinter::PrintLayoutMemberDecl(LayoutMemberDecl* node, bool is_last) {
@@ -465,6 +468,10 @@ void AstPrinter::PrintChangeScopeNode(ChangeScopeNode* node, bool is_last) {
 
 void AstPrinter::PrintPropertyDecl(PropertyDecl* node, bool is_last) {
     fprintf(out_, "PropertyDecl: %s\n", node->name()->chars());
+}
+
+void AstPrinter::PrintUpvarDecl(UpvarDecl* node, bool is_last) {
+    fprintf(out_, "UpvarDecl: %s\n", node->name()->chars());
 }
 
 void AstPrinter::PrintLogicalExpr(LogicalExpr* node, bool is_last) {
@@ -677,12 +684,7 @@ void AstPrinter::PrintSpreadArgsExpr(SpreadArgsExpr* node, bool is_last) {
 void AstPrinter::PrintFunctionExpr(FunctionExpr* node, bool is_last) {
     fprintf(out_, "FunctionExpr: %s\n",
             node->decl()->name() ? node->decl()->name()->chars() : "(anonymous)");
-    stack_.push_back(is_last);
-    for (size_t i = 0; i < node->decl()->args().size(); i++)
-        Print(node->decl()->args()[i], (i == node->decl()->args().size() - 1) && !node->decl()->body());
-    if (node->decl()->body())
-        Print(node->decl()->body(), true);
-    stack_.pop_back();
+    PrintFunctionBody(node->decl(), is_last);
 }
 
 } // namespace cc

@@ -60,6 +60,8 @@ class AstPrinter
     AST_EXPR_TYPE_LIST(_)
 #undef _
 
+    void PrintFunctionBody(FunctionDecl* node, bool is_last);
+
   private:
     FILE* out_;
     std::vector<bool> stack_;

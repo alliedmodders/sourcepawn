@@ -71,6 +71,7 @@ class CodeGenerator final
     void EmitPstruct(VarDeclBase* decl);
     void EmitGlobalVar(VarDeclBase* decl);
     void EmitLocalVar(VarDeclBase* decl);
+    void EmitLocalSharedVar(VarDeclBase* decl);
     void EmitIfStmt(IfStmt* stmt);
     void EmitDeleteStmt(DeleteStmt* stmt);
     void EmitDoWhileStmt(DoWhileStmt* stmt);
@@ -126,6 +127,7 @@ class CodeGenerator final
     void EmitArrayExpr(ArrayExpr* expr, unsigned int flags);
     void EmitSizeofExpr(SizeofExpr* expr, unsigned int flags);
     void EmitFunctionExpr(FunctionExpr* expr);
+    void EmitNewClosure(FunctionDecl* fun);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
@@ -139,6 +141,11 @@ class CodeGenerator final
     void EmitAddress(const value& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
     void EmitAddress(VarDeclBase* decl);
+
+    void EmitLoadField(LayoutFieldDecl* field);
+    void EmitLoadFieldOffset(LayoutFieldDecl* field);
+    void EmitStoreField(LayoutFieldDecl* field);
+    void EmitAddrField(LayoutFieldDecl* field);
 
     // Builtins.
     void EmitFloatBuiltin(CallExpr* expr);

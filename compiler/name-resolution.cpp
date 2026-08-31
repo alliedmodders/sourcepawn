@@ -514,6 +514,10 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (def_ok)
         DefineSymbol(sc, this, vclass_);
 
+    // Track 'let shared' variables so we can check they're captured.
+    if (is_shared_)
+        sc.shared_locals().push_back(this);
+
     // LHS bind should now succeed.
     if (init_)
         init_->left()->BindLval(sc);
@@ -547,9 +551,7 @@ SymbolExpr::BindLval(SemaContext& sc)
     return DoBind(sc, true);
 }
 
-bool
-SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
-{
+bool SymbolExpr::DoBind(SemaContext& sc, bool is_lval) {
     AutoErrorPos aep(pos_);
 
     if (sc.cc().in_preprocessor()) {
@@ -558,16 +560,42 @@ SymbolExpr::DoBind(SemaContext& sc, bool is_lval)
         report(pos_, 230) << name_;
     }
 
-    decl_ = FindSymbol(sc, name_);
-    if (!decl_) {
+    ResolvedSymbol rs;
+    if (!ResolveSymbol(&sc, sc.scope(), name_, &rs)) {
         report(pos_, 17) << name_;
         return false;
     }
 
-    if (auto fun = decl_->as<FunctionDecl>())
-        decl_ = fun->canonical();
+    decl_ = rs.decl;
 
-    if (decl_ && !is_lval)
+    if (auto fun = decl_->as<FunctionDecl>()) {
+        assert(fun->canonical());
+        decl_ = fun->canonical();
+    }
+
+    // Handle upvars.
+    if (rs.enclosure) {
+        auto var = decl_->to<VarDeclBase>();
+
+        if (var->is_shared())
+            rs.enclosure->AddSharedVar(var);
+
+        // Fixed, non-flat arrays must be captured by reference. Otherwise,
+        // the semantics are pretty subtle because of how 1D and 2D arrays
+        // are different.
+        if (!var->is_shared()) {
+            if (auto* array = var->type()->as<ArrayType>()) {
+                if (array->is_fixed() && !array->is_flat()) {
+                    report(pos_, 481) << var->name()->chars();
+                    return false;
+                }
+            }
+        }
+
+        decl_ = sc.func()->AddUpvar(pos_, rs.enclosure, var);
+    }
+
+    if (!is_lval)
         markusage(decl_, uREAD);
     return true;
 }
@@ -808,12 +836,30 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
 }
 
 bool FunctionExpr::Bind(SemaContext& sc) {
+    if (!decl_->name()) {
+        auto enclosing = sc.func();
+        uint32_t file_idx = sc.cc().sources()->GetSourceFileIndex(pos_);
+        std::string name = ".fn_expr@";
+        name += sc.cc().sources()->opened_files()[file_idx]->basename();
+        name += ":" + std::to_string(pos_.line) + ".";
+        name += std::to_string(enclosing ? enclosing->next_lambda_id()
+                                         : sc.sema()->next_fun_expr_count());
+        decl_->set_name(sc.cc().atom(name));
+    }
+
+    if (sc.func())
+        sc.func()->AddReferenceTo(decl_->canonical());
+
     return decl_->Bind(sc);
 }
 
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
+    if (outer_sc.func())
+        outer_ = outer_sc.func();
+
     if (!outer_sc.BindType(pos_, &decl_.type))
         return false;
+
     if (!decl_.type.dim_exprs.empty())
         ResolveArrayType(outer_sc.sema(), pos_, &decl_.type, sLOCAL);
 
@@ -829,8 +875,8 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
         typeinfo.set_type(this_type_);
         typeinfo.is_const = true;
 
-        auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT, false,
-                                false, false, nullptr);
+        auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT,
+                                VARDECL_DEFAULT, nullptr);
         assert(args_[0] == nullptr);
         args_[0] = decl;
     }
@@ -852,13 +898,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     // For inner functions, enter the name into the enclosing function's local scope.
     if (outer_sc.func() && name())
         DefineSymbol(outer_sc, this, sLOCAL);
-
-    if (name_ && name_->chars()[0] == PUBLIC_CHAR) {
-        // :TODO: deprecate this syntax.
-        is_public_ = true;  // implicit public function
-        if (is_stock_)
-            error(pos(), 42);      // invalid combination of class specifiers.
-    }
 
     SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {
@@ -896,14 +935,33 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
             ft_args.emplace_back(arg->type());
         }
     }
+    FunctionType::Convention conv = outer_ ? FunctionType::Closure : FunctionType::Typed;
     auto ft = outer_sc.cc().types()->defineFunction(
-        QualType(decl_.type.type, decl_.type.is_const), ft_args, variadic, FunctionType::Convention::Typed);
+        QualType(decl_.type.type, decl_.type.is_const), ft_args, variadic, conv);
     set_function_type(ft);
 
     ok &= BindArgs(sc);
 
     if (body_)
         ok &= body_->Bind(sc);
+
+    // Check for 'shared' variables that were never captured by any closure.
+    for (auto* stmt : prebody()) {
+        if (auto* var = stmt->as<VarDeclBase>()) {
+            if (var->is_shared() && !var->is_captured()) {
+                report(var->pos(), 482) << var->name()->chars();
+                ok = false;
+            }
+        }
+    }
+
+    for (auto* var : sc.shared_locals()) {
+        if (!var->is_captured()) {
+            report(var->pos(), 482) << var->name()->chars();
+            ok = false;
+        }
+    }
+
     return ok;
 }
 

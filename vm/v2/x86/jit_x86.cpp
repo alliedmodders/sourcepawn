@@ -999,6 +999,9 @@ void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
 
 void Compiler::EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) {
     __ movl(edx, RegAddr(addr_reg));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
     switch (op) {
         case LL_LOAD_FLD_X32:
             __ movl(eax, Operand(edx, offset));
@@ -1020,6 +1023,9 @@ void Compiler::EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t
 
 void Compiler::EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t val_reg) {
     __ movl(edx, RegAddr(addr_reg));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
     switch (op) {
         case LL_STOR_FLD_X32:
             __ movl(eax, RegAddr(val_reg));
@@ -1519,6 +1525,9 @@ void Compiler::EmitArrayToFlat(uint16_t src_reg, uint16_t dest_reg) {
 
 void Compiler::EmitAddrFld(uint16_t src_reg, uint16_t dest_reg, uint32_t offset) {
     __ movl(eax, RegAddr(src_reg));
+    __ testl(eax, eax);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
     __ lea(eax, Operand(eax, offset));
     __ movl(RegAddr(dest_reg), eax);
 }

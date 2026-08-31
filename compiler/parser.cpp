@@ -278,9 +278,12 @@ Parser::parse_unknown_decl(const full_token_t* tok)
 
         VarParams params;
         params.vclass = fstatic ? sSTATIC : sGLOBAL;
-        params.is_public = !!fpublic;
-        params.is_static = !!fstatic;
-        params.is_stock = !!fstock;
+        if (fpublic)
+            params.flags |= VARDECL_PUBLIC;
+        if (fstatic)
+            params.flags |= VARDECL_STATIC;
+        if (fstock)
+            params.flags |= VARDECL_STOCK;
 
         auto stmt = parse_var(&decl, params);
 
@@ -345,8 +348,7 @@ Parser::parse_var(declinfo_t* decl, VarParams& params)
         // Keep updating this field, as we only care about the last initializer.
         params.struct_init = init && init->as<StructExpr>();
 
-        VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.is_public,
-                                   params.is_static, params.is_stock, init);
+        VarDecl* var = new VarDecl(pos, decl->name, decl->type, params.vclass, params.flags, init);
         stmts.emplace_back(var);
 
         if (!params.autozero)
@@ -1438,6 +1440,7 @@ Parser::parse_stmt(bool allow_decl)
                 return stmt;
             }
             [[fallthrough]];
+        case tSHARED:
         case tDECL:
         case tNEW: {
             if (tok == tNEW && lexer_->match(tSYMBOL)) {
@@ -1561,14 +1564,28 @@ Parser::parse_stmt(bool allow_decl)
 
             auto pos = lexer_->pos();
             declinfo_t decl = {};
+            decl.type.is_new = true;
+            decl.type.set_type(types_->type_void());
 
             if (!lexer_->needsymbol(&decl.name))
                 return nullptr;
 
+            // Desugar "function foo() { }" into "let foo = function () { }".
+            Atom* name = decl.name;
+            decl.name = nullptr;
             auto fun = new FunctionDecl(pos, decl);
+            fun->set_is_stock();
+
             if (!parse_function_impl(fun))
                 return nullptr;
-            return fun;
+
+            // Wrap in FunctionExpr, bind to a local variable.
+            auto fun_expr = new FunctionExpr(pos, fun);
+            declinfo_t var_decl = {};
+            var_decl.type.is_new = true;
+            var_decl.type.is_auto = true;
+            var_decl.name = name;
+            return new VarDecl(pos, var_decl.name, var_decl.type, sLOCAL, VARDECL_DEFAULT, fun_expr);
         }
         case tINCLUDE:
         case tpTRYINCLUDE:
@@ -1618,12 +1635,19 @@ Parser::parse_local_decl(int tokid, bool autozero)
     Parser::VarParams params;
     params.vclass = (tokid == tSTATIC) ? sSTATIC : sLOCAL;
     params.autozero = autozero;
-    params.is_static = (tokid == tSTATIC);
+    if (tokid == tSTATIC)
+        params.flags |= VARDECL_STATIC;
+    if (tokid == tSHARED)
+        params.flags |= VARDECL_SHARED;
     return parse_var(&decl, params);
 }
 
 Stmt* Parser::parse_let_decl(int vclass) {
     auto pos = lexer_->pos();
+
+    VarDeclFlags vflags = VARDECL_DEFAULT;
+    if (vclass == sLOCAL && lexer_->match(tSHARED))
+        vflags |= VARDECL_SHARED;
 
     declinfo_t decl = {};
     decl.type.is_new = true;
@@ -1645,8 +1669,10 @@ Stmt* Parser::parse_let_decl(int vclass) {
         consume_line(false);
     }
 
-    return new VarDecl(pos, decl.name, decl.type,
-                       vclass, false, vclass == sSTATIC, false, init);
+    if (vclass == sSTATIC)
+        vflags |= VARDECL_STATIC;
+
+    return new VarDecl(pos, decl.name, decl.type, vclass, vflags, init);
 }
 
 Stmt*
@@ -2001,6 +2027,10 @@ void Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args) {
     do {
         auto pos = lexer_->pos();
 
+        VarDeclFlags arg_flags = VARDECL_DEFAULT;
+        if (lexer_->match(tSHARED))
+            report(pos, 483);
+
         declinfo_t decl = {};
         if (!parse_decl(&decl, DECLFLAG_ARGUMENT))
             continue;
@@ -2010,8 +2040,7 @@ void Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args) {
                 report(401);
             is_variadic = true;
 
-            auto p = new ArgDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, false, false,
-                                 false, nullptr);
+            auto p = new ArgDecl(pos, cc_.atom("..."), decl.type, sARGUMENT, arg_flags, nullptr);
             args->emplace_back(p);
             continue;
         }
@@ -2025,11 +2054,8 @@ void Parser::parse_args(FunctionDecl* fun, std::vector<ArgDecl*>* args) {
 
         if (fun->args().size() >= SP_MAX_CALL_ARGUMENTS)
             report(45);
-        if (decl.name->chars()[0] == PUBLIC_CHAR)
-            report(56) << decl.name; // function arguments cannot be public
 
-        auto p = new ArgDecl(pos, decl.name, decl.type, sARGUMENT, false, false,
-                             false, init);
+        auto p = new ArgDecl(pos, decl.name, decl.type, sARGUMENT, arg_flags, init);
         args->emplace_back(p);
     } while (lexer_->match(','));
 

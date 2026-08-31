@@ -132,8 +132,6 @@ struct CallArgs {
         argc++;
     }
 
-
-
     void Reset() {
         argc = 0;
         error = false;

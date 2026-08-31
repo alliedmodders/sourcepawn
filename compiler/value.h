@@ -32,6 +32,7 @@ class Decl;
 class FunctionDecl;
 class LayoutFieldDecl;
 class PropertyDecl;
+class UpvarDecl;
 class VarDeclBase;
 
 struct value {
@@ -57,6 +58,7 @@ struct value {
         switch (ident) {
             case iVARIABLE:
             case iCONSTEXPR:
+            case iUPVAR:
                 return true;
             default:
                 return false;
@@ -120,6 +122,15 @@ struct value {
         assert(ident == iFIELD);
         return field_;
     }
+    UpvarDecl* upvar() const {
+        assert(ident == iUPVAR);
+        return upvar_;
+    }
+    void set_upvar(UpvarDecl* upvar, QualType type) {
+        this->ident = iUPVAR;
+        this->upvar_ = upvar;
+        set_type(type);
+    }
 
     union {
         // when ident == iACCESSOR
@@ -134,6 +145,8 @@ struct value {
         Decl* decl_;
         // when ident == iFIELD
         LayoutFieldDecl* field_;
+        // when ident == iUPVAR
+        UpvarDecl* upvar_;
     };
 
     static value ErrorValue() {

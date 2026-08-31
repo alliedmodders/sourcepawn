@@ -81,6 +81,7 @@ static constexpr uint32_t kRttiMethodVisibilityMask = 0x3;
 static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
 static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
 static constexpr uint32_t kRttiMethod_Native = 0x4;
+static constexpr uint32_t kRttiMethod_Closure = 0x8;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {
@@ -260,6 +261,9 @@ static const uint8_t kClass = 0x47;      // rtti.classdefs (heap-allocated class
 // Followed by a fixed-length int16 encoding the number of locals, then that
 // many encoded types.
 static const uint8_t kLocalSlots = 0x60;
+// For closure method locals blobs, followed by uint16 count + encoded
+// upvar slot types. Appears before kLocalSlots in the locals blob.
+static const uint8_t kClosureSlots = 0x61;
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.

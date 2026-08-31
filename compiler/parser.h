@@ -68,9 +68,7 @@ class Parser
 
     struct VarParams {
         int vclass;
-        bool is_public = false;
-        bool is_static = false;
-        bool is_stock = false;
+        VarDeclFlags flags = VARDECL_DEFAULT;
         bool autozero = true;
         bool is_arg = false;
         bool struct_init = false;

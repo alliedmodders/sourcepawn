@@ -53,6 +53,7 @@ enum IdentifierKind {
     iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
     iTYPENAME = 14,     /* symbol defining a type */
     iFIELD = 15,        /* field of a struct or enumstruct */
+    iUPVAR = 16,        /* captured variable in closure */
 };
 
 enum class BuiltinType : uint8_t {

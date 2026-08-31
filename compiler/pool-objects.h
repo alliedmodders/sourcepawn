@@ -133,6 +133,11 @@ template <typename Key,
           typename KeyEqual = std::equal_to<Key>>
 using PoolMap = std::unordered_map<Key, T, Hash, KeyEqual, StlPoolAllocator<std::pair<const Key, T>>>;
 
+template <typename Key,
+          typename Hash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
+using PoolSet = std::unordered_set<Key, Hash, KeyEqual, StlPoolAllocator<Key>>;
+
 template <typename T>
 using PoolForwardList = std::forward_list<T, StlPoolAllocator<T>>;
 

@@ -471,6 +471,17 @@ Handle<SpFunction> Runtime::CastFunctionId(funcid_t id, const TypeDesc* td) {
     return callee->GetFunction();
 }
 
+Handle<SpFunction> Runtime::NewClosure(const TypeDesc* td, MethodInfo* method) {
+    auto fn = heap_.New<SpFunction>(td, td->closure_upvar_size());
+    if (!fn) {
+        env_->ReportError(SP_ERROR_OUT_OF_MEMORY);
+        return nullptr;
+    }
+    fn->method = method;
+    memset(fn->upvars(), 0, td->closure_upvar_size());
+    return fn;
+}
+
 bool Runtime::IsDebugging() {
     return true;
 }
@@ -479,8 +490,6 @@ bool Runtime::IsDebugging() {
 size_t Runtime::GetMemUsage() {
     return sizeof(*this) + image_->ImageSize();
 }
-
-
 
 bool Runtime::PerformFullValidation() {
     for (uint32_t i = 0; i < image_->rtti_methods()->row_count; i++) {
@@ -692,7 +701,7 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
         sp[i] = params[i];
 
     // Enter the execution engine.
-    bool ok = env_->Invoke(this, method, frame_base, result);
+    bool ok = env_->Invoke(this, method->GetFunction(), frame_base, result);
 
 
     return ok;
@@ -966,6 +975,35 @@ const TypeDesc* Runtime::LoadMethodSignature(uint32_t method_index) {
 
     auto parser = image_->GetTypeParser(method->signature);
     return LoadFunctionSignature(parser, (method->flags & kRttiMethod_Native) != 0);
+}
+
+const TypeDesc* Runtime::LoadClosureType(uint32_t method_index) {
+    const smx_rtti_method* method = image_->GetMethod(method_index);
+    if (!method || !method->locals)
+        return nullptr;
+
+    const TypeDesc* signature = LoadMethodSignature(method_index);
+    if (!signature)
+        return nullptr;
+
+    FastRtti parser = image_->GetTypeParser(method->locals);
+    uint8_t b;
+    if (!parser.GetNextByte(&b) || b != cb::kClosureSlots)
+        return nullptr;
+    uint16_t num_upvars;
+    if (!parser.ReadUint16(&num_upvars))
+        return nullptr;
+
+    std::vector<const TypeDesc*> upvar_types;
+    upvar_types.reserve(num_upvars);
+    for (uint16_t i = 0; i < num_upvars; i++) {
+        auto td = LoadType(parser);
+        if (!td)
+            return nullptr;
+        upvar_types.push_back(td);
+    }
+
+    return env_->types()->GetClosure(signature, upvar_types);
 }
 
 const TypeDesc* Runtime::LoadFunctionSignature(FastRtti& parser, bool is_native) {

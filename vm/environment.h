@@ -157,7 +157,7 @@ class Environment : public ISourcePawnEnvironment
     static inline size_t offsetOfSpTop() { return offsetof(Environment, sp_top_); }
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
-    bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, uint32_t frm, cell_t* result);
+    bool Invoke(v2::Runtime* cx, Handle<SpFunction> fn, uint32_t frm, cell_t* result);
 
     // Loading.
     BaseRuntime* LoadBinaryFromFile(const char* file, bool data_only = false);

@@ -57,6 +57,12 @@ struct IdxAddrArgs {
     uint16_t dest_reg;
 };
 
+struct UpvarArgs {
+    uint32_t slot;
+    uint16_t closure_reg;
+    uint16_t reg;
+};
+
 struct SwitchCaseEntry {
     cell_t value;
     uint32_t offset;
@@ -251,7 +257,16 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(GETFNOBJ, 149, "getfnobj", {LL_FMT_REG, LL_FMT_TYPEDESC, LL_FMT_REG}) \
     FOR_EACH(GETFUNCID, 150, "getfuncid", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(CALLI, 151, "calli", {LL_FMT_REG, LL_FMT_U8, LL_FMT_REG, LL_FMT_CALL}) \
-    FOR_EACH(NEWOBJ, 152, "newobj", {LL_FMT_TYPEDESC, LL_FMT_REG})
+    FOR_EACH(NEWOBJ, 152, "newobj", {LL_FMT_TYPEDESC, LL_FMT_REG}) \
+    FOR_EACH(NEWCLOSURE, 155, "newclosure", {LL_FMT_METHOD_ID, LL_FMT_REG}) \
+    FOR_EACH(CALLEE, 156, "callee", {LL_FMT_REG}) \
+    FOR_EACH(LOAD_UPVAR_X32, 157, "load.upvar.x32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_UPVAR_X64, 158, "load.upvar.x64", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_UPVAR_A, 159, "load.upvar.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(ADDR_UPVAR, 160, "addr.upvar", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_UPVAR_X32, 161, "stor.upvar.x32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_UPVAR_X64, 162, "stor.upvar.x64", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_UPVAR_A, 163, "stor.upvar.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

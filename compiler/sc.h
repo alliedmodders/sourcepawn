@@ -56,7 +56,6 @@ namespace cc {
 
 /* Note: the "cell" and "ucell" types are defined in AMX.H */
 
-#define PUBLIC_CHAR '@' /* character that defines a function "public" */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
 class VarDecl;

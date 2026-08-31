@@ -71,6 +71,13 @@ struct SpObject : public HeapItem {
 struct SpFunction : public HeapItem {
     // RefPtr here would create a cycle, so we use a raw pointer.
     sp::v2::MethodInfo* method;
+
+    // Upvars follow as flexible array.
+    // cell_t upvars[];  // num_upvars cells
+    uint8_t* upvars() {
+        assert(td->kind() == TypeKind::Closure);
+        return reinterpret_cast<uint8_t*>(this + 1);
+    }
 };
 
 } // namespace sp

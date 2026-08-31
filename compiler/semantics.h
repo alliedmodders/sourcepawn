@@ -49,8 +49,10 @@ class SemaContext
         cc_.set_sema(this);
         scope_ = cc_.globals();
     }
+
     SemaContext(SemaContext& parent, FunctionDecl* func)
       : cc_(parent.cc_),
+        outer_(&parent),
         sema_(parent.sema()),
         scope_(parent.scope_),
         func_(func),
@@ -92,6 +94,9 @@ class SemaContext
 
     FunctionDecl* func() const { return func_; }
     Semantics* sema() const { return sema_; }
+    SemaContext* outer() const { return outer_; }
+
+    std::vector<VarDeclBase*>& shared_locals() { return shared_locals_; }
 
     SymbolScope* ScopeForAdd();
 
@@ -110,6 +115,7 @@ class SemaContext
 
   private:
     CompileContext& cc_;
+    SemaContext* outer_ = nullptr;
     Semantics* sema_ = nullptr;
     SymbolScope* scope_ = nullptr;
     AutoCreateScope* scope_creator_ = nullptr;
@@ -124,6 +130,7 @@ class SemaContext
     bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
+    std::vector<VarDeclBase*> shared_locals_;
 };
 
 class Semantics final
@@ -150,6 +157,9 @@ class Semantics final
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }
+
+    int next_fun_expr_count() { return fun_expr_count_++; }
+    int next_shared_class_count() { return shared_class_count_++; }
 
   private:
 
@@ -193,7 +203,12 @@ class Semantics final
                          std::vector<bool>* visited);
 
     // Expressions.
-    bool CheckExpr(Expr* expr);
+    enum ExprFlags {
+        EXPR_DEFAULT = 0,
+        EXPR_DISCARD_RESULT = (1 << 0),
+    };
+
+    bool CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
     bool CheckNewArrayExpr(NewArrayExpr* expr);
     bool CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
     bool CheckStringExpr(StringExpr* expr, Type* target = nullptr);
@@ -207,7 +222,7 @@ class Semantics final
     bool CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
     bool CheckSizeofExpr(SizeofExpr* expr);
     bool CheckCastExpr(CastExpr* expr);
-    bool CheckIncDecExpr(IncDecExpr* expr);
+    bool CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
     bool CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
     bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
     bool CheckLogicalExpr(LogicalExpr* expr);
@@ -221,7 +236,7 @@ class Semantics final
                                    bool from_call);
     bool CheckFunctionExpr(FunctionExpr* expr);
 
-    bool CheckRvalue(Expr* expr, Type* target = nullptr);
+    bool CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = EXPR_DEFAULT);
     bool CheckRvalueAccess(Expr* expr);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
@@ -291,6 +306,7 @@ class Semantics final
     SemaContext* sc_ = nullptr;
     sp::Atom* this_atom_ = nullptr;
     int fun_expr_count_ = 0;
+    int shared_class_count_ = 0;
 };
 
 class AutoEnterScope final
