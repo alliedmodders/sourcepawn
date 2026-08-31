@@ -46,8 +46,6 @@ struct InterpFrame {
 
     uint32_t dest_reg;
     uint32_t prev_frame;
-    uint32_t hp_scope;
-    Heap::Position heap_pos;
 };
 
 class Interpreter final

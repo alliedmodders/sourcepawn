@@ -152,9 +152,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         std::swap(prev_used_temp_slots, used_temp_slots_);
     }
 
-    if (stmt->tree_has_heap_allocs())
-        EnterHeapScope(stmt->flow_type());
-
     switch (stmt->kind()) {
         case StmtKind::ChangeScopeNode:
             EmitChangeScopeNode(stmt->to<ChangeScopeNode>());
@@ -231,9 +228,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         default:
             assert(false);
     }
-
-    if (stmt->tree_has_heap_allocs())
-        LeaveHeapScope();
 
     if (fun_) {
         free_temp_slots_.splice(free_temp_slots_.end(), used_temp_slots_);
@@ -1996,7 +1990,7 @@ void CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt) {
     assert(token == tDO || token == tWHILE);
 
     LoopContext loop_cx;
-    loop_cx.heap_scope_id = heap_scope_id();
+
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
     auto body = stmt->body();
@@ -2009,40 +2003,12 @@ void CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt) {
 
         if (!IsTerminalFlow(body->flow_type()) || loop_cx.continue_to.used()) {
             __ bind(&loop_cx.continue_to);
-            if (cond->tree_has_heap_allocs()) {
-                // Need to create a temporary heap scope here.
-                Label on_true, join;
-                EnterHeapScope(Flow_None);
-                EmitTest(cond, true, &on_true);
-                __ PUSH_C(0);
-                __ emit(OP_JUMP, &join);
-                __ bind(&on_true);
-                __ PUSH_C(1);
-                __ bind(&join);
-                LeaveHeapScope();
-                __ emit(OP_JNZ, &start);
-            } else {
-                EmitTest(cond, true, &start);
-            }
+            EmitTest(cond, true, &start);
         }
     } else {
         __ bind(&loop_cx.continue_to);
 
-        if (cond->tree_has_heap_allocs()) {
-            // Need to create a temporary heap scope here.
-            Label on_true, join;
-            EnterHeapScope(Flow_None);
-            EmitTest(cond, true, &on_true);
-            __ PUSH_C(0);
-            __ emit(OP_JUMP, &join);
-            __ bind(&on_true);
-            __ PUSH_C(1);
-            __ bind(&join);
-            LeaveHeapScope();
-            __ emit(OP_JZER, &loop_cx.break_to);
-        } else {
-            EmitTest(cond, false, &loop_cx.break_to);
-        }
+        EmitTest(cond, false, &loop_cx.break_to);
         EmitStmt(body);
         if (body->flow_type() == Flow_None)
             __ emit(OP_JUMP, &loop_cx.continue_to);
@@ -2056,13 +2022,6 @@ CodeGenerator::EmitLoopControl(int token)
 {
     assert(loop_);
     assert(token == tBREAK || token == tCONTINUE);
-
-    for (auto iter = heap_scopes_.rbegin(); iter != heap_scopes_.rend(); iter++) {
-        if (iter->scope_id == loop_->heap_scope_id)
-            break;
-        if (iter->needs_restore)
-            __ emit(OP_HEAP_RESTORE);
-    }
 
     if (token == tBREAK)
         __ emit(OP_JUMP, &loop_->break_to);
@@ -2082,7 +2041,7 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
         EmitStmt(init);
 
     LoopContext loop_cx;
-    loop_cx.heap_scope_id = heap_scope_id();
+
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
     auto body = stmt->body();
@@ -2112,15 +2071,7 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
         if (stmt->has_continue()) {
             __ bind(&loop_cx.continue_to);
 
-            // It's a bit tricky to merge this into the same heap scope as
-            // the statement, so we create a one-off scope.
-            if (advance->tree_has_heap_allocs())
-                EnterHeapScope(Flow_None);
-
             EmitExpr(advance, EMIT_DISCARD_RESULT);
-
-            if (advance->tree_has_heap_allocs())
-                LeaveHeapScope();
         }
         if (!body_always_exits)
             __ emit(OP_JUMP, &top);
@@ -2241,8 +2192,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
         EmitStmt(info->body());
     }
 
-    assert(!has_stack_or_heap_scopes());
-
     if (ret_2d_array_.used()) {
         __ bind(&ret_2d_array_);
         std::vector<uint32_t> slots;
@@ -2261,8 +2210,6 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
             __ emit(OP_RETV);
         }
     }
-
-    heap_scopes_.clear();
 
     uint32_t pcode_end = asm_.pc();
 
@@ -2428,26 +2375,6 @@ CodeGenerator::EnterMemoryScope(tr::vector<MemoryScope>& frame)
         frame.push_back(MemoryScope{frame.back().scope_id + 1});
 }
 
-void CodeGenerator::EnterHeapScope(FlowType flow_type) {
-    EnterMemoryScope(heap_scopes_);
-    if (flow_type != Flow_Return) {
-        heap_scopes_.back().needs_restore = true;
-        __ emit(OP_HEAP_SAVE);
-    }
-}
-
-void CodeGenerator::LeaveHeapScope() {
-    assert(!heap_scopes_.empty());
-    if (heap_scopes_.back().needs_restore)
-        __ emit(OP_HEAP_RESTORE);
-    heap_scopes_.pop_back();
-}
-
-int CodeGenerator::heap_scope_id() {
-    if (heap_scopes_.empty())
-        return -1;
-    return heap_scopes_.back().scope_id;
-}
 
 int CodeGenerator::DynamicMemorySize() const {
     int custom = cc_.options()->pragma_dynamic;

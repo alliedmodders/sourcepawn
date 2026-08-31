@@ -92,22 +92,20 @@ namespace v2 {
     FOR_EACH(COPYARRAY, 47, "copyarray", 1) \
     FOR_EACH(SWITCH, 48, "switch", -1) \
     FOR_EACH(ADDR_S, 49, "addr.s", 3) \
-    FOR_EACH(HEAP_SAVE, 50, "heap.save", 1) \
-    FOR_EACH(HEAP_RESTORE, 51, "heap.restore", 1) \
-    FOR_EACH(TEST, 52, "test", 1) \
-    FOR_EACH(CVT_F32, 53, "cvt.f32", 1) \
-    FOR_EACH(CVT_I64, 54, "cvt.i64", 1) \
-    FOR_EACH(TRUNCATE_I64, 55, "truncate.i64", 1) \
-    FOR_EACH(SWAP, 56, "swap", 1) \
-    FOR_EACH(LOAD_FN, 57, "load.fn", 5) \
-    FOR_EACH(LOAD_I_I64, 58, "load.i.i64", 1) \
-    FOR_EACH(STOR_I_I64, 59, "stor.i.i64", 1) \
-    FOR_EACH(RETV, 60, "retv", 1) \
-    FOR_EACH(PUSH_C_I8, 61, "push.c.i8", 2) \
-    FOR_EACH(CALLN, 62, "calln", 6) \
-    FOR_EACH(PUSH_C_I64, 63, "push.c.i64", 9) \
-    FOR_EACH(ADDR_GLB, 64, "addr.glb", 3) \
-    FOR_EACH(LOAD_STR, 65, "load.str", 3) \
+    FOR_EACH(TEST, 50, "test", 1) \
+    FOR_EACH(CVT_F32, 51, "cvt.f32", 1) \
+    FOR_EACH(CVT_I64, 52, "cvt.i64", 1) \
+    FOR_EACH(TRUNCATE_I64, 53, "truncate.i64", 1) \
+    FOR_EACH(SWAP, 54, "swap", 1) \
+    FOR_EACH(LOAD_FN, 55, "load.fn", 5) \
+    FOR_EACH(LOAD_I_I64, 56, "load.i.i64", 1) \
+    FOR_EACH(STOR_I_I64, 57, "stor.i.i64", 1) \
+    FOR_EACH(RETV, 58, "retv", 1) \
+    FOR_EACH(PUSH_C_I8, 59, "push.c.i8", 2) \
+    FOR_EACH(CALLN, 60, "calln", 6) \
+    FOR_EACH(PUSH_C_I64, 61, "push.c.i64", 9) \
+    FOR_EACH(ADDR_GLB, 62, "addr.glb", 3) \
+    FOR_EACH(LOAD_STR, 63, "load.str", 3) \
     /* Allocate a new array on the heap, given a uint32_t type_id for the
      * array. The size of the outermost dimension must be pushed onto the
      * stack as a cell_t. The resulting address of the array is pushed onto
@@ -117,7 +115,7 @@ namespace v2 {
      * If the array's element type is a fixed array, then each element will
      * be initialized with an array of that type. This happens recursively.
      */ \
-    FOR_EACH(NEWARRAY, 66, "newarray", 5) \
+    FOR_EACH(NEWARRAY, 64, "newarray", 5) \
     /* Same as newarray, except that there must be N values on the stack,
      * where N is the number of kArrays in the type before any non-kArray
      * types appear. Eg, int[][][25][] must have two integers pushed onto
@@ -129,7 +127,7 @@ namespace v2 {
      *
      * NEWBULKARRAY with N=1 is the same as NEWARRAY.
      */ \
-    FOR_EACH(NEWBULKARRAY, 67, "newbulkarray", 6) \
+    FOR_EACH(NEWBULKARRAY, 65, "newbulkarray", 6) \
     /* Pops an array address off the stack, then copies a preset set of
      * values from the constant pool (data section) to that array. The offset
      * to the values is encoded as a uint32_t argument.
@@ -141,13 +139,13 @@ namespace v2 {
      *   kInt64: int64_t
      *   everything else: int32_t
      */ \
-    FOR_EACH(FILLARRAY, 68, "fillarray", 5) \
-    FOR_EACH(ARRAY_TO_NATIVE, 69, "array2native", 1) \
+    FOR_EACH(FILLARRAY, 66, "fillarray", 5) \
+    FOR_EACH(ARRAY_TO_NATIVE, 67, "array2native", 1) \
     /* Given a flat or non-flat array, and an index, create a view into this
      * array at the given index. The returned array is always of a non-fixed
      * size.
      */ \
-    FOR_EACH(SLICE, 70, "slice", 1) \
+    FOR_EACH(SLICE, 68, "slice", 1) \
     /* Pops a value from the stack, which must be an address to an object-
      * like structure. Loads a value from the specified field, which is
      * encoded as an index into the smx_rtti_field_refs table. The value
@@ -156,32 +154,32 @@ namespace v2 {
      *
      * The object type in the field ref must match the type of the object.
      */ \
-    FOR_EACH(LOAD_FLD, 71, "load.fld", 5) \
-    FOR_EACH(ADDR_FLD, 72, "addr.fld", 5) \
-    FOR_EACH(LOAD_ELEM_I32, 73, "load.elem.i32", 1) \
-    FOR_EACH(LOAD_ELEM_F32, 74, "load.elem.f32", 1) \
-    FOR_EACH(LOAD_ELEM_I64, 75, "load.elem.i64", 1) \
-    FOR_EACH(LOAD_ELEM_U8, 76, "load.elem.i8", 1) \
-    FOR_EACH(STOR_ELEM_I32, 77, "stor.elem.i32", 1) \
-    FOR_EACH(STOR_ELEM_F32, 78, "stor.elem.f32", 1) \
-    FOR_EACH(STOR_ELEM_I64, 79, "stor.elem.i64", 1) \
-    FOR_EACH(STOR_ELEM_U8, 80, "stor.elem.i8", 1) \
-    FOR_EACH(LOAD_I_F32, 81, "load.i.f32", 1) \
-    FOR_EACH(STOR_I_F32, 82, "stor.i.f32", 1) \
-    FOR_EACH(LOAD_ELEM_A, 83, "load.elem.a", 1) \
-    FOR_EACH(PUSH_C_F32, 84, "push.c.f32", 5) \
-    FOR_EACH(STOR_FLD, 85, "stor.fld", 5) \
-    FOR_EACH(LOAD_FLD_OFFSET, 86, "load.fld.offset", 5) \
-    FOR_EACH(LOAD_ES_SIZE, 87, "load.es.size", 5) \
-    FOR_EACH(COPYOBJ, 88, "copyobj", 5) \
+    FOR_EACH(LOAD_FLD, 69, "load.fld", 5) \
+    FOR_EACH(ADDR_FLD, 70, "addr.fld", 5) \
+    FOR_EACH(LOAD_ELEM_I32, 71, "load.elem.i32", 1) \
+    FOR_EACH(LOAD_ELEM_F32, 72, "load.elem.f32", 1) \
+    FOR_EACH(LOAD_ELEM_I64, 73, "load.elem.i64", 1) \
+    FOR_EACH(LOAD_ELEM_U8, 74, "load.elem.i8", 1) \
+    FOR_EACH(STOR_ELEM_I32, 75, "stor.elem.i32", 1) \
+    FOR_EACH(STOR_ELEM_F32, 76, "stor.elem.f32", 1) \
+    FOR_EACH(STOR_ELEM_I64, 77, "stor.elem.i64", 1) \
+    FOR_EACH(STOR_ELEM_U8, 78, "stor.elem.i8", 1) \
+    FOR_EACH(LOAD_I_F32, 79, "load.i.f32", 1) \
+    FOR_EACH(STOR_I_F32, 80, "stor.i.f32", 1) \
+    FOR_EACH(LOAD_ELEM_A, 81, "load.elem.a", 1) \
+    FOR_EACH(PUSH_C_F32, 82, "push.c.f32", 5) \
+    FOR_EACH(STOR_FLD, 83, "stor.fld", 5) \
+    FOR_EACH(LOAD_FLD_OFFSET, 84, "load.fld.offset", 5) \
+    FOR_EACH(LOAD_ES_SIZE, 85, "load.es.size", 5) \
+    FOR_EACH(COPYOBJ, 86, "copyobj", 5) \
     /* Slice an enumstruct of the given type, into an any[] array. The
      * size of the array is the size of the enum struct in cells.
      */ \
-    FOR_EACH(SLICE_ES, 89, "slice.es", 5) \
+    FOR_EACH(SLICE_ES, 87, "slice.es", 5) \
     /* Create a view of a flat or non-flat array as a flat or non-flat array.
      * Takes a type ID representing the output type.
      */ \
-    FOR_EACH(SLICE_AS, 90, "slice.as", 5)
+    FOR_EACH(SLICE_AS, 88, "slice.as", 5)
 
 
 enum OPCODE {

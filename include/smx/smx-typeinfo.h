@@ -81,7 +81,6 @@ static constexpr uint32_t kRttiMethodVisibilityMask = 0x3;
 static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
 static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
 static constexpr uint32_t kRttiMethod_Native = 0x4;
-static constexpr uint32_t kRttiMethod_GlobalCtor = 0x8;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {

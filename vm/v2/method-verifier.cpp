@@ -606,16 +606,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_HEAP_SAVE:
-            v->heap_scope_depth++;
-            return true;
-
-        case OP_HEAP_RESTORE:
-            if (!v->heap_scope_depth)
-                return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            v->heap_scope_depth--;
-            return true;
-
         case OP_RETN: {
             if (return_type_->kind() == TypeKind::Void)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -624,14 +614,12 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return false;
             if (!ValidateStore(return_type_, td))
                 return false;
-            block_->heap_scope_depth() = v->heap_scope_depth;
             return true;
         }
 
         case OP_RETV:
             if (return_type_->kind() != TypeKind::Void)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            block_->heap_scope_depth() = v->heap_scope_depth;
             return true;
 
         case OP_LOAD_FN: {
@@ -837,9 +825,6 @@ bool MethodVerifier::verifyJoin(VerifyData* first, VerifyData* other) {
         }
     }
 
-    if (first->heap_scope_depth != other->heap_scope_depth) {
-        return reportError(SP_ERROR_INSTRUCTION_PARAM);
-    }
     return true;
 }
 

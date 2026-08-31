@@ -862,30 +862,6 @@ bool Compiler::visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, si
     return true;
 }
 
-bool Compiler::visitHEAP_SAVE() {
-    // Allocate one cell on the heap.
-    visitHEAP(sizeof(cell_t));
-    // Get the addres of the old heap scope in pri.
-    __ movl(pri, hpScopeAddr());
-    // Store the old heap scope address into the new heap scope.
-    __ movl(Operand(dat, alt, NoScale), pri);
-    // Update the context's current heap scope.
-    __ movl(hpScopeAddr(), alt);
-    return true;
-}
-
-bool Compiler::visitHEAP_RESTORE() {
-    // Get the current heap scope address.
-    __ movl(rcx, hpScopeAddr());
-    // Get the previous heap scope address.
-    __ movl(alt, Operand(dat, rcx, NoScale));
-    // Update the heap pointer.
-    __ movl(hpAddr(), rcx);
-    // Update the heap scope.
-    __ movl(hpScopeAddr(), alt);
-    return true;
-}
-
 bool Compiler::visitMOVE_I64() {
     emitCheckAddress(pri, sizeof(int64_t));
     emitCheckAddress(alt, sizeof(int64_t));

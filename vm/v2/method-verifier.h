@@ -88,23 +88,19 @@ class MethodVerifier final
 
     struct VerifyData : public IBlockData {
         VerifyData()
-         : heap_scope_depth(0),
-           stack_bytes(0)
+         : stack_bytes(0)
         {}
         VerifyData(const VerifyData& other)
-         : heap_scope_depth(other.heap_scope_depth),
-           stack(other.stack),
+         : stack(other.stack),
            stack_bytes(other.stack_bytes)
         {}
 
         VerifyData& operator=(const VerifyData& other) {
-            heap_scope_depth = other.heap_scope_depth;
             stack = other.stack;
             stack_bytes = other.stack_bytes;
             return *this;
         }
 
-        uint32_t heap_scope_depth;
         std::vector<const TypeDesc*> stack;
         uint32_t stack_bytes;
 

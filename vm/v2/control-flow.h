@@ -148,10 +148,6 @@ class Block : public ke::Refcounted<Block>, public ke::InlineListNode<Block>
     void set_has_compiler_break_bug() {
         has_compiler_break_bug_ = true;
     }
-    uint32_t& heap_scope_depth() {
-        return heap_scope_depth_;
-    }
-
     // For debugging.
     uint32_t startPc() const;
     uint32_t endPc() const;
@@ -190,9 +186,6 @@ class Block : public ke::Refcounted<Block>, public ke::InlineListNode<Block>
 
     // Counter for fast already-visited testing.
     uint32_t epoch_;
-
-    // Heap scope depth.
-    uint32_t heap_scope_depth_ = 0;
 };
 
 typedef ke::InlineList<Block>::iterator RpoIterator;

@@ -148,22 +148,11 @@ class Runtime final : public BaseRuntime,
     size_t DataSize() const;
 
     static inline size_t offsetOfRuntime() { return 0; /* Deprecated, Runtime is self */ }
-    static inline size_t offsetOfHpScope() { return offsetof(Runtime, hp_scope_); }
     static inline size_t offsetOfEnv() { return offsetof(Runtime, env_); }
 
     bool data_only() const { return data_only_; }
 
-    uint32_t& hp_scope() { return hp_scope_; }
-
     Heap& heap() { return heap_; }
-
-    struct HeapScope {
-        Heap::Position pos;
-        uint32_t prev_hp_scope;
-    };
-
-    bool enterHeapScope();
-    void leaveHeapScope();
 
     Environment* env() const { return env_; }
 
@@ -210,7 +199,6 @@ class Runtime final : public BaseRuntime,
 
     cell_t* m_pNullVec = nullptr;
     cell_t* m_pNullString = nullptr;
-    uint32_t hp_scope_ = 0;
 };
 
 } // namespace v2

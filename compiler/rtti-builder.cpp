@@ -209,9 +209,6 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
     else if (fun->is_native())
         method.flags = kRttiMethod_Native;
 
-    if (fun->is_global_ctor())
-        method.flags |= kRttiMethod_GlobalCtor;
-
     // Only add a method table entry if we actually had locals or lines.
     if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
         dbg_methods_->add(entry);

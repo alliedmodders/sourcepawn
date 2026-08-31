@@ -315,11 +315,6 @@ class PcodeReader
                     defaultOffset, reinterpret_cast<const CaseTableEntry*>(table), ncases);
             }
 
-            case OP_HEAP_SAVE:
-                return visitor_->visitHEAP_SAVE();
-            case OP_HEAP_RESTORE:
-                return visitor_->visitHEAP_RESTORE();
-
             default:
                 assert(false);
                 return false;

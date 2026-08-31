@@ -379,13 +379,8 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, value* v) {
         }
     }
 
-    {
-        // We're potentially analyzing this outside normal statement boundaries,
-        // so we have to save and restore pending_heap_allocation_.
-        ke::SaveAndSet<bool> restore_heap(&sema_->pending_heap_allocation_, false);
-        if (!sema_->CheckExpr(expr))
-            return false;
-    }
+    if (!sema_->CheckExpr(expr))
+        return false;
 
     *v = expr->val();
     return true;

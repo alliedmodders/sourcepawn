@@ -175,16 +175,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
 
     ke::SaveRestore<uint32_t> saveSp(env_->sp());
 
-    const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
-    bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
-
-    std::optional<ke::SaveRestore<uint32_t>> saveHpScope;
-    std::optional<HeapSave> saveHp;
-    if (!is_global_ctor) {
-        saveHpScope.emplace(rt_->hp_scope());
-        saveHp.emplace(rt_->heap());
-    }
-
     uint32_t num_regs = method_->interp()->num_regs();
     if (num_regs > 0) {
         uint32_t bytes = num_regs * sizeof(cell_t);
@@ -616,9 +606,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 }
 
                 InterpFrame* frame = rt_->heap().ToPhysAddr<InterpFrame*>(frm_);
-                const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
-                bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
-
                 ivk_->~InterpInvokeFrame();
 
                 ivk_ = env_->top()->AsInterpInvokeFrame();
@@ -637,10 +624,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     return false;
                 frm_ = frame->prev_frame;
 
-                if (!is_global_ctor) {
-                    rt_->hp_scope() = frame->hp_scope;
-                    rt_->heap().RestorePosition(frame->heap_pos);
-                }
 
                 uint32_t num_caller_regs = method_->interp()->num_regs();
                 vregs_ = std::span<cell_t>(rt_->heap().ToPhysAddr<cell_t*>(env_->sp()), num_caller_regs);
@@ -724,7 +707,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     NativeEntry* native = rt_->NativeAt(native_index);
                     ivk_->enterNativeCall(native_index);
                     if (native->status == SP_NATIVE_BOUND) {
-                        HeapSave save_hp(rt_->heap());
                         ke::SaveRestore<uint32_t> save_sp(env_->sp());
 
                         if (native->legacy_fn)
@@ -768,8 +750,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                     frame->saved_cip = reader_.cursor();
                     frame->dest_reg = dest;
                     frame->prev_frame = frm_;
-                    frame->hp_scope = rt_->hp_scope();
-                    frame->heap_pos = rt_->heap().GetPosition();
 
                     ivk_->setCip(&frame->saved_cip);
 
@@ -1050,15 +1030,6 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 slice->length = cell_count;
                 slice->data = base;
                 vregs_[dest] = rt_->heap().ToLocalAddr(slice);
-                break;
-            }
-            case LL_HEAP_SAVE: {
-                if (!rt_->enterHeapScope())
-                    return false;
-                break;
-            }
-            case LL_HEAP_RESTORE: {
-                rt_->leaveHeapScope();
                 break;
             }
             case LL_ADDR_S: {

@@ -95,41 +95,6 @@ uint8_t* Heap::Allocate(uint32_t requested_size) {
     return current_->Allocate(aligned_size);
 }
 
-Heap::Position Heap::GetPosition() {
-    Position hp;
-    hp.chunk = current_;
-    hp.pos = current_ ? current_->pos : nullptr;
-    return hp;
-}
-
-void Heap::RestorePosition(const Position& hp) {
-    auto chunk = reinterpret_cast<Chunk*>(hp.chunk);
-    if (!chunk) {
-        current_ = nullptr;
-        return;
-    }
-    assert(ValidateRestoreTo(chunk, hp.pos));
-    current_ = chunk;
-    current_->pos = hp.pos;
-}
-
-bool Heap::ValidateRestoreTo(Chunk* chunk, uint8_t* pos) {
-    assert(chunk->Owns(pos));
-    assert(pos <= chunk->pos);
-
-    if (chunk == current_)
-        return true;
-
-    for (auto iter = first_; iter; iter = iter->next) {
-        if (chunk == iter)
-             return true;
-
-        if (chunk == current_)
-            return false;
-    }
-    return false;
-}
-
 void* Heap::AllocRaw(size_t bytes) {
     void* p = mi_heap_malloc(mi_heap_, bytes);
     if (!p) {

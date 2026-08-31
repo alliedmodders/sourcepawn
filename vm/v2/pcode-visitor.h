@@ -84,8 +84,6 @@ class PcodeVisitor
     virtual bool visitMOVE_I64() = 0;
     virtual bool visitFILL(uint32_t amount) = 0;
     virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) = 0;
-    virtual bool visitHEAP_SAVE() = 0;
-    virtual bool visitHEAP_RESTORE() = 0;
     virtual bool visitCVT_I64(cell_t slot) = 0;
     virtual bool visitTRUNCATE_I64() = 0;
     virtual bool visitTEST_I64() { return false; }

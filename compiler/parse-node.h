@@ -50,8 +50,7 @@ class ParseNode : public PoolObject
 {
   public:
     explicit ParseNode(const token_pos_t& pos)
-      : pos_(pos),
-        tree_has_heap_allocs_(false)
+      : pos_(pos)
     {}
 
     virtual bool Bind(SemaContext& sc) {
@@ -65,9 +64,6 @@ class ParseNode : public PoolObject
         return pos_;
     }
 
-    bool tree_has_heap_allocs() const { return tree_has_heap_allocs_; }
-    void set_tree_has_heap_allocs(bool b) { tree_has_heap_allocs_ = b; }
-
   protected:
     void error(const token_pos_t& pos, int number);
 
@@ -78,7 +74,6 @@ class ParseNode : public PoolObject
 
   protected:
     token_pos_t pos_;
-    bool tree_has_heap_allocs_ : 1;
 };
 
 enum FlowType {
@@ -581,8 +576,7 @@ class Expr : public ParseNode
   public:
     explicit Expr(ExprKind kind, const token_pos_t& pos)
       : ParseNode(pos),
-        kind_(kind),
-        can_alloc_heap_(false)
+        kind_(kind)
     {}
 
     // Flatten a series of binary expressions into a single list.
@@ -607,8 +601,6 @@ class Expr : public ParseNode
 
     value& val() { return val_; }
     const value& val() const { return val_; }
-    bool can_alloc_heap() const { return can_alloc_heap_; }
-    void set_can_alloc_heap(bool b) { can_alloc_heap_ = b; }
 
     // Returns whether this is an l-value (eg can appear on the left-hand
     // side of an assignment).
@@ -634,7 +626,6 @@ class Expr : public ParseNode
   protected:
     value val_ = {};
     ExprKind kind_ : 8;
-    bool can_alloc_heap_ : 1;
 };
 
 class UnaryExpr final : public Expr

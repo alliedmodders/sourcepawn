@@ -1151,11 +1151,6 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
-        case OP_HEAP_SAVE:
-        case OP_HEAP_RESTORE:
-            emitOp(op == OP_HEAP_SAVE ? LL_HEAP_SAVE : LL_HEAP_RESTORE);
-            break;
-
         case OP_JUMP: {
             FlushEmitStack();
 

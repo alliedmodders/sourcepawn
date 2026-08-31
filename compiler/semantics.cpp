@@ -71,8 +71,6 @@ bool Semantics::Analyze(ParseTree* tree) {
         return false;
     }
 
-    // All heap allocations must be owned by a ParseNode.
-    assert(!pending_heap_allocation_);
     return true;
 }
 
@@ -156,16 +154,8 @@ bool Semantics::CheckStmtList(StmtList* list) {
     return ok;
 }
 
-bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
+bool Semantics::CheckStmt(Stmt* stmt) {
     AutoErrorPos aep(stmt->pos());
-    ke::Maybe<ke::SaveAndSet<bool>> restore_heap_ownership;
-    if (flags & STMT_OWNS_HEAP)
-        restore_heap_ownership.init(&pending_heap_allocation_, false);
-
-    auto owns_heap = ke::MakeScopeGuard([&, this]() {
-        if (flags & STMT_OWNS_HEAP)
-            AssignHeapOwnership(stmt);
-    });
 
     switch (stmt->kind()) {
         case StmtKind::ChangeScopeNode:
@@ -249,8 +239,6 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
             return false;
         if (type->isEnumStruct() && IsThisAtom(decl->name()))
             decl->mutable_type_info()->is_const = false;
-        if (decl->vclass() == sLOCAL)
-            pending_heap_allocation_ = true;
     } else {
         // Since we always create an assignment expression, all type checks will
         // be performed by the Analyze(sc) call here.
@@ -1239,13 +1227,11 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
             if (left_array->is_flat()) {
                 auto type = types_->defineArray(left_array->inner(), size);
                 auto slice = new SliceExpr(second, nullptr, type);
-                NeedsHeapAlloc(slice);
                 second = expr->set_second(slice);
             }
             if (right_array->is_flat()) {
                 auto type = types_->defineArray(right_array->inner(), size);
                 auto slice = new SliceExpr(third, nullptr, type);
-                NeedsHeapAlloc(slice);
                 third = expr->set_third(slice);
             }
         }
@@ -2012,7 +1998,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             report(call, 411);
             return false;
         }
-        NeedsHeapAlloc(call);
     }
 
     markusage(fun, uREAD);
@@ -2143,9 +2128,6 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             param = new DefaultArgExpr(call->pos(), arg);
         else
             param->as<DefaultArgExpr>()->set_arg(arg);
-
-        if (arg->type()->isReference())
-            NeedsHeapAlloc(param);
 
         if (param->val().type())
             assert(!param->val().type()->isInt64());
@@ -2343,9 +2325,9 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
     // Note: unlike loop conditions, we don't factor in constexprs here, it's
     // too much work and way less common than constant loop conditions.
 
-    if (!CheckStmt(stmt->on_true(), STMT_OWNS_HEAP))
+    if (!CheckStmt(stmt->on_true()))
         return false;
-    if (stmt->on_false() && !CheckStmt(stmt->on_false(), STMT_OWNS_HEAP))
+    if (stmt->on_false() && !CheckStmt(stmt->on_false()))
         return false;
 
     if (stmt->on_false()) {
@@ -2439,7 +2421,6 @@ bool Semantics::TestSymbols(SymbolScope* root, bool testconst) {
 }
 
 bool Semantics::CheckBlockStmt(BlockStmt* block) {
-    ke::SaveAndSet<bool> restore_heap(&pending_heap_allocation_, false);
 
     bool ok = true;
     for (const auto& stmt : block->stmts()) {
@@ -2460,8 +2441,6 @@ bool Semantics::CheckBlockStmt(BlockStmt* block) {
     if (block->scope())
         TestSymbols(block->scope(), true);
 
-    // Blocks always taken heap ownership.
-    AssignHeapOwnership(block);
     return ok;
 }
 
@@ -2637,13 +2616,8 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
 }
 
 bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
-    {
-        ke::SaveAndSet<bool> restore_heap(&pending_heap_allocation_, false);
-
-        if (Expr* expr = AnalyzeForTest(stmt->cond())) {
-            stmt->set_cond(expr);
-            AssignHeapOwnership(expr);
-        }
+    if (Expr* expr = AnalyzeForTest(stmt->cond())) {
+        stmt->set_cond(expr);
     }
 
     auto cond = stmt->cond();
@@ -2658,7 +2632,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
         ke::SaveAndSet<bool> auto_break(&sc_->loop_has_break(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        if (!CheckStmt(stmt->body(), STMT_OWNS_HEAP))
+        if (!CheckStmt(stmt->body()))
             return false;
 
         has_break = sc_->loop_has_break();
@@ -2694,10 +2668,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
             ok = false;
     }
     if (stmt->advance()) {
-        ke::SaveAndSet<bool> restore(&pending_heap_allocation_, false);
-        if (CheckRvalue(stmt->advance()))
-            AssignHeapOwnership(stmt->advance());
-        else
+        if (!CheckRvalue(stmt->advance()))
             ok = false;
     }
 
@@ -2712,7 +2683,7 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
         ke::SaveAndSet<bool> auto_continue(&sc_->loop_has_continue(), false);
         ke::SaveAndSet<bool> auto_return(&sc_->loop_has_return(), false);
 
-        ok &= CheckStmt(stmt->body(), STMT_OWNS_HEAP);
+        ok &= CheckStmt(stmt->body());
 
         has_break = sc_->loop_has_break();
         has_return = sc_->loop_has_return();
@@ -2914,7 +2885,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
     if (fwd && fwd->deprecate() && !info->is_stock())
         report(info->pos(), 234) << info->name() << fwd->deprecate();
 
-    bool ok = CheckStmt(body, STMT_OWNS_HEAP);
+    bool ok = CheckStmt(body);
 
     info->set_returns_value(sc_->returns_value());
 
@@ -2992,17 +2963,6 @@ bool Semantics::CheckMethodmapDecl(MethodmapDecl* decl) {
     return ok;
 }
 
-void Semantics::NeedsHeapAlloc(Expr* expr) {
-    expr->set_can_alloc_heap(true);
-    pending_heap_allocation_ = true;
-}
-
-void Semantics::AssignHeapOwnership(ParseNode* node) {
-    if (pending_heap_allocation_) {
-        node->set_tree_has_heap_allocs(true);
-        pending_heap_allocation_ = false;
-    }
-}
 
 void Semantics::CheckVoidDecl(const typeinfo_t* type, int variable) {
     if (!type->type->isVoid())
@@ -3204,7 +3164,6 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
 
     Type* type = types_->defineArray(inner_type, size);
     auto slice = new SliceExpr(base, index_expr, type);
-    NeedsHeapAlloc(slice);
     return slice;
 }
 

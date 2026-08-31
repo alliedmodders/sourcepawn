@@ -232,9 +232,6 @@ void DumpTool::DumpRttiMethods() {
                     fprintf(stdout, "    .visibility = public\n");
                 else
                     fprintf(stdout, "    .visibility = unknown_%u\n", visibility);
-
-                if (method->flags & kRttiMethod_GlobalCtor)
-                    fprintf(stdout, "    .flags = global_ctor\n");
             }
         }
 

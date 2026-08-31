@@ -75,9 +75,6 @@ class Heap {
             pos += size;
             return p;
         }
-
-        // Inclusive for |end|, since it's a valid pos (with zero space left).
-        bool Owns(uint8_t* p) { return p >= base && p <= end; }
     };
 
     template <typename T>
@@ -88,26 +85,6 @@ class Heap {
     uint32_t ToLocalAddr(void* p) { return virt_mem_.ToLocalAddr(p); }
     template <typename T>
     T ToPhysAddr(uint32_t addr) { return virt_mem_.ToPhysAddr<T>(addr); }
-
-    struct Position {
-        Position() {
-            chunk = nullptr;
-            pos = nullptr;
-        }
-
-        void* chunk;
-        uint8_t* pos;
-
-        bool operator ==(const Position& other) const {
-            return chunk == other.chunk && pos == other.pos;
-        }
-        bool operator !=(const Position& other) const {
-            return !(*this == other);
-        }
-    };
-
-    Position GetPosition();
-    void RestorePosition(const Position& hp);
 
     void* AllocRaw(size_t bytes);
     void FreeRaw(void* ptr);
@@ -137,32 +114,12 @@ class Heap {
     uint8_t* SlowAllocate(uint32_t size);
 
     Chunk* NewChunk(size_t size);
-    bool ValidateRestoreTo(Chunk* chunk, uint8_t* pos);
 
   private:
     VirtMem& virt_mem_;
     mi_heap_t* mi_heap_ = nullptr;
     Chunk* first_ = nullptr;
     Chunk* current_ = nullptr;
-};
-
-struct HeapSave final {
-    HeapSave(Heap& heap)
-      : heap(heap),
-        pos(heap.GetPosition())
-    {}
-    HeapSave(HeapSave&& other) = default;
-    HeapSave(const HeapSave& other) = delete;
-
-    ~HeapSave() {
-        heap.RestorePosition(pos);
-    }
-
-    HeapSave& operator =(HeapSave&& other) = delete;
-    HeapSave& operator =(const HeapSave& other) = delete;
-
-    Heap& heap;
-    Heap::Position pos;
 };
 
 template <typename T>

@@ -209,15 +209,7 @@ class CodeGenerator final
         bool needs_restore;
     };
 
-    // Heap functions
-    void EnterHeapScope(FlowType flow_type);
-    void LeaveHeapScope();
-    void modheap_for_scope(const MemoryScope& scope);
 
-    int heap_scope_id();
-    bool has_stack_or_heap_scopes() {
-        return !heap_scopes_.empty();
-    }
 
     void EnterMemoryScope(tr::vector<MemoryScope>& frame);
     int PopScope(tr::vector<MemoryScope>& scope_list);
@@ -262,7 +254,6 @@ class CodeGenerator final
     RefPtr<SmxCodeSection> code_;
     std::unique_ptr<RttiBuilder> rtti_;
 
-    tr::vector<MemoryScope> heap_scopes_;
     smx_rtti_debug_method debug_info_;
     SymbolStack local_syms_;
     tr::vector<DebugSymbol> global_syms_;
@@ -280,7 +271,6 @@ class CodeGenerator final
         sp::Label break_to;
         sp::Label continue_to;
         int stack_scope_id;
-        int heap_scope_id;
     };
     LoopContext* loop_ = nullptr;
 

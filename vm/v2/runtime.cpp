@@ -683,12 +683,6 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
 
     /* Save our previous state. */
     ke::SaveRestore<uint32_t> save_sp(env_->sp());
-#ifndef NDEBUG
-    const smx_rtti_method* rtti = image_->GetMethod(method_index);
-    bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
-    uint32_t save_hp_scope = hp_scope_;
-    auto heap_pos = heap_.GetPosition();
-#endif
 
     /* Push parameters */
     if (!env_->addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
@@ -699,16 +693,10 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
     for (unsigned int i = 0; i < num_params; i++)
         sp[i + 1] = params[i];
 
-    // Enter the execution engine. Callee is responsible for saving and
-    // restoring hp_scope_.
+    // Enter the execution engine.
     bool ok = env_->Invoke(this, method, result);
 
-#ifndef NDEBUG
-    if (!is_global_ctor) {
-        assert(hp_scope_ == save_hp_scope);
-        assert(heap_pos == heap_.GetPosition());
-    }
-#endif
+
     return ok;
 }
 
@@ -717,27 +705,7 @@ cell_t* Runtime::GetLocalParams() {
     return nullptr;
 }
 
-bool Runtime::enterHeapScope() {
-    auto pos = heap_.GetPosition();
 
-    auto node = heap_.AllocTyped<HeapScope>();
-    if (!node)
-        return false;
-
-    node->pos = pos;
-    node->prev_hp_scope = hp_scope_;
-
-    hp_scope_ = heap_.ToLocalAddr(node);
-    return true;
-}
-
-void Runtime::leaveHeapScope() {
-    assert(hp_scope_ != 0);
-
-    auto node = *heap_.ToPhysAddr<HeapScope*>(hp_scope_);
-    heap_.RestorePosition(node.pos);
-    hp_scope_ = node.prev_hp_scope;
-}
 
 
 bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
@@ -774,11 +742,9 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
 }
 
 void Runtime::EnterHeapScope() {
-    enterHeapScope();
 }
 
 void Runtime::LeaveHeapScope() {
-    leaveHeapScope();
 }
 
 cell_t Runtime::GetNullFunctionValue() {

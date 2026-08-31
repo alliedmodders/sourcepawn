@@ -140,15 +140,11 @@ class Semantics final
     void set_context(SemaContext* sc) { sc_ = sc; }
 
   private:
-    enum StmtFlags {
-        STMT_DEFAULT = 0x0,
-        STMT_OWNS_HEAP = 0x1
-    };
 
     void GenerateInitFunctions(ParseTree* tree);
     FunctionDecl* GenerateInitFunction(const std::vector<VarDeclBase*>& vars, uint32_t suffix);
 
-    bool CheckStmt(Stmt* stmt, StmtFlags = STMT_DEFAULT);
+    bool CheckStmt(Stmt* stmt);
     bool CheckStmtList(StmtList* list);
     bool CheckBlockStmt(BlockStmt* stmt);
     bool CheckChangeScopeNode(ChangeScopeNode* node);
@@ -221,9 +217,6 @@ class Semantics final
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
     SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
-    void NeedsHeapAlloc(Expr* expr);
-    void AssignHeapOwnership(ParseNode* node);
-
     Expr* AnalyzeForTest(Expr* expr);
 
     void DeduceLiveness();
@@ -247,7 +240,6 @@ class Semantics final
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
     SemaContext* sc_ = nullptr;
-    bool pending_heap_allocation_ = false;
     sp::Atom* this_atom_ = nullptr;
 };
 
