@@ -491,6 +491,13 @@ uint32_t SmxImage::getClassdefFieldsEnd(uint32_t i) const {
     return next_classdef->first_field;
 }
 
+uint32_t SmxImage::getClassdefMethodsEnd(uint32_t i) const {
+    if (i == rtti_classdefs_->row_count - 1)
+        return rtti_methods_->row_count;
+    const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
+    return next_classdef->first_method;
+}
+
 const smx_rtti_classdef* SmxImage::FindClassdefForField(uint32_t field_index) const {
     if (!rtti_classdefs_ || !rtti_classdefs_->row_count)
         return nullptr;
@@ -507,6 +514,37 @@ const smx_rtti_classdef* SmxImage::FindClassdefForField(uint32_t field_index) co
     if (field_index >= cd->first_field && field_index < getClassdefFieldsEnd(lo))
         return cd;
     return nullptr;
+}
+
+const smx_rtti_classdef* SmxImage::FindClassdefForMethod(uint32_t method_index) const {
+    if (!rtti_classdefs_ || !rtti_classdefs_->row_count)
+        return nullptr;
+
+    uint32_t lo = 0, hi = rtti_classdefs_->row_count - 1;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo + 1) / 2;
+        if (getClassdef(mid)->first_method <= method_index)
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    const auto* cd = getClassdef(lo);
+    if (method_index >= cd->first_method && method_index < getClassdefMethodsEnd(lo))
+        return cd;
+    return nullptr;
+}
+
+auto SmxImage::ResolveFieldRef(uint32_t table_id) const -> std::optional<FieldLookup> {
+    if (GetTableIdSelector(table_id) != kTableId_RttiField)
+        return {};
+    uint32_t field_index = GetTableIdIndex(table_id);
+    auto field = getField(field_index);
+    if (!field)
+        return {};
+    auto classdef = FindClassdefForField(field_index);
+    if (!classdef)
+        return {};
+    return FieldLookup{field_index, classdef, field};
 }
 
 bool
@@ -565,7 +603,8 @@ SmxImage::validateRttiMethods() {
             uint32_t supported_flags = kRttiMethodVisibilityMask |
                                        kRttiMethod_Native |
                                        kRttiMethod_Closure |
-                                       kRttiMethod_HasUpvars;
+                                       kRttiMethod_HasUpvars |
+                                       kRttiMethod_Ctor;
             uint32_t unknown_flags = method->flags & ~supported_flags;
             if (unknown_flags)
                 return error("invalid method flags");
@@ -1291,29 +1330,4 @@ FastRtti SmxImage::GetTypeIdParser(uint32_t type_id) {
     if (kind == kTypeId_Inline)
         return FastRtti(type_id);
     return FastRtti(rtti_data_->blob(), rtti_data_->size(), payload);
-}
-
-bool SmxImage::IsVoidMethod(const smx_rtti_method* method) const {
-    return IsVoidSignature(method->signature);
-}
-
-bool SmxImage::IsVoidSignature(uint32_t offset) const {
-    if (!offset)
-        return false;
-
-    FastRtti rtti(rtti_data_->blob(), rtti_data_->size(), offset);
-
-    uint32_t arg_count;
-    if (!rtti.ReadFunctionSignatureArgCount(&arg_count))
-        return false;
-
-    uint8_t b;
-    if (!rtti.GetByte(&b))
-        return false;
-    if (b == cb::kLegacyVariadic)
-        rtti.NextByte();
-
-    if (!rtti.GetByte(&b))
-        return false;
-    return b == cb::kVoid;
 }

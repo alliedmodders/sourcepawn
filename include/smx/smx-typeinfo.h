@@ -108,6 +108,7 @@ static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
 static constexpr uint32_t kRttiMethod_Native = 0x4;
 static constexpr uint32_t kRttiMethod_Closure = 0x8;
 static constexpr uint32_t kRttiMethod_HasUpvars = 0x10;
+static constexpr uint32_t kRttiMethod_Ctor = 0x20;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {
@@ -178,6 +179,10 @@ struct smx_rtti_classdef {
     // First row in the rtti.fields table. Rows up to the next classdef's first
     // row, or the end of the fields table, are owned by this classdef.
     uint32_t first_field;
+
+    // First row in the rtti.methods table. Rows up to the next classdef's first
+    // row, or the end of the methods table, are owned by this classdef.
+    uint32_t first_method;
 };
 
 // The rtti.fields table has the following row structure:

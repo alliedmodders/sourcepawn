@@ -1,0 +1,1 @@
+error 486: constructors cannot have variadic arguments

@@ -1180,6 +1180,14 @@ bool ClassDecl::EnterNames(SemaContext& sc) {
             continue;
         }
         seen.emplace(decl->name());
+
+        if (decl->is_ctor()) {
+            if (ctor_) {
+                report(decl, 485);
+                continue;
+            }
+            ctor_ = decl;
+        }
     }
 
     return errors.ok();
@@ -1216,14 +1224,26 @@ bool ClassDecl::Bind(SemaContext& sc) {
     }
 
     for (const auto& fun : methods_) {
-        auto inner_name = DecorateInnerName(name_, fun->decl_name());
-        if (!inner_name)
+        if (fun->is_ctor()) {
+            if (fun->is_static())
+                report(fun, 175);
+
+            auto& type = fun->mutable_type_info();
+            type.set_type(sc.cc().types()->type_void());
+
+            if (!fun->is_static())
+                fun->set_this_type(type_);
+        } else if (!fun->is_static()) {
+            fun->set_this_type(type_);
+        }
+
+        if (!fun->Bind(sc))
             continue;
 
-        fun->set_name(inner_name);
-        if (!fun->is_static())
-            fun->set_this_type(type_);
-        fun->Bind(sc);
+        if (fun->is_ctor() && fun->signature()->variadic())
+            report(fun, 486);
+
+        fun->set_name(DecorateInnerName(name_, fun->decl_name()));
     }
     return errors.ok();
 }

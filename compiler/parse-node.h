@@ -1937,9 +1937,11 @@ class ClassDecl : public LayoutDecl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ClassDecl; }
 
     QualType type() const { return QualType(type_); }
+    MemberFunctionDecl* ctor() const { return ctor_; }
 
   private:
     Type* type_ = nullptr;
+    MemberFunctionDecl* ctor_ = nullptr;
 };
 
 class PropertyDecl : public Decl {

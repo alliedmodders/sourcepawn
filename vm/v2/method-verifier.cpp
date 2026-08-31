@@ -19,6 +19,7 @@
 #include "binary-reader.h"
 #include "environment.h"
 #include "graph-builder.h"
+#include "v2/method-info.h"
 #include "v2/opcodes.h"
 #include "v2/runtime.h"
 
@@ -490,26 +491,39 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(null_type());
         }
 
+        case OP_NEWOBJ:
         case OP_CALL:
         case OP_CALLN:
         case OP_CALLVA: {
             uint32_t table_id = (uint32_t)readCell();
-            if (GetTableIdSelector(table_id) != kTableId_RttiMethod)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            uint32_t method_index = GetTableIdIndex(table_id);
-            uint32_t arg_count;
-            const smx_rtti_method* method = smx_->GetMethod(method_index);
-            if (method->flags & kRttiMethod_HasUpvars)
+            uint32_t selector = GetTableIdSelector(table_id);
+            if (op == OP_NEWOBJ && selector == kTableId_RttiClassDef) {
+                uint32_t classdef_index = GetTableIdIndex(table_id);
+                auto classdef = smx_->getClassdef(classdef_index);
+                if (!classdef || (classdef->flags & kClassType_Mask) != kClassType_Class)
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+                auto td = rt_->env()->types()->GetClassdef(rt_, classdef, TypeKind::Object);
+                if (!td)
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+                return pushStack(td);
+            }
+
+            if (selector != kTableId_RttiMethod)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
+            uint32_t method_index = GetTableIdIndex(table_id);
+            auto method = rt_->AcquireMethod(method_index);
+            if (!method)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            auto raw_method = smx_->GetMethod(method_index);
+            if (raw_method->flags & kRttiMethod_HasUpvars)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            auto sig = method->signature();
             if (op == OP_CALLVA) {
-                if (!(method->flags & kRttiMethod_Native)) {
+                if (!(raw_method->flags & kRttiMethod_Native)) {
                     fprintf(stderr, "OP_CALLVA failure: callee not native\n");
-                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
-                }
-                const TypeDesc* sig = rt_->LoadMethodSignature(method_index);
-                if (!sig) {
-                    fprintf(stderr, "OP_CALLVA failure: no sig found\n");
                     return reportError(SP_ERROR_INVALID_INSTRUCTION);
                 }
                 if (sig->args().empty()) {
@@ -526,19 +540,22 @@ MethodVerifier::verifyOp(OPCODE op) {
                 }
             }
 
-            if (op == OP_CALLN || op == OP_CALLVA) {
+            uint32_t arg_count;
+            if (op == OP_CALLN || op == OP_CALLVA)
                 arg_count = (uint8_t)read<uint8_t>();
-            } else {
-                // :TODO:  replace with function TypeDesc
-                auto parser = smx_->GetTypeParser(method->signature);
-                if (!parser.ReadFunctionSignatureArgCount(&arg_count))
-                    return reportError(SP_ERROR_INVALID_INSTRUCTION);
-            }
+            else
+                arg_count = (uint8_t)sig->expected_argc();
 
-            if (!verifyCallIndex(method_index))
-                return false;
+            bool is_ctor = (raw_method->flags & kRttiMethod_Ctor) == kRttiMethod_Ctor;
+            if (is_ctor != (op == OP_NEWOBJ))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-            if (!verifyCallArguments(method, arg_count))
+            // For NEWOBJ the VM supplies |this|, so the operand stack only
+            // carries the explicit constructor arguments.
+            if (is_ctor)
+                arg_count--;
+
+            if (!verifyCallArguments(raw_method, sig, arg_count))
                 return false;
 
             // The interpreter pushes the argument count onto the stack before
@@ -548,19 +565,17 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(arg_count + 1))
                 return false;
 
-            // :TODO: replace with function TypeDesc
-            if (!smx_->IsVoidMethod(method)) {
-                auto parser = smx_->GetTypeParser(method->signature);
-                uint32_t unused_argc;
-                parser.ReadFunctionSignatureArgCount(&unused_argc);
-                uint8_t variadic;
-                parser.GetByte(&variadic);
-                if (variadic == cb::kLegacyVariadic)
-                    parser.NextByte();
-                auto td = rt_->LoadType(parser);
-                if (!td || !pushStack(td))
-                    return false;
+            const TypeDesc* return_td;
+            if (is_ctor) {
+                auto classdef = smx_->FindClassdefForMethod(method_index);
+                return_td = rt_->GetClassdefType(classdef);
+            } else {
+                return_td = sig->return_type();
             }
+
+            if (return_td->kind() != TypeKind::Void && !pushStack(return_td))
+                return false;
+
             if (collect_func_refs_)
                 collect_func_refs_(method_index);
             return true;
@@ -762,7 +777,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetStringLitType(offset));
         }
         case OP_LOAD_FLD: {
-            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            auto fl = smx_->ResolveFieldRef(read<uint32_t>());
             if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* obj;
@@ -778,7 +793,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(td);
         }
         case OP_ADDR_FLD: {
-            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            auto fl = smx_->ResolveFieldRef(read<uint32_t>());
             if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* obj;
@@ -794,7 +809,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetReferenceType(td));
         }
         case OP_STOR_FLD: {
-            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            auto fl = smx_->ResolveFieldRef(read<uint32_t>());
             if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* val_type;
@@ -813,7 +828,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
         case OP_LOAD_FLD_OFFSET: {
-            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            auto fl = smx_->ResolveFieldRef(read<uint32_t>());
             if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(cell_type());
@@ -877,20 +892,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (base->array_elt()->element_size() != td->array_elt()->element_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-            return pushStack(td);
-        }
-
-        case OP_NEWOBJ: {
-            uint32_t table_id = readCell();
-            if (GetTableIdSelector(table_id) != kTableId_RttiClassDef)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            uint32_t classdef_index = GetTableIdIndex(table_id);
-            auto classdef = smx_->getClassdef(classdef_index);
-            if (!classdef || (classdef->flags & kClassType_Mask) != kClassType_Class)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto td = rt_->env()->types()->GetClassdef(rt_, classdef, TypeKind::Object);
-            if (!td)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(td);
         }
 
@@ -1255,50 +1256,35 @@ MethodVerifier::verifyParamCount(cell_t nparams) {
     return true;
 }
 
-bool MethodVerifier::verifyCallIndex(uint32_t method_index) {
-    if (!smx_->GetMethod(method_index)) {
-        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, const TypeDesc* sig,
+                                         uint32_t arg_count)
+{
+    bool is_ctor = (method->flags & kRttiMethod_Ctor) == kRttiMethod_Ctor;
+    uint32_t expected_argc = sig->expected_argc();
+    uint32_t first_arg = 0;
+    if (is_ctor) {
+        expected_argc--;
+        first_arg = 1;
     }
-    return true;
-}
 
-bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t arg_count) {
-    // :TODO: replace with function TypeDesc
-    auto parser = smx_->GetTypeParser(method->signature);
-    uint32_t expected_argc;
-    if (!parser.ReadFunctionSignatureArgCount(&expected_argc))
-        return reportError(SP_ERROR_INVALID_INSTRUCTION);
-    uint8_t variadic;
-    if (!parser.GetByte(&variadic))
-        return reportError(SP_ERROR_INVALID_INSTRUCTION);
     if (!(method->flags & kRttiMethod_Native)) {
-        if (variadic == cb::kLegacyVariadic) {
+        if (sig->is_variadic()) {
             if (arg_count < expected_argc)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
         } else if (arg_count != expected_argc) {
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }
     }
-    if (variadic == cb::kLegacyVariadic)
-        parser.NextByte();
-    uint8_t type_byte;
-    if (!parser.GetByte(&type_byte))
-        return reportError(SP_ERROR_INVALID_INSTRUCTION);
-    if (type_byte == cb::kVoid)
-        parser.NextByte();
-    else if (!rt_->LoadType(parser))
-        return false;
 
     VerifyData* v = block_->data<VerifyData>();
     if (v->stack.size() < arg_count)
         return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
-    for (uint32_t i = 0; i < expected_argc; i++) {
-        auto expected_td = rt_->LoadArgType(parser);
-        if (!expected_td)
-            return false;
-        if (i < arg_count) {
-            const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - i];
+    for (uint32_t i = first_arg; i < sig->expected_argc(); i++) {
+        auto expected_td = sig->args()[i];
+        uint32_t stack_index = i - first_arg;
+        if (stack_index < arg_count) {
+            const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - stack_index];
             if (expected_td->IsHeapItem()) {
                 if (!ValidateStore(expected_td, arg_td, StoreContext::CallSite))
                     return false;

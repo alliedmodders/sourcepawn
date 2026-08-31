@@ -111,8 +111,16 @@ class SmxImage final :
         return getRttiRow<smx_rtti_field>(rtti_fields_, index);
     }
     uint32_t getClassdefFieldsEnd(uint32_t i) const;
+    uint32_t getClassdefMethodsEnd(uint32_t i) const;
     const smx_rtti_classdef* FindClassdefForField(uint32_t field_index) const;
-    bool IsVoidMethod(const smx_rtti_method* method) const;
+    const smx_rtti_classdef* FindClassdefForMethod(uint32_t method_index) const;
+
+    struct FieldLookup {
+        uint32_t field_index;
+        const smx_rtti_classdef* classdef;
+        const smx_rtti_field* field;
+    };
+    std::optional<FieldLookup> ResolveFieldRef(uint32_t table_id) const;
 
     FastRtti GetTypeParser(uint32_t offset);
     FastRtti GetTypeIdParser(uint32_t type_id);

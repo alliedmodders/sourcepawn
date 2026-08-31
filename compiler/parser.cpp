@@ -549,13 +549,35 @@ Decl* Parser::parse_class() {
         if (!is_private)
             lexer_->match(tPUBLIC);
 
+        // Predictively read the first symbol to detect constructor syntax.
+        Atom* symbol = nullptr;
+        full_token_t symbol_tok;
+        if (lexer_->matchsymbol(&symbol))
+            symbol_tok = *lexer_->current_token();
+
         declinfo_t decl = {};
-        if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
+        if (symbol && lexer_->match('(')) {
+            // Constructor: no return type, symbol is the method name.
+            lexer_->lexpush();
+            decl.name = symbol;
+            decl.type.is_new = true;
+        } else if (symbol) {
+            if (!parse_new_decl(&decl, &symbol_tok, DECLFLAG_FIELD))
+                continue;
+        } else if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD)) {
             continue;
+        }
 
         if (!decl.type.has_postdims && lexer_->peek('(')) {
             // It's a method.
-            auto fun = new MemberFunctionDecl(pos, stmt, decl);
+            bool is_ctor = !decl.type.bindable() && decl.name == stmt->name();
+
+            if (!decl.type.bindable() && !is_ctor) {
+                report(pos, 110);
+                continue;
+            }
+
+            auto fun = new MemberFunctionDecl(pos, stmt, decl, is_ctor, false);
             fun->set_is_stock();
             if (is_static)
                 fun->set_is_static();

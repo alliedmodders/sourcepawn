@@ -1896,6 +1896,8 @@ auto Semantics::BindNewTarget(Expr* target) -> std::optional<CallCtor> {
 
             if (auto class_decl = decl->as<ClassDecl>()) {
                 auto class_type = class_decl->type();
+                if (class_decl->ctor())
+                    return CallCtor{class_decl->ctor(), class_type.unqualified()};
                 return CallCtor{nullptr, class_type.unqualified()};
             }
 
@@ -2146,6 +2148,8 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         }
     }
 
+    // If we have no function and no target, it means we're getting a
+    // constructor call with no user constructor function.
     if (fun) {
         assert(fun->canonical() == fun);
         call->set_callee(fun);
@@ -2161,14 +2165,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
         if (fun->deprecate())
             report(call, 234) << fun->name() << fun->deprecate();
-    } else if (ctor_type) {
-        call->set_ctor_type(ctor_type);
-
-        if (!call->args().empty()) {
-            report(call->pos(), 92);
-            return false;
-        }
-    } else {
+    } else if (target) {
         call->set_target(target);
         call->set_callee(target->val().type()->to<FunctionType>());
     }
@@ -2176,19 +2173,30 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     auto& val = call->val();
 
     if (ctor_type) {
-        val.set_expr(ctor_type);
-        return true;
+        call->set_ctor_type(ctor_type);
+
+        if (!fun) {
+            if (!call->args().empty()) {
+                report(call->pos(), 92);
+                return false;
+            }
+            val.set_expr(ctor_type);
+            return true;
+        }
     }
 
     // Note: must read function_type() after CheckFunctionDecl, since
     // recursive analysis can update the return type.
     FunctionType* ft = call->callee_type();
-    val.set_expr(ft->return_type());
 
     ParamState ps;
 
-    unsigned int nargs = 0;
-    unsigned int argidx = 0;
+    // The |this| argument is even more implicit for NEWOBJ, since it's supplied
+    // by the VM. Thus, skip analysis of argument 0 if we have a ctor_type.
+    unsigned int nargs = ctor_type ? 1 : 0;
+    unsigned int first_argidx = ctor_type ? 1 : 0;
+    unsigned int argidx = first_argidx;
+
     if (call->implicit_this()) {
         if (ft->nargs() == 0) {
             report(call->implicit_this(), 92);
@@ -2262,7 +2270,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     // Check for missing or invalid extra arguments, and fill in default
     // arguments.
-    for (unsigned int argidx = 0; argidx < ft->nargs(); argidx++) {
+    for (unsigned int argidx = first_argidx; argidx < ft->nargs(); argidx++) {
         if (argidx >= ps.argv.size() || !ps.argv[argidx]) {
             auto result = CheckArgument(call, ft, ft->arg_type(argidx), nullptr, &ps, argidx);
             if (!result)
@@ -2278,6 +2286,11 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     } else {
         new (&call->args()) PoolArray<Expr*>(ps.argv);
     }
+
+    if (ctor_type)
+        val.set_expr(ctor_type);
+    else
+        val.set_expr(ft->return_type());
     return true;
 }
 

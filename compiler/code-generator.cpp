@@ -216,6 +216,8 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::ClassDecl: {
             auto cls = stmt->to<ClassDecl>();
+            rtti_->add_class(*cls->type());
+
             for (const auto& prop : cls->properties()) {
                 if (prop->getter())
                     EmitFunctionDecl(prop->getter());
@@ -1568,8 +1570,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         return;
     }
 
-    if (call->token() == tNEW && call->ctor_type()) {
-        uint32_t classdef_index = rtti_->classdef_index(call->ctor_type());
+    if (call->token() == tNEW && call->ctor_type() && !call->fun()) {
+        uint32_t classdef_index = rtti_->add_class(call->ctor_type());
         uint32_t table_id = MakeTableId(kTableId_RttiClassDef, classdef_index);
         __ emit(OP_NEWOBJ, table_id);
         if (discard)
@@ -1588,8 +1590,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
     auto ft = call->callee_type();
 
+    // The VM supplies |this| for a constructor, so argument 0 is a
+    // placeholder that is never on the operand stack.
+    size_t first_arg = call->ctor_type() ? 1 : 0;
+
     const auto& argv = call->args();
-    for (size_t i = nargs - 1; i < nargs; i--) {
+    // Use a post-decrement in the condition to work around overflow. The body
+    // gets the updated index.
+    for (size_t i = nargs; i-- > first_arg;) {
         const auto& expr = argv[i];
 
         QualType arg;
@@ -1691,16 +1699,22 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         }
     }
 
-    EmitCall(call->callee(), nargs, is_spread);
-
-    if (discard) {
-        if (!return_type->isVoid() && !ft->needs_hidden_arg())
+    if (call->ctor_type()) {
+        __ emit(OP_NEWOBJ, &fun->cg()->method_id);
+        if (discard)
             __ emit(OP_POP);
-    } else if (hidden_slot) {
-        if (return_type->isCompositeValue()) {
-            __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
-        } else {
-            __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
+    } else {
+        EmitCall(call->callee(), nargs, is_spread);
+
+        if (discard) {
+            if (!return_type->isVoid() && !ft->needs_hidden_arg())
+                __ emit(OP_POP);
+        } else if (hidden_slot) {
+            if (return_type->isCompositeValue()) {
+                __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
+            } else {
+                __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
+            }
         }
     }
 }

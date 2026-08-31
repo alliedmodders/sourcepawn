@@ -78,8 +78,8 @@ class MethodVerifier final
     bool verifyJumpOffset(cell_t offset);
     bool verifyParamCount(cell_t nparams);
     bool verifyDimensionCount(cell_t ndims);
-    bool verifyCallIndex(uint32_t method_index);
-    bool verifyCallArguments(const smx_rtti_method* method, uint32_t arg_count);
+    bool verifyCallArguments(const smx_rtti_method* method, const TypeDesc* sig,
+                             uint32_t arg_count);
     bool reportError(int err);
 
     cell_t readCell() {

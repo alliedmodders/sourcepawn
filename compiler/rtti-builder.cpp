@@ -173,7 +173,10 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_
         report(fun, 484);
 
     smx_rtti_method& method = methods_->add();
-    method.name = names_->add(fun->name());
+    if (auto mf = fun->as<MemberFunctionDecl>(); mf && mf->is_ctor())
+        method.name = names_->add(*cc_.atoms(), ".constructor");
+    else
+        method.name = names_->add(fun->name());
     method.pcode_start = pcode_start;
     method.pcode_end = 0;
     method.signature = encode_signature(fun->canonical());
@@ -222,10 +225,14 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
     }
 
     method.flags = 0;
+    if (auto mf = fun->as<MemberFunctionDecl>()) {
+        if (mf->parent()->as<ClassDecl>() && mf->is_ctor())
+            method.flags |= kRttiMethod_Ctor;
+    }
     if (fun->is_public())
-        method.flags = kRttiMethodVisibility_Public;
+        method.flags |= kRttiMethodVisibility_Public;
     else if (fun->is_native())
-        method.flags = kRttiMethod_Native;
+        method.flags |= kRttiMethod_Native;
     if (fun->signature()->conv() == FunctionType::Closure)
         method.flags |= kRttiMethod_Closure;
     if (fun->NumUpvars())
@@ -286,6 +293,8 @@ RttiBuilder::add_enumstruct(Type* type)
 }
 
 uint32_t RttiBuilder::add_class(Type* type) {
+    assert(type->isClass());
+
     TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
     if (p.found())
         return p->value;
@@ -302,6 +311,7 @@ uint32_t RttiBuilder::add_class(Type* type) {
     classdef.flags = kClassType_Class;
     classdef.name = names_->add(*cc_.atoms(), type->declName());
     classdef.first_field = fields_->count();
+    classdef.first_method = methods_->count();
     classdefs_->add(classdef);
 
     // Pre-allocate storage in case of nested types.
@@ -330,11 +340,6 @@ uint32_t RttiBuilder::add_class(Type* type) {
     }
 
     return cls_index;
-}
-
-uint32_t RttiBuilder::classdef_index(Type* type) {
-    assert(type->isClass());
-    return add_class(type);
 }
 
 uint32_t

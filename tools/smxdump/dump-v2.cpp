@@ -244,11 +244,23 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
 
         case OP_NEWOBJ: {
             uint32_t table_id = reader.read<uint32_t>();
-            uint32_t classdef_index = GetTableIdIndex(table_id);
-            if (auto cls = smx_->getClassdef(classdef_index))
-                fprintf(stdout, " %s", smx_->names() + cls->name);
-            else
-                fprintf(stdout, " unknown_class_%u", classdef_index);
+            uint32_t selector = GetTableIdSelector(table_id);
+
+            if (selector == kTableId_RttiClassDef) {
+                uint32_t classdef_index = GetTableIdIndex(table_id);
+                if (auto cls = smx_->getClassdef(classdef_index))
+                    fprintf(stdout, " %s", smx_->names() + cls->name);
+                else
+                    fprintf(stdout, " unknown_class_%u", classdef_index);
+            } else if (selector == kTableId_RttiMethod) {
+                uint32_t method_index = GetTableIdIndex(table_id);
+                if (auto method = smx_->GetMethod(method_index))
+                    fprintf(stdout, " %s", smx_->names() + method->name);
+                else
+                    fprintf(stdout, " unknown_method_%u", method_index);
+            } else {
+                fprintf(stdout, " table_id_%u", table_id);
+            }
             break;
         }
 

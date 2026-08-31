@@ -136,22 +136,6 @@ class Runtime final : public BaseRuntime,
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 
-    struct FieldLookup {
-        uint32_t field_index;
-        const smx_rtti_classdef* classdef;
-        const smx_rtti_field* field;
-    };
-    std::optional<FieldLookup> ResolveFieldRef(uint32_t table_id) {
-        if (GetTableIdSelector(table_id) != kTableId_RttiField)
-            return {};
-        uint32_t field_index = GetTableIdIndex(table_id);
-        auto* field = image_->getField(field_index);
-        auto* classdef = image_->FindClassdefForField(field_index);
-        if (!classdef)
-            return {};
-        return FieldLookup{field_index, classdef, field};
-    }
-
     Handle<SpFunction> CastFunctionId(funcid_t func_id, const TypeDesc* td);
     Handle<SpArray> NewArray(const TypeDesc* td, uint32_t size);
     Handle<SpObject> NewObject(const TypeDesc* td);

@@ -76,14 +76,13 @@ class RttiBuilder
         return to_typeid(QualType(type));
     }
 
-    uint32_t classdef_index(Type* type);
+    uint32_t add_class(Type* type);
 
   private:
     uint32_t add_enum(Type* type);
     uint32_t add_typeset(Type* type, funcenum_t* fe);
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
-    uint32_t add_class(Type* type);
     uint32_t encode_signature(FunctionDecl* decl);
     void encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);

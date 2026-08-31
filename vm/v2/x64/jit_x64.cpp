@@ -42,8 +42,12 @@ Compiler::~Compiler() {
 }
 
 bool CompilerBase::IsSupported() {
+#if 0
     const auto& features = FeaturesX64::Get();
     return features.sse4_1;
+#else
+    return false;
+#endif
 }
 
 bool CompilerBase::SupportsPlugin(Runtime* cx) {

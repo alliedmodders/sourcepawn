@@ -131,7 +131,7 @@ static const char* errmsg[] = {
     /*107*/ "cannot call methods on a function\n",
     /*108*/ "resolution operator (::) can only resolve field offsets of enum structs\n",
     /*109*/ "%s name must start with an uppercase letter\n",
-    /*110*/ "unused\n",
+    /*110*/ "method is missing a return type\n",
     /*111*/ "cannot index into enum struct \"%s\"\n",
     /*112*/ "unused\n",
     /*113*/ "constructor for \"%s\" already exists\n",
@@ -364,4 +364,6 @@ static const char* errmsg_ex[] = {
     /*482*/ "shared variable \"%s\" is not captured by any closure\n",
     /*483*/ "function arguments cannot be marked as shared\n",
     /*484*/ "too many RTTI table entries used\n",
+    /*485*/ "class may only have one constructor\n",
+    /*486*/ "constructors cannot have variadic arguments\n",
 };
