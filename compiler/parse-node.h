@@ -40,6 +40,7 @@ namespace cc {
 
 class Expr;
 class FunctionDecl;
+class LayoutMemberDecl;
 class LayoutFieldDecl;
 class MemberFunctionDecl;
 class MethodmapDecl;
@@ -1764,9 +1765,29 @@ class LayoutDecl : public Decl
     const PoolArray<LayoutFieldDecl*>& fields() const { return fields_; }
 
   protected:
+    bool BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type);
+    bool BindSetter(SemaContext& sc, PropertyDecl* prop, Type* type);
+
     PoolArray<PropertyDecl*> properties_;
     PoolArray<MemberFunctionDecl*> methods_;
     PoolArray<LayoutFieldDecl*> fields_;
+};
+
+class LayoutMemberDecl : public Decl
+{
+  public:
+    LayoutMemberDecl(StmtKind kind, const token_pos_t& pos, Atom* name)
+      : Decl(kind, pos, name),
+        is_private_(false)
+    {}
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::LayoutFieldDecl; }
+
+    bool is_private() const { return is_private_; }
+    void set_is_private() { is_private_ = true; }
+
+  private:
+    bool is_private_ : 1;
 };
 
 class MemberFunctionDecl : public FunctionDecl
@@ -1777,7 +1798,8 @@ class MemberFunctionDecl : public FunctionDecl
       : FunctionDecl(StmtKind::MemberFunctionDecl, pos, decl),
         parent_(parent),
         is_ctor_(is_ctor),
-        is_dtor_(is_dtor)
+        is_dtor_(is_dtor),
+        is_private_(false)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::MemberFunctionDecl; }
@@ -1787,17 +1809,21 @@ class MemberFunctionDecl : public FunctionDecl
     bool is_ctor() const { return is_ctor_; }
     bool is_dtor() const { return is_dtor_; }
 
+    bool is_private() const { return is_private_; }
+    void set_is_private() { is_private_ = true; }
+
   private:
     LayoutDecl* parent_;
     bool is_ctor_ : 1;
     bool is_dtor_ : 1;
+    bool is_private_ : 1;
 };
 
-class LayoutFieldDecl : public Decl
+class LayoutFieldDecl : public LayoutMemberDecl
 {
   public:
     LayoutFieldDecl(const token_pos_t& pos, const declinfo_t& decl, Decl* parent = nullptr)
-      : Decl(StmtKind::LayoutFieldDecl, pos, decl.name),
+      : LayoutMemberDecl(StmtKind::LayoutFieldDecl, pos, decl.name),
         type_(decl.type),
         parent_(parent)
     {}
@@ -1914,10 +1940,6 @@ class MethodmapDecl : public LayoutDecl
     MemberFunctionDecl* ctor() const { return ctor_; }
     MemberFunctionDecl* dtor() const { return dtor_; }
     Atom* extends() const { return extends_; }
-
-  private:
-    bool BindGetter(SemaContext& sc, PropertyDecl* prop);
-    bool BindSetter(SemaContext& sc, PropertyDecl* prop);
 
   private:
     bool nullable_ : 1;

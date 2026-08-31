@@ -404,8 +404,7 @@ class ArrayValidator final
         decl_(decl),
         pos_(decl->pos()),
         init_(decl->init_rhs()),
-        type_(decl->type()),
-        es_(nullptr)
+        type_(decl->type())
     {
     }
 
@@ -415,8 +414,7 @@ class ArrayValidator final
         decl_(nullptr),
         pos_(init->pos()),
         init_(init),
-        type_(type.type),
-        es_(nullptr)
+        type_(type.type)
     {}
 
     bool Validate();
@@ -437,7 +435,6 @@ class ArrayValidator final
     QualType type_;
     ArrayType* at_;
     unsigned total_cells_ = 0;
-    EnumStructDecl* es_;
 };
 
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init) {
@@ -448,7 +445,6 @@ bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* ini
 }
 
 bool ArrayValidator::Validate() {
-    es_ = type_->asEnumStruct();
     at_ = type_->as<ArrayType>();
 
     if (init_) {
@@ -505,16 +501,6 @@ bool ArrayValidator::ValidateInitializer() {
     if (decl_ && decl_->vclass() == sARGUMENT) {
         if (auto expr = init_->as<SymbolExpr>())
             return CheckArgument(expr);
-    }
-
-    // Handle enum structs here (gross, yes).
-    if (es_) {
-        if (auto array = init_->as<ArrayExpr>()) {
-            ValidateEnumStruct(es_, array);
-            return true;
-        }
-        report(448);
-        return false;
     }
 
     // Check for dynamic initializers.

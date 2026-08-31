@@ -1,0 +1,1 @@
+(4) : error 126: setter for X already exists

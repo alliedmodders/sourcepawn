@@ -358,4 +358,6 @@ static const char* errmsg_ex[] = {
     /*476*/ "variadic arguments cannot precede other arguments\n",
     /*477*/ "type '%s' cannot be used withview_as\n",
     /*478*/ "dynamic array declarations require an initializer\n",
+    /*479*/ "natives are not allowed in class declarations\n",
+    /*480*/ "cannot access private member '%s' of class '%s'\n",
 };

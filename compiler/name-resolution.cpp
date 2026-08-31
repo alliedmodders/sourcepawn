@@ -1111,6 +1111,14 @@ bool ClassDecl::EnterNames(SemaContext& sc) {
             type_->forbidInNativeCall();
     }
 
+    for (const auto& prop : properties_) {
+        if (seen.count(prop->name())) {
+            report(prop->pos(), 103) << prop->name() << "class";
+            continue;
+        }
+        seen.emplace(prop->name());
+    }
+
     for (const auto& decl : methods_) {
         if (seen.count(decl->name())) {
             report(decl->pos(), 103) << decl->name() << "class";
@@ -1122,15 +1130,44 @@ bool ClassDecl::EnterNames(SemaContext& sc) {
     return errors.ok();
 }
 
+static Atom* DecoratePropertyAccessorName(Atom* class_name, Atom* prop_name, const char* suffix) {
+    auto full = ke::StringPrintf("%s.%s%s", class_name->chars(), prop_name->chars(), suffix);
+    return CompileContext::get().atom(full);
+}
+
 bool ClassDecl::Bind(SemaContext& sc) {
     AutoCountErrors errors;
+    for (const auto& prop : properties_) {
+        if (!sc.BindType(prop->pos(), &prop->mutable_type_info()))
+            continue;
+
+        if (prop->type_info().dim_exprs.size() > 0) {
+            report(prop, 82);
+            continue;
+        }
+        if (prop->type_info().type->isEnumStruct()) {
+            report(prop, 117);
+            continue;
+        }
+
+        if (prop->getter() && BindGetter(sc, prop, type_)) {
+            auto name = DecoratePropertyAccessorName(name_, prop->name(), ".get");
+            prop->getter()->set_name(name);
+        }
+        if (prop->setter() && BindSetter(sc, prop, type_)) {
+            auto name = DecoratePropertyAccessorName(name_, prop->name(), ".set");
+            prop->setter()->set_name(name);
+        }
+    }
+
     for (const auto& fun : methods_) {
         auto inner_name = DecorateInnerName(name_, fun->decl_name());
         if (!inner_name)
             continue;
 
         fun->set_name(inner_name);
-        fun->set_this_type(type_);
+        if (!fun->is_static())
+            fun->set_this_type(type_);
         fun->Bind(sc);
     }
     return errors.ok();
@@ -1255,13 +1292,13 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
             continue;
         }
 
-        if (prop->getter() && BindGetter(sc, prop)) {
-            auto name = ke::StringPrintf("%s.%s.get", name_->chars(), prop->name()->chars());
-            prop->getter()->set_name(sc.cc().atom(name));
+        if (prop->getter() && BindGetter(sc, prop, type_)) {
+            auto name = DecoratePropertyAccessorName(name_, prop->name(), ".get");
+            prop->getter()->set_name(name);
         }
-        if (prop->setter() && BindSetter(sc, prop)) {
-            auto name = ke::StringPrintf("%s.%s.set", name_->chars(), prop->name()->chars());
-            prop->setter()->set_name(sc.cc().atom(name));
+        if (prop->setter() && BindSetter(sc, prop, type_)) {
+            auto name = DecoratePropertyAccessorName(name_, prop->name(), ".set");
+            prop->setter()->set_name(name);
         }
     }
 
@@ -1304,7 +1341,7 @@ bool MethodmapDecl::Bind(SemaContext& sc) {
     return errors.ok();
 }
 
-bool MethodmapDecl::BindGetter(SemaContext& sc, PropertyDecl* prop) {
+bool LayoutDecl::BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->getter();
 
     // There should be no extra arguments.
@@ -1313,14 +1350,14 @@ bool MethodmapDecl::BindGetter(SemaContext& sc, PropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_type(type_);
+    fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;
     return true;
 }
 
-bool MethodmapDecl::BindSetter(SemaContext& sc, PropertyDecl* prop) {
+bool LayoutDecl::BindSetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->setter();
 
     // Must have one extra argument taking the return type.
@@ -1329,7 +1366,7 @@ bool MethodmapDecl::BindSetter(SemaContext& sc, PropertyDecl* prop) {
         return false;
     }
 
-    fun->set_this_type(type_);
+    fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;

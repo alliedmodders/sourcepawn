@@ -1499,7 +1499,6 @@ IsUnimplementedKeyword(int token)
         case tINTN:
         case tNAMESPACE:
         case tPACKAGE:
-        case tPRIVATE:
         case tPROTECTED:
         case tREADONLY:
         case tSEALED:

@@ -60,11 +60,11 @@ class Parser
     Decl* parse_enumstruct();
     Decl* parse_class();
     Decl* parse_methodmap();
-    MemberFunctionDecl* parse_methodmap_method(MethodmapDecl* map);
-    PropertyDecl* parse_methodmap_property(MethodmapDecl* map);
-    bool parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name, const typeinfo_t& type,
-                                           MemberFunctionDecl** out_getter,
-                                           MemberFunctionDecl** out_setter);
+    MemberFunctionDecl* parse_layout_method(LayoutDecl* parent);
+    PropertyDecl* parse_layout_property(LayoutDecl* parent);
+    bool parse_property_accessor(LayoutDecl* parent, Atom* name, const typeinfo_t& type,
+                                 MemberFunctionDecl** out_getter,
+                                 MemberFunctionDecl** out_setter);
 
     struct VarParams {
         int vclass;
@@ -149,6 +149,7 @@ class Parser
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
     Atom* class_atom_ = nullptr;
+    Atom* property_atom_ = nullptr;
 };
 
 } // namespace cc

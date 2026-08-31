@@ -279,11 +279,13 @@ bool Semantics::CheckTypedVarDecl(VarDeclBase* decl) {
     if (!decl->as<ArgDecl>() && is_const && !decl->init() && !decl->is_public())
         report(decl->pos(), 251);
 
-    // CheckArrayDecl works on enum structs too.
-    if (type->isArray() || type->isEnumStruct()) {
+    if (type->isArray()) {
         if (!CheckArrayDeclaration(decl))
             return false;
-        if (type->isEnumStruct() && IsThisAtom(decl->name()))
+    } else if (type->isEnumStruct()) {
+        if (!CheckEnumStructVarDecl(decl))
+            return false;
+        if (IsThisAtom(decl->name()))
             decl->mutable_type_info()->is_const = false;
     } else if (type->isClass()) {
         if (!decl->init()) {
@@ -361,6 +363,75 @@ bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
     if (!CheckBinaryExprImpl(state))
         return false;
 
+    return true;
+}
+
+bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
+    Expr* init = decl->init_rhs();
+    if (!init)
+        return true;
+
+    // Handle array literal initializer — validate against enum struct fields.
+    if (auto array = init->as<ArrayExpr>()) {
+        AutoErrorPos aep(init->pos());
+        return ValidateEnumStructInitializer(decl->type()->asEnumStruct(), array);
+    }
+
+    // Non-literal initialization (e.g. from a function result).
+    if (!CheckRvalue(init))
+        return false;
+    if (init->lvalue())
+        decl->init()->set_right(new RvalueExpr(init));
+
+    auto ck = FindConversion(init->val().type(), *decl->type(), CvtContext::Assignment);
+    if (ck == ConversionKind::NeedsCast) {
+        report(init->pos(), 462) << init->val().type() << decl->type();
+        return false;
+    }
+    if (!HasImplicitConversion(ck)) {
+        ReportConversionDiagnostic(init->pos(), decl->type(), init->val().type());
+        return false;
+    }
+    return true;
+}
+
+bool Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array) {
+    const auto& field_list = es->fields();
+    auto field_iter = field_list.begin();
+
+    for (const auto& expr : array->exprs()) {
+        if (field_iter == field_list.end()) {
+            report(expr->pos(), 91);
+            return false;
+        }
+
+        auto field = *field_iter;
+        field_iter++;
+
+        const auto& type = field->type_info();
+        if (type.type->isArray()) {
+            if (!CheckArrayInitialization(this, type, expr))
+                continue;
+        } else {
+            AutoErrorPos pos(expr->pos());
+
+            if (!CheckExpr(expr))
+                continue;
+
+            const auto& v = expr->val();
+            if (v.ident != iCONSTEXPR) {
+                report(8);
+                continue;
+            }
+
+            CheckCoercion(expr, type.type, v.type(), CvtContext::Assignment);
+        }
+    }
+
+    if (array->ellipses()) {
+        report(array->pos(), 80);
+        return false;
+    }
     return true;
 }
 
@@ -833,10 +904,10 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
 
         if (!CheckAssignmentLHS(state))
             return false;
-        if (token != '=' && !CheckRvalue(state.left->pos(), state.left->val()))
+        if (token != '=' && !CheckRvalueAccess(state.left))
             return false;
     } else if (state.left->lvalue()) {
-        if (!CheckRvalue(state.left->pos(), state.left->val()))
+        if (!CheckRvalueAccess(state.left))
             return false;
         state.left = state.expr->set_left(new RvalueExpr(state.left));
     }
@@ -934,6 +1005,36 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
     return true;
 }
 
+static inline bool IsContextInsideClass(SemaContext& sc, LayoutDecl* cls) {
+    if (auto mf = sc.func()->as<MemberFunctionDecl>())
+        return mf->parent() == cls;
+    return false;
+}
+
+static inline bool CheckPrivateMemberAccess(ParseNode* node, Decl* member, LayoutDecl* cls, SemaContext& sc) {
+    bool is_private = false;
+    if (auto lmd = member->as<LayoutMemberDecl>())
+        is_private = lmd->is_private();
+    else if (auto fun = member->as<MemberFunctionDecl>())
+        is_private = fun->is_private();
+
+    if (is_private && !IsContextInsideClass(sc, cls)) {
+        Atom* name = member->name();
+        if (auto fun = member->as<MemberFunctionDecl>())
+            name = fun->decl_name();
+        report(node, 480) << name << cls->name();
+    }
+    return !is_private || IsContextInsideClass(sc, cls);
+}
+
+static bool CheckAccessorAccess(SemaContext& sc, Expr* node, PropertyDecl* prop,
+                                MemberFunctionDecl* accessor)
+{
+    if (accessor->is_private() && !IsContextInsideClass(sc, prop->parent()))
+        report(node, 480) << prop->name() << prop->parent()->name();
+    return !accessor->is_private() || IsContextInsideClass(sc, prop->parent());
+}
+
 bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
     if (!state.left->lvalue()) {
         report(state.expr, 22);
@@ -946,6 +1047,15 @@ bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
     if (!state.expr->initializer() && left_val.sym() && left_val.sym()->is_const()) {
         report(state.expr, 22);
         return false;
+    }
+
+    if (auto accessor = left_val.accessor()) {
+        if (!accessor->setter()) {
+            report(state.expr, 152) << accessor->name();
+            return false;
+        }
+        if (!CheckAccessorAccess(*sc_, state.expr, accessor, accessor->setter()))
+            return false;
     }
     return true;
 }
@@ -1423,6 +1533,15 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
         report(array->pos(), 142);
         return false;
     }
+
+    // Handle enum struct target — validate {x, y, ...} against struct fields.
+    if (auto es = target->asEnumStruct()) {
+        if (!ValidateEnumStructInitializer(es, array))
+            return false;
+        array->val().set_expr(target);
+        return true;
+    }
+
     auto array_target = target->as<ArrayType>();
     if (!array_target) {
         report(array->pos(), 142);
@@ -1453,7 +1572,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
     auto& val = array->val();
     val.ident = iEXPRESSION;
     val.set_type(types_->defineArray(formal_elt, (int)array->exprs().size()));
-    return CheckRvalue(array->pos(), array->val());
+    return CheckRvalueAccess(array);
 }
 
 bool Semantics::CheckIndexExpr(IndexExpr* expr) {
@@ -1828,16 +1947,31 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
 bool Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
                                            bool from_call)
 {
-    expr->set_resolved(FindClassField(type, expr->name()));
-
-    auto field_decl = expr->resolved();
-    if (!field_decl) {
+    Decl* member = FindClassField(type, expr->name());
+    if (!member) {
         report(expr, 105) << type << expr->name();
         return false;
     }
 
+    if (!CheckPrivateMemberAccess(expr, member, decl, *sc_))
+        return false;
+
+    // Only set resolved() for properties and methods. Regular fields carry
+    // their info in val() via set_field(), and EmitFieldAccessExpr asserts
+    // if resolved() is a LayoutFieldDecl.
+    if (!member->as<LayoutFieldDecl>())
+        expr->set_resolved(member);
+
     auto& val = expr->val();
-    if (auto fun = field_decl->as<MemberFunctionDecl>()) {
+    if (auto prop = member->as<PropertyDecl>()) {
+        if (expr->base()->lvalue())
+            expr->set_base(new RvalueExpr(expr->base()));
+        val.set_type(prop->property_type());
+        val.set_accessor(prop);
+        return true;
+    }
+
+    if (auto fun = member->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
             return false;
@@ -1848,7 +1982,7 @@ bool Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, Cla
         return true;
     }
 
-    auto field = field_decl->as<LayoutFieldDecl>();
+    auto field = member->as<LayoutFieldDecl>();
     assert(field);
 
     val.set_field(field, field->type());
@@ -2205,7 +2339,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
     AutoErrorPos aep(param->pos());
 
     if (param->val().ident == iACCESSOR) {
-        if (!CheckRvalue(param->pos(), param->val()))
+        if (!CheckRvalueAccess(param))
             return nullptr;
         param = new RvalueExpr(param);
     }
@@ -3057,6 +3191,12 @@ bool Semantics::CheckEnumStructDecl(EnumStructDecl* decl) {
 
 bool Semantics::CheckClassDecl(ClassDecl* decl) {
     bool ok = true;
+    for (const auto& prop : decl->properties()) {
+        if (prop->getter())
+            ok &= CheckFunctionDecl(prop->getter());
+        if (prop->setter())
+            ok &= CheckFunctionDecl(prop->setter());
+    }
     for (const auto& fun : decl->methods())
         ok &= CheckStmt(fun);
     return ok;
@@ -3196,15 +3336,17 @@ bool Semantics::CheckRvalue(Expr* expr, Type* target) {
 
     if (!CheckExpr(expr))
         return false;
-    return CheckRvalue(expr->pos(), expr->val());
+    return CheckRvalueAccess(expr);
 }
 
-bool Semantics::CheckRvalue(const token_pos_t& pos, const value& val) {
-    if (auto accessor = val.accessor()) {
+bool Semantics::CheckRvalueAccess(Expr* expr) {
+    if (auto accessor = expr->val().accessor()) {
         if (!accessor->getter()) {
-            report(pos, 149) << accessor->name();
+            report(expr, 149) << accessor->name();
             return false;
         }
+        if (!CheckAccessorAccess(*sc_, expr, accessor, accessor->getter()))
+            return false;
     }
     return true;
 }

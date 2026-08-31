@@ -48,6 +48,7 @@ Parser::Parser(CompileContext& cc, Semantics* sema)
 {
     types_ = cc_.types();
     class_atom_ = cc_.atom("class");
+    property_atom_ = cc_.atom("property");
 }
 
 Parser::~Parser()
@@ -509,6 +510,7 @@ Decl* Parser::parse_class() {
 
     std::vector<LayoutFieldDecl*> fields;
     std::vector<MemberFunctionDecl*> methods;
+    std::vector<PropertyDecl*> props;
 
     int opening_line = lexer_->fline();
     while (!lexer_->match('}')) {
@@ -517,28 +519,63 @@ Decl* Parser::parse_class() {
             break;
         }
 
+        int tok_id = lexer_->lex();
+        if (tok_id == tNATIVE) {
+            // "native" is not allowed in class declarations, but we still
+            // parse the line to stay in sync. parse_layout_method emits
+            // error 479 when native is seen on a non-methodmap.
+            lexer_->lexpush();
+            parse_layout_method(stmt);
+            continue;
+        }
+        if (tok_id == tSYMBOL && lexer_->current_token()->atom == property_atom_) {
+            auto prop = parse_layout_property(stmt);
+            if (prop) {
+                props.emplace_back(prop);
+            } else {
+                if (!consume_line())
+                    return stmt;
+            }
+            continue;
+        }
+        lexer_->lexpush();
+
+        // Consume optional access modifier and static for class members.
+        auto pos = lexer_->pos();
+        bool is_static = lexer_->match(tSTATIC);
+        bool is_private = lexer_->match(tPRIVATE);
+        if (!is_private)
+            lexer_->match(tPUBLIC);
+
         declinfo_t decl = {};
         if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
             continue;
 
-        auto decl_pos = lexer_->pos();
         if (!decl.type.has_postdims && lexer_->peek('(')) {
-            auto fun = new MemberFunctionDecl(decl_pos, stmt, decl);
+            // It's a method.
+            auto fun = new MemberFunctionDecl(pos, stmt, decl);
             fun->set_is_stock();
-            if (!parse_function(fun, 0, true))
+            if (is_static)
+                fun->set_is_static();
+            if (is_private)
+                fun->set_is_private();
+            if (!parse_function(fun, 0, !is_static))
                 continue;
-
             methods.emplace_back(fun);
             continue;
         }
 
-        fields.emplace_back(new LayoutFieldDecl(decl_pos, decl, stmt));
-
+        // It's a field.
+        auto field = new LayoutFieldDecl(pos, decl, stmt);
+        if (is_private)
+            field->set_is_private();
+        fields.emplace_back(field);
         lexer_->require_newline(TerminatorPolicy::Semicolon);
     }
 
     new (&stmt->fields()) PoolArray<LayoutFieldDecl*>(fields);
     new (&stmt->methods()) PoolArray<MemberFunctionDecl*>(methods);
+    new (&stmt->properties()) PoolArray<PropertyDecl*>(props);
 
     lexer_->require_newline(TerminatorPolicy::Newline);
     return stmt;
@@ -2028,13 +2065,13 @@ Parser::parse_methodmap()
         bool ok = true;
         int tok_id = lexer_->lex();
         if (tok_id == tPUBLIC) {
-            auto method = parse_methodmap_method(decl);
+            auto method = parse_layout_method(decl);
             if (method)
                 methods.emplace_back(method);
             else
                 ok = false;
-        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom->str() == "property") {
-            auto prop = parse_methodmap_property(decl);
+        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom == property_atom_) {
+            auto prop = parse_layout_property(decl);
             if (prop)
                 props.emplace_back(prop);
             else
@@ -2057,12 +2094,27 @@ Parser::parse_methodmap()
     return decl;
 }
 
-MemberFunctionDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
+MemberFunctionDecl* Parser::parse_layout_method(LayoutDecl* parent)
+{
     auto pos = lexer_->pos();
+    auto is_methodmap = parent->as<MethodmapDecl>();
+
+    bool is_private = false;
+    if (!is_methodmap) {
+        is_private = lexer_->match(tPRIVATE);
+        if (!is_private)
+            lexer_->match(tPUBLIC);
+    }
+    // For methodmaps, tPUBLIC was already consumed by parse_methodmap() dispatch.
 
     bool is_static = lexer_->match(tSTATIC);
     bool is_native = lexer_->match(tNATIVE);
-    bool is_dtor = lexer_->match('~');
+    if (is_native && !is_methodmap)
+        report(pos, 479);
+
+    bool is_dtor = false;
+    if (is_methodmap)
+        is_dtor = lexer_->match('~');
 
     Atom* symbol = nullptr;
     full_token_t symbol_tok;
@@ -2096,13 +2148,18 @@ MemberFunctionDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     ret_type.name = symbol;
 
     // Build a new symbol. Construct a temporary name including the class.
-    auto fullname = ke::StringPrintf("%s.%s", map->name()->chars(), symbol->chars());
+    auto fullname = ke::StringPrintf("%s.%s", parent->name()->chars(), symbol->chars());
     auto fqn = cc_.atom(fullname);
 
-    auto is_ctor = (!is_dtor && map->name() == symbol);
-    auto fun = new MemberFunctionDecl(pos, map, ret_type, is_ctor, is_dtor);
+    auto is_ctor = false;
+    if (is_methodmap)
+        is_ctor = (!is_dtor && is_methodmap->name() == symbol);
+
+    auto fun = new MemberFunctionDecl(pos, parent, ret_type, is_ctor, is_dtor);
     if (is_static)
         fun->set_is_static();
+    if (is_private)
+        fun->set_is_private();
     fun->set_name(fqn);
 
     if (is_native)
@@ -2110,7 +2167,7 @@ MemberFunctionDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
     else
         fun->set_is_stock();
 
-    if (map->name() == symbol && ret_type.type.bindable()) {
+    if (is_ctor && ret_type.type.bindable()) {
         // Keep parsing, as long as we abort before name resolution it's fine.
         report(fun, 434);
     }
@@ -2131,7 +2188,7 @@ MemberFunctionDecl* Parser::parse_methodmap_method(MethodmapDecl* map) {
 }
 
 PropertyDecl*
-Parser::parse_methodmap_property(MethodmapDecl* map)
+Parser::parse_layout_property(LayoutDecl* parent)
 {
     auto pos = lexer_->pos();
 
@@ -2150,7 +2207,7 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     MemberFunctionDecl* getter = nullptr;
     MemberFunctionDecl* setter = nullptr;
     while (!lexer_->match('}')) {
-        if (!parse_methodmap_property_accessor(map, ident, type, &getter, &setter))
+        if (!parse_property_accessor(parent, ident, type, &getter, &setter))
             lexer_->lexclr(TRUE);
         if (!lexer_->freading()) {
             if (errors.ok())
@@ -2163,15 +2220,23 @@ Parser::parse_methodmap_property(MethodmapDecl* map)
     return new PropertyDecl(pos, ident, type, getter, setter);
 }
 
-bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
-                                               const typeinfo_t& type,
-                                               MemberFunctionDecl** out_getter,
-                                               MemberFunctionDecl** out_setter)
+bool Parser::parse_property_accessor(LayoutDecl* parent, Atom* name,
+                                     const typeinfo_t& type,
+                                     MemberFunctionDecl** out_getter,
+                                     MemberFunctionDecl** out_setter)
 {
     bool is_native = false;
+    bool is_private = false;
     auto pos = lexer_->pos();
+    auto is_methodmap = parent->as<MethodmapDecl>();
 
-    lexer_->need(tPUBLIC);
+    if (is_methodmap) {
+        lexer_->need(tPUBLIC);
+    } else {
+        is_private = lexer_->match(tPRIVATE);
+        if (!is_private)
+            lexer_->match(tPUBLIC);
+    }
 
     Atom* ident;
     if (!lexer_->matchsymbol(&ident)) {
@@ -2179,7 +2244,12 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
             report(125);
             return false;
         }
+
         is_native = true;
+
+        if (!is_methodmap)
+            report(pos, 479);
+
         if (!lexer_->needsymbol(&ident))
             return false;
     }
@@ -2198,8 +2268,10 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
     else
         ret_type.type.set_type(types_->type_void());
 
-    auto fun = new MemberFunctionDecl(pos, map, ret_type);
-    std::string tmpname = map->name()->str() + "." + name->str();
+    auto fun = new MemberFunctionDecl(pos, parent, ret_type);
+    if (is_private)
+        fun->set_is_private();
+    std::string tmpname = parent->name()->str() + "." + name->str();
     if (getter)
         tmpname += ".get";
     else

@@ -90,6 +90,10 @@ Decl* FindClassField(Type* type, Atom* name) {
         if (field->name() == name)
             return field;
     }
+    for (const auto& prop : decl->properties()) {
+        if (prop->name() == name)
+            return prop;
+    }
     for (const auto& method : decl->methods()) {
         if (method->decl_name() == name)
             return method;

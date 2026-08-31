@@ -1,0 +1,1 @@
+(2) : error 127: property getters cannot accept extra arguments

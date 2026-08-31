@@ -1,0 +1,2 @@
+error 480: cannot access private member 'PrivateMethod' of class 'MyClass'
+error 480: cannot access private member 'Prop' of class 'MyClass'

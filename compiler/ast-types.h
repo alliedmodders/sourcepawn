@@ -45,6 +45,7 @@
     FOR_EACH(PragmaUnusedStmt) \
     FOR_EACH(FunctionDecl) \
     FOR_EACH(MemberFunctionDecl) \
+    FOR_EACH(LayoutMemberDecl) \
     FOR_EACH(EnumStructDecl) \
     FOR_EACH(ClassDecl) \
     FOR_EACH(LayoutFieldDecl) \

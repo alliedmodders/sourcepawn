@@ -114,6 +114,101 @@ Since "local" is guaranteed to be stack allocated, if the slice were to be
 assigned to a global variable, it would refer to invalid memory once the outer
 function returns, creating an invalid use-after-free.
 
+### Classes
+
+SourcePawn now has support for classes. The syntax is almost identical to enum
+structs, with a few changes and notes:
+
+- Natives are not allowed, and objects may not flow to natives (including types
+  that contain objects).
+- The "public" keyword is optional. Class methods, fields, and properties are
+  public by default.
+- There is a "private" keyword to restrict access.
+- Unlike enum structs, objects are not copied on assignment. They are reference
+  types, and participate in garbage collection.
+- Currently objects are reference counted. Cycles must be broken manually.
+- There is no inheritance, so there is no "protected" keyword.
+
+Example of using classes in SourcePawn:
+
+    class Player {
+        private int index_;
+        private char[] name_;
+
+        Player(int index) {
+            index_ = index;
+
+            char buffer[255];
+            GetClientName(index_, buffer, sizeof(buffer));
+
+            int size = strlen(buffer) + 1;
+            name_ = new char[size];
+            strcopy(name_, name_.size, buffer);
+        }
+
+        property int index {
+            get() { return index_; }
+        }
+        property char[] name {
+            get() { return name; }
+        }
+    }
+
+    let player = new Player(client);
+    PrintToServer("Player name: %s", player.name);
+
+### Closures
+
+SourcePawn now has support for nested functions, anonymous functions, and closures.
+
+### Typed Signatures
+This is a very nuanced change due to the difficult compatibility landscape of
+the SourcePawn type system. By default, all functions now have what is referred
+to as a "typed" signature. A typed signature can be declared with a new typedef syntax:
+
+    typedef Callback = function (int) -> Action;
+
+Typed signatures can be called indirectly. For example:
+
+    Action InvokeCallbacks(Callback[] callbacks, int client) {
+        let result = Plugin_Continue;
+        for (int i = 0; i < callbacks.size; i++) {
+            let rv = callbacks[i](client);
+            if (rv > result)
+                result = rv;
+        }
+        return result;
+    }
+
+Functions can be declared inside other functions, either anonymously or not.
+Inner functions must be declared with the new "typed signature" syntax. Note
+that in this new syntax, the return value comes after the argument list as
+an arrow. If omitted, the function returns void.
+
+    function void outer() {
+        function inner1() -> int { return 5; }
+        let inner2 = function () -> int { return 6; }
+    }
+
+#### Untyped Signatures
+
+Meanwhile, legacy callbacks declared like this will have an "untyped" signature:
+
+    typedef Callback = function Action ();
+
+An untyped function can coerce to/from `any`, and can be passed to natives.
+However, they cannot be invoked from within scripts. They can only be invoked
+by natives. When casting from an untyped signature to a typed signature, a
+run-time check occurs to ensure that underlying function's signature matches.
+
+Functions, including non-nested functions, are now internally stored as
+objects. They are implicitly casted to an untyped function ID in order to be
+safely passed to natives. However, if a function has captured any local
+variables, the implicit cast will fail at runtime (or compile-time, if
+detected). This is because natives do not have access to the garbage collection
+system, so it would be unsafe for a native to store an object with ephemeral
+lifetime.
+
 Implementation Changes
 ----------------------
 

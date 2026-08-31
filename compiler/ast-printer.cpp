@@ -371,6 +371,10 @@ void AstPrinter::PrintMemberFunctionDecl(MemberFunctionDecl* node, bool is_last)
     stack_.pop_back();
 }
 
+void AstPrinter::PrintLayoutMemberDecl(LayoutMemberDecl* node, bool is_last) {
+    fprintf(out_, "LayoutMemberDecl: %s (private: %d)\n", node->name()->chars(), node->is_private());
+}
+
 void AstPrinter::PrintEnumStructDecl(EnumStructDecl* node, bool is_last) {
     fprintf(out_, "EnumStructDecl: %s\n", node->name()->chars());
     stack_.push_back(is_last);

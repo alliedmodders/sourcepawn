@@ -216,6 +216,12 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::ClassDecl: {
             auto cls = stmt->to<ClassDecl>();
+            for (const auto& prop : cls->properties()) {
+                if (prop->getter())
+                    EmitFunctionDecl(prop->getter());
+                if (prop->setter())
+                    EmitFunctionDecl(prop->setter());
+            }
             for (const auto& fun : cls->methods())
                 EmitFunctionDecl(fun);
             break;
@@ -357,7 +363,7 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
             if (!init)
                 continue;
             __ emit(OP_ADDR_GLB, VarSlot(var->addr()));
-            EmitEnumStructCtor(var->type()->asEnumStruct(), init);
+            EmitEnumStructCopy(var->type(), init);
         } else if (init && init->as<Number64Expr>()) {
             auto n64 = init->as<Number64Expr>();
             __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
@@ -384,7 +390,17 @@ static inline uint32_t DeduceArraySize(ArrayType* type, Expr* ctor) {
 }
 
 void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
-    auto type = expr->val().type()->as<ArrayType>();
+    auto val_type = expr->val().type();
+
+    if (auto es = val_type->asEnumStruct()) {
+        auto temp_slot = AcquireTempSlot(expr, val_type);
+        __ emit(OP_ADDR_S, VarSlot(temp_slot));
+        EmitEnumStructCtor(es, expr);
+        __ emit(OP_ADDR_S, VarSlot(temp_slot));
+        return;
+    }
+
+    auto type = val_type->as<ArrayType>();
 
     if (type->is_flat()) {
         auto temp_slot = AcquireTempSlot(expr, type);
@@ -543,6 +559,16 @@ void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
     __ emit(OP_POP);
 }
 
+void CodeGenerator::EmitEnumStructCopy(QualType type, Expr* rhs) {
+    auto es = type->asEnumStruct();
+    if (rhs->as<ArrayExpr>()) {
+        EmitEnumStructCtor(es, rhs);
+    } else {
+        EmitExpr(rhs);
+        __ emit(OP_COPYOBJ, rtti_->to_typeid(type.unqualified()));
+    }
+}
+
 uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
     std::string data;
 
@@ -663,7 +689,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     } else if (is_struct) {
         if (init_rhs) {
             __ emit(OP_ADDR_S, VarSlot(slot));
-            EmitEnumStructCtor(decl->type()->asEnumStruct(), init_rhs);
+            EmitEnumStructCopy(decl->type(), init_rhs);
         }
     } else {
         if (init) {
@@ -1502,8 +1528,13 @@ void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
     // reserved for RvalueExpr().
     EmitExpr(expr->base());
 
-    // Only enum struct accesses have a resolved decl.
+    // Enum struct fields, and class properties, have resolved decls.
     if (!expr->resolved())
+        return;
+
+    // Getter/setter invocation is handled by the caller via the iACCESSOR
+    // case in EmitRvalue/EmitStore. We only need to emit the base here.
+    if (expr->resolved()->as<PropertyDecl>())
         return;
 
     assert(false);
@@ -1757,7 +1788,8 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     if (auto es = fun_->return_type()->asEnumStruct()) {
         __ load_hidden_arg(fun_);
-        EmitExpr(stmt->expr());
+        value lval = BindLvalue(stmt->expr(), true);
+        EmitRvalue(lval);
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_COPYOBJ, type_id);
         __ emit(OP_RETV);

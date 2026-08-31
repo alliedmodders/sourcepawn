@@ -162,6 +162,8 @@ class Semantics final
     bool CheckChangeScopeNode(ChangeScopeNode* node);
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
+    bool CheckEnumStructVarDecl(VarDeclBase* decl);
+    bool ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array);
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
@@ -220,7 +222,7 @@ class Semantics final
     bool CheckFunctionExpr(FunctionExpr* expr);
 
     bool CheckRvalue(Expr* expr, Type* target = nullptr);
-    bool CheckRvalue(const token_pos_t& pos, const value& val);
+    bool CheckRvalueAccess(Expr* expr);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
     Expr* BuildConversion(Expr* from, const Conversion& cv);

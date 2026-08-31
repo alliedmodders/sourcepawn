@@ -144,6 +144,7 @@ class Parser
     tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
+    Atom* property_atom_ = nullptr;
 };
 
 } // namespace cc

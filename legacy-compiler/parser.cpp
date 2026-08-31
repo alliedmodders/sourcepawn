@@ -47,6 +47,7 @@ Parser::Parser(CompileContext& cc, Semantics* sema)
     lexer_(cc.lexer())
 {
     types_ = cc_.types();
+    property_atom_ = cc_.atom("property");
 }
 
 Parser::~Parser()
@@ -1873,7 +1874,7 @@ Parser::parse_methodmap()
                 methods.emplace_back(method);
             else
                 ok = false;
-        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom->str() == "property") {
+        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom == property_atom_) {
             auto prop = parse_methodmap_property(decl);
             if (prop)
                 props.emplace_back(prop);
