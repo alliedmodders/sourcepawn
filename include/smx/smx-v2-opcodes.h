@@ -123,7 +123,6 @@ namespace v2 {
     FOR_EACH(DEC_ALT, 113, "dec.alt", 1) \
     FOR_EACH(MOVS, 117, "movs", 2) \
     FOR_EACH(FILL, 119, "fill", 2) \
-    FOR_EACH(HALT, 120, "halt", 2) \
     FOR_EACH(BOUNDS, 121, "bounds", 2) \
     FOR_EACH(SWITCH, 129, "switch", 2) \
     FOR_EACH(CASETBL, 130, "casetbl", -1) \

@@ -160,9 +160,7 @@ class Semantics final
     bool CheckDoWhileStmt(DoWhileStmt* stmt);
     bool CheckBreakStmt(BreakStmt* stmt);
     bool CheckContinueStmt(ContinueStmt* stmt);
-    bool CheckExitStmt(ExitStmt* stmt);
     bool CheckDeleteStmt(DeleteStmt* stmt);
-    bool CheckAssertStmt(AssertStmt* stmt);
     bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
     bool CheckReturnStmt(ReturnStmt* stmt);
     bool CheckCompoundReturnStmt(ReturnStmt* stmt);

@@ -109,12 +109,8 @@ bool Semantics::CheckStmt(Stmt* stmt, StmtFlags flags) {
             return CheckVarDecl(stmt->to<ArgDecl>());
         case StmtKind::ExprStmt:
             return CheckExprStmt(stmt->to<ExprStmt>());
-        case StmtKind::ExitStmt:
-            return CheckExitStmt(stmt->to<ExitStmt>());
         case StmtKind::BlockStmt:
             return CheckBlockStmt(stmt->to<BlockStmt>());
-        case StmtKind::AssertStmt:
-            return CheckAssertStmt(stmt->to<AssertStmt>());
         case StmtKind::IfStmt:
             return CheckIfStmt(stmt->to<IfStmt>());
         case StmtKind::DeleteStmt:
@@ -2466,14 +2462,6 @@ bool Semantics::CheckNativeCompoundReturn(FunctionDecl* info) {
     return true;
 }
 
-bool Semantics::CheckAssertStmt(AssertStmt* stmt) {
-    if (Expr* expr = AnalyzeForTest(stmt->expr())) {
-        stmt->set_expr(expr);
-        return true;
-    }
-    return false;
-}
-
 bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     auto expr = stmt->expr();
     if (!CheckRvalue(expr))
@@ -2530,25 +2518,6 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     markusage(map->dtor(), uREAD);
 
     stmt->set_map(map);
-    return true;
-}
-
-bool Semantics::CheckExitStmt(ExitStmt* stmt) {
-    auto expr = stmt->expr();
-    if (!CheckRvalue(expr))
-        return false;
-    if (expr->lvalue())
-        expr = stmt->set_expr(new RvalueExpr(expr));
-
-    if (!IsValueKind(expr->val().ident)) {
-        report(expr, 106);
-        return false;
-    }
-
-    AutoErrorPos aep(expr->pos());
-
-    if (!TypeChecker::DoCoerce(types_->type_int(), expr))
-        return false;
     return true;
 }
 

@@ -59,8 +59,8 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
 }
 
 bool CodeGenerator::Generate() {
-    // First instruction is always halt.
-    __ emit(OP_HALT, 0);
+    // We always have at least one instruction.
+    __ emit(OP_NOP);
 
     EmitStmtList(tree_->stmts());
     if (!ComputeStackUsage())
@@ -162,15 +162,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             // Emit even if no side effects.
             EmitExpr(stmt->to<ExprStmt>()->expr());
             break;
-        case StmtKind::ExitStmt: {
-            auto e = stmt->to<ExitStmt>();
-            if (e->expr())
-                EmitExpr(e->expr());
-            else
-                __ const_pri(0);
-            __ emit(OP_HALT, xEXIT);
-            break;
-        }
         case StmtKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
 
@@ -178,14 +169,6 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
                 AutoEnterScope locals(this, &local_syms_);
                 EmitStmtList(s);
             }
-            break;
-        }
-        case StmtKind::AssertStmt: {
-            auto s = stmt->to<AssertStmt>();
-            Label flab1;
-            EmitTest(s->expr(), true, &flab1);
-            __ emit(OP_HALT, xASSERTION);
-            __ bind(&flab1);
             break;
         }
         case StmtKind::IfStmt:
@@ -1043,7 +1026,7 @@ CmpTokenToOp(int token)
             return OP_JNEQ;
         default:
             assert(false);
-            return OP_HALT;
+            return OP_NOP;
     }
 }
 

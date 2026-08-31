@@ -1387,14 +1387,6 @@ Parser::parse_stmt(bool allow_decl)
             lexer_->need(tTERM);
             return stmt;
         }
-        case tASSERT: {
-            auto pos = lexer_->pos();
-            Expr* expr = parse_expr(true);
-            lexer_->need(tTERM);
-            if (!expr)
-                return nullptr;
-            return new AssertStmt(pos, expr);
-        }
         case tDELETE: {
             auto pos = lexer_->pos();
             Expr* expr = parse_expr(false);
@@ -1402,15 +1394,6 @@ Parser::parse_stmt(bool allow_decl)
             if (!expr)
                 return nullptr;
             return new DeleteStmt(pos, expr);
-        }
-        case tEXIT: {
-            auto pos = lexer_->pos();
-            Expr* expr = nullptr;
-            if (lexer_->match(tTERM)) {
-                expr = parse_expr(false);
-                lexer_->need(tTERM);
-            }
-            return new ExitStmt(pos, expr);
         }
         case tDO: {
             auto pos = lexer_->pos();

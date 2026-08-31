@@ -1324,25 +1324,6 @@ class ReturnStmt : public Stmt
     Expr* expr_;
 };
 
-class AssertStmt : public Stmt
-{
-  public:
-    explicit AssertStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(StmtKind::AssertStmt, pos),
-        expr_(expr)
-    {}
-
-    bool Bind(SemaContext& sc) override { return expr_->Bind(sc); }
-
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::AssertStmt; }
-
-    Expr* expr() const { return expr_; }
-    Expr* set_expr(Expr* expr) { return expr_ = expr; }
-
-  private:
-    Expr* expr_;
-};
-
 class DeleteStmt : public Stmt
 {
   public:
@@ -1362,25 +1343,6 @@ class DeleteStmt : public Stmt
   private:
     Expr* expr_;
     MethodmapDecl* map_;
-};
-
-class ExitStmt : public Stmt
-{
-  public:
-    explicit ExitStmt(const token_pos_t& pos, Expr* expr)
-      : Stmt(StmtKind::ExitStmt, pos),
-        expr_(expr)
-    {}
-
-    bool Bind(SemaContext& sc) override;
-
-    static bool is_a(Stmt* node) { return node->kind() == StmtKind::ExitStmt; }
-
-    Expr* expr() const { return expr_; }
-    Expr* set_expr(Expr* expr) { return expr_ = expr; }
-
-  private:
-    Expr* expr_;
 };
 
 class DoWhileStmt : public Stmt

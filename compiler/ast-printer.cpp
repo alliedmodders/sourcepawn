@@ -260,12 +260,6 @@ void AstPrinter::PrintReturnStmt(ReturnStmt* node, bool is_last) {
     }
 }
 
-void AstPrinter::PrintAssertStmt(AssertStmt* node, bool is_last) {
-    fprintf(out_, "AssertStmt\n");
-    stack_.push_back(is_last);
-    Print(node->expr(), true);
-    stack_.pop_back();
-}
 
 void AstPrinter::PrintDeleteStmt(DeleteStmt* node, bool is_last) {
     fprintf(out_, "DeleteStmt\n");
@@ -274,12 +268,6 @@ void AstPrinter::PrintDeleteStmt(DeleteStmt* node, bool is_last) {
     stack_.pop_back();
 }
 
-void AstPrinter::PrintExitStmt(ExitStmt* node, bool is_last) {
-    fprintf(out_, "ExitStmt\n");
-    stack_.push_back(is_last);
-    Print(node->expr(), true);
-    stack_.pop_back();
-}
 
 void AstPrinter::PrintDoWhileStmt(DoWhileStmt* node, bool is_last) {
     fprintf(out_, "DoWhileStmt (token '%s')\n", get_token_string(node->token()).c_str());

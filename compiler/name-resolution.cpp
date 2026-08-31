@@ -656,14 +656,6 @@ ReturnStmt::Bind(SemaContext& sc)
 }
 
 bool
-ExitStmt::Bind(SemaContext& sc)
-{
-    if (!expr_)
-        return true;
-    return expr_->Bind(sc);
-}
-
-bool
 DoWhileStmt::Bind(SemaContext& sc)
 {
     bool ok = cond_->Bind(sc);

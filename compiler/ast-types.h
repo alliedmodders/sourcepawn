@@ -38,9 +38,7 @@
     FOR_EACH(IfStmt) \
     FOR_EACH(ExprStmt) \
     FOR_EACH(ReturnStmt) \
-    FOR_EACH(AssertStmt) \
     FOR_EACH(DeleteStmt) \
-    FOR_EACH(ExitStmt) \
     FOR_EACH(DoWhileStmt) \
     FOR_EACH(ForStmt) \
     FOR_EACH(SwitchStmt) \

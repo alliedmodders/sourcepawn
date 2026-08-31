@@ -332,11 +332,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_HALT: {
-            reportError(SP_ERROR_INVALID_INSTRUCTION);
-            return false;
-        }
-
         case OP_MOVS: {
             cell_t val = readCell();
             return verifyMemAmount(val);
