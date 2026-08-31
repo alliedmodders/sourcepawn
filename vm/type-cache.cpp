@@ -198,6 +198,7 @@ const TypeDesc* TypeCache::GetClassdef(v2::Runtime* rt, const smx_rtti_classdef*
     // recursion could wind up re-parsing type forever.
     TypeDesc* td = NewTypeDesc(pool_, classdef);
     td->kind_ = kind;
+    td->clsdef.image = image;
     if (is_class)
         td->set_finalizer(SpObject::NestedFinalizer);
 

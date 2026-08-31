@@ -113,14 +113,14 @@ class TestPlan(object):
       if rc == 0 and '-jit' in stdout and not self.args.no_jit:
         self.shells.append({
           'path': path,
-          'args': [],
+          'args': ['--leak-check'],
           'name': 'default-' + arch,
           'env': env,
           })
 
       self.shells.append({
         'path': path,
-        'args': ['--disable-jit'],
+        'args': ['--disable-jit', '--leak-check'],
         'name': 'interpreter-' + arch,
         'env': env,
       })

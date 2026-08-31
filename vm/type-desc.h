@@ -18,6 +18,7 @@
 
 namespace sp {
 
+class SmxImage;
 struct smx_rtti_classdef;
 
 enum class TypeKind : uint8_t {
@@ -91,6 +92,7 @@ class TypeDesc final {
         can_global_cache_(false)
     {
         clsdef.classdef = classdef;
+        clsdef.image = nullptr;
         clsdef.total_size = 0;
         clsdef.field_offsets = {};
         clsdef.heap_item_offsets = {};
@@ -102,6 +104,7 @@ class TypeDesc final {
         can_global_cache_(false)
     {
         clsdef.classdef = classdef;
+        clsdef.image = nullptr;
         clsdef.total_size = total_size;
         clsdef.field_offsets = field_offsets;
         clsdef.heap_item_offsets = heap_item_offsets;
@@ -323,6 +326,10 @@ class TypeDesc final {
         assert(HasClassdef());
         return clsdef.classdef;
     }
+    SmxImage* image() const {
+        assert(HasClassdef());
+        return clsdef.image;
+    }
     uint32_t cls_size() const {
         assert(HasClassdef());
         return clsdef.total_size;
@@ -373,6 +380,7 @@ class TypeDesc final {
         const TypeDesc* ref;
         struct {
             const smx_rtti_classdef* classdef;
+            SmxImage* image;
             uint32_t total_size;
             std::span<uint32_t> field_offsets;
             std::span<uint32_t> heap_item_offsets;

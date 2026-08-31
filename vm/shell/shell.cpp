@@ -22,6 +22,7 @@
 #include "base-runtime.h"
 #include "environment.h"
 #include "stack-frames.h"
+#include "v2/runtime.h"
 
 #ifdef __EMSCRIPTEN__
 # include <emscripten.h>
@@ -801,7 +802,8 @@ int main(int argc, char** argv)
 
   bool has_leaks = false;
   if (leak_check.value()) {
-    sEnv->SetLeakReportCallback([&](v2::Runtime*, const char* message) {
+    sEnv->SetLeakReportCallback([&](v2::Runtime* rt, const char* message) {
+      fprintf(stderr, "LEAK DETECTED IN %s! LIVE OBJECTS:\n", rt->Name());
       fprintf(stderr, "%s", message);
       has_leaks = true;
     });

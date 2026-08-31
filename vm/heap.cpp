@@ -20,6 +20,7 @@
 
 #include <mimalloc.h>
 #include "environment.h"
+#include "smx-image.h"
 
 namespace sp {
 
@@ -49,6 +50,8 @@ static std::string DescribeType(const TypeDesc* td) {
         case TypeKind::Reference:
             return "ref to " + DescribeType(td->ref_type());
         case TypeKind::Object:
+            if (auto image = td->image())
+                return image->names() + td->cls()->name;
             return "object";
         case TypeKind::Closure:
             return "closure";
