@@ -1,7 +1,7 @@
 // returnCode: 1
 #include <shell>
 
-int[] g;
+int[] g = null;
 
 void f(int[] x) {
   g = x;

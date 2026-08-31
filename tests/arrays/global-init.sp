@@ -1,6 +1,6 @@
 #include <shell>
 
-int[] x;
+int[] x = null;
 int[] g1 = null;
 int[] g2 = new int[5];
 int[] g3 = g2;

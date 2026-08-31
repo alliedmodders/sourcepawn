@@ -102,6 +102,8 @@ class Parser
     TypedefInfo* parse_function_type();
 
     bool parse_function(FunctionDecl* info, int tokid, bool has_this);
+    Expr* parse_function_expr();
+    bool parse_function_impl(FunctionDecl* fun);
     void parse_args(FunctionDecl* info, std::vector<ArgDecl*>* args);
 
     // Wrapper around hier14() that allows comma expressions without a wrapping

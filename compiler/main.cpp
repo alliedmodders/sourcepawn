@@ -177,6 +177,15 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
         if (!tree || !errors.ok())
             goto cleanup;
 
+        if (options->syntax_only) {
+            if (options->print_ast) {
+                AstPrinter printer(stdout);
+                printer.Print(tree);
+            }
+            ok = true;
+            goto cleanup;
+        }
+
         errors.Reset();
 
         {

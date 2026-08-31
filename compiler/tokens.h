@@ -54,8 +54,9 @@ enum TokenKind {
     tELLIPS,         /* ... */
     tDBLDOT,         /* .. */
     tDBLCOLON,       /* :: */
+    tARROW,          /* -> */
     /* value of last multi-character operator */
-    tMIDDLE = tDBLCOLON,
+    tMIDDLE = tARROW,
     /* reserved words (statements) */
     tACQUIRE,
     tAS,

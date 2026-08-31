@@ -1285,6 +1285,24 @@ class SpreadArgsExpr final : public Expr {
     static bool is_a(Expr* node) { return node->kind() == ExprKind::SpreadArgsExpr; }
 };
 
+class FunctionExpr final : public Expr
+{
+  public:
+    FunctionExpr(const token_pos_t& pos, FunctionDecl* decl)
+      : Expr(ExprKind::FunctionExpr, pos),
+        decl_(decl)
+    {}
+
+    bool Bind(SemaContext& sc) override { return true; }
+
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::FunctionExpr; }
+
+    FunctionDecl* decl() const { return decl_; }
+
+  private:
+    FunctionDecl* decl_;
+};
+
 class IfStmt : public Stmt
 {
   public:

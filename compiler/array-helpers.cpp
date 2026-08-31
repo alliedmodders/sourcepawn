@@ -851,11 +851,13 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     // We need an explicit initializer so that EmitArrayCtor() will generate
     // the appropriate NEWARRAY or NEWBULKARRAY opcode via EmitNewArrayExpr.
     if (!decl->init_rhs() && decl->vclass() != sARGUMENT) {
-        if (auto array = decl->type()->as<ArrayType>(); array && !array->is_flat()) {
-            if (array->is_fixed()) {
-                if (!AddImplicitDynamicInitializer(decl))
-                    return false;
+        if (auto array = decl->type()->as<ArrayType>()) {
+            if (!array->is_fixed()) {
+                report(decl->pos(), 478);
+                return false;
             }
+            if (!array->is_flat() && !AddImplicitDynamicInitializer(decl))
+                return false;
         }
     }
 

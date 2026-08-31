@@ -1300,6 +1300,7 @@ const char* sc_tokens[] = {"*=",
                            "...",
                            "..",
                            "::",
+                           "->",
                            "acquire",
                            "as",
                            "assert",
@@ -1711,6 +1712,8 @@ void Lexer::LexIntoToken(full_token_t* tok) {
                 tok->id = taSUB;
             else if (match_char('-'))
                 tok->id = tDEC;
+            else if (match_char('>'))
+                tok->id = tARROW;
             else
                 tok->id = '-';
             return;

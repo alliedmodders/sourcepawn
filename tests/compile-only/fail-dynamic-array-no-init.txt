@@ -1,0 +1,1 @@
+(2) : error 478: dynamic array declarations require an initializer

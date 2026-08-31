@@ -1028,6 +1028,8 @@ Parser::primary()
         return new ThisExpr(lexer_->pos());
     if (tok == tSYMBOL)
         return new SymbolExpr(lexer_->pos(), lexer_->current_token()->atom);
+    if (tok == tFUNCTION)
+        return parse_function_expr();
 
     lexer_->lexpush();
 
@@ -1463,6 +1465,22 @@ Parser::parse_stmt(bool allow_decl)
             return parse_switch();
         case tSYN_PRAGMA_UNUSED:
             return parse_pragma_unused();
+        case tFUNCTION: {
+            if (!allow_decl) {
+                report(3);
+                return nullptr;
+            }
+
+            auto pos = lexer_->pos();
+            declinfo_t decl = {};
+            if (!parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION))
+                return nullptr;
+
+            auto fun = new FunctionDecl(pos, decl);
+            if (!parse_function_impl(fun))
+                return nullptr;
+            return fun;
+        }
         case tINCLUDE:
         case tpTRYINCLUDE:
             report(414);
@@ -1838,6 +1856,52 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
     fun->set_end_pos(lexer_->pos());
     delayed_functions_.emplace_back(fun);
 
+    return true;
+}
+
+Expr* Parser::parse_function_expr() {
+    auto pos = lexer_->pos();
+
+    declinfo_t decl = {};
+    decl.type.is_new = true;
+    decl.type.set_type(types_->type_void());
+
+    if (!lexer_->peek('(')) {
+        if (!parse_decl(&decl, DECLFLAG_MAYBE_FUNCTION))
+            return nullptr;
+    }
+
+    auto fun = new FunctionDecl(pos, decl);
+    fun->set_is_stock();
+
+    if (!parse_function_impl(fun))
+        return nullptr;
+    return new FunctionExpr(pos, fun);
+}
+
+bool Parser::parse_function_impl(FunctionDecl* fun)
+{
+    if (!lexer_->match('(')) {
+        report(10);
+        return false;
+    }
+
+    std::vector<ArgDecl*> args;
+    parse_args(fun, &args);
+    new (&fun->args()) PoolArray<ArgDecl*>(args);
+
+    if (lexer_->match(tARROW)) {
+        TypenameInfo ret_type;
+        if (parse_new_typename(nullptr, &ret_type) && ret_type.type())
+            fun->update_return_type(ret_type.type());
+    }
+
+    if (!lexer_->match('{')) {
+        report(437);
+        return false;
+    }
+
+    fun->set_body(parse_compound());
     return true;
 }
 

@@ -633,5 +633,16 @@ void AstPrinter::PrintSpreadArgsExpr(SpreadArgsExpr* node, bool is_last) {
     fprintf(out_, "SpreadArgsExpr\n");
 }
 
+void AstPrinter::PrintFunctionExpr(FunctionExpr* node, bool is_last) {
+    fprintf(out_, "FunctionExpr: %s\n",
+            node->decl()->name() ? node->decl()->name()->chars() : "(anonymous)");
+    stack_.push_back(is_last);
+    for (size_t i = 0; i < node->decl()->args().size(); i++)
+        Print(node->decl()->args()[i], (i == node->decl()->args().size() - 1) && !node->decl()->body());
+    if (node->decl()->body())
+        Print(node->decl()->body(), true);
+    stack_.pop_back();
+}
+
 } // namespace cc
 } // namespace sp
