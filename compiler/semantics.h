@@ -287,6 +287,20 @@ class Semantics final
     bool DiagnoseFailure(TypeCheckerState& state);
     bool DiagnoseFunctionFailure(TypeCheckerState& state);
 
+    struct BinaryExprState {
+        BinaryExpr* expr;
+        Expr* left;
+        Expr* right;
+
+        BinaryExprState(BinaryExpr* expr)
+          : expr(expr), left(expr->left()), right(expr->right())
+        {}
+    };
+    bool CheckBinaryExprImpl(BinaryExprState& state);
+    bool CheckAssignmentLHS(BinaryExprState& state);
+    bool CheckAssignmentRHS(BinaryExprState& state);
+    bool CheckOperatorTypes(BinaryExprState& state);
+
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;

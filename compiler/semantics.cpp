@@ -708,64 +708,35 @@ static inline bool CanPromoteToInt64(Type* type) {
     return type->isInt() || type->isAny();
 }
 
-class BinaryExprChecker final
-{
-  public:
-    BinaryExprChecker(CompileContext& cc, Semantics& sema, BinaryExpr* expr)
-      : cc_(cc),
-        sema_(sema),
-        expr_(expr),
-        types_(cc_.types()),
-        left_(expr_->left()),
-        right_(expr_->right())
-    {
-    }
-
-    bool Check();
-
-  private:
-    bool CheckAssignmentLHS();
-    bool CheckAssignmentRHS();
-    bool CheckOperatorTypes();
-
-  private:
-    CompileContext& cc_;
-    Semantics& sema_;
-    BinaryExpr* expr_;
-    TypeManager* types_;
-    Expr* left_;
-    Expr* right_;
-};
-
-bool BinaryExprChecker::Check() {
-    if (!sema_.CheckExpr(left_))
+bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
+    if (!CheckExpr(state.left))
         return false;
 
-    if (expr_->token() == '=') {
-        if (!sema_.CheckRvalue(right_, left_->val().type()))
+    if (state.expr->token() == '=') {
+        if (!CheckRvalue(state.right, state.left->val().type()))
             return false;
     } else {
-        if (!sema_.CheckRvalue(right_))
+        if (!CheckRvalue(state.right))
             return false;
     }
 
-    int token = expr_->token();
+    int token = state.expr->token();
     bool is_null_compare = false;
     if (token != '=') {
         is_null_compare = (token == tlEQ || token == tlNE) &&
-                          (left_->val().type()->isNullable() ||
-                           right_->val().type()->isNullable());
+                          (state.left->val().type()->isNullable() ||
+                           state.right->val().type()->isNullable());
         if (!is_null_compare) {
-            if (!sema_.CheckScalarType(left_))
+            if (!CheckScalarType(state.left))
                 return false;
-            if (!sema_.CheckScalarType(right_))
+            if (!CheckScalarType(state.right))
                 return false;
         }
     }
 
     if (IsAssignOp(token)) {
         // Mark the left-hand side as written as soon as we can.
-        if (Decl* sym = left_->val().sym()) {
+        if (Decl* sym = state.left->val().sym()) {
             markusage(sym, uWRITTEN);
 
             // If it's an outparam, also mark it as read.
@@ -776,9 +747,9 @@ bool BinaryExprChecker::Check() {
             {
                 markusage(sym, uREAD);
             }
-        } else if (auto* accessor = left_->val().accessor()) {
+        } else if (auto* accessor = state.left->val().accessor()) {
             if (!accessor->setter()) {
-                report(expr_, 152) << accessor->name();
+                report(state.expr, 152) << accessor->name();
                 return false;
             }
             markusage(accessor->setter(), uREAD);
@@ -786,57 +757,57 @@ bool BinaryExprChecker::Check() {
                 markusage(accessor->getter(), uREAD);
         }
 
-        if (!CheckAssignmentLHS())
+        if (!CheckAssignmentLHS(state))
             return false;
-        if (token != '=' && !sema_.CheckRvalue(left_->pos(), left_->val()))
+        if (token != '=' && !CheckRvalue(state.left->pos(), state.left->val()))
             return false;
-    } else if (left_->lvalue()) {
-        if (!sema_.CheckRvalue(left_->pos(), left_->val()))
+    } else if (state.left->lvalue()) {
+        if (!CheckRvalue(state.left->pos(), state.left->val()))
             return false;
-        left_ = expr_->set_left(new RvalueExpr(left_));
+        state.left = state.expr->set_left(new RvalueExpr(state.left));
     }
 
     // RHS is always loaded. Note we do this after validating the left-hand side,
     // so ValidateAssignment has an original view of RHS.
-    if (right_->lvalue())
-        right_ = expr_->set_right(new RvalueExpr(right_));
+    if (state.right->lvalue())
+        state.right = state.expr->set_right(new RvalueExpr(state.right));
 
     // The assignment operator is overloaded separately.
     if (IsAssignOp(token)) {
-        if (!CheckAssignmentRHS())
+        if (!CheckAssignmentRHS(state))
             return false;
     }
 
-    auto* left_val = &left_->val();
-    auto* right_val = &right_->val();
+    auto* left_val = &state.left->val();
+    auto* right_val = &state.right->val();
 
-    auto oper_tok = NormalizeBinaryToken(expr_->token());
+    auto oper_tok = NormalizeBinaryToken(state.expr->token());
     if (oper_tok && !is_null_compare) {
         assert(token != '=');
 
         if (!SupportsOperators(left_val->type())) {
-            report(left_, 33) << left_val->type();
+            report(state.left, 33) << left_val->type();
             return false;
         }
         if (!SupportsOperators(right_val->type())) {
-            report(right_, 33) << right_val->type();
+            report(state.right, 33) << right_val->type();
             return false;
         }
     }
 
     if (is_null_compare) {
         if (left_val->type()->isArray() && right_val->type()->isArray()) {
-            if (!sema_.PerformTypeCheck(right_, left_val->type(), right_val->type(), Semantics::Assignment))
+            if (!PerformTypeCheck(state.right, left_val->type(), right_val->type(), Semantics::Assignment))
                 return false;
         }
     }
 
-    auto& val = expr_->val();
+    auto& val = state.expr->val();
     val.ident = iEXPRESSION;
     val.set_type(left_val->type());
 
     if (oper_tok) {
-        if (!CheckOperatorTypes())
+        if (!CheckOperatorTypes(state))
             return false;
         if (left_val->ident == iCONSTEXPR && right_val->ident == iCONSTEXPR &&
             val.type()->coercesFromInt())
@@ -855,9 +826,9 @@ bool BinaryExprChecker::Check() {
     return true;
 }
 
-bool BinaryExprChecker::CheckOperatorTypes() {
-    auto* left_val = &left_->val();
-    auto* right_val = &right_->val();
+bool Semantics::CheckOperatorTypes(BinaryExprState& state) {
+    auto* left_val = &state.left->val();
+    auto* right_val = &state.right->val();
 
     // For the purposes of tag matching, we consider the order to be irrelevant.
     Type* left_type = left_val->type();
@@ -868,24 +839,24 @@ bool BinaryExprChecker::CheckOperatorTypes() {
     if (right_type->isReference())
         right_type = right_type->inner();
 
-    if (auto cr = FindBinaryCoercionRule(left_type, right_type, expr_->token()); cr) {
+    if (auto cr = FindBinaryCoercionRule(left_type, right_type, state.expr->token()); cr) {
         if (*cr == BuiltinType::Void) {
-            report(expr_, 461) << get_token_string(expr_->token()) << left_type << right_type;
+            report(state.expr, 461) << get_token_string(state.expr->token()) << left_type << right_type;
             return false;
         }
 
         if (!right_type->isBuiltin(*cr))
-            right_ = expr_->set_right(sema_.BuildSimpleCast(right_, *cr));
+            state.right = state.expr->set_right(BuildSimpleCast(state.right, *cr));
 
         if (!left_type->isBuiltin(*cr)) {
-            if (IsAssignOp(expr_->token())) {
-                report(expr_, 462) << right_->val().type() << left_type;
+            if (IsAssignOp(state.expr->token())) {
+                report(state.expr, 462) << state.right->val().type() << left_type;
                 return false;
             }
-            left_ = expr_->set_left(sema_.BuildSimpleCast(left_, *cr));
+            state.left = state.expr->set_left(BuildSimpleCast(state.left, *cr));
         }
 
-        expr_->val().set_type(left_->val().type());
+        state.expr->val().set_type(state.left->val().type());
         return true;
     }
 
@@ -893,82 +864,82 @@ bool BinaryExprChecker::CheckOperatorTypes() {
     return true;
 }
 
-bool BinaryExprChecker::CheckAssignmentLHS() {
-    int left_ident = left_->val().ident;
-    if (left_ident == iARRAYELEM || left_->val().type()->isCharArray()) {
+bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
+    int left_ident = state.left->val().ident;
+    if (left_ident == iARRAYELEM || state.left->val().type()->isCharArray()) {
         // This is a special case, assigned to a packed character in a cell
         // is permitted.
         return true;
     }
 
-    int oper_tok = NormalizeBinaryToken(expr_->token());
-    if (auto left_array = left_->val().type()->as<ArrayType>()) {
+    int oper_tok = NormalizeBinaryToken(state.expr->token());
+    if (auto left_array = state.left->val().type()->as<ArrayType>()) {
         // array assignment is permitted too (with restrictions)
         if (oper_tok) {
-            report(expr_, 23);
+            report(state.expr, 23);
             return false;
         }
 
         if (left_array->is_flat()) {
             for (auto iter = left_array; iter; iter = iter->inner()->as<ArrayType>()) {
                 if (!iter->size()) {
-                    report(left_, 46);
+                    report(state.left, 46);
                     return false;
                 }
             }
         }
         return true;
     }
-    if (!left_->lvalue()) {
-        report(expr_, 22);
+    if (!state.left->lvalue()) {
+        report(state.expr, 22);
         return false;
     }
 
-    const auto& left_val = left_->val();
+    const auto& left_val = state.left->val();
 
     // may not change "constant" parameters
-    if (!expr_->initializer() && left_val.sym() && left_val.sym()->is_const()) {
-        report(expr_, 22);
+    if (!state.expr->initializer() && left_val.sym() && left_val.sym()->is_const()) {
+        report(state.expr, 22);
         return false;
     }
     return true;
 }
 
-bool BinaryExprChecker::CheckAssignmentRHS() {
-    const auto& left_val = left_->val();
-    const auto& right_val = right_->val();
+bool Semantics::CheckAssignmentRHS(BinaryExprState& state) {
+    const auto& left_val = state.left->val();
+    const auto& right_val = state.right->val();
 
     if (left_val.ident == iVARIABLE) {
-        const auto& right_val = right_->val();
-        int oper_tok = NormalizeBinaryToken(expr_->token());
+        const auto& right_val = state.right->val();
+        int oper_tok = NormalizeBinaryToken(state.expr->token());
         if (right_val.ident == iVARIABLE && right_val.sym() == left_val.sym() && !oper_tok)
-            report(expr_, 226) << left_val.sym()->name(); // self-assignment
+            report(state.expr, 226) << left_val.sym()->name(); // self-assignment
     }
 
     if (left_val.type()->as<ArrayType>()) {
-        if (!sema_.PerformCoercion(expr_, left_val.type(), right_val.type(), Semantics::Assignment))
+        if (!PerformCoercion(state.expr, left_val.type(), right_val.type(), Semantics::Assignment))
             return false;
 
         auto left_array = left_val.type()->to<ArrayType>();
         if (left_array->size() > 0) {
             auto right_array = right_val.type()->to<ArrayType>();
             if (right_array->inner()->isArray()) {
-                report(expr_, 23);
+                report(state.expr, 23);
                 return false;
             }
             if (right_array->size() == 0) {
-                report(expr_, 9);
+                report(state.expr, 9);
                 return false;
             }
-            expr_->set_array_copy(true);
+            state.expr->set_array_copy(true);
         }
     } else {
         if (right_val.type()->isArray()) {
             // Hack. Special case array literals assigned to an enum struct,
             // since we don't have the infrastructure to deduce an RHS type
             // yet.
-            if (!left_val.type()->isEnumStruct() || !right_->as<ArrayExpr>()) {
-                report(expr_, 6); // must be assigned to an array
+            if (!left_val.type()->isEnumStruct() || !state.right->as<ArrayExpr>()) {
+                report(state.expr, 6); // must be assigned to an array
                 return false;
             }
             return true;
@@ -983,22 +954,22 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     if (left_type->isInt64() || right_val.type()->isInt64()) {
         if (!left_type->isInt64()) {
             if (left_type->isInt())
-                report(expr_, 454);
+                report(state.expr, 454);
             else
-                report(expr_, 450) << right_val.type() << left_type;
+                report(state.expr, 450) << right_val.type() << left_type;
             return false;
         }
         if (!right_val.type()->isInt64()) {
             if (!CanPromoteToInt64(right_val.type())) {
-                report(expr_, 450) << right_val.type() << left_type;
+                report(state.expr, 450) << right_val.type() << left_type;
                 return false;
             }
-            right_ = expr_->set_right(sema_.BuildSimpleCast(right_, BuiltinType::Int64));
+            state.right = state.expr->set_right(BuildSimpleCast(state.right, BuiltinType::Int64));
         }
         return true;
     }
 
-    int oper_tok = NormalizeBinaryToken(expr_->token());
+    int oper_tok = NormalizeBinaryToken(state.expr->token());
     if (oper_tok) {
         // This is a compound assignment, the binary operation is checked later.
         return true;
@@ -1012,21 +983,21 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
     }
 
     if (right_val.type()->isVoid()) {
-        report(expr_, 466);
+        report(state.expr, 466);
         return false;
     }
 
     if (left_val.type()->asEnumStruct() || right_val.type()->asEnumStruct()) {
         if (left_val.type() != right_val.type()) {
-            report(expr_, 134) << left_val.type() << right_val.type();
+            report(state.expr, 134) << left_val.type() << right_val.type();
             return false;
         }
 
-        expr_->set_enum_struct_copy(true);
+        state.expr->set_enum_struct_copy(true);
     } else if (!left_val.type()->isArray()) {
         matchtag(left_val.type(), right_val.type(), TRUE);
 
-        right_ = expr_->set_right(sema_.CoerceNull(right_, left_type));
+        state.right = state.expr->set_right(CoerceNull(state.right, left_type));
     }
     return true;
 }
@@ -1034,8 +1005,8 @@ bool BinaryExprChecker::CheckAssignmentRHS() {
 bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
-    BinaryExprChecker checker(cc_, *this, expr);
-    return checker.Check();
+    BinaryExprState state(expr);
+    return CheckBinaryExprImpl(state);
 }
 
 static inline bool
