@@ -2616,14 +2616,16 @@ Parser::parse_old_decl(declinfo_t* decl, int flags)
                 if (!lexer_->match('_')) {
                     // If we don't get the magic tag '_', then we should have a symbol.
                     Atom* name;
-                    if (lexer_->needsymbol(&name))
-                        ti = TypenameInfo(name, true);
+                    if (!lexer_->needsymbol(&name))
+                        break;
+                    ti = TypenameInfo(name, true);
                 }
                 numtags++;
 
                 if (lexer_->match('}'))
                     break;
-                lexer_->need(',');
+                if (!lexer_->need(','))
+                    break;
             }
             lexer_->need(':');
         }
