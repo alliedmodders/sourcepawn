@@ -1421,11 +1421,15 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         report(expr, 477) << from_type;
     } else if (to_type->isObject()) {
         report(expr, 477) << to_type;
-    } else if (from_type->isFunction() != to_type->isFunction()) {
+    } else if (from_type->isFunctionLike() != to_type->isFunctionLike()) {
         // Warn: unsupported cast.
         report(expr, 237);
-    } else if (from_type->isFunction() && to_type->isFunction()) {
-        CheckCoercion(expr, to_type, out_val.type(), CvtContext::Assignment);
+    } else if (from_type->isFunctionLike() && to_type->isFunctionLike()) {
+        inner = TryConversion(inner, to_type, CvtContext::Assignment);
+        if (!inner)
+            return false;
+        expr->set_expr(inner);
+        out_val = inner->val();
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (to_type->isEnumStruct() || from_type->isEnumStruct()) {
@@ -3543,6 +3547,8 @@ Expr* Semantics::BuildConversion(Expr* from, ConversionKind ck, Type* to) {
             return BuildSimpleCast(from, to->builtin_type());
         case ConversionKind::FuncToLegacy:
         case ConversionKind::LegacyToFunc:
+            if (from->lvalue())
+                from = new RvalueExpr(from);
             return new SimpleCastExpr(from, to);
         case ConversionKind::CoerceNull:
             return CoerceNull(from, to);

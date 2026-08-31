@@ -832,6 +832,18 @@ void Compiler::EmitNewClosure(const TypeDesc* closure_td, MethodInfo* method, ui
     CallRtForHandle(PmfCast<void*>(&Runtime::NewClosure), dest_reg);
 }
 
+void Compiler::EmitGetFnObj(uint16_t src_reg, const TypeDesc* td, uint16_t dest_reg) {
+    __ movl(eax, RegAddr(src_reg));
+#if defined(_WIN32)
+    __ push(reinterpret_cast<intptr_t>(td));
+    __ push(eax);
+#else
+    __ movl(Operand(esp, 8), eax);
+    __ movl(Operand(esp, 12), reinterpret_cast<intptr_t>(td));
+#endif
+    CallRtForHandle(PmfCast<void*>(&Runtime::CastFunctionId), dest_reg);
+}
+
 void Compiler::EmitCallee(uint16_t dest_reg) {
     __ movl(eax, Operand(ebp, kCalleeSlotOffset));
     __ movl(RegAddr(dest_reg), eax);

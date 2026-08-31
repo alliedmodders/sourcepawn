@@ -384,6 +384,7 @@ class MethodLowerer
 std::unique_ptr<LLCode> MethodLowerer::Lower() {
     if (!InitializeRegisters())
         return nullptr;
+
     AutoClearBlockData<LoweringData> clear_block_data(graph_);
 
     // :TODO: the last block has the max ID.
@@ -421,7 +422,7 @@ std::unique_ptr<LLCode> MethodLowerer::Lower() {
 
     PatchJumps();
 
-    if (vregs_overflowed_ || num_temp_regs_ >= UINT16_MAX) {
+    if (vregs_overflowed_) {
         rt_->ReportErrorNumber(SP_ERROR_STACKLOW);
         return nullptr;
     }

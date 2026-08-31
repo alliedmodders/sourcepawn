@@ -95,6 +95,7 @@ class CompilerBase
     virtual void EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
                                   const std::vector<uint16_t>& args) = 0;
     virtual void EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) = 0;
+    virtual void EmitGetFnObj(uint16_t src_reg, const TypeDesc* td, uint16_t dest_reg) = 0;
     virtual void EmitJump(size_t target_idx) = 0;
     virtual void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) = 0;
     virtual void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) = 0;

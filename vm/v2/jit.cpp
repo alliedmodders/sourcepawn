@@ -548,6 +548,13 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitGetFuncId(src_reg, dest_reg);
                 break;
             }
+            case LL_GETFNOBJ: {
+                uint16_t src_reg = reader.read<uint16_t>();
+                const TypeDesc* td = reader.read<const TypeDesc*>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitGetFnObj(src_reg, td, dest_reg);
+                break;
+            }
             case LL_LOAD_I_U8:
             case LL_LOAD_I_X32:
             case LL_LOAD_I_X64:

@@ -767,6 +767,13 @@ void Compiler::EmitNewClosure(const TypeDesc* closure_td, MethodInfo* method, ui
     CallRtForHandle(&Runtime::NewClosure, 2, dest_reg);
 }
 
+void Compiler::EmitGetFnObj(uint16_t src_reg, const TypeDesc* td, uint16_t dest_reg) {
+    __ movl(rax, RegAddr(src_reg));
+    __ movl(ArgReg2, rax);
+    __ movq(ArgReg3, reinterpret_cast<intptr_t>(td));
+    CallRtForHandle(&Runtime::CastFunctionId, 2, dest_reg);
+}
+
 void Compiler::EmitAddRef(uint16_t reg) {
     __ movl(rax, RegAddr(reg));
     EmitIncRef(rax);
