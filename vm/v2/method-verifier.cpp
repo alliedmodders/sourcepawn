@@ -119,8 +119,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SHR:
         case OP_SSHR:
         case OP_SMUL:
-        case OP_SDIV:
-        case OP_SDIV_ALT:
         case OP_ADD:
         case OP_SUB_ALT:
         case OP_AND:
@@ -138,9 +136,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_SGRTR:
         case OP_SGEQ:
         case OP_INC_PRI:
-        case OP_INC_ALT:
         case OP_DEC_PRI:
-        case OP_DEC_ALT:
         case OP_STRADJUST_PRI:
         case OP_MOVE_I64:
         case OP_TRUNCATE_I64:
@@ -194,9 +190,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_S_PRI:
         case OP_LOAD_S_ALT:
         case OP_LREF_S_PRI:
-        case OP_LREF_S_ALT:
         case OP_SREF_S_PRI:
-        case OP_SREF_S_ALT:
         case OP_STOR_S_ALT:
         case OP_STOR_S_PRI:
         case OP_ZERO_S:
@@ -245,9 +239,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         }
 
         case OP_LOAD_PRI:
-        case OP_LOAD_ALT:
-        case OP_STOR_PRI:
-        case OP_STOR_ALT: {
+        case OP_STOR_PRI: {
             cell_t offset = readCell();
             return verifyDatOffset(offset);
         }
@@ -283,9 +275,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(1);
         }
 
-        case OP_PUSH_I_I64:
-            return pushStack(2);
-
         case OP_CALL: {
             // An OP_CALL must be preceded by a PUSH_C variant, and it must be in the
             // same block.
@@ -313,8 +302,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_JSLEQ:
         case OP_JSGRTR:
         case OP_JSGEQ:
-        case OP_SHL_C_PRI:
-        case OP_SHL_C_ALT:
         case OP_ADD_C:
         case OP_SMUL_C:
         case OP_CONST_PRI:
@@ -378,7 +365,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
 
-        case OP_INITARRAY_PRI:
         case OP_INITARRAY_ALT: {
             constexpr cell_t kMaxCells = INT_MAX / (2 * (int)sizeof(cell_t));
 

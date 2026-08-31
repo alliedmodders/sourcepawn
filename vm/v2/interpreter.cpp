@@ -128,18 +128,6 @@ bool Interpreter::visitPUSH_ADR(cell_t slot) {
 }
 
 bool
-Interpreter::visitPUSH_I_I64() {
-    cell_t* src = cx_->acquireAddrRange(regs_.pri(), sizeof(cell_t) * 2);
-    if (!src)
-        return false;
-    if (!cx_->pushStack(src[1]))
-        return false;
-    if (!cx_->pushStack(src[0]))
-        return false;
-    return true;
-}
-
-bool
 Interpreter::visitCALL(cell_t offset) {
     RefPtr<MethodInfo> target = cx_->AcquireMethod(offset);
     if (!target) {
@@ -334,14 +322,14 @@ Interpreter::visitINVERT() {
 }
 
 bool
-Interpreter::visitINC(PawnReg dest) {
-    regs_[dest] += 1;
+Interpreter::visitINC_PRI() {
+    regs_.pri() += 1;
     return true;
 }
 
 bool
-Interpreter::visitDEC(PawnReg dest) {
-    regs_[dest] -= 1;
+Interpreter::visitDEC_PRI() {
+    regs_.pri() -= 1;
     return true;
 }
 
@@ -372,30 +360,6 @@ Interpreter::visitSUB_ALT() {
 bool
 Interpreter::visitSMUL() {
     regs_.pri() *= regs_.alt();
-    return true;
-}
-
-bool
-Interpreter::visitSDIV(PawnReg dest) {
-    PawnReg dividendReg = dest;
-    PawnReg divisorReg = (dest == PawnReg::Pri) ? PawnReg::Alt : PawnReg::Pri;
-
-    cell_t divisor = regs_[divisorReg];
-    cell_t dividend = regs_[dividendReg];
-
-    if (divisor == 0) {
-        cx_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
-        return false;
-    }
-
-    // -INT_MIN / -1 is an overflow.
-    if (divisor == -1 && dividend == cell_t(0x80000000)) {
-        cx_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
-        return false;
-    }
-
-    regs_.pri() = dividend / divisor;
-    regs_.alt() = dividend % divisor;
     return true;
 }
 
@@ -456,13 +420,6 @@ Interpreter::visitSHR() {
 bool
 Interpreter::visitSSHR() {
     regs_.pri() >>= regs_.alt();
-    return true;
-}
-
-bool
-Interpreter::visitSHL_C(PawnReg dest, cell_t amount) {
-    // Only generated without the peephole optimizer.
-    regs_[dest] <<= amount;
     return true;
 }
 
@@ -562,19 +519,19 @@ Interpreter::visitIDXADDR() {
 }
 
 bool
-Interpreter::visitLREF_S(PawnReg dest, cell_t srcoffs) {
-    cell_t address;
-    if (!cx_->getFrameValue(StackOffset(srcoffs), &address))
+Interpreter::visitLREF_S_PRI(cell_t srcoffs) {
+    cell_t value;
+    if (!cx_->getFrameValue(StackOffset(srcoffs), &value))
         return false;
-    return cx_->getCellValue(address, &regs_[dest]);
+    return cx_->getCellValue(value, &regs_.pri());
 }
 
 bool
-Interpreter::visitSREF_S(cell_t destoffs, PawnReg src) {
-    cell_t address;
-    if (!cx_->getFrameValue(StackOffset(destoffs), &address))
+Interpreter::visitSREF_S_PRI(cell_t destoffs) {
+    cell_t value;
+    if (!cx_->getFrameValue(StackOffset(destoffs), &value))
         return false;
-    return cx_->setCellValue(address, regs_[src]);
+    return cx_->setCellValue(value, regs_.pri());
 }
 
 bool
@@ -620,13 +577,13 @@ Interpreter::visitSTRB_I(cell_t width) {
 }
 
 bool
-Interpreter::visitLOAD(PawnReg dest, cell_t srcaddr) {
-    return cx_->getCellValue(srcaddr, &regs_[dest]);
+Interpreter::visitLOAD_PRI(cell_t srcaddr) {
+    return cx_->getCellValue(srcaddr, &regs_.pri());
 }
 
 bool
-Interpreter::visitSTOR(cell_t address, PawnReg src) {
-    return cx_->setCellValue(address, regs_[src]);
+Interpreter::visitSTOR_PRI(cell_t address) {
+    return cx_->setCellValue(address, regs_.pri());
 }
 
 bool
@@ -643,9 +600,9 @@ Interpreter::visitXCHG() {
 }
 
 bool
-Interpreter::visitSWAP(PawnReg dest) {
-    cell_t temp = regs_[dest];
-    if (!cx_->popStack(&regs_[dest]))
+Interpreter::visitSWAP_ALT() {
+    cell_t temp = regs_.alt();
+    if (!cx_->popStack(&regs_.alt()))
         return false;
     return cx_->pushStack(temp);
 }
@@ -700,9 +657,9 @@ Interpreter::visitHEAP_RESTORE() {
 }
 
 bool
-Interpreter::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                            cell_t data_fill_size, cell_t fill_value) {
-    return cx_->initArray(regs_[reg], addr, iv_size, data_copy_size, data_fill_size, fill_value);
+Interpreter::visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                               cell_t data_fill_size, cell_t fill_value) {
+    return cx_->initArray(regs_.alt(), addr, iv_size, data_copy_size, data_fill_size, fill_value);
 }
 
 bool

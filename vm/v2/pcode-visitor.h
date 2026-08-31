@@ -35,16 +35,16 @@ class PcodeVisitor
   public:
     virtual bool beforeVisitOp(OPCODE op) { return true; }
     virtual bool visitBREAK() = 0;
-    virtual bool visitLOAD(PawnReg dest, cell_t srcaddr) = 0;
+    virtual bool visitLOAD_PRI(cell_t srcaddr) = 0;
     virtual bool visitLOAD_S(PawnReg dest, cell_t srcoffs) = 0;
-    virtual bool visitLREF_S(PawnReg dest, cell_t srcoffs) = 0;
+    virtual bool visitLREF_S_PRI(cell_t srcoffs) = 0;
     virtual bool visitLOAD_I() = 0;
     virtual bool visitLODB_I(cell_t width) = 0;
     virtual bool visitCONST(PawnReg dest, cell_t imm) = 0;
     virtual bool visitADDR(PawnReg dest, cell_t offset) = 0;
-    virtual bool visitSTOR(cell_t address, PawnReg src) = 0;
+    virtual bool visitSTOR_PRI(cell_t address) = 0;
     virtual bool visitSTOR_S(cell_t offset, PawnReg src) = 0;
-    virtual bool visitSREF_S(cell_t offset, PawnReg src) = 0;
+    virtual bool visitSREF_S_PRI(cell_t offset) = 0;
     virtual bool visitSTOR_I() = 0;
     virtual bool visitSTRB_I(cell_t width) = 0;
     virtual bool visitIDXADDR() = 0;
@@ -53,7 +53,6 @@ class PcodeVisitor
     virtual bool visitPUSH(PawnReg src) = 0;
     virtual bool visitPUSH_C(cell_t value) = 0;
     virtual bool visitPUSH_S(cell_t offset) = 0;
-    virtual bool visitPUSH_I_I64() = 0;
     virtual bool visitPOP(PawnReg dest) = 0;
     virtual bool visitHEAP(cell_t amount) = 0;
     virtual bool visitRETN() = 0;
@@ -63,9 +62,7 @@ class PcodeVisitor
     virtual bool visitSHL() = 0;
     virtual bool visitSHR() = 0;
     virtual bool visitSSHR() = 0;
-    virtual bool visitSHL_C(PawnReg dest, cell_t amount) = 0;
     virtual bool visitSMUL() = 0;
-    virtual bool visitSDIV(PawnReg dest) = 0;
     virtual bool visitSDIV_ALT_I32() = 0;
     virtual bool visitSMOD_ALT_I32() = 0;
     virtual bool visitADD() = 0;
@@ -82,20 +79,20 @@ class PcodeVisitor
     virtual bool visitZERO_S(cell_t offset) = 0;
     virtual bool visitZERO_S_I64(cell_t offset) = 0;
     virtual bool visitCompareOp(CompareOp op) = 0;
-    virtual bool visitINC(PawnReg dest) = 0;
-    virtual bool visitDEC(PawnReg dest) = 0;
+    virtual bool visitINC_PRI() = 0;
+    virtual bool visitDEC_PRI() = 0;
     virtual bool visitMOVS(uint32_t amount) = 0;
     virtual bool visitMOVE_I64() = 0;
     virtual bool visitFILL(uint32_t amount) = 0;
     virtual bool visitBOUNDS(uint32_t limit) = 0;
-    virtual bool visitSWAP(PawnReg dest) = 0;
+    virtual bool visitSWAP_ALT() = 0;
     virtual bool visitPUSH_ADR(cell_t slot) = 0;
     virtual bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) = 0;
     virtual bool visitGENARRAY(uint32_t dims, bool autozero) = 0;
     virtual bool visitSTRADJUST_PRI() = 0;
     virtual bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) = 0;
-    virtual bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                                cell_t data_fill_size, cell_t fill_value) = 0;
+    virtual bool visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                                    cell_t data_fill_size, cell_t fill_value) = 0;
     virtual bool visitHEAP_SAVE() = 0;
     virtual bool visitHEAP_RESTORE() = 0;
     virtual bool visitCVT_I64(cell_t slot) = 0;

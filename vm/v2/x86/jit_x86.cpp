@@ -216,13 +216,6 @@ Compiler::visitSSHR() {
 }
 
 bool
-Compiler::visitSHL_C(PawnReg dest, cell_t amount) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ shll(reg, amount);
-    return true;
-}
-
-bool
 Compiler::visitSMUL() {
     __ imull(pri, alt);
     return true;
@@ -288,23 +281,20 @@ Compiler::visitCompareOp(CompareOp op) {
 }
 
 bool
-Compiler::visitINC(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ addl(reg, 1);
+Compiler::visitINC_PRI() {
+    __ addl(pri, 1);
     return true;
 }
 
 bool
-Compiler::visitDEC(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ subl(reg, 1);
+Compiler::visitDEC_PRI() {
+    __ subl(pri, 1);
     return true;
 }
 
 bool
-Compiler::visitLOAD(PawnReg dest, cell_t srcaddr) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(dat, srcaddr));
+Compiler::visitLOAD_PRI(cell_t srcaddr) {
+    __ movl(pri, Operand(dat, srcaddr));
     return true;
 }
 
@@ -316,10 +306,9 @@ Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
 }
 
 bool
-Compiler::visitLREF_S(PawnReg dest, cell_t srcoffs) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(frm, StackOffset(srcoffs)));
-    __ movl(reg, Operand(dat, reg, NoScale));
+Compiler::visitLREF_S_PRI(cell_t srcoffs) {
+    __ movl(pri, Operand(frm, StackOffset(srcoffs)));
+    __ movl(pri, Operand(dat, pri, NoScale));
     return true;
 }
 
@@ -339,9 +328,8 @@ Compiler::visitADDR(PawnReg dest, cell_t offset) {
 }
 
 bool
-Compiler::visitSTOR(cell_t offset, PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(Operand(dat, offset), reg);
+Compiler::visitSTOR_PRI(cell_t offset) {
+    __ movl(Operand(dat, offset), pri);
     return true;
 }
 
@@ -359,10 +347,9 @@ Compiler::visitIDXADDR() {
 }
 
 bool
-Compiler::visitSREF_S(cell_t offset, PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
+Compiler::visitSREF_S_PRI(cell_t offset) {
     __ movl(tmp, Operand(frm, StackOffset(offset)));
-    __ movl(Operand(dat, tmp, NoScale), reg);
+    __ movl(Operand(dat, tmp, NoScale), pri);
     return true;
 }
 
@@ -375,11 +362,10 @@ Compiler::visitPOP(PawnReg dest) {
 }
 
 bool
-Compiler::visitSWAP(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
+Compiler::visitSWAP_ALT() {
     __ movl(tmp, Operand(stk, 0));
-    __ movl(Operand(stk, 0), reg);
-    __ movl(reg, tmp);
+    __ movl(Operand(stk, 0), alt);
+    __ movl(alt, tmp);
     return true;
 }
 
@@ -398,9 +384,9 @@ Compiler::visitSTOR_I() {
 }
 
 bool
-Compiler::visitSDIV(PawnReg dest) {
-    Register dividend = (dest == PawnReg::Pri) ? pri : alt;
-    Register divisor = (dest == PawnReg::Pri) ? alt : pri;
+Compiler::visitSDIV_ALT_I32() {
+    Register dividend = alt;
+    Register divisor = pri;
 
     // Guard against divide-by-zero.
     __ testl(divisor, divisor);
@@ -416,24 +402,15 @@ Compiler::visitSDIV(PawnReg dest) {
 
     // Now we can actually perform the divide.
     __ movl(tmp, divisor);
-    if (dest == PawnReg::Pri)
-        __ movl(edx, dividend);
-    else
-        __ movl(eax, dividend);
+    __ movl(eax, dividend);
     __ sarl(edx, 31);
     __ idivl(tmp);
     return true;
 }
 
 bool
-Compiler::visitSDIV_ALT_I32() {
-    visitSDIV(PawnReg::Alt);
-    return true;
-}
-
-bool
 Compiler::visitSMOD_ALT_I32() {
-    visitSDIV(PawnReg::Alt);
+    visitSDIV_ALT_I32();
     __ movl(eax, edx);
     return true;
 }
@@ -616,15 +593,12 @@ Compiler::visitJcmp(CompareOp op, cell_t offset) {
 }
 
 bool
-Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                         cell_t data_fill_size, cell_t fill_value) {
+Compiler::visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                             cell_t data_fill_size, cell_t fill_value) {
     if (!iv_size) {
         // This is a flat array, we can inline something a little faster.
         __ push(edi);
-        if (reg == PawnReg::Pri)
-            __ lea(edi, Operand(dat, pri, NoScale));
-        else
-            __ lea(edi, Operand(dat, alt, NoScale));
+        __ lea(edi, Operand(dat, alt, NoScale));
         if (data_copy_size) {
             __ push(esi);
             __ lea(esi, Operand(dat, addr));
@@ -652,10 +626,7 @@ Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_c
         __ push(data_copy_size);
         __ push(iv_size);
         __ push(addr);
-        if (reg == PawnReg::Pri)
-            __ push(pri);
-        else
-            __ push(alt);
+        __ push(alt);
         __ push(intptr_t(rt_->GetBaseContext()));
         // :TODO: this needs an exit frame!
         __ callWithABI(ExternalAddress((void*)InvokeInitArray));
@@ -1046,17 +1017,6 @@ Compiler::emitFloatCmp(ConditionCode cc) {
         __ set(cc, r8_al);
     }
     __ addl(stk, 8);
-}
-
-bool
-Compiler::visitPUSH_I_I64() {
-    emitCheckAddress(pri, sizeof(int64_t));
-    __ movl(tmp, Operand(dat, pri, NoScale, 4));
-    __ movl(Operand(stk, -4), tmp);
-    __ movl(tmp, Operand(dat, pri, NoScale, 0));
-    __ movl(Operand(stk, -8), tmp);
-    __ subl(stk, 8);
-    return true;
 }
 
 bool
@@ -1720,4 +1680,4 @@ bool CompilerBase::SupportsPlugin(PluginContext* cx) {
     return true;
 }
 
-} // namespace sp
+} // namespace sp::v2

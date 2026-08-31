@@ -200,9 +200,8 @@ bool Compiler::visitBREAK() {
     return true;
 }
 
-bool Compiler::visitLOAD(PawnReg dest, cell_t srcaddr) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(dat, srcaddr));
+bool Compiler::visitLOAD_PRI(cell_t srcaddr) {
+    __ movl(pri, Operand(dat, srcaddr));
     return true;
 }
 
@@ -212,10 +211,9 @@ bool Compiler::visitLOAD_S(PawnReg dest, cell_t srcoffs) {
     return true;
 }
 
-bool Compiler::visitLREF_S(PawnReg dest, cell_t srcoffs) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ movl(reg, Operand(frm, StackOffset(srcoffs)));
-    __ movl(reg, Operand(dat, reg, NoScale));
+bool Compiler::visitLREF_S_PRI(cell_t srcoffs) {
+    __ movl(pri, Operand(frm, StackOffset(srcoffs)));
+    __ movl(pri, Operand(dat, pri, NoScale));
     return true;
 }
 
@@ -248,9 +246,8 @@ bool Compiler::visitADDR(PawnReg dest, cell_t offset) {
     return true;
 }
 
-bool Compiler::visitSTOR(cell_t offset, PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ movl(Operand(dat, offset), reg);
+bool Compiler::visitSTOR_PRI(cell_t offset) {
+    __ movl(Operand(dat, offset), pri);
     return true;
 }
 
@@ -260,10 +257,9 @@ bool Compiler::visitSTOR_S(cell_t offset, PawnReg src) {
     return true;
 }
 
-bool Compiler::visitSREF_S(cell_t offset, PawnReg src) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
+bool Compiler::visitSREF_S_PRI(cell_t offset) {
     __ movl(tmp, Operand(frm, StackOffset(offset)));
-    __ movl(Operand(dat, tmp, NoScale), reg);
+    __ movl(Operand(dat, tmp, NoScale), pri);
     return true;
 }
 
@@ -316,8 +312,8 @@ bool Compiler::visitPUSH_C(cell_t value) {
     return true;
 }
 
-bool Compiler::visitPUSH_S(cell_t slot) {
-    __ movl(tmp, Operand(frm, StackOffset(slot)));
+bool Compiler::visitPUSH_S(cell_t offset) {
+    __ movl(tmp, Operand(frm, StackOffset(offset)));
     __ movl(Operand(stk, -4), tmp);
     __ subq(stk, 4);
     return true;
@@ -496,20 +492,14 @@ bool Compiler::visitSSHR() {
     return true;
 }
 
-bool Compiler::visitSHL_C(PawnReg dest, cell_t amount) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ shll(reg, amount);
-    return true;
-}
-
 bool Compiler::visitSMUL() {
     __ imull(pri, alt);
     return true;
 }
 
-bool Compiler::visitSDIV(PawnReg dest) {
-    Register dividend = (dest == PawnReg::Pri) ? pri : alt;
-    Register divisor = (dest == PawnReg::Pri) ? alt : pri;
+bool Compiler::visitSDIV_ALT_I32() {
+    Register dividend = alt;
+    Register divisor = pri;
 
     // Guard against divide-by-zero.
     __ testl(divisor, divisor);
@@ -525,23 +515,15 @@ bool Compiler::visitSDIV(PawnReg dest) {
 
     // Now we can actually perform the divide.
     __ movl(tmp, divisor);
-    if (dest == PawnReg::Pri)
-        __ movl(rdx, dividend);
-    else
-        __ movl(rax, dividend);
+    __ movl(rax, dividend);
     __ sarl(rdx, 31);
     __ idivl(tmp);
     return true;
 }
 
-bool Compiler::visitSDIV_ALT_I32() {
-    visitSDIV(PawnReg::Alt);
-    return true;
-}
-
 bool Compiler::visitSMOD_ALT_I32() {
-    visitSDIV(PawnReg::Alt);
-    __ movl(rax, rdx);
+    visitSDIV_ALT_I32();
+    __ movl(pri, rdx);
     return true;
 }
 
@@ -618,15 +600,13 @@ bool Compiler::visitCompareOp(CompareOp op) {
     return true;
 }
 
-bool Compiler::visitINC(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ addl(reg, 1);
+bool Compiler::visitINC_PRI() {
+    __ addl(pri, 1);
     return true;
 }
 
-bool Compiler::visitDEC(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
-    __ subl(reg, 1);
+bool Compiler::visitDEC_PRI() {
+    __ subl(pri, 1);
     return true;
 }
 
@@ -668,11 +648,10 @@ bool Compiler::visitBOUNDS(uint32_t limit) {
     return true;
 }
 
-bool Compiler::visitSWAP(PawnReg dest) {
-    Register reg = (dest == PawnReg::Pri) ? pri : alt;
+bool Compiler::visitSWAP_ALT() {
     __ movl(tmp, Operand(stk, 0));
-    __ movl(Operand(stk, 0), reg);
-    __ movl(reg, tmp);
+    __ movl(Operand(stk, 0), alt);
+    __ movl(alt, tmp);
     return true;
 }
 
@@ -924,14 +903,11 @@ int InvokeInitArray(PluginContext* cx, cell_t base_addr, InitArrayArgs* args) {
                          args->data_fill_size, args->fill_value) ? 1 : 0;
 }
 
-bool Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                              cell_t data_fill_size, cell_t fill_value) {
+bool Compiler::visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                                  cell_t data_fill_size, cell_t fill_value) {
     if (!iv_size) {
         // This is a flat array, we can inline something a little faster.
-        if (reg == PawnReg::Pri)
-            __ lea(rdi, Operand(dat, pri, NoScale));
-        else
-            __ lea(rdi, Operand(dat, alt, NoScale));
+        __ lea(rdi, Operand(dat, alt, NoScale));
         if (data_copy_size) {
             __ lea(rsi, Operand(dat, addr));
             __ cld();
@@ -960,7 +936,7 @@ bool Compiler::visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t d
         __ subq(rsp, args_size);
 
         // Make sure pri/alt get used first since rdx is used for argument passing.
-        __ movq(ArgReg1, (reg == PawnReg::Pri) ? pri : alt);
+        __ movq(ArgReg1, alt);
         __ lea(ArgReg2, Operand(rsp, kShadowStackSize));
         __ movl(Operand(ArgReg2, offsetof(InitArrayArgs, fill_value)), fill_value);
         __ movl(Operand(ArgReg2, offsetof(InitArrayArgs, data_fill_size)), data_fill_size);
@@ -1002,14 +978,6 @@ bool Compiler::visitHEAP_RESTORE() {
     __ movl(hpAddr(), rcx);
     // Update the heap scope.
     __ movl(hpScopeAddr(), alt);
-    return true;
-}
-
-bool Compiler::visitPUSH_I_I64() {
-    emitCheckAddress(pri, sizeof(int64_t));
-    __ movq(tmp, Operand(dat, pri, NoScale, 0));
-    __ movq(Operand(stk, -8), tmp);
-    __ subq(stk, 8);
     return true;
 }
 

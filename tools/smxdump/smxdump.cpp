@@ -618,8 +618,6 @@ class DumpTool final {
 
         switch (op) {
             case OP_PUSH_C:
-            case OP_SHL_C_PRI:
-            case OP_SHL_C_ALT:
             case OP_ADD_C:
             case OP_SMUL_C:
             case OP_HEAP:
@@ -629,9 +627,7 @@ class DumpTool final {
             case OP_CONST_ALT:
             case OP_MOVS:
             case OP_LOAD_PRI:
-            case OP_LOAD_ALT:
             case OP_STOR_PRI:
-            case OP_STOR_ALT:
             case OP_FILL:
                 fprintf(stdout, " %d", readCell());
                 break;
@@ -660,9 +656,7 @@ class DumpTool final {
             case OP_ZERO_S_I64:
             case OP_STOR_S_PRI_I64:
             case OP_LREF_S_PRI:
-            case OP_LREF_S_ALT:
             case OP_SREF_S_PRI:
-            case OP_SREF_S_ALT:
                 fprintf(stdout, " %d", readInt16());
                 break;
 
@@ -725,7 +719,6 @@ class DumpTool final {
                 break;
             }
 
-            case OP_INITARRAY_PRI:
             case OP_INITARRAY_ALT: {
                 cell_t v0 = readCell();
                 cell_t v1 = readCell();

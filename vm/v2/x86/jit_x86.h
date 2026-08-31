@@ -44,16 +44,16 @@ class Compiler : public CompilerBase
     ~Compiler();
 
     bool visitBREAK() override;
-    bool visitLOAD(PawnReg dest, cell_t srcaddr) override;
+    bool visitLOAD_PRI(cell_t srcaddr) override;
     bool visitLOAD_S(PawnReg dest, cell_t srcoffs) override;
-    bool visitLREF_S(PawnReg dest, cell_t srcoffs) override;
+    bool visitLREF_S_PRI(cell_t srcoffs) override;
     bool visitLOAD_I() override;
     bool visitLODB_I(cell_t width) override;
     bool visitCONST(PawnReg dest, cell_t imm) override;
     bool visitADDR(PawnReg dest, cell_t offset) override;
-    bool visitSTOR(cell_t offset, PawnReg src) override;
+    bool visitSTOR_PRI(cell_t offset) override;
     bool visitSTOR_S(cell_t offset, PawnReg src) override;
-    bool visitSREF_S(cell_t offset, PawnReg src) override;
+    bool visitSREF_S_PRI(cell_t offset) override;
     bool visitSTOR_I() override;
     bool visitSTRB_I(cell_t width) override;
     bool visitIDXADDR() override;
@@ -70,9 +70,7 @@ class Compiler : public CompilerBase
     bool visitSHL() override;
     bool visitSHR() override;
     bool visitSSHR() override;
-    bool visitSHL_C(PawnReg dest, cell_t amount) override;
     bool visitSMUL() override;
-    bool visitSDIV(PawnReg dest) override;
     bool visitSDIV_ALT_I32() override;
     bool visitSMOD_ALT_I32() override;
     bool visitADD() override;
@@ -88,22 +86,21 @@ class Compiler : public CompilerBase
     bool visitZERO(PawnReg dest) override;
     bool visitZERO_S(cell_t offset) override;
     bool visitCompareOp(CompareOp op) override;
-    bool visitINC(PawnReg dest) override;
-    bool visitDEC(PawnReg dest) override;
+    bool visitINC_PRI() override;
+    bool visitDEC_PRI() override;
     bool visitMOVS(uint32_t amount) override;
     bool visitFILL(uint32_t amount) override;
     bool visitBOUNDS(uint32_t limit) override;
-    bool visitSWAP(PawnReg dest) override;
+    bool visitSWAP_ALT() override;
     bool visitPUSH_ADR(cell_t slot) override;
     bool visitSYSREQ_N(uint32_t native_index, uint32_t nparams) override;
     bool visitGENARRAY(uint32_t dims, bool autozero) override;
     bool visitSTRADJUST_PRI() override;
     bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override;
-    bool visitINITARRAY(PawnReg reg, cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                        cell_t data_fill_size, cell_t fill_value) override;
+    bool visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
+                            cell_t data_fill_size, cell_t fill_value) override;
     bool visitHEAP_SAVE() override;
     bool visitHEAP_RESTORE() override;
-    bool visitPUSH_I_I64() override;
     bool visitMOVE_I64() override;
     bool visitCVT_I64(cell_t slot) override;
     bool visitTRUNCATE_I64() override;

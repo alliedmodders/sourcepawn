@@ -117,11 +117,9 @@ class PcodeReader
             case OP_BREAK:
                 return visitor_->visitBREAK();
 
-            case OP_LOAD_PRI:
-            case OP_LOAD_ALT: {
-                PawnReg reg = (op == OP_LOAD_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
-                return visitor_->visitLOAD(reg, offset);
+            case OP_LOAD_PRI: {
+                cell_t srcaddr = readCell();
+                return visitor_->visitLOAD_PRI(srcaddr);
             }
 
             case OP_LOAD_S_PRI:
@@ -131,11 +129,9 @@ class PcodeReader
                 return visitor_->visitLOAD_S(reg, offset);
             }
 
-            case OP_LREF_S_PRI:
-            case OP_LREF_S_ALT: {
-                PawnReg reg = (op == OP_LREF_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
+            case OP_LREF_S_PRI: {
                 cell_t offset = readInt16();
-                return visitor_->visitLREF_S(reg, offset);
+                return visitor_->visitLREF_S_PRI(offset);
             }
 
             case OP_LOAD_I:
@@ -160,11 +156,9 @@ class PcodeReader
                 return visitor_->visitADDR(reg, offset);
             }
 
-            case OP_STOR_PRI:
-            case OP_STOR_ALT: {
-                PawnReg reg = (op == OP_STOR_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t offset = readCell();
-                return visitor_->visitSTOR(offset, reg);
+            case OP_STOR_PRI: {
+                cell_t address = readCell();
+                return visitor_->visitSTOR_PRI(address);
             }
 
             case OP_STOR_S_PRI:
@@ -180,11 +174,9 @@ class PcodeReader
                 return visitor_->visitSTOR_S_C(offset, value);
             }
 
-            case OP_SREF_S_PRI:
-            case OP_SREF_S_ALT: {
-                PawnReg reg = (op == OP_SREF_S_PRI) ? PawnReg::Pri : PawnReg::Alt;
+            case OP_SREF_S_PRI: {
                 cell_t offset = readInt16();
-                return visitor_->visitSREF_S(offset, reg);
+                return visitor_->visitSREF_S_PRI(offset);
             }
 
             case OP_STOR_I:
@@ -224,9 +216,6 @@ class PcodeReader
                 cell_t slot = readInt16();
                 return visitor_->visitPUSH_S(slot);
             }
-
-            case OP_PUSH_I_I64:
-                return visitor_->visitPUSH_I_I64();
 
             case OP_POP_PRI:
             case OP_POP_ALT: {
@@ -348,19 +337,8 @@ class PcodeReader
             case OP_SSHR:
                 return visitor_->visitSSHR();
 
-            case OP_SHL_C_PRI:
-            case OP_SHL_C_ALT: {
-                PawnReg reg = (op == OP_SHL_C_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t val = readCell();
-                return visitor_->visitSHL_C(reg, val);
-            }
-
             case OP_SMUL:
                 return visitor_->visitSMUL();
-            case OP_SDIV:
-                return visitor_->visitSDIV(PawnReg::Pri);
-            case OP_SDIV_ALT:
-                return visitor_->visitSDIV(PawnReg::Alt);
             case OP_SDIV_ALT_I32:
                 return visitor_->visitSDIV_ALT_I32();
             case OP_SMOD_ALT_I32:
@@ -463,14 +441,10 @@ class PcodeReader
                 return visitor_->visitCompareOpF32(CompareOp::Sgeq);
 
             case OP_INC_PRI:
-                return visitor_->visitINC(PawnReg::Pri);
-            case OP_INC_ALT:
-                return visitor_->visitINC(PawnReg::Alt);
+                return visitor_->visitINC_PRI();
 
             case OP_DEC_PRI:
-                return visitor_->visitDEC(PawnReg::Pri);
-            case OP_DEC_ALT:
-                return visitor_->visitDEC(PawnReg::Alt);
+                return visitor_->visitDEC_PRI();
 
             case OP_MOVS: {
                 cell_t val = readCell();
@@ -490,10 +464,8 @@ class PcodeReader
                 return visitor_->visitBOUNDS(value);
             }
 
-            case OP_SWAP_PRI:
             case OP_SWAP_ALT: {
-                PawnReg reg = (op == OP_SWAP_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                return visitor_->visitSWAP(reg);
+                return visitor_->visitSWAP_ALT();
             }
 
             case OP_PUSH_ADR:
@@ -550,16 +522,14 @@ class PcodeReader
                 return true;
             }
 
-            case OP_INITARRAY_PRI:
             case OP_INITARRAY_ALT: {
-                PawnReg reg = (op == OP_INITARRAY_PRI) ? PawnReg::Pri : PawnReg::Alt;
                 cell_t addr = readCell();
                 cell_t iv_size = readCell();
                 cell_t data_copy_size = readCell();
                 cell_t data_fill_size = readCell();
                 cell_t fill_value = readCell();
-                return visitor_->visitINITARRAY(reg, addr, iv_size, data_copy_size, data_fill_size,
-                                                fill_value);
+                return visitor_->visitINITARRAY_ALT(addr, iv_size, data_copy_size, data_fill_size,
+                                                    fill_value);
             }
 
             case OP_HEAP_SAVE:

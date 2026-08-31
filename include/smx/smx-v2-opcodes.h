@@ -35,11 +35,9 @@ namespace v2 {
 #define OPCODE_LIST_V2(FOR_EACH) \
     FOR_EACH(NONE, 0, "none", 1) \
     FOR_EACH(LOAD_PRI, 1, "load.pri", 5) \
-    FOR_EACH(LOAD_ALT, 2, "load.alt", 5) \
     FOR_EACH(LOAD_S_PRI, 3, "load.s.pri", 3) \
     FOR_EACH(LOAD_S_ALT, 4, "load.s.alt", 3) \
     FOR_EACH(LREF_S_PRI, 5, "lref.s.pri", 3) \
-    FOR_EACH(LREF_S_ALT, 6, "lref.s.alt", 3) \
     FOR_EACH(LOAD_I, 7, "load.i", 1) \
     FOR_EACH(LODB_I, 8, "lodb.i", 5) \
     FOR_EACH(CONST_PRI, 9, "const.pri", 5) \
@@ -47,12 +45,10 @@ namespace v2 {
     FOR_EACH(ADDR_PRI, 11, "addr.pri", 3) \
     FOR_EACH(ADDR_ALT, 12, "addr.alt", 3) \
     FOR_EACH(STOR_PRI, 13, "stor.pri", 5) \
-    FOR_EACH(STOR_ALT, 14, "stor.alt", 5) \
     FOR_EACH(STOR_S_PRI, 15, "stor.s.pri", 3) \
     FOR_EACH(STOR_S_ALT, 16, "stor.s.alt", 3) \
     FOR_EACH(STOR_S_C, 17, "stor.s.c", 7) \
     FOR_EACH(SREF_S_PRI, 18, "sref.s.pri", 3) \
-    FOR_EACH(SREF_S_ALT, 19, "sref.s.alt", 3) \
     FOR_EACH(STOR_I, 20, "stor.i", 1) \
     FOR_EACH(STRB_I, 21, "strb.i", 5) \
     FOR_EACH(IDXADDR, 22, "idxaddr", 1) \
@@ -81,11 +77,7 @@ namespace v2 {
     FOR_EACH(SHL, 45, "shl", 1) \
     FOR_EACH(SHR, 46, "shr", 1) \
     FOR_EACH(SSHR, 47, "sshr", 1) \
-    FOR_EACH(SHL_C_PRI, 48, "shl.c.pri", 5) \
-    FOR_EACH(SHL_C_ALT, 49, "shl.c.alt", 5) \
     FOR_EACH(SMUL, 50, "smul", 1) \
-    FOR_EACH(SDIV, 51, "sdiv", 1) \
-    FOR_EACH(SDIV_ALT, 52, "sdiv.alt", 1) \
     FOR_EACH(SDIV_ALT_I32, 53, "sdiv.i32", 1) \
     FOR_EACH(SMOD_ALT_I32, 54, "smod.i32", 1) \
     FOR_EACH(ADD, 55, "add", 1) \
@@ -109,9 +101,7 @@ namespace v2 {
     FOR_EACH(SGRTR, 73, "sgrtr", 1) \
     FOR_EACH(SGEQ, 74, "sgeq", 1) \
     FOR_EACH(INC_PRI, 77, "inc.pri", 1) \
-    FOR_EACH(INC_ALT, 78, "inc.alt", 1) \
     FOR_EACH(DEC_PRI, 79, "dec.pri", 1) \
-    FOR_EACH(DEC_ALT, 80, "dec.alt", 1) \
     FOR_EACH(MOVS, 81, "movs", 5) \
     FOR_EACH(FILL, 82, "fill", 5) \
     FOR_EACH(BOUNDS, 83, "bounds", 5) \
@@ -127,7 +117,6 @@ namespace v2 {
     FOR_EACH(GENARRAY_Z, 93, "genarray.z", 5) \
     FOR_EACH(STRADJUST_PRI, 94, "stradjust.pri", 1) \
     FOR_EACH(ENDPROC, 95, "endproc", 1) \
-    FOR_EACH(INITARRAY_PRI, 96, "initarray.pri", 21) \
     FOR_EACH(INITARRAY_ALT, 97, "initarray.alt", 21) \
     FOR_EACH(HEAP_SAVE, 98, "heap.save", 1) \
     FOR_EACH(HEAP_RESTORE, 99, "heap.restore", 1) \
@@ -146,7 +135,6 @@ namespace v2 {
     FOR_EACH(CVT_F32, 112, "cvt.f32", 1) \
     FOR_EACH(MOD_ALT_F32, 113, "mod.alt.f32", 1) \
     FOR_EACH(MOVE_I64, 114, "move.i64", 1) \
-    FOR_EACH(PUSH_I_I64, 115, "push.i.i64", 1) \
     FOR_EACH(CVT_I64, 116, "cvt.i64", 3) \
     FOR_EACH(TRUNCATE_I64, 117, "truncate.i64", 1) \
     FOR_EACH(TEST_I64, 118, "test.i64", 1) \

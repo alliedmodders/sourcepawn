@@ -65,8 +65,6 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
 
     switch (op) {
         case OP_PUSH_C:
-        case OP_SHL_C_PRI:
-        case OP_SHL_C_ALT:
         case OP_ADD_C:
         case OP_SMUL_C:
         case OP_HEAP:
@@ -76,9 +74,7 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
         case OP_CONST_ALT:
         case OP_MOVS:
         case OP_LOAD_PRI:
-        case OP_LOAD_ALT:
         case OP_STOR_PRI:
-        case OP_STOR_ALT:
         case OP_FILL:
             fprintf(fp, "%d", reader.read<cell_t>());
             break;
@@ -107,9 +103,7 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
         case OP_ZERO_S_I64:
         case OP_STOR_S_PRI_I64:
         case OP_LREF_S_PRI:
-        case OP_LREF_S_ALT:
         case OP_SREF_S_PRI:
-        case OP_SREF_S_ALT:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 
@@ -157,7 +151,6 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const uint8_t* start, const ui
             break;
         }
 
-        case OP_INITARRAY_PRI:
         case OP_INITARRAY_ALT: {
             cell_t v0 = reader.read<cell_t>();
             cell_t v1 = reader.read<cell_t>();
