@@ -43,4 +43,22 @@ void SpArray::NestedFinalizer(HeapItem* obj) {
     }
 }
 
+void SpObject::NestedFinalizer(HeapItem* obj) {
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto td = obj->td;
+    auto offsets = td->heap_item_offsets();
+
+    uint8_t* payload = reinterpret_cast<uint8_t*>(obj);
+    for (size_t i = 0; i < offsets.size(); i++) {
+        cell_t* field_ptr = reinterpret_cast<cell_t*>(payload + offsets[i]);
+        cell_t value = *field_ptr;
+        if (!value)
+            continue;
+        auto child = vm.ToPhysAddr<HeapItem*>(value);
+        child->Release();
+    }
+}
+
 } // namespace sp

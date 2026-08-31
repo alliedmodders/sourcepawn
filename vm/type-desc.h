@@ -37,6 +37,7 @@ enum class TypeKind : uint8_t {
     ArraySlice,
     Reference,
     EnumStruct,
+    Object,
 };
 
 struct HeapItem;
@@ -87,15 +88,18 @@ class TypeDesc final {
         clsdef.classdef = classdef;
         clsdef.total_size = 0;
         clsdef.field_offsets = {};
+        clsdef.heap_item_offsets = {};
     }
 
-    TypeDesc(const smx_rtti_classdef* classdef, uint32_t total_size, std::span<uint32_t> field_offsets)
-      : kind_(TypeKind::EnumStruct),
+    TypeDesc(const smx_rtti_classdef* classdef, uint32_t total_size,
+             std::span<uint32_t> field_offsets, std::span<uint32_t> heap_item_offsets)
+      : kind_(heap_item_offsets.empty() ? TypeKind::EnumStruct : TypeKind::Object),
         can_global_cache_(false)
     {
         clsdef.classdef = classdef;
         clsdef.total_size = total_size;
         clsdef.field_offsets = field_offsets;
+        clsdef.heap_item_offsets = heap_item_offsets;
     }
 
     TypeDesc(const TypeDesc* return_type, std::span<const TypeDesc*> args, bool is_native)
@@ -117,6 +121,8 @@ class TypeDesc final {
                 return (array.size * array.elt->element_size() + 3) & ~3;
             case TypeKind::EnumStruct:
                 return clsdef.total_size;
+            case TypeKind::Object:
+                return sizeof(int32_t);
             case TypeKind::LegacyVarArgs:
                 assert(false);
                 return 0;
@@ -146,6 +152,7 @@ class TypeDesc final {
             case TypeKind::Array:
             case TypeKind::FixedArray:
             case TypeKind::FlatArray:
+            case TypeKind::Object:
                 return sizeof(uint32_t);
 
             case TypeKind::EnumStruct:
@@ -200,6 +207,7 @@ class TypeDesc final {
     }
 
     bool IsFunction() const { return kind_ == TypeKind::Function; }
+    bool IsObject() const { return kind_ == TypeKind::Object; }
     const TypeDesc* return_type() const {
         assert(IsFunction());
         return func.return_type;
@@ -229,6 +237,7 @@ class TypeDesc final {
             case TypeKind::FixedArray:
             case TypeKind::Array:
             case TypeKind::Function:
+            case TypeKind::Object:
                 return true;
             default:
                 return false;
@@ -236,7 +245,7 @@ class TypeDesc final {
     }
 
     bool HasClassdef() const {
-        return kind_ == TypeKind::EnumStruct;
+        return kind_ == TypeKind::EnumStruct || kind_ == TypeKind::Object;
     }
     const smx_rtti_classdef* cls() const {
         assert(HasClassdef());
@@ -249,6 +258,10 @@ class TypeDesc final {
     std::span<uint32_t> cls_offsets() const {
         assert(HasClassdef());
         return clsdef.field_offsets;
+    }
+    std::span<uint32_t> heap_item_offsets() const {
+        assert(kind_ == TypeKind::Object);
+        return clsdef.heap_item_offsets;
     }
 
     typedef void (*Finalizer)(HeapItem* item);
@@ -264,6 +277,13 @@ class TypeDesc final {
 
   private:
     void set_finalizer(Finalizer finalizer) { finalizer_ = finalizer; }
+    void init_clsdef(uint32_t total_size,
+                     std::span<uint32_t> field_offsets,
+                     std::span<uint32_t> heap_item_offsets) {
+        clsdef.total_size = total_size;
+        clsdef.field_offsets = field_offsets;
+        clsdef.heap_item_offsets = heap_item_offsets;
+    }
 
   private:
 #ifndef NDEBUG
@@ -283,6 +303,7 @@ class TypeDesc final {
             const smx_rtti_classdef* classdef;
             uint32_t total_size;
             std::span<uint32_t> field_offsets;
+            std::span<uint32_t> heap_item_offsets;
         } clsdef;
         struct {
             const TypeDesc* return_type;

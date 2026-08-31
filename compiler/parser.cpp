@@ -47,6 +47,7 @@ Parser::Parser(CompileContext& cc, Semantics* sema)
     lexer_(cc.lexer())
 {
     types_ = cc_.types();
+    class_atom_ = cc_.atom("class");
 }
 
 Parser::~Parser()
@@ -82,6 +83,10 @@ Parser::Parse()
                 /* ignore zero's */
                 break;
             case tSYMBOL:
+                if (lexer_->current_token()->atom == class_atom_) {
+                    decl = parse_class();
+                    break;
+                }
                 // Fallthrough.
             case tINT:
             case tOBJECT:
@@ -453,6 +458,54 @@ Parser::parse_enumstruct()
     }
 
     auto stmt = new EnumStructDecl(pos, struct_name);
+
+    std::vector<LayoutFieldDecl*> fields;
+    std::vector<FunctionDecl*> methods;
+
+    int opening_line = lexer_->fline();
+    while (!lexer_->match('}')) {
+        if (!lexer_->freading()) {
+            report(151) << opening_line;
+            break;
+        }
+
+        declinfo_t decl = {};
+        if (!parse_new_decl(&decl, nullptr, DECLFLAG_FIELD))
+            continue;
+
+        auto decl_pos = lexer_->pos();
+        if (!decl.type.has_postdims && lexer_->peek('(')) {
+            auto fun = new MemberFunctionDecl(decl_pos, stmt, decl);
+            fun->set_is_stock();
+            if (!parse_function(fun, 0, true))
+                continue;
+
+            methods.emplace_back(fun);
+            continue;
+        }
+
+        fields.emplace_back(new LayoutFieldDecl(decl_pos, decl, stmt));
+
+        lexer_->require_newline(TerminatorPolicy::Semicolon);
+    }
+
+    new (&stmt->fields()) PoolArray<LayoutFieldDecl*>(fields);
+    new (&stmt->methods()) PoolArray<FunctionDecl*>(methods);
+
+    lexer_->require_newline(TerminatorPolicy::Newline);
+    return stmt;
+}
+
+Decl* Parser::parse_class() {
+    auto pos = lexer_->pos();
+
+    Atom* class_name;
+    if (!lexer_->needsymbol(&class_name))
+        return nullptr;
+    if (!lexer_->need('{'))
+        return nullptr;
+
+    auto stmt = new ClassDecl(pos, class_name);
 
     std::vector<LayoutFieldDecl*> fields;
     std::vector<FunctionDecl*> methods;

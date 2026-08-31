@@ -82,6 +82,7 @@ class RttiBuilder
     uint32_t add_typeset(Type* type, funcenum_t* fe);
     uint32_t add_struct(Type* type);
     uint32_t add_enumstruct(Type* type);
+    uint32_t add_class(Type* type);
     uint32_t encode_signature(FunctionDecl* decl);
     void encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft);
     void encode_enum_into(std::vector<uint8_t>& bytes, Type* type);
@@ -91,6 +92,7 @@ class RttiBuilder
     void encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe);
     void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type);
+    void encode_class_into(std::vector<uint8_t>& bytes, Type* type);
 
     //void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
     void build_debuginfo();

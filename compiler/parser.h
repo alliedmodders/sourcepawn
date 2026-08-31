@@ -58,6 +58,7 @@ class Parser
     Decl* parse_typedef();
     Decl* parse_typeset();
     Decl* parse_enumstruct();
+    Decl* parse_class();
     Decl* parse_methodmap();
     MethodmapMethodDecl* parse_methodmap_method(MethodmapDecl* map);
     MethodmapPropertyDecl* parse_methodmap_property(MethodmapDecl* map);
@@ -147,6 +148,7 @@ class Parser
     tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
+    Atom* class_atom_ = nullptr;
 };
 
 } // namespace cc

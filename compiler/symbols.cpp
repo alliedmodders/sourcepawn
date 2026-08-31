@@ -81,6 +81,22 @@ Decl* FindEnumStructField(Type* type, Atom* name) {
     return nullptr;
 }
 
+Decl* FindClassField(Type* type, Atom* name) {
+    auto decl = type->asClass();
+    if (!decl)
+        return nullptr;
+
+    for (const auto& field : decl->fields()) {
+        if (field->name() == name)
+            return field;
+    }
+    for (const auto& method : decl->methods()) {
+        if (method->decl_name() == name)
+            return method;
+    }
+    return nullptr;
+}
+
 enum class NewNameStatus {
     Ok,
     Shadowed,

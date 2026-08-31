@@ -855,7 +855,20 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
                 return nullptr;
             }
             auto classdef = image_->getClassdef(index);
-            return GetEnumStructType(classdef);
+            return env_->types()->GetClassdef(this, classdef, TypeKind::EnumStruct);
+        }
+        case cb::kClass: {
+            uint32_t index;
+            if (!parser.ReadUint32_Leb128(&index)) {
+                ReportError("invalid type data");
+                return nullptr;
+            }
+            if (!image_->rtti_classdefs() || index >= image_->rtti_classdefs()->row_count) {
+                ReportError("invalid classdef index in type data");
+                return nullptr;
+            }
+            auto classdef = image_->getClassdef(index);
+            return env_->types()->GetClassdef(this, classdef, TypeKind::Object);
         }
         case cb::kInt64:
             return GetPrimitiveType(TypeKind::Int64);
@@ -1041,8 +1054,17 @@ const TypeDesc* Runtime::GetStringLitType(uint16_t index) {
     return GetFixedArrayType(char_type, (uint32_t)blob->size() + 1);
 }
 
-const TypeDesc* Runtime::GetEnumStructType(const smx_rtti_classdef* classdef) {
-    return env_->types()->GetEnumStruct(this, classdef);
+const TypeDesc* Runtime::GetClassdefType(const smx_rtti_classdef* classdef) {
+    switch (classdef->flags & kClassType_Mask) {
+        case kClassType_Struct:
+        case kClassType_EnumStruct:
+            return env_->types()->GetClassdef(this, classdef, TypeKind::EnumStruct);
+        case kClassType_Class:
+            return env_->types()->GetClassdef(this, classdef, TypeKind::Object);
+        default:
+            assert(false && "unknown classdef type");
+            return nullptr;
+    }
 }
 
 const TypeDesc* Runtime::GetTypeOfGlobal(uint16_t index) {
@@ -1093,6 +1115,23 @@ Handle<SpArray> Runtime::NewArray(const TypeDesc* td, uint32_t size) {
         base->data = 0;
     }
     return base;
+}
+
+Handle<SpObject> Runtime::NewObject(const TypeDesc* td) {
+    assert(td->IsObject());
+    uint32_t size = td->cls_size();
+
+    auto obj = heap_.New<SpObject>(td, size);
+    if (!obj) {
+        env_->ReportError(SP_ERROR_OUT_OF_MEMORY);
+        return nullptr;
+    }
+
+    // Zero-initialize the payload.
+    void* payload = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(obj.get()) + sizeof(SpObject));
+    memset(payload, 0, size);
+
+    return obj;
 }
 
 Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) {

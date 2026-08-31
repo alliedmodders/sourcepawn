@@ -61,6 +61,7 @@ bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, 
 
 void markusage(Decl* decl, int usage);
 Decl* FindEnumStructField(Type* type, Atom* name);
+Decl* FindClassField(Type* type, Atom* name);
 
 } // namespace cc
 } // namespace sp

@@ -139,6 +139,8 @@ static bool DoEnterTypes(Stmt* stmt, SemaContext& sc) {
             return stmt->to<TypesetDecl>()->EnterTypes(sc);
         case StmtKind::EnumStructDecl:
             return stmt->to<EnumStructDecl>()->EnterTypes(sc);
+        case StmtKind::ClassDecl:
+            return stmt->to<ClassDecl>()->EnterTypes(sc);
         case StmtKind::MethodmapDecl:
             return stmt->to<MethodmapDecl>()->EnterTypes(sc);
         case StmtKind::StmtList:
@@ -1056,6 +1058,71 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 }
 
 bool EnumStructDecl::Bind(SemaContext& sc) {
+    AutoCountErrors errors;
+    for (const auto& fun : methods_) {
+        auto inner_name = DecorateInnerName(name_, fun->decl_name());
+        if (!inner_name)
+            continue;
+
+        fun->set_name(inner_name);
+        fun->set_this_type(type_);
+        fun->Bind(sc);
+    }
+    return errors.ok();
+}
+
+bool ClassDecl::EnterTypes(SemaContext& sc) {
+    type_ = sc.cc().types()->defineClass(name_, this);
+    return true;
+}
+
+bool ClassDecl::EnterNames(SemaContext& sc) {
+    AutoCountErrors errors;
+
+    AutoErrorPos error_pos(pos_);
+
+    if (!CheckNameRedefinition(sc, name(), pos_, sGLOBAL))
+        return false;
+    DefineSymbol(sc, this, sGLOBAL);
+
+    std::unordered_set<Atom*> seen;
+
+    for (auto& field : fields_) {
+        if (!sc.BindType(field->pos(), &field->mutable_type_info()))
+            continue;
+
+        if (!field->type_info().dim_exprs.empty()) {
+            if (!ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(),
+                                  sENUMFIELD)) {
+                continue;
+            }
+        }
+
+        if (field->type_info().is_const)
+            report(field->pos(), 94) << field->name();
+
+        if (seen.count(field->name())) {
+            report(field->pos(), 103) << field->name() << "class";
+            continue;
+        }
+        seen.emplace(field->name());
+
+        if (!field->type()->isAllowedInNativeCall())
+            type_->forbidInNativeCall();
+    }
+
+    for (const auto& decl : methods_) {
+        if (seen.count(decl->name())) {
+            report(decl->pos(), 103) << decl->name() << "class";
+            continue;
+        }
+        seen.emplace(decl->name());
+    }
+
+    return errors.ok();
+}
+
+bool ClassDecl::Bind(SemaContext& sc) {
     AutoCountErrors errors;
     for (const auto& fun : methods_) {
         auto inner_name = DecorateInnerName(name_, fun->decl_name());

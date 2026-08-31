@@ -13,6 +13,7 @@
 #include "type-cache.h"
 #include "v2/runtime.h"
 #include "smx-image.h"
+#include "objects.h"
 
 #include <utility>
 
@@ -135,8 +136,8 @@ const TypeDesc* TypeCache::GetReference(const TypeDesc* elt) {
     return td;
 }
 
-const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classdef* classdef) {
-    TypeCacheKey key(classdef);
+const TypeDesc* TypeCache::GetClassdef(v2::Runtime* rt, const smx_rtti_classdef* classdef, TypeKind kind) {
+    TypeCacheKey key(kind, classdef);
 
     auto p = cache_.find(key);
     if (p.found())
@@ -150,31 +151,62 @@ const TypeDesc* TypeCache::GetEnumStruct(v2::Runtime* rt, const smx_rtti_classde
     uint32_t stopat = image->getClassdefFieldsEnd(cls_index);
     uint32_t num_fields = stopat - classdef->first_field;
 
+    bool is_class = (kind == TypeKind::Object);
+
+    // Create a placeholder and cache it before processing fields, otherwise
+    // recursion could wind up re-parsing type forever.
+    TypeDesc* td = NewTypeDesc(pool_, classdef);
+    td->kind_ = kind;
+    if (is_class)
+        td->set_finalizer(SpObject::NestedFinalizer);
+
+    auto where = cache_.findForAdd(key);
+    assert(!where.found());
+    cache_.add(where, td);
+
     uint32_t* offsets = pool_.alloc<uint32_t>(num_fields);
     std::span<uint32_t> field_offsets(offsets, num_fields);
 
+    // Enum structs are bare, so there's no header. Objects on the other hand
+    // have an SpObject header.
+    uint32_t header_offset = is_class ? sizeof(SpObject) : 0;
+
+    std::vector<uint32_t> heap_item_list;
     uint32_t current_offset = 0;
     for (uint32_t i = 0; i < num_fields; i++) {
-        field_offsets[i] = current_offset;
+        field_offsets[i] = current_offset + header_offset;
 
         auto field = image->getField(classdef->first_field + i);
         auto field_td = rt->LoadTypeFromId(field->type_id);
         if (!field_td)
             return nullptr;
+
         if (field_td->IsHeapItem()) {
-            rt->ReportErrorNumber(SP_ERROR_RTTI);
-            return nullptr;
+            if (!is_class) {
+                rt->ReportErrorNumber(SP_ERROR_RTTI);
+                return nullptr;
+            }
+
+            assert(is_class || (!field_td->IsArrayish() || field_td->IsFlatArray()));
+
+            heap_item_list.push_back(field_offsets[i]);
         }
-        assert(!field_td->IsArrayish() || field_td->IsFlatArray());
         current_offset += field_td->field_size();
         current_offset = ke::Align(current_offset, sizeof(cell_t));
     }
-    uint32_t total_size = current_offset;
 
-    TypeDesc* td = NewTypeDesc(pool_, classdef, total_size, field_offsets);
-    auto p2 = cache_.findForAdd(key);
-    assert(!p2.found());
-    cache_.add(p2, td);
+    // Allocate heap_item_offsets buffer.
+    uint32_t* heap_offsets = nullptr;
+    if (!heap_item_list.empty()) {
+        heap_offsets = pool_.alloc<uint32_t>(heap_item_list.size());
+        for (size_t i = 0; i < heap_item_list.size(); i++)
+            heap_offsets[i] = heap_item_list[i];
+    }
+
+    std::span<uint32_t> heap_item_offsets(heap_offsets, heap_item_list.size());
+
+    // Update placeholder with computed offsets.
+    td->init_clsdef(current_offset, field_offsets, heap_item_offsets);
     return td;
 }
 

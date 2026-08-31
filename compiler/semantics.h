@@ -162,6 +162,7 @@ class Semantics final
     bool CheckChangeScopeNode(ChangeScopeNode* node);
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
+    bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
     void CheckFunctionReturnUsage(FunctionDecl* info);
@@ -213,7 +214,9 @@ class Semantics final
     bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
-                                        bool from_call);
+                                         bool from_call);
+    bool CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
+                                   bool from_call);
     bool CheckFunctionExpr(FunctionExpr* expr);
 
     bool CheckRvalue(Expr* expr, Type* target = nullptr);
@@ -236,7 +239,8 @@ class Semantics final
     Expr* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
                         ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
-    FunctionDecl* BindNewTarget(Expr* target);
+    using CallCtor = std::pair<FunctionDecl*, Type*>;
+    std::optional<CallCtor> BindNewTarget(Expr* target);
     CallTarget BindCallTarget(CallExpr* call, Expr* target);
     SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 

@@ -395,6 +395,31 @@ void AstPrinter::PrintEnumStructDecl(EnumStructDecl* node, bool is_last) {
     stack_.pop_back();
 }
 
+void AstPrinter::PrintClassDecl(ClassDecl* node, bool is_last) {
+    fprintf(out_, "ClassDecl: %s\n", node->name()->chars());
+    stack_.push_back(is_last);
+
+    bool has_methods = !node->methods().empty();
+
+    PrintIndent(!has_methods);
+    fprintf(out_, "fields:\n");
+    stack_.push_back(!has_methods);
+    for (size_t i = 0; i < node->fields().size(); i++)
+        Print(node->fields()[i], i == node->fields().size() - 1);
+    stack_.pop_back();
+
+    if (has_methods) {
+        PrintIndent(true);
+        fprintf(out_, "methods:\n");
+        stack_.push_back(true);
+        for (size_t i = 0; i < node->methods().size(); i++)
+            Print(node->methods()[i], i == node->methods().size() - 1);
+        stack_.pop_back();
+    }
+
+    stack_.pop_back();
+}
+
 void AstPrinter::PrintLayoutFieldDecl(LayoutFieldDecl* node, bool is_last) {
     fprintf(out_, "LayoutFieldDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());

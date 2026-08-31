@@ -202,6 +202,8 @@ bool Semantics::CheckStmt(Stmt* stmt) {
             return CheckFunctionDecl(stmt->to<FunctionDecl>());
         case StmtKind::EnumStructDecl:
             return CheckEnumStructDecl(stmt->to<EnumStructDecl>());
+        case StmtKind::ClassDecl:
+            return CheckClassDecl(stmt->to<ClassDecl>());
         case StmtKind::MethodmapDecl:
             return CheckMethodmapDecl(stmt->to<MethodmapDecl>());
         case StmtKind::ReturnStmt:
@@ -284,6 +286,14 @@ bool Semantics::CheckTypedVarDecl(VarDeclBase* decl) {
             return false;
         if (type->isEnumStruct() && IsThisAtom(decl->name()))
             decl->mutable_type_info()->is_const = false;
+    } else if (type->isClass()) {
+        if (!decl->init()) {
+            report(decl->pos(), 478);
+            return false;
+        }
+        auto init = decl->init();
+        if (init && !CheckRvalue(init))
+            return false;
     } else {
         // Since we always create an assignment expression, all type checks will
         // be performed by the Analyze(sc) call here.
@@ -1621,6 +1631,12 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     if (base_type->isReference())
         base_type = base_type->inner();
 
+    if (auto cls = base_type->asClass()) {
+        if (base->lvalue())
+            base = expr->set_base(new RvalueExpr(base));
+        return CheckClassFieldAccessExpr(expr, base_type, cls, from_call);
+    }
+
     auto map = base_type->asMethodmap();
     if (!map) {
         if (base_val.type()->isFunctionLike())
@@ -1747,7 +1763,7 @@ CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     }
 }
 
-FunctionDecl* Semantics::BindNewTarget(Expr* target) {
+auto Semantics::BindNewTarget(Expr* target) -> std::optional<CallCtor> {
     AutoErrorPos aep(target->pos());
 
     switch (target->kind()) {
@@ -1755,24 +1771,29 @@ FunctionDecl* Semantics::BindNewTarget(Expr* target) {
             auto expr = target->to<SymbolExpr>();
             auto decl = expr->decl();
 
+            if (auto class_decl = decl->as<ClassDecl>()) {
+                auto class_type = class_decl->type();
+                return CallCtor{nullptr, class_type.unqualified()};
+            }
+
             auto mm = MethodmapDecl::LookupMethodmap(decl);
             if (!mm) {
                 report(expr, 116) << decl->name();
-                return nullptr;
+                return {};
             }
 
             if (!mm->nullable()) {
                 report(expr, 171) << mm->name();
-                return nullptr;
+                return {};
             }
             if (!mm->ctor()) {
                 report(expr, 172) << mm->name();
-                return nullptr;
+                return {};
             }
-            return mm->ctor();
+            return CallCtor{mm->ctor(), nullptr};
         }
     }
-    return nullptr;
+    return {};
 }
 
 bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
@@ -1801,8 +1822,37 @@ bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
-    Type* field_type = field->type_info().type;
-    val.set_field(field, QualType(field_type));
+    val.set_field(field, field->type());
+    return true;
+}
+
+bool Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
+                                           bool from_call)
+{
+    expr->set_resolved(FindClassField(type, expr->name()));
+
+    auto field_decl = expr->resolved();
+    if (!field_decl) {
+        report(expr, 105) << type << expr->name();
+        return false;
+    }
+
+    auto& val = expr->val();
+    if (auto fun = field_decl->as<MemberFunctionDecl>()) {
+        if (!from_call) {
+            report(expr, 76);
+            return false;
+        }
+
+        val.set_function(fun);
+        markusage(fun, uREAD);
+        return true;
+    }
+
+    auto field = field_decl->as<LayoutFieldDecl>();
+    assert(field);
+
+    val.set_field(field, field->type());
     return true;
 }
 
@@ -1939,11 +1989,14 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     FunctionDecl* fun = nullptr;
     Expr* target = nullptr;
+    Type* ctor_type = nullptr;
 
     if (call->token() == tNEW) {
-        fun = BindNewTarget(call->target());
-        if (!fun)
+        auto ctor = BindNewTarget(call->target());
+        if (!ctor)
             return false;
+        fun = ctor->first;
+        ctor_type = ctor->second;
     } else {
         auto result = BindCallTarget(call, call->target());
         if (auto target_fun = std::get_if<FunctionDecl*>(&result)) {
@@ -1970,16 +2023,28 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
         if (fun->deprecate())
             report(call, 234) << fun->name() << fun->deprecate();
+    } else if (ctor_type) {
+        call->set_ctor_type(ctor_type);
+
+        if (!call->args().empty()) {
+            report(call->pos(), 92);
+            return false;
+        }
     } else {
         call->set_target(target);
         call->set_callee(target->val().type()->to<FunctionType>());
     }
 
+    auto& val = call->val();
+
+    if (ctor_type) {
+        val.set_expr(ctor_type);
+        return true;
+    }
+
     // Note: must read function_type() after CheckFunctionDecl, since
     // recursive analysis can update the return type.
     FunctionType* ft = call->callee_type();
-
-    auto& val = call->val();
     val.set_expr(ft->return_type());
 
     ParamState ps;
@@ -2985,6 +3050,13 @@ bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
 }
 
 bool Semantics::CheckEnumStructDecl(EnumStructDecl* decl) {
+    bool ok = true;
+    for (const auto& fun : decl->methods())
+        ok &= CheckStmt(fun);
+    return ok;
+}
+
+bool Semantics::CheckClassDecl(ClassDecl* decl) {
     bool ok = true;
     for (const auto& fun : decl->methods())
         ok &= CheckStmt(fun);

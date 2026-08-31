@@ -146,6 +146,8 @@ struct smx_rtti_field_ref {
 
 static const uint32_t kClassType_Struct = 0x0;
 static const uint32_t kClassType_EnumStruct = 0x1;
+static const uint32_t kClassType_Class = 0x2;
+static const uint32_t kClassType_Mask = 0x7;
 
 // The rtti.classdef table has the following row structure:
 struct smx_rtti_classdef {
@@ -253,6 +255,7 @@ static const uint8_t kObsoleteTypedef = 0x43;
 static const uint8_t kTypeset = 0x44;    // rtti.typesets
 static const uint8_t kClassdef = 0x45;   // rtti.classdefs
 static const uint8_t kEnumStruct = 0x46; // rtti.classdefs (rtti.enumstructs in v1)
+static const uint8_t kClass = 0x47;      // rtti.classdefs (heap-allocated class)
 
 // Followed by a fixed-length int16 encoding the number of locals, then that
 // many encoded types.

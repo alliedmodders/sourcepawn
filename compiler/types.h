@@ -71,6 +71,7 @@ enum class TypeKind : uint8_t {
     Object,
     Function,
     EnumStruct,
+    Class,
     Pstruct,
     Methodmap,
     Enum,
@@ -82,6 +83,7 @@ enum class TypeKind : uint8_t {
 
 struct funcenum_t;
 class EnumStructDecl;
+class ClassDecl;
 class Expr;
 class MethodmapDecl;
 class PstructDecl;
@@ -407,6 +409,15 @@ class Type : public PoolObject
         return enumstruct_ptr_;
     }
 
+    bool isClass() const {
+        return kind_ == TypeKind::Object;
+    }
+    ClassDecl* asClass() const {
+        if (!isClass())
+            return nullptr;
+        return class_ptr_;
+    }
+
     bool isPstruct() const {
         return kind_ == TypeKind::Pstruct;
     }
@@ -432,6 +443,11 @@ class Type : public PoolObject
     void setEnumStruct(EnumStructDecl* decl) {
         assert(kind_ == TypeKind::EnumStruct);
         enumstruct_ptr_ = decl;
+    }
+    void setClass(ClassDecl* decl) {
+        assert(kind_ == TypeKind::Object);
+        class_ptr_ = decl;
+        allowed_in_native_call_ = false;
     }
     void setPstruct(PstructDecl* decl) {
         assert(kind_ == TypeKind::Pstruct);
@@ -464,6 +480,7 @@ class Type : public PoolObject
         funcenum_t* funcenum_ptr_;
         MethodmapDecl* methodmap_ptr_;
         EnumStructDecl* enumstruct_ptr_;
+        ClassDecl* class_ptr_;
         PstructDecl* pstruct_ptr_;
         BuiltinType builtin_type_;
         Type* inner_type_;
@@ -543,6 +560,7 @@ class TypeManager
     Type* defineMethodmap(Atom* name, MethodmapDecl* map);
     Type* defineEnumTag(const char* name);
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
+    Type* defineClass(Atom* name, ClassDecl* decl);
     Type* defineTag(Atom* atom);
     Type* definePstruct(PstructDecl* decl);
     Type* defineReference(Type* inner);

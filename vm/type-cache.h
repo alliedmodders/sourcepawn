@@ -51,11 +51,16 @@ struct TypeCacheKey {
     explicit TypeCacheKey(const smx_rtti_classdef* classdef)
       : kind(TypeKind::EnumStruct), classdef(classdef)
     {}
+    TypeCacheKey(TypeKind kind, const smx_rtti_classdef* classdef)
+      : kind(kind), classdef(classdef)
+    {
+        assert(kind == TypeKind::EnumStruct || kind == TypeKind::Object);
+    }
 
     bool operator ==(const TypeCacheKey& other) const {
         if (kind != other.kind)
             return false;
-        if (kind == TypeKind::EnumStruct)
+        if (kind == TypeKind::EnumStruct || kind == TypeKind::Object)
             return classdef == other.classdef;
         if (kind == TypeKind::Array || kind == TypeKind::ArraySlice || kind == TypeKind::Reference)
             return elt_kind == other.elt_kind;
@@ -90,7 +95,7 @@ class TypeCache final {
     const TypeDesc* GetArray(const TypeDesc* elt);
     const TypeDesc* GetSlice(const TypeDesc* elt);
     const TypeDesc* GetReference(const TypeDesc* elt);
-    const TypeDesc* GetEnumStruct(v2::Runtime* rt, const smx_rtti_classdef* classdef);
+    const TypeDesc* GetClassdef(v2::Runtime* rt, const smx_rtti_classdef* classdef, TypeKind kind);
     const TypeDesc* CreateFunction(const TypeDesc* return_type, const std::vector<const TypeDesc*>& args, bool is_native);
 
   private:
@@ -102,6 +107,7 @@ class TypeCache final {
                 return false;
             switch (key.kind) {
                 case TypeKind::EnumStruct:
+                case TypeKind::Object:
                     return td->cls() == key.classdef;
                 case TypeKind::Array:
                 case TypeKind::ArraySlice:
@@ -130,7 +136,7 @@ class TypeCache final {
         }
         static uintptr_t hash(const TypeCacheKey& key) {
             uintptr_t h = ke::HashIntPtr((uint8_t)key.kind);
-            if (key.kind == TypeKind::EnumStruct) {
+            if (key.kind == TypeKind::EnumStruct || key.kind == TypeKind::Object) {
                 h = ke::HashCombine(h, ke::HashPointer(key.classdef));
             } else {
                 h = ke::HashCombine(h, ke::HashPointer(key.elt_kind));
@@ -150,7 +156,7 @@ class TypeCache final {
             if (td->IsFunction())
                 return hash(FunctionLookupKey(td->return_type(), td->args(), td->is_native()));
             uintptr_t h = ke::HashIntPtr((uint8_t)td->kind());
-            if (td->kind() == TypeKind::EnumStruct) {
+            if (td->kind() == TypeKind::EnumStruct || td->kind() == TypeKind::Object) {
                 h = ke::HashCombine(h, ke::HashPointer(td->cls()));
             } else {
                 const TypeDesc* elt_kind = td->IsReference() ? td->ref_type() : td->array_elt();

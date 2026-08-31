@@ -202,6 +202,12 @@ namespace v2 {
      * Runtime error if the SpFunction is a closure.
      */ \
     FOR_EACH(GETFUNCID, 94, "getfuncid", 1) \
+    /* Allocate a new class instance on the heap. The operand is a
+     * uint32_t type_id for the class. The instance is zero-initialized
+     * and has a HeapItem header (TypeDesc* + refcount). The resulting
+     * heap address is pushed onto the stack.
+     */ \
+    FOR_EACH(NEWOBJ, 95, "newobj", 5) \
 
 
 enum OPCODE {

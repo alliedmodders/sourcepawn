@@ -215,6 +215,12 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
         case StmtKind::EnumStructDecl:
             EmitEnumStructDecl(stmt->to<EnumStructDecl>());
             break;
+        case StmtKind::ClassDecl: {
+            auto cls = stmt->to<ClassDecl>();
+            for (const auto& fun : cls->methods())
+                EmitFunctionDecl(fun);
+            break;
+        }
         case StmtKind::MethodmapDecl:
             EmitMethodmapDecl(stmt->to<MethodmapDecl>());
             break;
@@ -664,7 +670,12 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         if (init) {
             const auto& val = init->right()->val();
             if (val.ident == iCONSTEXPR) {
-                __ emit(OP_STOR_S_C, VarSlot(slot), val.constval());
+                if (val.type()->isNull()) {
+                    __ emit(OP_LOAD_NULL);
+                    __ emit(OP_STOR_S, VarSlot(slot));
+                } else {
+                    __ emit(OP_STOR_S_C, VarSlot(slot), val.constval());
+                }
             } else if (auto n64 = init->right()->as<Number64Expr>()) {
                 __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
                 __ emit(OP_STOR_S, VarSlot(slot));
@@ -1517,6 +1528,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         (this->*(iter->second))(call);
 
         if (discard && !return_type->isVoid())
+            __ emit(OP_POP);
+        return;
+    }
+
+    if (call->token() == tNEW && call->ctor_type()) {
+        uint32_t type_id = rtti_->to_typeid(call->ctor_type());
+        __ emit(OP_NEWOBJ, type_id);
+        if (discard)
             __ emit(OP_POP);
         return;
     }

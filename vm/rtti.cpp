@@ -91,6 +91,7 @@ bool FastRtti::SkipNextType() {
             case cb::kEnum:
             case cb::kTypeset:
             case cb::kEnumStruct:
+            case cb::kClass:
             case cb::kFunctionPtr:
             {
                 uint32_t value;
@@ -296,6 +297,7 @@ RttiParser::decode() {
         case cb::kTypeset:
         case cb::kClassdef:
         case cb::kEnumStruct:
+        case cb::kClass:
         case cb::kFunctionPtr: {
             uint32_t index = decodeUint32();
             result = new Rtti(type, index);
@@ -388,6 +390,7 @@ RttiParser::validate() {
         case cb::kTypeset:
         case cb::kClassdef:
         case cb::kEnumStruct:
+        case cb::kClass:
         case cb::kFunctionPtr:
             // Skip the index.
             return tryDecodeUint32();

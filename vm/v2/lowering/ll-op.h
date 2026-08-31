@@ -139,6 +139,8 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(SGRTR_I32, 37, "sgrtr.i32", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(SGEQ_I32, 38, "sgeq.i32", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(COPYARRAY, 39, "copyarray", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(COPYARRAY_FLAT_A, 153, "copyarray.flat.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(COPYARRAY_A, 154, "copyarray.a", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(SWITCH, 40, "switch", {LL_FMT_REG, LL_FMT_SWITCH}) \
     FOR_EACH(ADDR_S, 41, "addr.s", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(TEST_F32, 42, "test.f32", {LL_FMT_REG, LL_FMT_REG}) \
@@ -248,7 +250,8 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(STOR_ELEM_FLAT_I_U8, 148, "stor.elem.flat.i.u8", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(GETFNOBJ, 149, "getfnobj", {LL_FMT_REG, LL_FMT_TYPEDESC, LL_FMT_REG}) \
     FOR_EACH(GETFUNCID, 150, "getfuncid", {LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(CALLI, 151, "calli", {LL_FMT_REG, LL_FMT_U8, LL_FMT_REG, LL_FMT_CALL})
+    FOR_EACH(CALLI, 151, "calli", {LL_FMT_REG, LL_FMT_U8, LL_FMT_REG, LL_FMT_CALL}) \
+    FOR_EACH(NEWOBJ, 152, "newobj", {LL_FMT_TYPEDESC, LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

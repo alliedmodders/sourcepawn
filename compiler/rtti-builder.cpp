@@ -256,6 +256,46 @@ RttiBuilder::add_enumstruct(Type* type)
     return es_index;
 }
 
+uint32_t RttiBuilder::add_class(Type* type) {
+    TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
+    if (p.found())
+        return p->value;
+
+    auto cls_decl = type->asClass();
+    uint32_t cls_index = classdefs_->count();
+    typeid_cache_.add(p, type, cls_index);
+
+    smx_rtti_classdef classdef;
+    memset(&classdef, 0, sizeof(classdef));
+    classdef.flags = kClassType_Class;
+    classdef.name = names_->add(*cc_.atoms(), type->declName());
+    classdef.first_field = fields_->count();
+    classdefs_->add(classdef);
+
+    // Pre-allocate storage in case of nested types.
+    const auto& field_list = cls_decl->fields();
+    for (size_t i = 0; i < field_list.size(); i++)
+        fields_->add();
+
+    // Add all fields.
+    size_t index = 0;
+    for (auto iter = field_list.begin(); iter != field_list.end(); iter++) {
+        auto field = (*iter);
+
+        smx_rtti_field info;
+        info.flags = 0;
+        info.name = names_->add(field->name());
+        info.type_id = to_typeid(field->type());
+        uint32_t field_idx = classdef.first_field + index;
+        fields_->at(field_idx) = info;
+
+        field_mappings_[field] = FieldMapping{cls_index, field_idx};
+        index++;
+    }
+
+    return cls_index;
+}
+
 uint32_t
 RttiBuilder::add_struct(Type* type)
 {
@@ -460,6 +500,11 @@ RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
     CompactEncodeUint32(bytes, add_enumstruct(type));
 }
 
+void RttiBuilder::encode_class_into(std::vector<uint8_t>& bytes, Type* type) {
+    bytes.push_back(cb::kClass);
+    CompactEncodeUint32(bytes, add_class(type));
+}
+
 uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
     if (type->isBool())
         return cb::kBool;
@@ -511,6 +556,11 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, boo
 
     if (uint8_t b = TypeToRttiBytecode(type)) {
         bytes.push_back(b);
+        return;
+    }
+
+    if (type->isClass()) {
+        encode_class_into(bytes, type);
         return;
     }
 
@@ -594,6 +644,8 @@ uint32_t RttiBuilder::AddFieldRef(LayoutFieldDecl* decl) {
                 add_enumstruct(*es->type());
             else if (auto ps = parent->as<PstructDecl>())
                 add_struct(*ps->type());
+            else if (auto cls = parent->as<ClassDecl>())
+                add_class(*cls->type());
             else
                 assert(false);
         }

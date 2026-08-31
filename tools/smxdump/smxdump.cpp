@@ -396,6 +396,7 @@ std::string DumpTool::DumpType(FastRtti& rtti) {
             }
             case cb::kClassdef:
             case cb::kEnumStruct:
+            case cb::kClass:
             {
                 uint32_t value;
                 if (!rtti.ReadUint32_Leb128(&value))
@@ -455,6 +456,8 @@ const char* DumpTool::GetClassdefPrefix(uint32_t flags) {
         return "struct";
     if (flags == kClassType_EnumStruct)
         return "enum struct";
+    if (flags == kClassType_Class)
+        return "class";
     return "unknown classdef";
 }
 

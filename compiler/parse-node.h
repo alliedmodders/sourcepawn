@@ -934,8 +934,6 @@ class CallExpr final : public Expr
     Expr* target() const { return target_; }
     void set_target(Expr* target) { target_ = target; }
     int token() const { return token_; }
-    Expr* implicit_this() const { return implicit_this_; }
-    void set_implicit_this(Expr* expr) { implicit_this_ = expr; }
 
     FunctionDecl* fun() const {
         if (auto p = std::get_if<FunctionDecl*>(&resolved_target_))
@@ -947,6 +945,20 @@ class CallExpr final : public Expr
     const CallTarget& callee() const { return resolved_target_; }
     FunctionType* callee_type();
 
+    Expr* implicit_this() const {
+        if (auto p = std::get_if<Expr*>(&implicit_this_))
+            return *p;
+        return nullptr;
+    }
+    void set_implicit_this(Expr* expr) { implicit_this_ = expr; }
+
+    Type* ctor_type() const {
+        if (auto p = std::get_if<Type*>(&implicit_this_))
+            return *p;
+        return nullptr;
+    }
+    void set_ctor_type(Type* type) { implicit_this_ = type; }
+
   private:
     bool ProcessArg(SemaContext& sc, VarDecl* arg, Expr* param, unsigned int pos);
 
@@ -954,7 +966,7 @@ class CallExpr final : public Expr
     Expr* target_;
     PoolArray<Expr*> args_;
     CallTarget resolved_target_;
-    Expr* implicit_this_ = nullptr;
+    std::variant<std::monostate, Expr*, Type*> implicit_this_;
 };
 
 class EmitOnlyExpr : public Expr
@@ -1738,7 +1750,8 @@ class LayoutDecl : public Decl
 
     static bool is_a(Stmt* node) {
         return node->kind() == StmtKind::MethodmapDecl ||
-               node->kind() == StmtKind::EnumStructDecl;
+               node->kind() == StmtKind::EnumStructDecl ||
+               node->kind() == StmtKind::ClassDecl;
     }
 };
 
@@ -1805,6 +1818,30 @@ class EnumStructDecl : public LayoutDecl
     bool Bind(SemaContext& sc) override;
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::EnumStructDecl; }
+
+    PoolArray<FunctionDecl*>& methods() { return methods_; }
+    PoolArray<LayoutFieldDecl*>& fields() { return fields_; }
+
+    QualType type() const { return QualType(type_); }
+
+  private:
+    PoolArray<FunctionDecl*> methods_;
+    PoolArray<LayoutFieldDecl*> fields_;
+    Type* type_ = nullptr;
+};
+
+class ClassDecl : public LayoutDecl
+{
+  public:
+    ClassDecl(const token_pos_t& pos, Atom* name)
+      : LayoutDecl(StmtKind::ClassDecl, pos, name)
+    {}
+
+    bool EnterTypes(SemaContext& sc);
+    bool EnterNames(SemaContext& sc) override;
+    bool Bind(SemaContext& sc) override;
+
+    static bool is_a(Stmt* node) { return node->kind() == StmtKind::ClassDecl; }
 
     PoolArray<FunctionDecl*>& methods() { return methods_; }
     PoolArray<LayoutFieldDecl*>& fields() { return fields_; }

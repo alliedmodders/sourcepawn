@@ -66,14 +66,14 @@ Type::kindName() const
   switch (kind_) {
     case TypeKind::EnumStruct:
       return "enum struct";
+    case TypeKind::Object:
+      return "class";
     case TypeKind::Pstruct:
       return "struct";
     case TypeKind::Methodmap:
       return "methodmap";
     case TypeKind::Enum:
       return "enum";
-    case TypeKind::Object:
-      return "object";
     case TypeKind::Function:
       if (funcenum_ptr_) {
         if (funcenum_ptr_->entries.size() > 1)
@@ -116,6 +116,8 @@ bool Type::isNonFlatArray() const {
 }
 
 bool Type::isNullable() const {
+    if (isClass())
+        return true;
     if (auto array = as<ArrayType>())
         return !array->is_flat();
     return isNull();
@@ -134,6 +136,8 @@ bool Type::isAddressType() const {
 }
 
 bool Type::isHeapItem() {
+    if (isClass())
+        return true;
     if (auto at = as<ArrayType>())
         return !at->is_flat();
     if (auto ft = as<FunctionType>())
@@ -333,6 +337,12 @@ TypeManager::defineEnumTag(const char* name)
 Type* TypeManager::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
     Type* type = add(name, TypeKind::EnumStruct);
     type->setEnumStruct(decl);
+    return type;
+}
+
+Type* TypeManager::defineClass(Atom* name, ClassDecl* decl) {
+    Type* type = add(name, TypeKind::Object);
+    type->setClass(decl);
     return type;
 }
 

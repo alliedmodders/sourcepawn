@@ -548,11 +548,31 @@ bool Interpreter::run_internal() {
                 uint32_t bytes = reader_.read<uint32_t>();
                 uint16_t src_reg = reader_.read<uint16_t>();
                 uint16_t dest_reg = reader_.read<uint16_t>();
-                cell_t src_addr = vregs_[src_reg];
-                cell_t dest_addr = vregs_[dest_reg];
-                uint8_t* dest = rt_->heap().ToPhysAddr<uint8_t*>(dest_addr);
-                uint8_t* src = rt_->heap().ToPhysAddr<uint8_t*>(src_addr);
+                uint8_t* dest = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[dest_reg]);
+                uint8_t* src = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[src_reg]);
                 memcpy(dest, src, bytes);
+                break;
+            }
+            case LL_COPYARRAY_FLAT_A: {
+                uint32_t count = reader_.read<uint32_t>();
+                uint16_t src_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+
+                cell_t* src = rt_->heap().ToPhysAddr<cell_t*>(vregs_[src_reg]);
+                cell_t* dest = rt_->heap().ToPhysAddr<cell_t*>(vregs_[dest_reg]);
+
+                for (uint32_t i = 0; i < count; i++) {
+                    auto new_item = rt_->heap().ToPhysAddr<HeapItem*>(src[i]);
+                    if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                        rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                        return false;
+                    }
+                    if (auto old_item = rt_->heap().ToPhysAddr<HeapItem*>(dest[i]))
+                        old_item->Release();
+                    dest[i] = src[i];
+                    if (new_item)
+                        new_item->AddRef();
+                }
                 break;
             }
 
@@ -1232,6 +1252,38 @@ bool Interpreter::run_internal() {
                 memcpy(dest_data, src_data, bytes);
                 break;
             }
+            case LL_COPYARRAY_A: {
+                uint16_t srcreg = reader_.read<uint16_t>();
+                uint16_t destreg = reader_.read<uint16_t>();
+                SpArray* src = heap_.ToPhysAddr<SpArray*>(vregs_[srcreg]);
+                SpArray* dest = heap_.ToPhysAddr<SpArray*>(vregs_[destreg]);
+                if (!src) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
+                assert(dest->td->kind() == TypeKind::FixedArray);
+
+                auto src_data = heap_.ToPhysAddr<cell_t*>(src->data);
+                auto dest_data = heap_.ToPhysAddr<cell_t*>(dest->data);
+
+                if (src_data == dest_data)
+                    break;
+
+                uint32_t count = dest->length;
+                for (uint32_t i = 0; i < count; i++) {
+                    auto new_item = heap_.ToPhysAddr<HeapItem*>(src_data[i]);
+                    if (new_item && new_item->td->kind() == TypeKind::ArraySlice) {
+                        rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                        return false;
+                    }
+                    if (auto old_item = heap_.ToPhysAddr<HeapItem*>(dest_data[i]))
+                        old_item->Release();
+                    dest_data[i] = src_data[i];
+                    if (new_item)
+                        new_item->AddRef();
+                }
+                break;
+            }
             case LL_COPYOBJ: {
                 uint32_t bytes = reader_.read<uint32_t>();
                 uint16_t srcreg = reader_.read<uint16_t>();
@@ -1266,6 +1318,15 @@ bool Interpreter::run_internal() {
                 if (!array)
                     return false;
                 vregs_[dest] = rt_->heap().ToLocalAddr(array.release());
+                break;
+            }
+            case LL_NEWOBJ: {
+                auto td = reader_.read<const TypeDesc*>();
+                uint16_t dest = reader_.read<uint16_t>();
+                auto obj = rt_->NewObject(td);
+                if (!obj)
+                    return false;
+                vregs_[dest] = rt_->heap().ToLocalAddr(obj.release());
                 break;
             }
             case LL_NEWBULKARRAY: {

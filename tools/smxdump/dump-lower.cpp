@@ -262,6 +262,10 @@ std::string DumpTool::DumpType(const TypeDesc* td) {
             if (td->HasClassdef() && td->cls())
                 return std::string("enum_struct ") + (smx()->names() + td->cls()->name);
             return "enum_struct";
+        case TypeKind::Object:
+            if (td->HasClassdef() && td->cls())
+                return std::string("class ") + (smx()->names() + td->cls()->name);
+            return "class";
         default:
             return "unknown";
     }

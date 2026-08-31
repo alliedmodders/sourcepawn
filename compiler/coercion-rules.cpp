@@ -306,8 +306,7 @@ ConversionKind FindConversion(Type* from, Type* to, CvtContext why) {
             return FindBuiltinConversion(from->builtin_type(), to, why);
 
         case TypeKind::Object:
-            assert(false);
-            break;
+            return ConversionKind::Illegal;
 
         case TypeKind::EnumStruct:
         case TypeKind::Pstruct:

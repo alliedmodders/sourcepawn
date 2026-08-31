@@ -592,8 +592,6 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (dest->kind() != TypeKind::FixedArray && dest->kind() != TypeKind::FlatArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            if (dest->array_elt()->IsHeapItem())
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (src->kind() != TypeKind::FixedArray && src->kind() != TypeKind::FlatArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             if (src->array_size() > dest->array_size())
@@ -880,6 +878,14 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (base->array_elt()->element_size() != td->array_elt()->element_size())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
 
+            return pushStack(td);
+        }
+
+        case OP_NEWOBJ: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td || !td->IsObject())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(td);
         }
 
@@ -1358,6 +1364,10 @@ bool MethodVerifier::ValidateStore(const TypeDesc* dest, const TypeDesc* src, St
         case TypeKind::Function:
             if (src->kind() != TypeKind::Function)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            if (dest != src)
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
+            return true;
+        case TypeKind::Object:
             if (dest != src)
                 return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return true;

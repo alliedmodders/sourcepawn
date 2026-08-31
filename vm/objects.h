@@ -65,6 +65,7 @@ struct SpArray : public HeapItem {
 };
 
 struct SpObject : public HeapItem {
+    static void NestedFinalizer(HeapItem* obj);
 };
 
 struct SpFunction : public HeapItem {

@@ -781,6 +781,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             const TypeDesc* src = src_node->type;
             const TypeDesc* dest = dest_node->type;
             uint32_t bytes = src->array_size() * dest->array_elt()->element_size();
+            bool heap_item = dest->array_elt()->IsHeapItem();
 
             if (dest->IsFlatArray() || src->IsFlatArray()) {
                 VReg flat_src_reg = src_reg;
@@ -794,7 +795,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     emit(LL_ARRAY_TO_FLAT, dest_reg, flat_dest_reg);
                 }
 
-                emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
+                if (heap_item)
+                    emit(LL_COPYARRAY_FLAT_A, bytes / sizeof(cell_t), flat_src_reg, flat_dest_reg);
+                else
+                    emit(LL_COPYARRAY_FLAT, bytes, flat_src_reg, flat_dest_reg);
 
                 if (!src->IsFlatArray()) {
                     FreeReg(flat_src_reg);
@@ -803,7 +807,10 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     FreeReg(flat_dest_reg);
                 }
             } else {
-                emit(LL_COPYARRAY, bytes, src_reg, dest_reg);
+                if (heap_item)
+                    emit(LL_COPYARRAY_A, src_reg, dest_reg);
+                else
+                    emit(LL_COPYARRAY, bytes, src_reg, dest_reg);
             }
             FreeReg(src_reg);
             FreeReg(dest_reg);
@@ -1098,7 +1105,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             auto classdef = image_->getClassdef(ref->cls_index);
             auto field = image_->getField(ref->field_index);
             const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
 
             uint32_t relative_field_index = ref->field_index - classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
@@ -1127,7 +1134,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             auto classdef = image_->getClassdef(ref->cls_index);
             auto field = image_->getField(ref->field_index);
             const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
             const TypeDesc* pushed_td = field_td->IsCompositeValue() ? field_td : rt_->GetReferenceType(field_td);
 
             uint32_t relative_field_index = ref->field_index - classdef->first_field;
@@ -1152,7 +1159,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             auto classdef = image_->getClassdef(ref->cls_index);
             auto field = image_->getField(ref->field_index);
             const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
 
             uint32_t relative_field_index = ref->field_index - classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
@@ -1182,7 +1189,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             uint32_t ref_index = reader_.read<uint32_t>();
             auto ref = image_->getFieldRef(ref_index);
             auto classdef = image_->getClassdef(ref->cls_index);
-            const TypeDesc* class_td = rt_->GetEnumStructType(classdef);
+            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
 
             uint32_t relative_field_index = ref->field_index - classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
@@ -1284,6 +1291,18 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             if (size_node)
                 FreeReg(size_reg);
+            pushStack(CreateTempNode(td, dest));
+            break;
+        }
+
+        case OP_NEWOBJ: {
+            uint32_t type_id = reader_.read<uint32_t>();
+            const TypeDesc* td = graph_->rt()->LoadTypeFromId(type_id);
+
+            FlushEmitStack();
+
+            VReg dest = AllocateTemp(td);
+            emit(LL_NEWOBJ, td, dest);
             pushStack(CreateTempNode(td, dest));
             break;
         }

@@ -131,12 +131,13 @@ class Runtime final : public BaseRuntime,
     const TypeDesc* GetFlatArrayType(const TypeDesc* elt, uint32_t size);
     const TypeDesc* GetSliceType(const TypeDesc* elt);
     const TypeDesc* GetPrimitiveType(TypeKind kind);
-    const TypeDesc* GetEnumStructType(const smx_rtti_classdef* classdef);
+    const TypeDesc* GetClassdefType(const smx_rtti_classdef* classdef);
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 
     Handle<SpFunction> CastFunctionId(funcid_t func_id, const TypeDesc* td);
     Handle<SpArray> NewArray(const TypeDesc* td, uint32_t size);
+    Handle<SpObject> NewObject(const TypeDesc* td);
     Handle<SpArray> NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
     void FillArray(SpArray* array, uint32_t data_offset);
     void FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset);
