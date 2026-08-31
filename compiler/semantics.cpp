@@ -2188,7 +2188,7 @@ bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     expr->set_resolved(field);
 
     auto& val = expr->val();
-    val.set_expr(QualType(types_->type_int()));
+    val.set_expr(types_->type_int());
     return true;
 }
 

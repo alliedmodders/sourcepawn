@@ -891,6 +891,7 @@ void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
         case iARRAYELEM:
         case iVARIABLE:
         case iEXPRESSION:
+        case iFIELD:
             es = cv.type()->asEnumStruct();
             break;
         case iTYPENAME:
@@ -898,6 +899,18 @@ void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
             break;
         default:
             break;
+    }
+
+    // For a static field access (e.g. "sizeof(Outer::x)") the value's type is
+    // always int (the field offset), so grab the actual enum struct type from
+    // the resolved field.
+    if (!es) {
+        if (auto access = child->as<FieldAccessExpr>()) {
+            if (access->token() == tDBLCOLON) {
+                if (auto fd = access->resolved()->as<LayoutFieldDecl>())
+                    es = fd->type()->asEnumStruct();
+            }
+        }
     }
 
     assert(es != nullptr);
