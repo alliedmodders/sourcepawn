@@ -922,8 +922,11 @@ Parser::hier13()
             ke::SaveAndSet<bool> allowtags(&lexer_->allow_tags(), false);
             left = hier13();
         }
-        lexer_->need(':');
+        if (!left || !lexer_->need(':'))
+            return node;
         Expr* right = hier13();
+        if (!right)
+            return node;
         return new TernaryExpr(pos, node, left, right);
     }
     return node;
