@@ -287,6 +287,8 @@ void check_void_decl(const declinfo_t* decl, int variable);
 bool check_operatortag(int opertok, Type* result_type, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
 bool IsLegacyEnumType(SymbolScope* scope, Type* type);
+bool IsValidIndexType(Type* type);
+bool HasTagOnInheritanceChain(Type* type, Type* other);
 
 } // namespace cc
 } // namespace sp

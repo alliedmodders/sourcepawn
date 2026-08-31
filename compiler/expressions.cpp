@@ -209,16 +209,7 @@ static bool matchfunctags(Type* formal, Type* actual) {
     return false;
 }
 
-bool HasTagOnInheritanceChain(Type* type, Type* other) {
-    auto map = type->asMethodmap();
-    if (!map)
-        return false;
-    for (; map; map = map->parent()) {
-        if (*map->type() == other)
-            return true;
-    }
-    return false;
-}
+
 
 bool matchtag(Type* formal, Type* actual, int flags) {
     Type* given_formal = formal;
@@ -380,9 +371,7 @@ calc(cell left, int oper_tok, cell right, char* boolresult)
     return 0;
 }
 
-bool IsValidIndexType(Type* type) {
-    return type->isInt() || type->isAny() || type->isChar() || type->isEnum();
-}
+
 
 bool checktag(Type* type, Type* expr_type) {
     AutoCountErrors errors;
@@ -394,39 +383,6 @@ bool checktag(Type* type, Type* expr_type) {
     if (errors.ok())
         report(213) << type << expr_type;
     return false;
-}
-
-/*  commutative
- *
- *  Test whether an operator is commutative, i.e. x oper y == y oper x.
- *  Commutative operators are: +  (addition)
- *                             *  (multiplication)
- *                             == (equality)
- *                             != (inequality)
- *                             &  (bitwise and)
- *                             ^  (bitwise xor)
- *                             |  (bitwise or)
- *
- *  If in an expression, code for the left operand has been generated and
- *  the right operand is a constant and the operator is commutative, the
- *  precautionary "push" of the primary register is scrapped and the constant
- *  is read into the secondary register immediately.
- */
-int
-commutative(int oper)
-{
-    switch (oper) {
-        case '+':
-        case '*':
-        case tlEQ:
-        case tlNE:
-        case '&':
-        case '^':
-        case '|':
-            return true;
-        default:
-            return false;
-    }
 }
 
 } // namespace cc

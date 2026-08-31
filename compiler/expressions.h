@@ -30,33 +30,19 @@
 namespace sp {
 namespace cc {
 
-class SemaContext;
-struct value;
-
-int NextExprOp(Lexer* lexer, int* opidx, int* list);
-
 #define MATCHTAG_COERCE 0x1      // allow coercion
 #define MATCHTAG_SILENT 0x2      // silence the error(213) warning
 #define MATCHTAG_DEDUCE 0x4      // correct coercion
 #define MATCHTAG_FUNCARG 0x8     // argument in a function signature
 #define MATCHTAG_ENUM_ASSN 0x10  // enum assignment
 
-struct UserOperation;
-bool find_userop(SemaContext& sc, int oper, Type* type1, Type* type2, int numparam,
-                 const value* lval, UserOperation* op);
-bool find_userop(SemaContext& sc, int oper, int tag1, int tag2, int numparam,
-                 const value* lval, UserOperation* op);
-
-int commutative(int oper);
 cell calc(cell left, int oper_tok, cell right, char* boolresult);
-bool IsValidIndexType(Type* type);
 bool matchtag(int formaltag, int actualtag, int flags);
 bool matchtag(Type* formaltag, Type* actualtag, int flags);
 bool matchtag_commutative(Type* formal, Type* actual, int flags);
 bool matchtag_commutative(int formaltag, int actualtag, int flags);
 bool checktag(Type* type, Type* expr_type);
 bool checktag(int tag, int exprtag);
-bool HasTagOnInheritanceChain(Type* type, Type* other);
 bool functag_compare(FunctionType* formal, FunctionType* actual);
 
 } // namespace cc

@@ -3313,5 +3313,20 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
     return slice;
 }
 
+bool IsValidIndexType(Type* type) {
+    return type->isInt() || type->isAny() || type->isChar() || type->isEnum();
+}
+
+bool HasTagOnInheritanceChain(Type* type, Type* other) {
+    auto map = type->asMethodmap();
+    if (!map)
+        return false;
+    for (; map; map = map->parent()) {
+        if (*map->type() == other)
+            return true;
+    }
+    return false;
+}
+
 } // namespace cc
 } // namespace sp

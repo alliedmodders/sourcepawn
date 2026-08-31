@@ -22,6 +22,7 @@
 #include <amtl/am-raii.h>
 #include "errors.h"
 #include "sctracker.h"
+#include "semantics.h"
 
 namespace sp {
 namespace cc {
