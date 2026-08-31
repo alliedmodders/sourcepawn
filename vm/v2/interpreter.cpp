@@ -491,6 +491,10 @@ bool Interpreter::run_internal() {
                 uint16_t dest_reg = reader_.read<uint16_t>();
                 cell_t addr = vregs_[addr_reg];
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(addr);
+                if (!array) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
                 vregs_[dest_reg] = array->data;
                 break;
             }
