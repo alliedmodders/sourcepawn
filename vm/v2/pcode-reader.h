@@ -18,12 +18,14 @@
 #include <sp_vm_types.h>
 #include "control-flow.h"
 #include "v2/opcodes.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "v2/pcode-visitor.h"
 
 namespace sp::v2 {
 
-class PluginRuntime;
+class Runtime;
+using PluginContext = Runtime;
+using PluginRuntime = Runtime;
 class PcodeVisitor;
 
 template <typename T>

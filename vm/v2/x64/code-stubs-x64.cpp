@@ -14,7 +14,7 @@
 #include "code-stubs.h"
 #include "debug-metadata.h"
 #include "linking.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "x64/constants-x64.h"
 #include "x64/macro-assembler-x64.h"
 

@@ -18,7 +18,7 @@
 #include "graph-builder.h"
 #include "v2/method-verifier.h"
 #include "v2/opcodes.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 namespace sp::v2 {
 

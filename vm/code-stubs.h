@@ -25,7 +25,9 @@ namespace v1 {
 class PluginRuntime;
 }
 namespace v2 {
-class PluginRuntime;
+class Runtime;
+using PluginRuntime = Runtime;
+using PluginContext = Runtime;
 }
 
 class Environment;

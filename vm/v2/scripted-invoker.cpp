@@ -14,16 +14,13 @@
 
 #include <stdio.h>
 #include <string.h>
-
-#include <utility>
-
 #include "environment.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
+#include "v2/method-info.h"
+#include "v2/runtime.h"
 
 /********************
-* FUNCTION CALLING*
-********************/
+ * ScriptedInvoker  *
+ ********************/
 
 using namespace sp::v2;
 using namespace SourcePawn;

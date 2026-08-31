@@ -39,7 +39,7 @@
 #include "x86/frames-x86.h"
 #include "linking.h"
 #include "v2/method-info.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "v2/runtime-helpers.h"
 #include "watchdog_timer.h"
 

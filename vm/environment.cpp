@@ -18,7 +18,7 @@
 #include "legacy/method-info.h"
 #include "legacy/plugin-runtime.h"
 #include "v2/method-info.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
 #    include "legacy/jit.h"

@@ -28,8 +28,9 @@ namespace sp::v2 {
 using namespace ke;
 using namespace SourcePawn;
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
+class Runtime;
+using PluginRuntime = Runtime;
+using PluginContext = Runtime;
 class MethodInfo;
 
 class ScriptedInvoker : public IPluginFunction

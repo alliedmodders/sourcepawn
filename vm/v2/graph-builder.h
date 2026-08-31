@@ -32,7 +32,9 @@ struct smx_rtti_method;
 
 namespace sp::v2 {
 
-class PluginRuntime;
+class Runtime;
+using PluginRuntime = Runtime;
+using PluginContext = Runtime;
 
 class GraphBuilder
 {

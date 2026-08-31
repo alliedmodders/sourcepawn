@@ -28,7 +28,7 @@
 #include "v2/interpreter.h"
 #include "v2/method-info.h"
 #include "v2/pcode-reader.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "v2/runtime-helpers.h"
 #include "watchdog_timer.h"
 

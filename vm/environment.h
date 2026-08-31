@@ -33,7 +33,9 @@ class PluginRuntime;
 class MethodInfo;
 }
 namespace v2 {
-class PluginRuntime;
+class Runtime;
+using PluginRuntime = Runtime;
+using PluginContext = Runtime;
 class MethodInfo;
 }
 

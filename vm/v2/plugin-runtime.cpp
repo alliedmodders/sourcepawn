@@ -10,7 +10,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -39,22 +39,29 @@ using namespace SourcePawn;
 namespace sp {
 namespace v2 {
 
-PluginRuntime::PluginRuntime(SmxImage* image)
- : BaseRuntime(image)
- , memory_(nullptr)
- , data_size_(image_->DescribeData().length)
- , mem_size_(image_->HeapSize())
- , m_pNullVec(nullptr)
- , m_pNullString(nullptr)
+using namespace SourcePawn;
+
+static const size_t kMinHeapSize = 16384;
+
+Runtime::Runtime(SmxImage* image)
+ : BaseRuntime(image),
+   memory_(nullptr),
+   data_size_(data().length),
+   mem_size_(image->HeapSize()),
+   m_pNullVec(nullptr),
+   m_pNullString(nullptr)
 {
+    memset(code_hash_, 0, sizeof(code_hash_));
+    memset(data_hash_, 0, sizeof(data_hash_));
+
     // Compute and align a minimum memory amount.
     if (mem_size_ < data_size_)
         mem_size_ = data_size_;
     mem_size_ = ke::Align(mem_size_, sizeof(cell_t));
 
     // Add a minimum heap size if needed.
-    if (mem_size_ < data_size_ + 16384)
-        mem_size_ = data_size_ + 16384;
+    if (mem_size_ < data_size_ + kMinHeapSize)
+        mem_size_ = data_size_ + kMinHeapSize;
     assert(ke::IsAligned(mem_size_, sizeof(cell_t)));
 
     hp_ = data_size_;
@@ -67,7 +74,7 @@ PluginRuntime::PluginRuntime(SmxImage* image)
     Environment::get()->RegisterRuntime(this);
 }
 
-PluginRuntime::~PluginRuntime() {
+Runtime::~Runtime() {
     // The watchdog thread takes the global JIT lock while it patches all
     // runtimes. It is not enough to ensure that the unlinking of the runtime is
     // protected; we cannot delete functions or code while the watchdog might be
@@ -79,8 +86,7 @@ PluginRuntime::~PluginRuntime() {
     delete[] memory_;
 }
 
-bool
-PluginRuntime::Initialize() {
+bool Runtime::Initialize() {
     if (!ke::IsAligned(code_.bytes, sizeof(cell_t))) {
         // Align the code section.
         aligned_code_ = std::make_unique<uint8_t[]>(code_.length);
@@ -162,16 +168,17 @@ PluginRuntime::Initialize() {
     return true;
 }
 
+ke::RefPtr<BaseMethodInfo> Runtime::GetMethodFromFrameId(uint32_t frame_id) const {
+    return GetMethodByIndex(frame_id);
+}
 
-ke::RefPtr<BaseMethodInfo>
-PluginRuntime::GetMethodByIndex(uint32_t method_index) const {
+ke::RefPtr<BaseMethodInfo> Runtime::GetMethodByIndex(uint32_t method_index) const {
     if (method_index >= methods_.size())
         return nullptr;
     return methods_[method_index];
 }
 
-RefPtr<MethodInfo>
-PluginRuntime::AcquireMethod(uint32_t method_index) {
+RefPtr<MethodInfo> Runtime::AcquireMethod(uint32_t method_index) {
     if (method_index < methods_.size() && methods_[method_index])
         return methods_[method_index];
 
@@ -192,14 +199,12 @@ PluginRuntime::AcquireMethod(uint32_t method_index) {
     return method;
 }
 
-const std::vector<RefPtr<MethodInfo>>&
-PluginRuntime::AllMethods() const {
+const std::vector<RefPtr<MethodInfo>>& Runtime::AllMethods() const {
     Environment::get()->lock().AssertCurrentThreadOwns();
     return methods_;
 }
 
-int
-PluginRuntime::FindNativeByName(const char* name, uint32_t* index) {
+int Runtime::FindNativeByName(const char* name, uint32_t* index) {
     for (uint32_t i = 0; i < (uint32_t)natives_.size(); i++) {
         if (strcmp(natives_[i].name, name) == 0) {
             if (index)
@@ -210,8 +215,17 @@ PluginRuntime::FindNativeByName(const char* name, uint32_t* index) {
     return SP_ERROR_NOT_FOUND;
 }
 
-int
-PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
+int Runtime::GetNativeByIndex(uint32_t index, sp_native_t** native) {
+    if (index >= (uint32_t)natives_.size())
+        return SP_ERROR_INDEX;
+
+    if (native)
+        *native = &natives_[index];
+
+    return SP_ERROR_NONE;
+}
+
+int Runtime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_t flags,
                                    void* data) {
     if (index >= (uint32_t)natives_.size())
         return SP_ERROR_INDEX;
@@ -234,8 +248,7 @@ PluginRuntime::UpdateNativeBinding(uint32_t index, SPVM_NATIVE_FUNC pfn, uint32_
     return SP_ERROR_NONE;
 }
 
-int
-PluginRuntime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
+int Runtime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callback, uint32_t flags,
                                          void* data) {
     RefPtr<INativeCallback> holder(callback);
     if (index >= (uint32_t)natives_.size())
@@ -259,22 +272,18 @@ PluginRuntime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callba
     return SP_ERROR_NONE;
 }
 
-
-const sp_native_t*
-PluginRuntime::GetNative(uint32_t index) {
+const sp_native_t* Runtime::GetNative(uint32_t index) {
     if (index >= (uint32_t)natives_.size())
         return nullptr;
 
     return &natives_[index];
 }
 
-uint32_t
-PluginRuntime::GetNativesNum() {
+uint32_t Runtime::GetNativesNum() {
     return (uint32_t)natives_.size();
 }
 
-int
-PluginRuntime::FindPublicByName(const char* name, uint32_t* index) {
+int Runtime::FindPublicByName(const char* name, uint32_t* index) {
     auto cmp = [](const sp_public_t& a, const char* target) -> bool {
         return strcmp(a.name, target) < 0;
     };
@@ -286,8 +295,7 @@ PluginRuntime::FindPublicByName(const char* name, uint32_t* index) {
     return SP_ERROR_NONE;
 }
 
-int
-PluginRuntime::GetPublicByIndex(uint32_t index, sp_public_t** out) {
+int Runtime::GetPublicByIndex(uint32_t index, sp_public_t** out) {
     if (index >= publics_.size())
         return SP_ERROR_INDEX;
 
@@ -297,13 +305,11 @@ PluginRuntime::GetPublicByIndex(uint32_t index, sp_public_t** out) {
     return SP_ERROR_NONE;
 }
 
-uint32_t
-PluginRuntime::GetPublicsNum() {
+uint32_t Runtime::GetPublicsNum() {
     return (uint32_t)publics_.size();
 }
 
-int
-PluginRuntime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out) {
+int Runtime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out) {
     if (index >= image_->NumPubvars())
         return SP_ERROR_INDEX;
 
@@ -320,8 +326,7 @@ PluginRuntime::GetPubvarByIndex(uint32_t index, sp_pubvar_t** out) {
     return SP_ERROR_NONE;
 }
 
-int
-PluginRuntime::FindPubvarByName(const char* name, uint32_t* index) {
+int Runtime::FindPubvarByName(const char* name, uint32_t* index) {
     size_t idx;
     if (!image_->FindPubvar(name, &idx))
         return SP_ERROR_NOT_FOUND;
@@ -331,8 +336,7 @@ PluginRuntime::FindPubvarByName(const char* name, uint32_t* index) {
     return SP_ERROR_NONE;
 }
 
-int
-PluginRuntime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) {
+int Runtime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_addr) {
     if (index >= image_->NumPubvars())
         return SP_ERROR_INDEX;
 
@@ -346,7 +350,7 @@ PluginRuntime::GetPubvarAddrs(uint32_t index, cell_t* local_addr, cell_t** phys_
 }
 
 uint32_t
-PluginRuntime::GetPubVarsNum() {
+Runtime::GetPubVarsNum() {
     return image_->NumPubvars();
 }
 
@@ -582,11 +586,11 @@ PluginRuntime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_para
     return ok;
 }
 
-IPluginFunction* PluginRuntime::GetFunctionById(funcid_t func_id) {
+IPluginFunction* Runtime::GetFunctionById(funcid_t func_id) {
     return GetScriptedInvoker(func_id);
 }
 
-ScriptedInvoker* PluginRuntime::GetScriptedInvoker(funcid_t func_id) {
+ScriptedInvoker* Runtime::GetScriptedInvoker(funcid_t func_id) {
     if (!(func_id & 1))
         return nullptr;
 
@@ -594,7 +598,7 @@ ScriptedInvoker* PluginRuntime::GetScriptedInvoker(funcid_t func_id) {
     return GetFunctionByMethodIndex(method_index);
 }
 
-ScriptedInvoker* PluginRuntime::GetFunctionByMethodIndex(uint32_t method_index) {
+ScriptedInvoker* Runtime::GetFunctionByMethodIndex(uint32_t method_index) {
     if (method_index >= image_->rtti_methods()->row_count)
         return nullptr;
     if (method_index >= entrypoints_.size())
@@ -604,11 +608,10 @@ ScriptedInvoker* PluginRuntime::GetFunctionByMethodIndex(uint32_t method_index) 
     return entrypoints_[method_index].get();
 }
 
-IPluginFunction*
-PluginRuntime::GetFunctionByName(const char* public_name) {
-    size_t index;
+IPluginFunction* Runtime::GetFunctionByName(const char* public_name) {
+    uint32_t index;
 
-    if (image_->FindPublic(public_name, &index) != SP_ERROR_NONE)
+    if (FindPublicByName(public_name, &index) != SP_ERROR_NONE)
         return nullptr;
 
     assert(index < publics_.size());
@@ -620,14 +623,12 @@ PluginRuntime::IsDebugging() {
     return true;
 }
 
-size_t
-PluginRuntime::GetMemUsage() {
+size_t Runtime::GetMemUsage() {
     return sizeof(*this) + image_->ImageSize() +
            (aligned_code_ ? code_.length : 0) + HeapSize();
 }
 
-bool
-PluginRuntime::PerformFullValidation() {
+bool Runtime::PerformFullValidation() {
     Environment* env = Environment::get();
     for (uint32_t i = 0; i < image_->rtti_methods()->row_count; i++) {
         const smx_rtti_method* method = image_->GetMethod(i);
@@ -645,7 +646,7 @@ PluginRuntime::PerformFullValidation() {
     return true;
 }
 
-bool PluginRuntime::GetNativeIndex(uint32_t method_index, uint32_t* index) const {
+bool Runtime::GetNativeIndex(uint32_t method_index, uint32_t* index) const {
     auto iter = native_map_.find(method_index);
     if (iter == native_map_.end())
         return false;
@@ -653,7 +654,7 @@ bool PluginRuntime::GetNativeIndex(uint32_t method_index, uint32_t* index) const
     return true;
 }
 
-bool PluginRuntime::UsesDirectArrays() {
+bool Runtime::UsesDirectArrays() {
     return true;
 }
 
@@ -661,14 +662,72 @@ bool PluginRuntime::UsesHeapScopes() {
     return (image_->DescribeCode().features & SmxConsts::kCodeFeatureHeapScopes) != 0;
 }
 
-bool PluginRuntime::CallGlobalCtor() {
+bool Runtime::CallGlobalCtor() {
     cell_t ignore_result;
 
     auto ctor_index = image_->FindRttiMethod(".ctor");
     if (!ctor_index)
         return true;
 
-    return Invoke((*ctor_index << 1) | 1, nullptr, 0, &ignore_result);
+    return InvokeMethod(*ctor_index, &ignore_result, 0, &ignore_result);
+}
+
+bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
+                           unsigned int num_params, cell_t* result)
+{
+    EnterProfileScope profileScope("SourcePawn", "EnterJIT");
+
+    if (!env_->watchdog()->HandleInterrupt()) {
+        ReportErrorNumber(SP_ERROR_TIMEOUT);
+        return false;
+    }
+
+    ScriptedInvoker* cfun = GetFunctionByMethodIndex(method_index);
+    if (!cfun) {
+        ReportErrorNumber(SP_ERROR_NOT_FOUND);
+        return false;
+    }
+
+    if (IsPaused()) {
+        ReportErrorNumber(SP_ERROR_NOT_RUNNABLE);
+        return false;
+    }
+
+    if ((cell_t)(hp_ + 16 * sizeof(cell_t)) > (cell_t)(sp_ - (sizeof(cell_t) * (num_params + 1)))) {
+        ReportErrorNumber(SP_ERROR_STACKLOW);
+        return false;
+    }
+
+    env_->clearPendingException();
+
+    cell_t ignore_result;
+    if (result == NULL)
+        result = &ignore_result;
+
+    EnterProfileScope scriptScope("SourcePawn", cfun->DebugName());
+
+    RefPtr<MethodInfo> method = cfun->AcquireMethod();
+    if (!method) {
+        ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
+        return false;
+    }
+    cell_t save_sp = sp_;
+    cell_t save_hp = hp_;
+    cell_t save_hp_scope = hp_scope_;
+
+    sp_ -= sizeof(cell_t) * (num_params + 1);
+    cell_t* sp = (cell_t*)(memory_ + sp_);
+
+    sp[0] = num_params;
+    for (unsigned int i = 0; i < num_params; i++)
+        sp[i + 1] = params[i];
+
+    bool ok = env_->Invoke(this, method, result);
+
+    sp_ = save_sp;
+    hp_ = save_hp;
+    hp_scope_ = save_hp_scope;
+    return ok;
 }
 
 cell_t*
@@ -1295,10 +1354,6 @@ PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
     return nullptr;
 }
 
-ke::RefPtr<BaseMethodInfo>
-PluginRuntime::GetMethodFromFrameId(uint32_t frame_id) const {
-    return GetMethodByIndex(frame_id);
-}
 
 int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
     cell_t* phys;

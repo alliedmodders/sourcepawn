@@ -23,7 +23,9 @@
 
 namespace sp::v2 {
 
-class PluginRuntime;
+class Runtime;
+using PluginContext = Runtime;
+using PluginRuntime = Runtime;
 
 class MethodVerifier final
 {

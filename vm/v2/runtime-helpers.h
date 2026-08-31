@@ -20,8 +20,9 @@
 
 namespace sp::v2 {
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
+class Runtime;
+using PluginContext = Runtime;
+using PluginRuntime = Runtime;
 struct NativeEntry;
 
 cell_t NativeInvokeThunk(PluginContext* ctx, NativeEntry* entry, const cell_t* params);

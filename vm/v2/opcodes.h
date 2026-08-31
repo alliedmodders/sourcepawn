@@ -33,7 +33,7 @@
 
 #include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 namespace sp::v2 {
 

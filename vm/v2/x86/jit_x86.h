@@ -23,7 +23,7 @@
 #include "v2/jit.h"
 #include "macro-assembler.h"
 #include "v2/opcodes.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 using namespace SourcePawn;
 

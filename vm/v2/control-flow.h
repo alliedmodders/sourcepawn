@@ -21,7 +21,7 @@
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
 #include "label.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 namespace sp::v2 {
 

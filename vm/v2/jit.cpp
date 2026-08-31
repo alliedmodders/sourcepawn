@@ -22,7 +22,7 @@
 #include "v2/method-info.h"
 #include "v2/opcodes.h"
 #include "v2/pcode-reader.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 #include "stack-frames.h"
 #include "watchdog_timer.h"
 #if defined(KE_ARCH_X86)

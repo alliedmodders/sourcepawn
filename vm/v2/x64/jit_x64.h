@@ -18,6 +18,7 @@
 
 #include "v2/jit.h"
 #include "x64/constants-x64.h"
+#include "v2/runtime.h"
 
 namespace sp {
 class CompiledFunction;

@@ -17,7 +17,7 @@
 #include "v2/runtime-helpers.h"
 
 #include "environment.h"
-#include "v2/plugin-runtime.h"
+#include "v2/runtime.h"
 
 namespace sp::v2 {
 

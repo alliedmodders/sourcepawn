@@ -33,8 +33,9 @@ namespace sp::v2 {
 
 using namespace SourcePawn;
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
+class Runtime;
+using PluginRuntime = Runtime;
+using PluginContext = Runtime;
 
 struct BackwardJump {
     // The pc at the jump instruction (i.e. after it).

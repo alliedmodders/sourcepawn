@@ -30,8 +30,9 @@ namespace sp::v2 {
 
 using namespace ke;
 
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
+class Runtime;
+using PluginContext = Runtime;
+using PluginRuntime = Runtime;
 class MethodInfo;
 
 class Interpreter final
