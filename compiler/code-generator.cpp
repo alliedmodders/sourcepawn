@@ -390,8 +390,13 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         // The array has not been allocated yet.
         Type* emit_type = type;
         if (!type->is_fixed() && ctor) {
-            uint32_t size = DeduceArraySize(type, ctor);
-            emit_type = cc_.types()->defineArray(type->inner(), size);
+            if (uint32_t size = DeduceArraySize(type, ctor); size > 0) {
+                emit_type = cc_.types()->defineArray(type->inner(), size);
+            } else {
+                // Currently we can't create fixed-size zero-length arrays, so
+                // we stick with a dynamic type and push a zero length here.
+                __ PUSH_C(0);
+            }
         }
 
         uint32_t type_id = rtti_->to_typeid(emit_type);
@@ -401,67 +406,76 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
     }
 
     if (type->inner()->isEnumStruct()) {
-        ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
-
-        for (size_t i = 0; i < array->exprs().size(); i++) {
-            __ emit(OP_DUP);
-            __ PUSH_C(i);
-            __ emit(OP_IDXADDR);
-
-            if (array)
-                EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
-        }
-
-        if (type->is_flat())
-            __ emit(OP_POP);
+        EmitArrayFillStructs(type, ctor->as<ArrayExpr>());
     } else if (ArrayType* inner = type->inner()->as<ArrayType>()) {
         assert(!inner->is_flat());
-        ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
 
-        uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
-        for (size_t i = 0; i < len; i++) {
-            __ emit(OP_DUP);
-            __ PUSH_C(i);
-            __ emit(OP_IDXADDR);
-
-            // If the inner array is flat, then it's already been allocated.
-            if (inner->is_flat())
-                __ emit(OP_LOAD_I_I32);
-
-            EmitArrayCtor(inner, array ? array->exprs().at(i) : nullptr, 0);
-
-            // Otherwise, the allocation is now on the stack.
-            if (!inner->is_flat())
-                __ emit(OP_STOR_I_A);
-        }
-
-        // No longer need the parent address.
-        if (type->is_flat())
-            __ emit(OP_POP);
+        EmitArrayFillArrays(type, inner, ctor->as<ArrayExpr>());
     } else if (ctor) {
-        uint32_t fill_data_pos;
+        std::optional<uint32_t> fill_data_pos;
 
         auto iter = fill_data_cache_.find(ctor);
         if (iter != fill_data_cache_.end()) {
             fill_data_pos = iter->second;
         } else if (auto array = ctor->as<ArrayExpr>()) {
-            fill_data_pos = EmitArrayFillData(type, array);
+            if (array->exprs().size() > 0)
+                fill_data_pos = EmitArrayFillData(type, array);
         } else if (auto str = ctor->as<StringExpr>()) {
             fill_data_pos = EmitStringFillData(type, str);
         } else {
             assert(false);
-            return;
         }
 
-        if (flags & EMIT_REPEATABLE)
-            fill_data_cache_.emplace(ctor, fill_data_pos);
+        if (fill_data_pos) {
+            if (flags & EMIT_REPEATABLE)
+                fill_data_cache_.emplace(ctor, *fill_data_pos);
 
-        // If this is a flat array, the address was pushed onto the stack by our
-        // caller, and now we're consuming it. Otherwise, the caller expects the
-        // address to be returned on the stack.
-        if (!type->is_flat())
-            __ emit(OP_DUP);
-        __ emit(OP_FILLARRAY, fill_data_pos);
+            // If this is a flat array, the address was pushed onto the stack by our
+            // caller, and now we're consuming it. Otherwise, the caller expects the
+            // address to be returned on the stack.
+            if (!type->is_flat())
+                __ emit(OP_DUP);
+            __ emit(OP_FILLARRAY, *fill_data_pos);
+
+            // OP_FILLARRAY popped the flat address on the stack, we must
+            // early return and skip the OP_POP below.
+            return;
+        }
+    }
+
+    // No longer need the parent address.
+    if (type->is_flat())
+        __ emit(OP_POP);
+}
+
+void CodeGenerator::EmitArrayFillStructs(ArrayType* type, ArrayExpr* array) {
+    uint32_t len = array ? array->exprs().size() : type->size();
+    for (size_t i = 0; i < len; i++) {
+        __ emit(OP_DUP);
+        __ PUSH_C(i);
+        __ emit(OP_IDXADDR);
+
+        if (array)
+            EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
+    }
+}
+
+void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, ArrayExpr* array) {
+    uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
+    for (size_t i = 0; i < len; i++) {
+        __ emit(OP_DUP);
+        __ PUSH_C(i);
+        __ emit(OP_IDXADDR);
+
+        // If the inner array is flat, then it's already been allocated.
+        if (inner->is_flat())
+            __ emit(OP_LOAD_I_I32);
+
+        EmitArrayCtor(inner, array ? array->exprs().at(i) : nullptr, 0);
+
+        // Otherwise, the allocation is now on the stack.
+        if (!inner->is_flat())
+            __ emit(OP_STOR_I_A);
     }
 }
 

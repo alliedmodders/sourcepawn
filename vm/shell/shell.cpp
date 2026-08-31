@@ -19,6 +19,7 @@
 #include <amtl/am-cxx.h>
 #include <amtl/experimental/am-argparser.h>
 #include "api.h"
+#include "base-runtime.h"
 #include "environment.h"
 #include "stack-frames.h"
 
@@ -281,12 +282,13 @@ static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
   if (!fn)
     return cx->ThrowNativeError("Could not find function");
 
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
   int err;
-  if ((err = cx->LocalToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read array");
 
-  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
   int length = params[3];
 
   CallArgs args;
@@ -342,12 +344,13 @@ static cell_t CallWithFlatArray(IPluginContext* cx, const cell_t* params) {
   if (!fn)
     return cx->ThrowNativeError("Could not find function");
 
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
   int err;
-  if ((err = cx->LocalToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read array");
 
-  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
   int length = params[3];
 
   CallArgs args;
@@ -378,11 +381,12 @@ static cell_t CallWithFlatString(IPluginContext* cx, const cell_t* params) {
 }
 
 static cell_t TestLocalToArrayPtr(IPluginContext* cx, const cell_t* params) {
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
-  if (cx->LocalToArrayPtr(params[1], &array) != SP_ERROR_NONE)
+  if (rt->ParamToArrayPtr(params[1], &array) != SP_ERROR_NONE)
     return -1;
 
-  char* data = reinterpret_cast<char*>(cx->GetArrayData(array));
+  char* data = reinterpret_cast<char*>(rt->GetArrayData(array));
   if (!data)
     return -2;
 
@@ -437,6 +441,7 @@ static cell_t AssertEq(IPluginContext* cx, const cell_t* params)
 
 static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 {
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
   cell_t* phys_out;
   uint32_t size;
@@ -445,17 +450,17 @@ static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
     return 0;
 
   int err;
-  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument");
 
-  cell_t* phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  cell_t* phys_in = reinterpret_cast<cell_t*>(rt->GetArrayData(array, &size));
   if (size != 0 && (uint32_t)params[2] >= size)
     return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 0)");
 
-  if ((err = cx->LocalToArrayPtr(phys_in[params[2]], &array)) != SP_ERROR_NONE)
+  if ((err = rt->LocalToArrayPtr(phys_in[params[2]], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read array level 0");
 
-  phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  phys_in = reinterpret_cast<cell_t*>(rt->GetArrayData(array, &size));
   if (size != 0 && (uint32_t)params[3] >= size)
     return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 1)");
 
@@ -468,12 +473,13 @@ static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 
 static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
 {
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
 
   int err;
-  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument 1");
-  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
 
   IPluginFunction* fn = cx->GetFunctionById(params[4]);
   if (!fn)

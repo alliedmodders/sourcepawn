@@ -1252,14 +1252,6 @@ bool Interpreter::run_internal() {
                 rt_->FillArray(array, data_offset);
                 break;
             }
-            case LL_ARRAY_TO_NATIVE: {
-                uint16_t src = reader_.read<uint16_t>();
-                uint16_t dest = reader_.read<uint16_t>();
-                uint32_t addr = vregs_[src];
-                assert((addr & kNativePointerTag) == 0);
-                vregs_[dest] = addr | kNativePointerTag;
-                break;
-            }
             case LL_SLICE_ES: {
                 uint32_t cell_count = reader_.read<uint32_t>();
                 uint16_t src = reader_.read<uint16_t>();

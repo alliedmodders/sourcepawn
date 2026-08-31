@@ -120,6 +120,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
     std::array<std::pair<void*, uint32_t>, SP_MAX_EXEC_PARAMS> cows;
     uint32_t ncows = 0;
 
+    const auto& expected_arg_types = method_->arg_types();
     for (uint32_t i = 0; i < args.argc; i++) {
         const auto& arg = args.argv[i];
 
@@ -130,10 +131,8 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         }
 
         void* addr = nullptr;
-        uint32_t nbytes = 0;
         switch (arg.type) {
             case CallArgs::ARG_CELL_BY_REF: {
-                nbytes = sizeof(cell_t);
                 params[i] = env->sp();
                 if (!env->addStack(sizeof(cell_t)))
                     return false;
@@ -142,7 +141,6 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 break;
             }
             case CallArgs::ARG_INT64: {
-                nbytes = sizeof(int64_t);
                 params[i] = env->sp();
                 if (!env->addStack(sizeof(int64_t)))
                     return false;
@@ -151,17 +149,18 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 break;
             }
             case CallArgs::ARG_ARRAY: {
-                const auto& expected_arg_types = method_->arg_types();
-                bool is_flat = (i < expected_arg_types.size() && expected_arg_types[i]->IsFlatArray());
-
-                if (is_flat) {
-                    auto expected_td = expected_arg_types[i];
+                auto expected_td = expected_arg_types[i];
+                if (expected_td->IsFlatArray()) {
                     uint32_t flat_bytes = expected_td->array_size() * sizeof(cell_t);
+
                     params[i] = env->sp();
                     if (!env->addStack(flat_bytes))
                         return false;
+
                     addr = env->heap().ToPhysAddr<void*>(params[i]);
-                    nbytes = std::min<size_t>(arg.array_size * sizeof(cell_t), flat_bytes);
+                    uint32_t nbytes =
+                        std::min<size_t>(arg.array_size * sizeof(cell_t), flat_bytes);
+                    memcpy(addr, arg.u.addr, nbytes);
                 } else {
                     auto elt_type = env->types()->GetPrimitive(TypeKind::Int32);
                     auto type = env->types()->GetArray(elt_type);
@@ -170,27 +169,26 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                         return false;
 
                     addr = context_->heap().ToPhysAddr<void*>(array->data);
-                    nbytes = arg.array_size * sizeof(cell_t);
+                    memcpy(addr, arg.u.addr, arg.array_size * sizeof(cell_t));
 
                     // :tODO: resolve leaks
                     params[i] = context_->heap().ToLocalAddr(array.release());
                 }
-
-                memcpy(addr, arg.u.addr, nbytes);
                 break;
             }
             case CallArgs::ARG_CHAR_ARRAY: {
-                const auto& expected_arg_types = method_->arg_types();
-                bool is_flat = (i < expected_arg_types.size() && expected_arg_types[i]->IsFlatArray());
-                uint32_t max_size;
+                uint32_t max_size, nbytes;
 
-                if (is_flat) {
-                    auto expected_td = expected_arg_types[i];
+                auto expected_td = expected_arg_types[i];
+                if (expected_td->IsFlatArray()) {
                     uint32_t flat_bytes = expected_td->array_size() * sizeof(char);
-                    uint32_t aligned_bytes = (flat_bytes + sizeof(cell_t) - 1) & ~(sizeof(cell_t) - 1);
+                    uint32_t aligned_bytes =
+                        (flat_bytes + sizeof(cell_t) - 1) & ~(sizeof(cell_t) - 1);
+
                     params[i] = env->sp();
                     if (!env->addStack(aligned_bytes))
                         return false;
+
                     addr = env->heap().ToPhysAddr<void*>(params[i]);
                     max_size = expected_td->array_size();
                     nbytes = std::min<size_t>(arg.array_size, flat_bytes);
@@ -210,15 +208,15 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 }
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
-                    cell_t pointer_tag = is_flat ? 0 : kNativePointerTag;
+                    cell_t dest = context_->heap().ToLocalAddr(addr);
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
-                        context_->StringToLocalUTF8(params[i] | pointer_tag, max_size,
+                        context_->StringToLocalUTF8(dest, max_size,
                                                     reinterpret_cast<const char *>(arg.u.addr),
                                                     NULL);
                     } else if (arg.flags & SM_PARAM_STRING_BINARY) {
                         memcpy(addr, arg.u.addr, nbytes);
                     } else {
-                        context_->StringToLocal(params[i] | pointer_tag, max_size,
+                        context_->StringToLocal(dest, max_size,
                                                 reinterpret_cast<const char *>(arg.u.addr));
                     }
                 } else {

@@ -473,12 +473,6 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitLoadConst(dest, id);
                 break;
             }
-            case LL_ARRAY_TO_NATIVE: {
-                uint16_t src_reg = reader.read<uint16_t>();
-                uint16_t dest_reg = reader.read<uint16_t>();
-                EmitArrayToNative(src_reg, dest_reg);
-                break;
-            }
             case LL_LOAD_I_U8:
             case LL_LOAD_I_I32:
             case LL_LOAD_I_F32:

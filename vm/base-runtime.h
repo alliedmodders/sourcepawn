@@ -24,9 +24,13 @@
 namespace sp {
 
 class Environment;
+
 namespace v2 {
 class Runtime;
-}
+} // namespace v2
+
+struct ARRAY_HANDLE;
+typedef ARRAY_HANDLE* ARRAY_PTR;
 
 class BaseRuntime : public SourcePawn::IPluginRuntime
 {
@@ -77,6 +81,8 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
      * from which a native was called (and thus this can only be
      * called inside a native).
      *
+     * Note: this is only supported in v1 runtimes.
+     *
      * @return        Parameter stack.
      */
     virtual cell_t* GetLocalParams() = 0;
@@ -96,6 +102,36 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     SourcePawn::IFrameIterator* CreateFrameIterator() override;
     void DestroyFrameIterator(SourcePawn::IFrameIterator* it) override;
     bool IsPaused() override;
+
+    // Convert a parameter address to an ARRAY_PTR handle.
+    //
+    // @param base      Array base.
+    // @param out       Array pointer handle.
+    virtual int ParamToArrayPtr(cell_t base, ARRAY_PTR* out) = 0;
+
+    // Return the data vector for an array.
+    //
+    // For character arrays, the pointer should be casted to a uint8_t* or char*.
+    // For int64 arrays, the pointer should be casted to an int64_t* or uint64_t*.
+    // For all other types, the pointer should be casted to a cell_t*.
+    //
+    // If UsesDirectArrays() is false, note that |data[i]| will not yield an
+    // interior array pointer if the array has interior arrays. Instead, the
+    // formula is:
+    //
+    //      array_base + (i * sizeof(cell_t)) + data[i]
+    //
+    // @param handle    Array pointer handle.
+    // @param size      Optional pointer to store size of the array. If zero,
+    //                  and the return pointer is not null, then the array
+    //                  length is not supported.
+    // @return          Pointer to the data vector for the array, or null if
+    //                  the array has no data vector (zero length).
+    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
+
+    // Convert an internal address representing a heap-allocated array to an
+    // ARRAY_PTR.
+    virtual int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) = 0;
 
     const char* GetFilename() override { return full_name_.c_str(); }
     virtual BaseRuntime* GetBaseRuntime() override { return this; }

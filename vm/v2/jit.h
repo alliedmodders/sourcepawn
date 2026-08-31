@@ -111,7 +111,6 @@ class CompilerBase
     virtual void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) = 0;
     virtual void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) = 0;
-    virtual void EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) = 0;
     virtual void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) = 0;
     virtual void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) = 0;
     virtual void EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) = 0;

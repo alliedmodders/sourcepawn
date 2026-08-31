@@ -34,8 +34,6 @@ namespace v2 {
 
 using namespace ke;
 
-static constexpr cell_t kNativePointerTag = 0x80000000;
-
 class MethodInfo;
 
 struct NativeEntry : public sp_native_t {
@@ -101,9 +99,11 @@ class Runtime final : public BaseRuntime,
     bool IsNullFunctionId(funcid_t func) override;
     bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) override;
     IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
-    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
+    int ParamToArrayPtr(cell_t base, ARRAY_PTR* out) override;
     void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
-    bool InvokeMethod(uint32_t method_index, const cell_t* params, unsigned int num_params, cell_t* result);
+    int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) override;
+    bool InvokeMethod(uint32_t method_index, const cell_t* params, unsigned int num_params,
+                      cell_t* result);
     bool IsInExec() override;
 
   public:
@@ -162,8 +162,6 @@ class Runtime final : public BaseRuntime,
   private:
     bool InitializeContext();
     bool InitializeGlobals();
-
-    SpArray* LocalToCompatArray(cell_t local_addr);
 
   private:
     Environment* env_;

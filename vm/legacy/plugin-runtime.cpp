@@ -1,4 +1,4 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
 // Copyright (C) 2006-2015 AlliedModders LLC
 //
@@ -38,12 +38,12 @@ using namespace SourcePawn;
 #define CELLBOUNDMAX (INT_MAX / sizeof(cell_t))
 
 PluginRuntime::PluginRuntime(std::shared_ptr<SmxImage> image)
- : BaseRuntime(std::move(image))
- , memory_(nullptr)
- , data_size_(image_->DescribeData().length)
- , mem_size_(image_->HeapSize())
- , m_pNullVec(nullptr)
- , m_pNullString(nullptr)
+ : BaseRuntime(std::move(image)),
+   memory_(nullptr),
+   data_size_(image_->DescribeData().length),
+   mem_size_(image_->HeapSize()),
+   m_pNullVec(nullptr),
+   m_pNullString(nullptr)
 {
     // Compute and align a minimum memory amount.
     if (mem_size_ < data_size_)
@@ -1431,18 +1431,22 @@ PluginRuntime::GetFunctionByIdOrError(funcid_t func_id) {
     return nullptr;
 }
 
-int PluginRuntime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
-    cell_t* phys;
-    if (int err = LocalToPhysAddr(base, &phys))
-        return err;
-    *out = reinterpret_cast<ARRAY_PTR>(phys);
-    return SP_ERROR_NONE;
+int PluginRuntime::ParamToArrayPtr(cell_t base, ARRAY_PTR* out) {
+    return LocalToArrayPtr(base, out);
 }
 
 void* PluginRuntime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
     if (size)
         *size = 0;
     return reinterpret_cast<void*>(handle);
+}
+
+int PluginRuntime::LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) {
+    cell_t* phys;
+    if (int err = LocalToPhysAddr(addr, &phys))
+        return err;
+    *out = reinterpret_cast<ARRAY_PTR>(phys);
+    return SP_ERROR_NONE;
 }
 
 } // namespace v1

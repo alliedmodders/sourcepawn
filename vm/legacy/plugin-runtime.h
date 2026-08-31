@@ -115,8 +115,9 @@ class PluginRuntime : public BaseRuntime, public ke::InlineListNode<PluginRuntim
     IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
     bool IsInExec() override;
 
-    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
+    int ParamToArrayPtr(cell_t base, ARRAY_PTR* out) override;
     void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
+    int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) override;
 
   public:
     bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);

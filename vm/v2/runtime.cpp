@@ -521,22 +521,12 @@ bool Runtime::CallGlobalCtor() {
 }
 
 int Runtime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
-    if (auto array = LocalToCompatArray(local_addr)) {
-        if (phys_addr)
-            *phys_addr = heap_.ToPhysAddr<cell_t*>(array->data);
-        return SP_ERROR_NONE;
-    }
     if (phys_addr)
         *phys_addr = heap_.ToPhysAddr<cell_t*>(local_addr);
     return SP_ERROR_NONE;
 }
 
 int Runtime::LocalToString(cell_t local_addr, char** addr) {
-    if (auto array = LocalToCompatArray(local_addr)) {
-        if (addr)
-            *addr = heap_.ToPhysAddr<char*>(array->data);
-        return SP_ERROR_NONE;
-    }
     if (addr)
         *addr = heap_.ToPhysAddr<char*>(local_addr);
     return SP_ERROR_NONE;
@@ -547,11 +537,7 @@ int Runtime::StringToLocal(cell_t local_addr, size_t bytes, const char* source) 
         return SP_ERROR_NONE;
 
     size_t len = strlen(source);
-    char* dest;
-    if (auto array = LocalToCompatArray(local_addr))
-        dest = heap_.ToPhysAddr<char*>(array->data);
-    else
-        dest = heap_.ToPhysAddr<char*>(local_addr);
+    char* dest = heap_.ToPhysAddr<char*>(local_addr);
 
     if (len >= bytes)
         len = bytes - 1;
@@ -597,11 +583,7 @@ int Runtime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* s
         return SP_ERROR_NONE;
 
     size_t len = strlen(source);
-    char* dest;
-    if (auto array = LocalToCompatArray(local_addr))
-        dest = heap_.ToPhysAddr<char*>(array->data);
-    else
-        dest = heap_.ToPhysAddr<char*>(local_addr);
+    char* dest = heap_.ToPhysAddr<char*>(local_addr);
 
     bool needtocheck = false;
     if ((size_t)len >= maxbytes) {
@@ -788,15 +770,17 @@ IPluginFunction* Runtime::GetFunctionByIdOrError(funcid_t func_id) {
     return nullptr;
 }
 
-int Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
+static constexpr cell_t kPointerTag = 0x80000000;
+
+int Runtime::ParamToArrayPtr(cell_t base, ARRAY_PTR* out) {
     *out = reinterpret_cast<ARRAY_PTR>(static_cast<uintptr_t>(base));
     return SP_ERROR_NONE;
 }
 
 void* Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
     cell_t base = static_cast<cell_t>(reinterpret_cast<uintptr_t>(handle));
-    if (base & kNativePointerTag) {
-        uint32_t local_addr = base & ~kNativePointerTag;
+    if (base & kPointerTag) {
+        uint32_t local_addr = base & ~kPointerTag;
         SpArray* array = heap_.ToPhysAddr<SpArray*>(local_addr);
         if (size)
             *size = array->length;
@@ -805,6 +789,11 @@ void* Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
     if (size)
         *size = 0;
     return heap_.ToPhysAddr<void*>(base);
+}
+
+int Runtime::LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) {
+    *out = reinterpret_cast<ARRAY_PTR>(static_cast<uintptr_t>(addr | kPointerTag));
+    return SP_ERROR_NONE;
 }
 
 const TypeDesc* Runtime::LoadType(FastRtti& parser) {
@@ -1204,14 +1193,6 @@ Handle<SpArray> Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uin
     slice->length = td->array_size() - index;
     slice->data = local_addr + index * td->array_elt()->element_size();
     return slice;
-}
-
-SpArray* Runtime::LocalToCompatArray(cell_t local_addr) {
-    if (local_addr & kNativePointerTag) {
-        uint32_t handle = local_addr & ~kNativePointerTag;
-        return heap_.ToPhysAddr<SpArray*>(handle);
-    }
-    return nullptr;
 }
 
 } // namespace v2

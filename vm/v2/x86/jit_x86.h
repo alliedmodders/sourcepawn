@@ -74,7 +74,6 @@ class Compiler : public CompilerBase
     void EmitUnaryI64(LLOp op, uint16_t src_reg, uint16_t dest_reg) override;
     void EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) override;
     void EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) override;
-    void EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) override;
     void EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) override;
     void EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) override;
     void EmitLoadFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t dest_reg) override;

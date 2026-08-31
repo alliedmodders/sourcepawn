@@ -714,12 +714,6 @@ void Compiler::EmitLoadInternedObj(uint32_t addr, uint16_t dest_reg) {
     __ movl(RegAddr(dest_reg), rax);
 }
 
-void Compiler::EmitArrayToNative(uint32_t src_reg, uint32_t dest_reg) {
-    __ movl(rax, RegAddr(src_reg));
-    __ orl(rax, kNativePointerTag);
-    __ movl(RegAddr(dest_reg), rax);
-}
-
 void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
     __ movl(rax, RegAddr(src_reg));
     switch (op) {

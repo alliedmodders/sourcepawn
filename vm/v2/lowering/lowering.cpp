@@ -1563,8 +1563,8 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         VReg arg_reg = EmitNode(node);
 
         if (node->type->IsNonFlatArray() && (method->flags & kRttiMethod_Native)) {
-            VReg dest = AllocateTempCells(GetCellCount(cell_type_), false);
-            emit(LL_ARRAY_TO_NATIVE, arg_reg, dest);
+            VReg dest = AllocateTempCells(1, false);
+            emit(LL_ARRAY_TO_FLAT, arg_reg, dest);
             args_to_free.push_back(arg_reg);
             argv[i] = dest;
         } else {

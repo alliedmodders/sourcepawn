@@ -1151,7 +1151,7 @@ bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t
         return reportError(SP_ERROR_INVALID_INSTRUCTION);
     if (!(method->flags & kRttiMethod_Native)) {
         if (variadic == cb::kLegacyVariadic) {
-            if (arg_count < expected_argc - 1)
+            if (arg_count < expected_argc)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
         } else if (arg_count != expected_argc) {
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
