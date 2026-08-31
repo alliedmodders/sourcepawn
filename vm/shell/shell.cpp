@@ -825,7 +825,7 @@ int main(int argc, char** argv)
   int errcode = Execute(filename.value().c_str());
 
   if (!errcode && has_leaks)
-    errcode = 1;
+    errcode = 3;
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

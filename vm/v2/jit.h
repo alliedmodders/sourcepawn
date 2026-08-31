@@ -186,7 +186,7 @@ class CompilerBase
 
   public:
     // Helpers.
-    static void* FindEntryFp();
+    static void* UnwindStack(cell_t* frm_regs);
     static void InvokeReportError(int err);
     static void InvokeReportTimeout();
     static void DispatchDeferredReport();

@@ -937,20 +937,38 @@ void* CompilerBase::LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t
     return fn->GetEntryAddress();
 }
 
-// Find the |ebp| associated with the entry frame. We use this to drop out of
-// the entire scripted call stack.
-void* CompilerBase::FindEntryFp() {
-    void* fp = nullptr;
+void* CompilerBase::UnwindStack(cell_t* frm_regs) {
+    auto env = Environment::get();
 
-    for (JitFrameIterator iter(Environment::get()); !iter.done(); iter.next()) {
+    Runtime* rt = env->top()->cx()->GetBaseRuntime()->AsV2();
+    assert(rt);
+
+    void* entry_fp = nullptr;
+    for (JitFrameIterator iter(env); !iter.done(); iter.next()) {
         FrameLayout* frame = iter.frame();
         if (frame->frame_type() == JitFrameType::Entry)
             break;
-        fp = frame->prev_fp;
+
+        entry_fp = frame->prev_fp;
+
+        if (frame->frame_type() != JitFrameType::Scripted) {
+            assert(frame->frame_type() == JitFrameType::Exit);
+            continue;
+        }
+
+        ke::RefPtr<MethodInfo> method = rt->AcquireMethod(frame->function_id());
+        const BitSet& gcobj_regs = method->llcode()->gcobj_regs();
+        gcobj_regs.for_each([&](size_t reg) {
+            if (HeapItem* item = rt->heap().ToPhysAddr<HeapItem*>(frm_regs[reg]))
+                item->Release();
+        });
+
+        frm_regs = static_cast<cell_t*>(
+            JitScriptedFrameLayout::FromLayout(frame)->saved_frm);
     }
 
-    assert(fp);
-    return fp;
+    assert(entry_fp);
+    return entry_fp;
 }
 
 // Exit frame is a JitExitFrameForHelper.

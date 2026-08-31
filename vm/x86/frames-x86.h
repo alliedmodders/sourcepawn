@@ -51,6 +51,16 @@ struct FrameLayout {
     }
 };
 
+struct JitScriptedFrameLayout {
+    void* saved_frm;
+    FrameLayout layout;
+
+    static JitScriptedFrameLayout* FromLayout(FrameLayout* layout) {
+        return reinterpret_cast<JitScriptedFrameLayout*>(
+            reinterpret_cast<uint8_t*>(layout) - sizeof(void*));
+    }
+};
+
 } // namespace sp
 
 #endif // _include_sourcepawn_jit_frames_x86_h_

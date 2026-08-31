@@ -132,7 +132,8 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ bind(&return_to_invoke);
     {
         __ setupExitFrame(ExitFrameType::Helper, 0);
-        __ callWithABI(ExternalAddress((void*)CompilerBase::FindEntryFp));
+        __ movq(ArgReg0, frm);
+        __ callWithABI(ExternalAddress((void*)CompilerBase::UnwindStack));
         __ leaveExitFrame();
         __ movq(rbp, rax);
         __ jmp(&error);
