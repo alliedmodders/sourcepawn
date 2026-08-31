@@ -849,7 +849,7 @@ std::optional<std::string_view> SmxImage::ReadDataBlob(uint32_t offset) const {
     const uint8_t* end = data_.blob() + data_.length();
 
     auto len = DecodeCompact(cursor, end);
-    if (!len || *len > end - cursor) {
+    if (!len || *len > static_cast<uint32_t>(end - cursor)) {
         error("invalid length for data blob");
         return {};
     }

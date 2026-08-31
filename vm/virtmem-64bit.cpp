@@ -16,6 +16,8 @@
 #ifdef KE_POSIX
 #include <sys/mman.h>
 #include <unistd.h>
+#elif defined(_WIN32)
+#include <windows.h>
 #endif
 
 #include <algorithm>
@@ -36,16 +38,29 @@ using namespace ke;
 static constexpr size_t kDefaultArenaSize = 2 * ke::kGB;
 
 bool VirtMem64::Initialize() {
+    map_len_ = kDefaultArenaSize;
+    size_t page_size = 0;
+
 #ifdef KE_POSIX
 # if !defined(MAP_NORESERVE)
 #  define MAP_NORESERVE 0
 # endif
-    map_len_ = kDefaultArenaSize;
-    auto page_size = getpagesize();
+    page_size = getpagesize();
 
     constexpr int flags = MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE;
     void* base = mmap(nullptr, map_len_, PROT_NONE, flags, -1, 0);
     if (base == MAP_FAILED) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
+        return false;
+    }
+    map_base_ = (uint8_t*)base;
+#elif defined(_WIN32)
+    SYSTEM_INFO info;
+    GetSystemInfo(&info);
+    page_size = info.dwPageSize;
+
+    void* base = VirtualAlloc(nullptr, map_len_, MEM_RESERVE, PAGE_NOACCESS);
+    if (!base) {
         Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return false;
     }

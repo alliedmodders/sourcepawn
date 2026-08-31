@@ -13,7 +13,7 @@
 #include "code-allocator.h"
 #include <assert.h>
 #if defined(_WIN32)
-#    include <Windows.h>
+#    include <windows.h>
 #else
 #    include <sys/mman.h>
 #    include <unistd.h>

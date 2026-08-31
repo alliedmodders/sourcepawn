@@ -94,7 +94,7 @@ class Label
   void bind(uint32_t offset) {
     assert(!bound());
     status_ = (offset << 1) | kBound;
-    assert(this->offset() == offset);
+    assert(static_cast<uint32_t>(this->offset()) == offset);
   }
 
   void reset() {

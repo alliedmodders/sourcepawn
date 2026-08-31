@@ -250,7 +250,7 @@ ArrayTypeResolver::SetRankSize(Expr* expr, int rank, int size)
     if (computed_[rank] == size)
         return;
 
-    if (rank == computed_.size() - 1) {
+    if (rank == static_cast<int>(computed_.size()) - 1) {
         // The final rank is allowed to vary as long as the size was not
         // explicitly specified. If it was specified, we'll error during
         // semantic analysis, so there's no need to handle it now.
@@ -601,7 +601,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         if (!AddCells(cells))
             return false;
 
-        if (rank->size() && bytes > rank->size()) {
+        if (rank->size() && bytes > static_cast<size_t>(rank->size())) {
             report(str->pos(), 47);
             return false;
         }

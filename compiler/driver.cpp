@@ -26,7 +26,7 @@
 #include "sc.h"
 
 #if defined _WIN32
-# include <Windows.h>
+# include <windows.h>
 # include <direct.h>
 #else
 # include <unistd.h>
@@ -160,7 +160,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
-        hwndFinish = (HWND)atoi(opt_hwnd.value().c_str());
+        hwndFinish = (HWND)(intptr_t)atoll(opt_hwnd.value().c_str());
         if (!IsWindow(hwndFinish))
             hwndFinish = (HWND)0;
     }

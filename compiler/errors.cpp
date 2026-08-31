@@ -238,8 +238,11 @@ void ReportManager::ReportError(ErrorReport&& report) {
         cc_.set_must_abort();
 
     // Count messages per line, reset if not the same line.
-    if (lastline_ != error_list_.back().lineno || error_list_.back().fileno != lastfile_)
+    if (lastline_ != static_cast<int>(error_list_.back().lineno) ||
+        static_cast<int>(error_list_.back().fileno) != lastfile_)
+    {
         errors_on_line_ = 0;
+    }
 
     lastline_ = error_list_.back().lineno;
     lastfile_ = error_list_.back().fileno;

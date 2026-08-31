@@ -2219,7 +2219,7 @@ void Parser::fix_mispredicted_postdims(declinfo_t* decl) {
     //      Blah[3] x;
     //
     // This is illegal, so report it now, and strip dim_exprs.
-    for (int i = 0; i < decl->type.dim_exprs.size(); i++) {
+    for (size_t i = 0; i < decl->type.dim_exprs.size(); i++) {
         if (decl->type.dim_exprs[i]) {
             report(decl->type.dim_exprs[i]->pos(), 101);
             break;

@@ -265,7 +265,7 @@ class Config(object):
             raise
             raise Exception('Could not find {}'.format(libclang_rt))
 
-        self.asan_libs[cxx.target.arch] = os.path.dirname(output)
+        self.asan_libs[cxx.target] = os.path.dirname(output)
 
     def generate_version_header(self):
         includes = builder.AddFolder('includes')
@@ -300,7 +300,7 @@ class Config(object):
         if self.enable_asan:
             binary.compiler.linkflags += [
                 '-shared-libsan',
-                '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
+                '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target]),
             ]
         return binary
 
@@ -404,8 +404,8 @@ class SourcePawn(object):
         builder.Build('vm/AMBuilder', vars)
 
         cppnode = builder.Add(binary)
-        self.static_libsp[cxx.target.arch] = cppnode.binary
-        self.libsourcepawn[cxx.target.arch] = cppnode
+        self.static_libsp[cxx.target] = cppnode.binary
+        self.libsourcepawn[cxx.target] = cppnode
 
     def BuildSpcomp(self, builder):
         binary = self.root.Program(builder, 'spcomp')
@@ -440,7 +440,7 @@ class SourcePawn(object):
         self.AddStaticLibraries(binary)
 
         cppnodes = builder.Add(binary)
-        self.spshell[builder.cxx.target.arch] = cppnodes
+        self.spshell[builder.cxx.target] = cppnodes
 
     def BuildVerifier(self, builder):
         binary = self.root.Program(builder, 'verifier')
@@ -479,12 +479,12 @@ class SourcePawn(object):
 
         self.AddVmFlags(binary)
 
-        arch = binary.compiler.target.arch
+        target = binary.compiler.target
         binary.compiler.linkflags += [
-            self.zlib[arch],
-            self.libamtl[arch],
-            self.mimalloc[arch],
-            self.static_libsp[arch],
+            self.static_libsp[target],
+            self.zlib[target],
+            self.libamtl[target],
+            self.mimalloc[target],
         ]
 
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
@@ -540,28 +540,28 @@ class SourcePawn(object):
             amtl = os.path.relpath(self.amtl, builder.currentSourcePath)
             amtl_builder = os.path.join(amtl, 'amtl', 'AMBuilder')
             libamtl = self.BuildForArch(amtl_builder, cxx, extra_vars)
-            self.libamtl[cxx.target.arch] = libamtl.binary
+            self.libamtl[cxx.target] = libamtl.binary
 
     def EnsureZlib(self):
         if self.zlib is not None:
             return
         self.zlib = {}
         for cxx in self.root.targets:
-            self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
+            self.zlib[cxx.target] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
         self.included_zlib = True
 
     def EnsureGTest(self):
         if self.gtest:
             return
         for cxx in self.root.targets:
-            self.gtest[cxx.target.arch] = self.BuildForArch("third_party/AMBuilder.gtest", cxx)
+            self.gtest[cxx.target] = self.BuildForArch("third_party/AMBuilder.gtest", cxx)
 
     def EnsureMimalloc(self):
         if self.mimalloc is not None:
             return
         self.mimalloc = {}
         for cxx in self.root.targets:
-            self.mimalloc[cxx.target.arch] = self.BuildForArch("third_party/AMBuild.mimalloc", cxx)
+            self.mimalloc[cxx.target] = self.BuildForArch("third_party/AMBuild.mimalloc", cxx)
 
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)

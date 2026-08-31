@@ -40,7 +40,7 @@ class Heap {
         uint8_t* pos = nullptr;
         Chunk* next = nullptr;
 
-        bool CanAllocate(size_t bytes) { return (end - pos) >= bytes; }
+        bool CanAllocate(size_t bytes) { return static_cast<size_t>(end - pos) >= bytes; }
 
         uint8_t* Allocate(size_t size) {
             assert(CanAllocate(size));

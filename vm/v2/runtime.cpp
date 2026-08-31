@@ -917,7 +917,7 @@ cell_t Runtime::GetNullFunctionValue() {
 }
 
 bool Runtime::IsNullFunctionId(funcid_t func) {
-    return func == GetNullFunctionValue();
+    return func == static_cast<funcid_t>(GetNullFunctionValue());
 }
 
 bool Runtime::GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) {

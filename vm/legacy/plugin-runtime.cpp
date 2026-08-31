@@ -1005,7 +1005,7 @@ PluginRuntime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
         return SP_ERROR_ARRAY_TOO_BIG;
 
     uint32_t new_hp = hp_ + bytes;
-    if (new_hp >= sp_ - STACK_MARGIN)
+    if (static_cast<cell_t>(new_hp) >= sp_ - STACK_MARGIN)
         return SP_ERROR_HEAPLOW;
 
     cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
@@ -1405,7 +1405,7 @@ PluginRuntime::GetNullFunctionValue() {
 
 bool
 PluginRuntime::IsNullFunctionId(funcid_t func) {
-    return func == GetNullFunctionValue();
+    return func == static_cast<funcid_t>(GetNullFunctionValue());
 }
 
 bool

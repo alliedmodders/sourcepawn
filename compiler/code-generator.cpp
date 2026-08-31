@@ -536,13 +536,13 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
     // If we have ellipses, it should be a fixed array.
     assert(!array->ellipses() || type->size());
 
-    if (array->ellipses() && num_items < type->size()) {
+    if (array->ellipses() && num_items < (uint32_t)type->size()) {
         cell_t step = 0;
         if (prev2)
             step = *prev1 - *prev2;
 
         cell_t next_value = *prev1 + step;
-        while (num_items < type->size()) {
+        while (num_items < (uint32_t)type->size()) {
             if (type->inner()->isInt64())
                 AddValue<int64_t>(&data, next_value);
             else
@@ -941,7 +941,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
         __ emit(OP_LOAD_S, VarSlot(*temp_slot));
 }
 
-[[maybe_unused]] static inline bool StackSlotsForLval(const value& v) {
+[[maybe_unused]] static inline int StackSlotsForLval(const value& v) {
     switch (v.ident) {
         case iVARIABLE:
             return 0;
