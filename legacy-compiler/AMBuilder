@@ -1,0 +1,33 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
+import os
+
+module = binary.Module(builder, 'legacy-compiler')
+
+module.sources += [
+  'assembler.cpp',
+  'array-helpers.cpp',
+  'ast-printer.cpp',
+  'builtin-generator.cpp',
+  'coercion-rules.cpp',
+  'compile-context.cpp',
+  'code-generator.cpp',
+  'data-queue.cpp',
+  'errors.cpp',
+  'expressions.cpp',
+  'lexer.cpp',
+  'main.cpp',
+  'name-resolution.cpp',
+  'parse-node.cpp',
+  'parser.cpp',
+  'pool-objects.cpp',
+  'rtti-builder.cpp',
+  'sci18n.cpp',
+  'sctracker.cpp',
+  'semantics.cpp',
+  'scopes.cpp',
+  'source-file.cpp',
+  'source-manager.cpp',
+  'symbols.cpp',
+  'type-checker.cpp',
+  'types.cpp',
+]

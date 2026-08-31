@@ -334,6 +334,7 @@ class SourcePawn(object):
         }
         self.spshell = {}
         self.spcomp = []
+        self.oldspcomp = []
         self.zlib = None
         self.mimalloc = None
         self.gtest = {}
@@ -385,6 +386,7 @@ class SourcePawn(object):
 
         self.BuildStaticCoreLib(builder)
         self.BuildSpcomp(builder)
+        self.BuildOldSpcomp(builder)
         self.BuildSpshell(builder)
         self.BuildVerifier(builder)
         self.BuildSmxDump(builder)
@@ -427,6 +429,27 @@ class SourcePawn(object):
 
         cppnodes = builder.Add(binary)
         self.spcomp.append(cppnodes)
+
+    def BuildOldSpcomp(self, builder):
+        binary = self.root.Program(builder, 'oldspcomp')
+
+        self.SetupBinForArch(binary, builder)
+
+        vars = self.vars.copy()
+        vars['binary'] = binary
+        builder.Build('legacy-compiler/AMBuilder', vars)
+
+        binary.sources = [
+            'legacy-compiler/driver.cpp',
+        ]
+
+        if binary.compiler.target.platform == 'windows':
+            binary.sources += ['legacy-compiler/version.rc']
+
+        self.AddStaticLibraries(binary)
+
+        cppnodes = builder.Add(binary)
+        self.oldspcomp.append(cppnodes)
 
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
