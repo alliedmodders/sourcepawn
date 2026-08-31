@@ -1,0 +1,33 @@
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
+//
+// Copyright (C) 2026 AlliedModders LLC
+//
+// This file is part of SourcePawn. SourcePawn is free software: you can
+// redistribute it and/or modify it under the terms of the GNU General Public
+// License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+//
+#pragma once
+
+#include <amtl/am-bits.h>
+#ifdef KE_64BIT
+# include "heap-64bit.h"
+#else
+# include "heap-32bit.h"
+#endif
+
+namespace sp {
+
+static constexpr uint32_t kDefaultStackSize = 16 * ke::kKB;
+static constexpr uint32_t kDefaultHeapChunkSize = 64 * ke::kKB;
+
+#ifdef KE_64BIT
+using HeapImpl = Heap64;
+#else
+using HeapImpl = Heap32;
+#endif
+
+} // namespace sp

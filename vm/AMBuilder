@@ -30,6 +30,11 @@ module.sources += [
   'watchdog_timer.cpp',
 ]
 
+if '64' in module.compiler.target.arch:
+  module.sources += ['heap-64bit.cpp']
+else:
+  module.sources += ['heap-32bit.cpp']
+
 # V1 implementation
 module.sources += [
   'legacy/builtins.cpp',

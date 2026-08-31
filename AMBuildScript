@@ -335,6 +335,7 @@ class SourcePawn(object):
         self.spshell = {}
         self.spcomp = []
         self.zlib = None
+        self.gtest = {}
         self.libamtl = None
         self.static_libsp = {}
 
@@ -344,6 +345,7 @@ class SourcePawn(object):
     def BuildCore(self):
         self.EnsureZlib()
         self.EnsureAmtl()
+        self.EnsureGTest()
 
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
@@ -383,6 +385,7 @@ class SourcePawn(object):
         self.BuildSpshell(builder)
         self.BuildVerifier(builder)
         self.BuildSmxDump(builder)
+        self.BuildImplTests(builder)
 
     def BuildStaticCoreLib(self, builder):
         cxx = builder.cxx
@@ -469,6 +472,11 @@ class SourcePawn(object):
 
         builder.Add(binary)
 
+    def BuildImplTests(self, builder):
+        vars = self.vars.copy()
+        vars['gtest'] = self.gtest[builder.cxx.target.arch]
+        builder.Build('tests/impl_tests/AMBuilder', vars)
+
     def AddStaticLibraries(self, binary):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
@@ -544,6 +552,12 @@ class SourcePawn(object):
         for cxx in self.root.targets:
             self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
         self.included_zlib = True
+
+    def EnsureGTest(self):
+        if self.gtest:
+            return
+        for cxx in self.root.targets:
+            self.gtest[cxx.target.arch] = self.BuildForArch("third_party/AMBuilder.gtest", cxx)
 
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)
