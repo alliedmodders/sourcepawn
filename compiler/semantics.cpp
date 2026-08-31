@@ -1271,9 +1271,6 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     auto second = expr->second();
     auto third = expr->third();
 
-    if (!CheckRvalue(first))
-        return false;
-
     if (target) {
         if (!CheckRvalue(second, target))
             return false;
