@@ -824,7 +824,7 @@ void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
             __ movl(rax, RegAddr(val_reg));
             __ movl(HeapAddr(rdx), rax);
             break;
-        case LL_STOR_I_U8:
+        case LL_STOR_I_I8:
             __ movl(rax, RegAddr(val_reg));
             __ movb(HeapAddr(rdx), rax);
             break;
@@ -1097,7 +1097,7 @@ void Compiler::EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) {
             __ movl(rax, RegAddr(args.val_reg));
             __ movl(Operand(frm, rcx, ScaleFour, base_offset), rax);
             break;
-        case LL_STOR_ELEM_FLAT_U8:
+        case LL_STOR_ELEM_FLAT_I8:
             __ movl(rax, RegAddr(args.val_reg));
             __ movb(Operand(frm, rcx, NoScale, base_offset), rax);
             break;
@@ -1131,7 +1131,7 @@ void Compiler::EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) {
             __ movl(rax, RegAddr(args.val_reg));
             __ movl(Operand(rdx, rcx, ScaleFour), rax);
             break;
-        case LL_STOR_ELEM_FLAT_I_U8:
+        case LL_STOR_ELEM_FLAT_I_I8:
             __ movl(rax, RegAddr(args.val_reg));
             __ movb(Operand(rdx, rcx, NoScale), rax);
             break;
@@ -1214,7 +1214,7 @@ void Compiler::EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             __ movl(rax, RegAddr(val_reg));
             __ movl(Operand(rdx, rcx, ScaleFour), rax);
             break;
-        case LL_STOR_ELEM_U8:
+        case LL_STOR_ELEM_I8:
             __ movl(rax, RegAddr(val_reg));
             __ movb(Operand(rdx, rcx, NoScale), rax);
             break;

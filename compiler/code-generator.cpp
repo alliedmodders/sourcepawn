@@ -2040,7 +2040,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
     switch (lval.ident) {
         case iARRAYELEM:
             if (lval.type()->isChar())
-                __ emit(OP_STOR_ELEM_U8);
+                __ emit(OP_STOR_ELEM_I8);
             else if (lval.type()->isInt16())
                 __ emit(OP_STOR_ELEM_I16);
             else if (lval.type()->isInt64())
@@ -2057,7 +2057,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
             break;
         case iADDRESS:
             if (lval.type()->isChar())
-                __ emit(OP_STOR_I_U8);
+                __ emit(OP_STOR_I_I8);
             else if (lval.type()->isInt16())
                 __ emit(OP_STOR_I_I16);
             else if (lval.type()->isInt64())

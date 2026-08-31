@@ -190,7 +190,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
         case OP_STOR_ELEM_INTPTR:
-        case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_I8:
         case OP_STOR_ELEM_I16:
         case OP_STOR_ELEM_A: {
             const TypeDesc* val;
@@ -532,7 +532,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(cell_type());
         }
 
-        case OP_STOR_I_U8: {
+        case OP_STOR_I_I8: {
             const TypeDesc* val;
             if (!popStack(&val))
                 return false;

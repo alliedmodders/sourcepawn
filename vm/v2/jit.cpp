@@ -515,7 +515,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitLoadI(op, src_reg, dest_reg);
                 break;
             }
-            case LL_STOR_I_U8:
+            case LL_STOR_I_I8:
             case LL_STOR_I_I32:
             case LL_STOR_I_F32:
             case LL_STOR_I_I64:
@@ -599,7 +599,6 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             case LL_LOAD_ELEM_FLAT_F32:
             case LL_LOAD_ELEM_FLAT_I64:
             case LL_LOAD_ELEM_FLAT_U8:
-            case LL_LOAD_ELEM_FLAT_I8:
             case LL_LOAD_ELEM_FLAT_I16:
             {
                 auto args = reader.read<LoadElemFlatArgs>();
@@ -610,7 +609,6 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             case LL_LOAD_ELEM_FLAT_I_F32:
             case LL_LOAD_ELEM_FLAT_I_I64:
             case LL_LOAD_ELEM_FLAT_I_U8:
-            case LL_LOAD_ELEM_FLAT_I_I8:
             case LL_LOAD_ELEM_FLAT_I_I16:
             {
                 auto args = reader.read<LoadElemFlatArgs>();
@@ -670,7 +668,6 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             case LL_LOAD_ELEM_F32:
             case LL_LOAD_ELEM_I64:
             case LL_LOAD_ELEM_U8:
-            case LL_LOAD_ELEM_I8:
             case LL_LOAD_ELEM_I16:
             case LL_LOAD_ELEM_A:
             {

@@ -616,7 +616,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_I_F32:
         case OP_STOR_I_I64:
         case OP_STOR_I_INTPTR:
-        case OP_STOR_I_U8:
+        case OP_STOR_I_I8:
         case OP_STOR_I_I16:
         case OP_STOR_I_A: {
             LLOp llop = LL_NOP;
@@ -627,7 +627,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 case OP_STOR_I_INTPTR:
                     llop = intptr_type_->IsWideInt() ? LL_STOR_I_I64 : LL_STOR_I_I32;
                     break;
-                case OP_STOR_I_U8:  llop = LL_STOR_I_U8; break;
+                case OP_STOR_I_I8:  llop = LL_STOR_I_I8; break;
                 case OP_STOR_I_I16: llop = LL_STOR_I_I16; break;
                 case OP_STOR_I_A:   llop = LL_STOR_I_A; break;
                 default: assert(false); break;
@@ -651,7 +651,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_ELEM_F32:
         case OP_STOR_ELEM_I64:
         case OP_STOR_ELEM_INTPTR:
-        case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_I8:
         case OP_STOR_ELEM_I16:
         case OP_STOR_ELEM_A: {
             ExprNode* val = popStack();
@@ -674,7 +674,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         llop = intptr_type_->IsWideInt() ?
                                LL_STOR_ELEM_FLAT_I64 : LL_STOR_ELEM_FLAT_I32;
                         break;
-                    case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
+                    case OP_STOR_ELEM_I8:  llop = LL_STOR_ELEM_FLAT_I8; break;
                     case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_FLAT_I16; break;
                     default: assert(false); break;
                 }
@@ -694,7 +694,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         case LL_STOR_ELEM_FLAT_I32: iop = LL_STOR_ELEM_FLAT_I_I32; break;
                         case LL_STOR_ELEM_FLAT_F32: iop = LL_STOR_ELEM_FLAT_I_F32; break;
                         case LL_STOR_ELEM_FLAT_I64: iop = LL_STOR_ELEM_FLAT_I_I64; break;
-                        case LL_STOR_ELEM_FLAT_U8:  iop = LL_STOR_ELEM_FLAT_I_U8; break;
+                        case LL_STOR_ELEM_FLAT_I8:  iop = LL_STOR_ELEM_FLAT_I_I8; break;
                         case LL_STOR_ELEM_FLAT_I16: iop = LL_STOR_ELEM_FLAT_I_I16; break;
                         default: assert(false); break;
                     }
@@ -717,7 +717,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         llop = intptr_type_->IsWideInt() ?
                                LL_STOR_ELEM_I64 : LL_STOR_ELEM_I32;
                         break;
-                    case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
+                    case OP_STOR_ELEM_I8:  llop = LL_STOR_ELEM_I8; break;
                     case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_I16; break;
                     case OP_STOR_ELEM_A:   llop = LL_STOR_ELEM_A; break;
                     default: assert(false); break;

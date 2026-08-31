@@ -386,7 +386,7 @@ bool Interpreter::run_internal() {
                 *ptr = *reinterpret_cast<int64_t*>(&vregs_[val]);
                 break;
             }
-            case LL_STOR_I_U8: {
+            case LL_STOR_I_I8: {
                 uint16_t addr = reader_.read<uint16_t>();
                 uint16_t val = reader_.read<uint16_t>();
                 uint8_t* dest_addr = rt_->heap().ToPhysAddr<uint8_t*>(vregs_[addr]);
@@ -455,7 +455,7 @@ bool Interpreter::run_internal() {
             case LL_STOR_ELEM_I32:
             case LL_STOR_ELEM_F32:
             case LL_STOR_ELEM_I64:
-            case LL_STOR_ELEM_U8:
+            case LL_STOR_ELEM_I8:
             case LL_STOR_ELEM_I16:
             case LL_STOR_ELEM_A: {
                 uint16_t base_reg = reader_.read<uint16_t>();
@@ -476,7 +476,7 @@ bool Interpreter::run_internal() {
                 void* elt = rt_->GetArrayElem(array, index);
                 if (op == LL_STOR_ELEM_I64) {
                     *reinterpret_cast<int64_t*>(elt) = *reinterpret_cast<int64_t*>(&vregs_[val_reg]);
-                } else if (op == LL_STOR_ELEM_U8) {
+                } else if (op == LL_STOR_ELEM_I8) {
                     *reinterpret_cast<uint8_t*>(elt) = vregs_[val_reg] & 0xFF;
                 } else if (op == LL_STOR_ELEM_I16) {
                     *reinterpret_cast<int16_t*>(elt) = int16_t(vregs_[val_reg] & 0xffff);
@@ -683,7 +683,7 @@ bool Interpreter::run_internal() {
                 *elt = vregs_[args.val_reg];
                 break;
             }
-            case LL_STOR_ELEM_FLAT_U8: {
+            case LL_STOR_ELEM_FLAT_I8: {
                 STOR_ELEM_FLAT(uint8_t);
                 *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
                 break;
@@ -716,7 +716,7 @@ bool Interpreter::run_internal() {
                 *elt = vregs_[args.val_reg];
                 break;
             }
-            case LL_STOR_ELEM_FLAT_I_U8: {
+            case LL_STOR_ELEM_FLAT_I_I8: {
                 STOR_ELEM_FLAT_I(uint8_t);
                 *elt = static_cast<uint8_t>(vregs_[args.val_reg]);
                 break;

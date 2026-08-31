@@ -44,7 +44,7 @@ namespace v2 {
     FOR_EACH(DUP, 8, "dup", 1) \
     FOR_EACH(STOR_S_C, 9, "stor.s.c", 7) \
     FOR_EACH(STOR_I_I32, 10, "stor.i.i32", 1) \
-    FOR_EACH(STOR_I_U8, 11, "stor.i.u8", 1) \
+    FOR_EACH(STOR_I_I8, 11, "stor.i.i8", 1) \
     FOR_EACH(IDXADDR, 12, "idxaddr", 1) \
     FOR_EACH(PUSH_C, 13, "push.c", 5) \
     FOR_EACH(RETN, 14, "retn", 1) \
@@ -166,11 +166,11 @@ namespace v2 {
     FOR_EACH(LOAD_ELEM_I32, 70, "load.elem.i32", 1) \
     FOR_EACH(LOAD_ELEM_F32, 71, "load.elem.f32", 1) \
     FOR_EACH(LOAD_ELEM_I64, 72, "load.elem.i64", 1) \
-    FOR_EACH(LOAD_ELEM_U8, 73, "load.elem.i8", 1) \
+    FOR_EACH(LOAD_ELEM_U8, 73, "load.elem.u8", 1) \
     FOR_EACH(STOR_ELEM_I32, 74, "stor.elem.i32", 1) \
     FOR_EACH(STOR_ELEM_F32, 75, "stor.elem.f32", 1) \
     FOR_EACH(STOR_ELEM_I64, 76, "stor.elem.i64", 1) \
-    FOR_EACH(STOR_ELEM_U8, 77, "stor.elem.i8", 1) \
+    FOR_EACH(STOR_ELEM_I8, 77, "stor.elem.i8", 1) \
     FOR_EACH(LOAD_I_F32, 78, "load.i.f32", 1) \
     FOR_EACH(STOR_I_F32, 79, "stor.i.f32", 1) \
     FOR_EACH(LOAD_ELEM_A, 80, "load.elem.a", 1) \
