@@ -70,6 +70,9 @@ struct SwitchCaseEntry {
 #pragma pack(pop)
 
 enum LLArgFmt : uint8_t {
+    // Opcode has no operands.
+    LL_FMT_NONE,
+
     // 0xffff is an invalid register.
     LL_FMT_REG,
 
@@ -105,7 +108,7 @@ enum LLArgFmt : uint8_t {
 };
 
 #define LL_OPCODE_LIST(FOR_EACH) \
-    FOR_EACH(NOP, "nop", {}) \
+    FOR_EACH(NOP, "nop", {LL_FMT_NONE}) \
     FOR_EACH(LOAD_GLB_X32, "load.glb.x32", {LL_FMT_GLB_ID, LL_FMT_REG}) \
     FOR_EACH(LOAD_I_X32, "load.i.x32", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_I_U8, "load.i.u8", {LL_FMT_REG, LL_FMT_REG}) \
@@ -194,7 +197,7 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_FN, "load.fn", {LL_FMT_METHOD_ID, LL_FMT_REG}) \
     FOR_EACH(LOAD_I_X64, "load.i.x64", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_I_X64, "stor.i.x64", {LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(RETV, "retv", {}) \
+    FOR_EACH(RETV, "retv", {LL_FMT_NONE}) \
     FOR_EACH(ADDR_GLB, "addr.glb", {LL_FMT_GLB_ID, LL_FMT_REG}) \
     FOR_EACH(LOAD_STR, "load.str", {LL_FMT_STR_ID, LL_FMT_REG}) \
     FOR_EACH(NEWARRAY, "newarray", {LL_FMT_TYPEDESC, LL_FMT_REG, LL_FMT_REG}) \

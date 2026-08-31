@@ -12,6 +12,7 @@
 //
 #include "heap.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 
 #include <algorithm>
@@ -73,7 +74,8 @@ static bool mi_cdecl VisitBlocksForLeaks(const mi_heap_t*, const mi_heap_area_t*
 
     auto* item = reinterpret_cast<HeapItem*>(block);
     std::string desc = DescribeType(item->td);
-    info->report += ke::StringPrintf("  %p: %s (%zu bytes)\n", block, desc.c_str(), block_size);
+    info->report += ke::StringPrintf("  %p: %s (%" PRIuPTR " bytes)\n", block, desc.c_str(),
+                                     static_cast<uintptr_t>(block_size));
     return true;
 }
 

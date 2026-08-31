@@ -12,6 +12,7 @@
 //
 #include <math.h>
 #include <fenv.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdarg.h>
 

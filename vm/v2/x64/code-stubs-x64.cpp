@@ -34,23 +34,27 @@ bool CodeStubs::CompileInvokeStubV2() {
     MacroAssembler masm;
     __ enterFrame(JitFrameType::Entry, 0);
 
-    // 8 bytes for re-alignment, and another 48 for temporaries. This is enough
-    // for 7 locals. Since enterFrame pushes one value after setting rbp, our
-    // first local starts at -16, not -8.
-    __ subq(rsp, 8 + 48);
+    // 8 bytes for re-alignment, and another 64 for temporaries. Since
+    // enterFrame pushes one value after setting rbp, our first local starts
+    // at -16, not -8. The rval pointer gets the last slot; on win64, rsi/rdi
+    // (which are callee-saved there) use the two before it.
+    static const int32_t kRvalOffset = -72;
+    __ subq(rsp, 8 + 64);
 
-    // Four locals are used to preserve callee-saved registers.
+    // Locals are used to preserve callee-saved registers. The JIT uses rbx
+    // (frm), and r12-r15 as runtime registers.
     __ movq(Operand(rbp, -16), rbx);
     __ movq(Operand(rbp, -24), r12);
     __ movq(Operand(rbp, -32), r13);
-    __ movq(Operand(rbp, -40), r15);
+    __ movq(Operand(rbp, -40), r14);
+    __ movq(Operand(rbp, -48), r15);
 #ifdef _WIN32
-    __ movq(Operand(rbp, -48), rsi);
-    __ movq(Operand(rbp, -56), rdi);
+    __ movq(Operand(rbp, -56), rsi);
+    __ movq(Operand(rbp, -64), rdi);
 #endif
 
     // Save the return address.
-    __ movq(Operand(rbp, -48), ArgReg2);
+    __ movq(Operand(rbp, kRvalOffset), ArgReg2);
 
     Environment* env = Environment::get();
 
@@ -65,7 +69,7 @@ bool CodeStubs::CompileInvokeStubV2() {
     __ call(ArgReg1);
 
     // Store the rval.
-    __ movq(rdx, Operand(rbp, -48));
+    __ movq(rdx, Operand(rbp, kRvalOffset));
     __ movl(Operand(rdx, 0), rax);
 
     Label ret;
@@ -73,10 +77,11 @@ bool CodeStubs::CompileInvokeStubV2() {
 
     // Restore the stack.
 #ifdef _WIN32
-    __ movq(rdi, Operand(rbp, -56));
-    __ movq(rsi, Operand(rbp, -48));
+    __ movq(rdi, Operand(rbp, -64));
+    __ movq(rsi, Operand(rbp, -56));
 #endif
-    __ movq(r15, Operand(rbp, -40));
+    __ movq(r15, Operand(rbp, -48));
+    __ movq(r14, Operand(rbp, -40));
     __ movq(r13, Operand(rbp, -32));
     __ movq(r12, Operand(rbp, -24));
     __ movq(rbx, Operand(rbp, -16));

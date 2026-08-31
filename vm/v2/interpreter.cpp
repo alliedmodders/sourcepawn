@@ -1003,7 +1003,7 @@ bool Interpreter::run_internal() {
                     uint16_t arg_reg = reader_.read<uint16_t>();
                     params[i + 1] = vregs_[arg_reg];
                 }
-                for (cell_t i = 0; i < vararg_count; i++)
+                for (uint32_t i = 0; i < vararg_count; i++)
                     params[nargs + i + 1] = varargs[i + 1];
 
                 NativeEntry* native = rt_->NativeAt(native_index);

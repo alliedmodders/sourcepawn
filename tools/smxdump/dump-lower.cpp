@@ -159,6 +159,8 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
                 std::vector<std::string> op_args;
                 for (size_t i = 0; i < nargs; i++) {
                     switch (args[i]) {
+                        case LL_FMT_NONE:
+                            break;
                         case LL_FMT_REG:
                             op_args.push_back(FormatRegister(reader.read<uint16_t>()));
                             break;

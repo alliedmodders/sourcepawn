@@ -1650,8 +1650,13 @@ void Compiler::CallRtForHandleImpl(void* method_addr, uint32_t nargs, uint16_t d
         __ movq(Operand(rsp, 32), HelperArgReg4);
 #endif
 
+#ifdef _WIN64
+    __ lea(ArgReg1, Operand(rbp, kHandleOffset));
+    __ movq(ArgReg0, context_reg);
+#else
     __ movq(ArgReg1, context_reg);
     __ lea(ArgReg0, Operand(rbp, kHandleOffset));
+#endif
 
     // Clear exit_fp_ so DispatchReport defers the error.
     __ xorq(rax, rax);

@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #include "ast-printer.h"
 
+#include <inttypes.h>
+
 #include "lexer.h"
 #include "parse-node.h"
 #include <amtl/am-string.h>
