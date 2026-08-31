@@ -20,9 +20,11 @@
 //      misrepresented as being the original software.
 //  3.  This notice may not be removed or altered from any source distribution.
 
-#include <amtl/am-maybe.h>
-#include <amtl/am-utility.h>
 #include "array-helpers.h"
+
+#include <amtl/am-maybe.h>
+#include <amtl/am-raii.h>
+#include <amtl/am-utility.h>
 #include "errors.h"
 #include "lexer-inl.h"
 #include "semantics.h"
@@ -31,6 +33,16 @@
 
 namespace sp {
 namespace cc {
+
+static bool HasDynamicSizeofExpr(Expr* expr) {
+    if (expr->is(ExprKind::SizeofExpr))
+        return true;
+    if (auto bin = expr->as<BinaryExpr>())
+        return HasDynamicSizeofExpr(bin->left()) || HasDynamicSizeofExpr(bin->right());
+    if (auto unary = expr->as<UnaryExpr>())
+        return HasDynamicSizeofExpr(unary->expr());
+    return false;
+}
 
 class ArrayTypeResolver
 {
@@ -311,8 +323,14 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             //     int blah[y];
             //              ^-- no
             if (type_->is_new) {
-                report(expr->pos(), 161) << type_->type;
-                return false;
+                if (HasDynamicSizeofExpr(expr)) {
+                    // This is support for backwards compatibility with plugins that make a declaration like:
+                    // any data[sizeof(x)];
+                    report(expr->pos(), 254);
+                } else {
+                    report(expr->pos(), 161) << type_->type;
+                    return false;
+                }
             }
 
             // Old-style dynamic arrays are only allowed in local scope.
@@ -361,8 +379,13 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, value* v) {
         }
     }
 
-    if (!sema_->CheckExpr(expr))
-        return false;
+    {
+        // We're potentially analyzing this outside normal statement boundaries,
+        // so we have to save and restore pending_heap_allocation_.
+        ke::SaveAndSet<bool> restore_heap(&sema_->pending_heap_allocation_, false);
+        if (!sema_->CheckExpr(expr))
+            return false;
+    }
 
     *v = expr->val();
     return true;

@@ -429,7 +429,7 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         return true;
 
     // |int x = x| should bind to outer x, not inner.
-    if (init_)
+    if (init_ && !as<ArgDecl>())
         init_rhs()->Bind(sc);
 
     if (!sc.BindType(pos(), &type_))
@@ -785,6 +785,12 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     bool ok = true;
     for (const auto& decl : args_)
         ok &= decl->BindType(outer_sc);
+
+    // Bind default arguments with the outer scope, so they can't see other arguments.
+    for (const auto& decl : args_) {
+        if (decl && decl->init())
+            ok &= decl->init_rhs()->Bind(outer_sc);
+    }
 
     if (!ok)
         return false;

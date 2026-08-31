@@ -280,6 +280,7 @@ static const char* warnmsg[] = {
     /*251*/ "const variable was not initialized\n",
     /*252*/ "sizeof on scalar will always return 1\n",
     /*253*/ "implicit conversion from \"%s\" to \"%s\" is undefined\n",
+    /*254*/ "sizeof on enum structs is no longer constant, implicitly creating a dynamic array\n",
 };
 
 static const char* errmsg_ex[] = {

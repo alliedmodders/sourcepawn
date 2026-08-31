@@ -208,6 +208,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
             break;
         }
 
+        case OP_SLICE_AS:
         case OP_SLICE_ES: {
             uint32_t type_id = reader.read<uint32_t>();
             auto rtti = smx_->GetTypeIdParser(type_id);

@@ -143,6 +143,10 @@ namespace v2 {
      */ \
     FOR_EACH(FILLARRAY, 68, "fillarray", 5) \
     FOR_EACH(ARRAY_TO_NATIVE, 69, "array2native", 1) \
+    /* Given a flat or non-flat array, and an index, create a view into this
+     * array at the given index. The returned array is always of a non-fixed
+     * size.
+     */ \
     FOR_EACH(SLICE, 70, "slice", 1) \
     /* Pops a value from the stack, which must be an address to an object-
      * like structure. Loads a value from the specified field, which is
@@ -170,7 +174,14 @@ namespace v2 {
     FOR_EACH(LOAD_FLD_OFFSET, 86, "load.fld.offset", 5) \
     FOR_EACH(LOAD_ES_SIZE, 87, "load.es.size", 5) \
     FOR_EACH(COPYOBJ, 88, "copyobj", 5) \
-    FOR_EACH(SLICE_ES, 89, "slice.es", 5)
+    /* Slice an enumstruct of the given type, into an any[] array. The
+     * size of the array is the size of the enum struct in cells.
+     */ \
+    FOR_EACH(SLICE_ES, 89, "slice.es", 5) \
+    /* Create a view of a flat or non-flat array as a flat or non-flat array.
+     * Takes a type ID representing the output type.
+     */ \
+    FOR_EACH(SLICE_AS, 90, "slice.as", 5)
 
 
 enum OPCODE {

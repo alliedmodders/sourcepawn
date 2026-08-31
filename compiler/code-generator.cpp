@@ -948,6 +948,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
         case iACCESSOR:
         case iADDRESS:
         case iEXPRESSION:
+        case iFIELD:
             return 1;
         case iARRAYELEM:
             return 2;
@@ -1391,6 +1392,9 @@ void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
     if (es) {
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_SLICE_ES, type_id);
+    } else if (slice->expr()->val().type()->isArray() && !slice->index()) {
+        uint32_t type_id = rtti_->to_typeid(slice->val().type());
+        __ emit(OP_SLICE_AS, type_id);
     } else {
         if (slice->index())
             EmitExpr(slice->index());
@@ -1958,9 +1962,7 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
     } else {
         assert(decl->vclass() == sSTATIC || decl->vclass() == sGLOBAL);
         uint16_t slot = AcquireGlobalSlot(decl);
-        if (decl->type()->isFlatArray())
-            __ emit(OP_ADDR_GLB, VarSlot(slot));
-        else if (decl->type()->isCompositeValue())
+        if (decl->type()->isAddressType())
             __ emit(OP_LOAD_GLB, VarSlot(slot));
         else
             __ emit(OP_ADDR_GLB, VarSlot(slot));

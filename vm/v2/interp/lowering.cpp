@@ -552,6 +552,23 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_SLICE_AS: {
+            uint32_t type_id = reader_.read<uint32_t>();
+            const TypeDesc* td = rt_->LoadTypeFromId(type_id);
+            const TypeDesc* base = stack_.back();
+            popStack(); // pop base
+            pushStack(td);
+            emitOp(LL_PUSH_C);
+            emitVal<cell_t>(0);
+            if (base->IsFlatArray()) {
+                emitOp(LL_SLICE_FLAT);
+                emitVal<const TypeDesc*>(base);
+            } else {
+                emitOp(LL_SLICE);
+            }
+            break;
+        }
+
         case OP_CVT_I64: {
             emitOp(LL_CVT_I64);
             popStack();

@@ -759,6 +759,35 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetSliceType(any_type()));
         }
 
+        case OP_SLICE_AS: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td)
+                return false;
+            if (!td->IsNonFlatArray())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            const TypeDesc* base;
+            if (!popStack(&base))
+                return false;
+            if (!base->IsArrayish())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            if (td->kind() == TypeKind::FixedArray) {
+                if (base->kind() != TypeKind::FixedArray && base->kind() != TypeKind::FlatArray)
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+                if (base->array_size() != td->array_size())
+                    return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+
+            if (base->array_elt()->IsArrayish() || td->array_elt()->IsArrayish())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            if (base->array_elt()->element_size() != td->array_elt()->element_size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            return pushStack(td);
+        }
+
         default:
             // Should have been caught earlier.
             return reportError(SP_ERROR_INVALID_INSTRUCTION);
@@ -1099,7 +1128,7 @@ bool MethodVerifier::verifyCallArguments(const smx_rtti_method* method, uint32_t
         if (!expected_td)
             return false;
         if (i < arg_count) {
-            const TypeDesc* arg_td = v->stack[v->stack.size() - arg_count + i];
+            const TypeDesc* arg_td = v->stack[v->stack.size() - 1 - i];
             if (arg_td->kind() == TypeKind::FlatArray && expected_td->kind() == TypeKind::FixedArray)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
         }

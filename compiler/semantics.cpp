@@ -261,7 +261,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
         auto init_rhs = decl->init_rhs();
         if (init && vclass != sLOCAL) {
             if (!init_rhs->EvalConst(nullptr, nullptr)) {
-                if (vclass == sARGUMENT && init_rhs->is(ExprKind::SymbolExpr))
+                if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
                     return true;
 
                 // Make a special exception for int64 lits.
@@ -398,7 +398,9 @@ bool Semantics::CheckExpr(Expr* expr) {
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
-            return CheckWrappedExpr(expr, expr->to<RvalueExpr>()->lval());
+        case ExprKind::SliceExpr:
+        case ExprKind::SimpleCastExpr:
+            return true;
         case ExprKind::NamedArgExpr:
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
         default:
@@ -1229,17 +1231,23 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr) {
         third = expr->set_third(new RvalueExpr(third));
 
     if (second->val().type() != third->val().type()) {
-        if (second->val().type()->isFlatArray()) {
-            auto type = types_->defineArray(second->val().type()->inner(), 0);
-            auto slice = new SliceExpr(second, nullptr, type);
-            NeedsHeapAlloc(slice);
-            second = expr->set_second(slice);
-        }
-        if (third->val().type()->isFlatArray()) {
-            auto type = types_->defineArray(third->val().type()->inner(), 0);
-            auto slice = new SliceExpr(third, nullptr, type);
-            NeedsHeapAlloc(slice);
-            third = expr->set_third(slice);
+        if (second->val().type()->isArray() && third->val().type()->isArray()) {
+            auto left_array = second->val().type()->to<ArrayType>();
+            auto right_array = third->val().type()->to<ArrayType>();
+            int size = (left_array->size() == right_array->size()) ? left_array->size() : 0;
+
+            if (left_array->is_flat()) {
+                auto type = types_->defineArray(left_array->inner(), size);
+                auto slice = new SliceExpr(second, nullptr, type);
+                NeedsHeapAlloc(slice);
+                second = expr->set_second(slice);
+            }
+            if (right_array->is_flat()) {
+                auto type = types_->defineArray(right_array->inner(), size);
+                auto slice = new SliceExpr(third, nullptr, type);
+                NeedsHeapAlloc(slice);
+                third = expr->set_third(slice);
+            }
         }
     }
 
@@ -1337,10 +1345,34 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         }
         to_type = types_->defineReference(to_type);
     }
+
+    ArrayType* to_array_type = nullptr;
+    if (actual_array)
+        to_array_type = types_->redefineArray(to_type, actual_array);
+
+    if (actual_array) {
+        Type* target_elem = to_type;
+        if (auto target_array = to_type->as<ArrayType>()) {
+            auto iter = target_array;
+            for (;;) {
+                if (!iter->inner()->isArray())
+                    break;
+                iter = iter->inner()->to<ArrayType>();
+            }
+            target_elem = iter->inner();
+        }
+        if (from_type->lit_size() != target_elem->lit_size()) {
+            report(expr, 460) << expr->expr()->val().type() << to_array_type;
+            return false;
+        }
+    }
     if (actual_array && from_type->isInt64()) {
-        report(expr, 460) << actual_array << to_type;
+        report(expr, 460) << actual_array << to_array_type;
         return false;
     }
+
+    if (actual_array)
+        to_type = to_array_type;
 
     if (out_val.ident == iACCESSOR) {
         if (inner->lvalue())
@@ -1358,9 +1390,6 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
 
     if (expr->lvalue())
         out_val.ident = iADDRESS;
-
-    if (actual_array)
-        to_type = types_->redefineArray(to_type, actual_array);
 
     out_val.set_type(to_type);
     return true;
@@ -2853,7 +2882,7 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         if (!type->isArray() && !type->isEnumStruct()) {
             // Note: arrays and enum structs were checked earlier in ArrayValidator.
             const auto& rhs = arg->init_rhs();
-            if (rhs->val().ident != iCONSTEXPR)
+            if (rhs->val().ident != iCONSTEXPR && !rhs->is(ExprKind::SizeofExpr))
                 report(rhs, 8);
         }
     }
@@ -3154,10 +3183,12 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
     Expr* base = nullptr;
     Expr* index_expr = nullptr;
     Type* inner_type = nullptr;
+    int size = 0;
 
     if (param->val().type()->isFlatArray()) {
         base = param;
         inner_type = param->val().type()->inner();
+        size = param->val().type()->to<ArrayType>()->size();
     } else if (param->val().type()->isEnumStruct()) {
         base = param;
         inner_type = types_->type_any();
@@ -3171,7 +3202,7 @@ SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
         inner_type = param->val().type();
     }
 
-    Type* type = types_->defineArray(inner_type, 0);
+    Type* type = types_->defineArray(inner_type, size);
     auto slice = new SliceExpr(base, index_expr, type);
     NeedsHeapAlloc(slice);
     return slice;

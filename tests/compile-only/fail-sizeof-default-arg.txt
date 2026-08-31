@@ -1,1 +1,1 @@
-(1) : error 163: indeterminate array size in "sizeof" expression
+(1) : error 017: undefined symbol "eggs"
