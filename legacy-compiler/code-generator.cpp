@@ -56,6 +56,7 @@ CodeGenerator::CodeGenerator(CompileContext& cc, ParseTree* tree)
     code_ = new SmxCodeSection(".code");
     publics_ = new SmxPublicSection(".publics");
     rtti_ = std::make_unique<RttiBuilder>(cc, names_);
+    smx_.set_version(SmxConsts::SP_VERSION_1_1);
 }
 
 bool CodeGenerator::Generate() {

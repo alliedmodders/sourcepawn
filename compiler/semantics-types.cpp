@@ -164,7 +164,7 @@ auto Semantics::FindEqualityOperator(Type* left_type, Type* right_type)
     // Eg, for "float == int", ltr = illegal, rtl = numeric.
     //
     // Therefore, we we choose to convert the right-hand side.
-    if (static_cast<uint32_t>(rtl_ck) > static_cast<uint32_t>(ltr_ck))
+    if (static_cast<uint32_t>(rtl_ck) >= static_cast<uint32_t>(ltr_ck))
         out.right = {rtl_ck, left_type};
     else
         out.left = {ltr_ck, right_type};
@@ -196,12 +196,36 @@ bool Semantics::PerformCoercion(ParseNode* node, QualType formal, QualType actua
     return PerformCoercion(node->pos(), formal, actual, why, flags);
 }
 
+template <typename T>
+static void ReportConversionDiagnosticImpl(T location, QualType formal, QualType actual) {
+    auto diag_ck = FindConversion(*formal, *actual, CvtContext::Assignment);
+    if (diag_ck == ConversionKind::Numeric) {
+        report(location, 462) << actual << formal;
+    } else if (actual->isVoid()) {
+        report(location, 466);
+    } else if (actual->isNull()) {
+        report(location, 148) << formal;
+    } else if (formal->isArray() && !formal->isFixedArray() && actual->isFlatArray()) {
+        report(location, 473) << actual << formal;
+    } else {
+        report(location, 450) << actual << formal;
+    }
+}
+
+void Semantics::ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual) {
+    ReportConversionDiagnosticImpl(pos, formal, actual);
+}
+
+void Semantics::ReportConversionDiagnostic(ParseNode* node, QualType formal, QualType actual) {
+    ReportConversionDiagnosticImpl(node, formal, actual);
+}
+
 bool Semantics::CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
                               CvtContext why)
 {
     auto ck = FindConversion(*actual, *formal, why);
     if (!HasImplicitConversion(ck)) {
-        report(pos, 450) << actual << formal;
+        ReportConversionDiagnostic(pos, formal, actual);
         return false;
     }
     if (ck == ConversionKind::TagMismatch)

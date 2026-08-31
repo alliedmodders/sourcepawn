@@ -31,7 +31,7 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     types_ = cc_.types();
     typeid_cache_.init(128);
     data_ = new SmxBlobSection<void>("rtti.data");
-    methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
+    methods_ = new SmxRttiTable<smx_rtti_method_v1>("rtti.methods");
     natives_ = new SmxRttiTable<smx_rtti_native>("rtti.natives");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
@@ -183,7 +183,7 @@ smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
-    smx_rtti_method& method = methods_->add();
+    smx_rtti_method_v1& method = methods_->add();
     method.name = names_->add(fun->name());
     method.pcode_start = fun->cg()->label.offset();
     method.pcode_end = 0;

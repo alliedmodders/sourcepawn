@@ -36,6 +36,10 @@ def main():
                       help='Filter for tests with a particular name.')
   parser.add_argument('--no-jit', default=False, action='store_true',
                       help='Disable JIT testing.')
+  parser.add_argument('--fail-fast', default=False, action='store_true',
+                      help='Stop and end the test plan after one error.')
+  parser.add_argument('--no-binary', default=False, action='store_true',
+                      help='Skip tests that are precompiled .smx binary files.')
   args = parser.parse_args()
   if args.coverage:
     args.coverage = os.path.abspath(args.coverage)
@@ -179,7 +183,7 @@ class TestPlan(object):
       path = os.path.join(self.tests_path, local_path)
       if os.path.isdir(path):
         self.find_tests_impl(local_path, manifest)
-      elif path.endswith('.sp') or path.endswith('.smx'):
+      elif path.endswith('.sp') or (path.endswith('.smx') and not self.args.no_binary):
         test = Test(**{
           'path': os.path.abspath(path),
           'manifest': manifest,
@@ -395,7 +399,8 @@ class TestRunner(object):
   def run_impl(self):
     try:
       for mode in self.plan.modes:
-        self.run_mode(mode)
+        if not self.run_mode(mode):
+          break
     except KeyboardInterrupt as e:
       pass
 
@@ -413,6 +418,9 @@ class TestRunner(object):
         continue
       if not self.run_test(mode, test):
         self.failures_.add(test)
+        if self.plan.args.fail_fast:
+          return False
+    return True
 
   def should_compile_only(self, test):
     if test.path.endswith('.smx'):

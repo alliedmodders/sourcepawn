@@ -1604,7 +1604,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     EmitCall(call->fun(), nargs, is_spread);
 
     if (discard) {
-        if (!return_type->isVoid())
+        if (!return_type->isVoid() && !call->fun()->needs_hidden_arg())
             __ emit(OP_POP);
     } else if (hidden_slot) {
         if (return_type->isCompositeValue()) {

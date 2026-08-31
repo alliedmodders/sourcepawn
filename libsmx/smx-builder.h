@@ -258,8 +258,11 @@ class SmxBuilder
       sections_.push_back(section);
   }
 
+  void set_version(uint16_t version) { version_ = version; }
+
  private:
   std::vector<ke::RefPtr<SmxSection>> sections_;
+  uint16_t version_ = SmxConsts::SP_VERSION_2;
 };
 
 } // namespace sp

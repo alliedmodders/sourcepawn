@@ -51,6 +51,7 @@ enum class CvtContext {
     Assignment,
     Operator,
     FuncArg,
+    Return,
 };
 
 static inline bool HasImplicitConversion(ConversionKind ck) {

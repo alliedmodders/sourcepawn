@@ -34,6 +34,14 @@
 namespace sp {
 namespace cc {
 
+struct smx_rtti_method_v1 {
+    uint32_t name;
+    uint32_t pcode_start;
+    uint32_t pcode_end;
+    uint32_t signature;
+    uint32_t locals;
+};
+
 // The old compiler expects the v1 classdef layout which includes reserved
 // fields that were removed from the current smx-typeinfo.h.
 struct smx_rtti_classdef_v1 {
@@ -103,7 +111,7 @@ class RttiBuilder
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
     RefPtr<SmxBlobSection<void>> data_;
-    RefPtr<SmxRttiTable<smx_rtti_method>> methods_;
+    RefPtr<SmxRttiTable<smx_rtti_method_v1>> methods_;
     RefPtr<SmxRttiTable<smx_rtti_native>> natives_;
     RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
     RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;

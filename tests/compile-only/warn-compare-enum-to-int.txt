@@ -1,0 +1,1 @@
+(7) : warning 213: tag mismatch (expected "MyEnum", got "int")

@@ -346,7 +346,10 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
         return false;
     }
 
-    if (!PerformCoercion(field, arg->type(), QualType(actual), Semantics::Argument))
+    if (arg->type()->isBool() && actual->isInt())
+        return true;
+
+    if (!CheckCoercion(field, arg->type(), QualType(actual), CvtContext::Argument))
         return false;
     return true;
 }
@@ -805,16 +808,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
             return false;
         }
         if (!HasImplicitConversion(ck)) {
-            auto diag_ck = FindConversion(left_type, assign_type, CvtContext::Assignment);
-            if (diag_ck == ConversionKind::Numeric) {
-                report(state.expr, 462) << assign_type << left_type;
-            } else if (assign_type->isVoid()) {
-                report(state.expr, 466);
-            } else if (!left_type->isFixedArray() && assign_type->isFlatArray()) {
-                report(state.expr, 473) << assign_type << left_type;
-            } else {
-                report(state.expr, 450) << assign_type << left_type;
-            }
+            ReportConversionDiagnostic(state.expr, left_type, assign_type);
             return false;
         }
 
@@ -849,7 +843,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         val.type()->coercesFromInt())
     {
         char boolresult = FALSE;
-        PerformCoercion(state.expr, left_val->type(), right_val->type(), Generic);
+        CheckCoercion(state.expr, left_val->type(), right_val->type(), CvtContext::Operator);
         val.ident = iCONSTEXPR;
         val.set_constval(calc(left_val->constval(), op_token, right_val->constval(),
                               &boolresult));
@@ -1122,7 +1116,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         // Warn: unsupported cast.
         report(expr, 237);
     } else if (from_type->isFunction() && to_type->isFunction()) {
-        PerformCoercion(expr, to_type, out_val.type(), Semantics::Assignment);
+        CheckCoercion(expr, to_type, out_val.type(), CvtContext::Assignment);
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
     } else if (to_type->isEnumStruct() || from_type->isEnumStruct()) {
@@ -1240,7 +1234,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             report(expr, 76);
             return false;
         }
-        if (fun->return_array()) {
+        if (fun->return_array() || fun->return_type()->isArray()) {
             report(expr, 182);
             return false;
         }
@@ -1318,7 +1312,7 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
                 return false;
             }
 
-            if (!PerformCoercion(entry, formal_elt, val.type(), Semantics::Assignment))
+            if (!CheckCoercion(entry, formal_elt, val.type(), CvtContext::Assignment))
                 return false;
         }
     }
@@ -2021,8 +2015,10 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         Type* type = val->type();
         if (type->isInt64() || (type->isReference() && type->inner()->isInt64())) {
             // Hack: allow this since we don't have typed varargs right now.
+        } else if (type->isArray()) {
+            // Arrays are allowed in varargs.
         } else {
-            PerformCoercion(param, arg->type(), QualType(type), Argument);
+            CheckCoercion(param, arg->type(), QualType(type), CvtContext::Argument);
         }
         if (auto slice = ParamNeedsSliceWrapper(param, nullptr))
             param = slice;
@@ -2055,7 +2051,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                 report(param, 134) << arg->type() << val->type();
                 return nullptr;
             }
-            PerformCoercion(param, arg->type()->inner(), QualType(val->type()), Argument);
+            CheckCoercion(param, arg->type()->inner(), QualType(val->type()), CvtContext::Argument);
         }
     } else if (auto to_array = arg->type()->as<ArrayType>()) {
         if (auto slice = ParamNeedsSliceWrapper(param, to_array))
@@ -2066,7 +2062,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         val = &param->val();
 
         auto type = val->type();
-        if (!PerformCoercion(param, arg->type(), QualType(type), Semantics::Argument))
+        if (!CheckCoercion(param, arg->type(), QualType(type), CvtContext::Argument))
             return nullptr;
 
         if (auto array = param->as<ArrayExpr>()) {
@@ -2091,7 +2087,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             val = &param->val();
         }
 
-        if (!PerformCoercion(param, arg->type(), QualType(val->type()), Semantics::Argument))
+        if (!CheckCoercion(param, arg->type(), QualType(val->type()), CvtContext::Argument))
             return nullptr;
     }
     if (param)
@@ -2347,6 +2343,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         return false;
     }
 
+    bool already_returned = sc_->returns_value();
     sc_->set_returns_value();
 
     if (fun->return_type()->isInt64() && CanPromoteToInt64(expr->val().type())) {
@@ -2357,7 +2354,12 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     const auto& v = expr->val();
 
     // Check that the return statement matches the declared return type.
-    if (!PerformCoercion(stmt, fun->return_type(), v.type(), Semantics::Return))
+    // If a return statement has already been checked, the function's return type
+    // is now fixed. We use Assignment to prevent returning a flat array to a
+    // dynamic array return type, while the first return uses Return to allow
+    // updating the return type.
+    CvtContext why = already_returned ? CvtContext::Assignment : CvtContext::Return;
+    if (!CheckCoercion(stmt, fun->return_type(), v.type(), why))
         return false;
 
     expr = stmt->set_expr(CoerceNull(expr, fun->return_type()));
@@ -2634,12 +2636,7 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
 }
 
 void Semantics::CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual) {
-    if (actual->coercesToInt()) {
-        if (formal != actual)
-            report(expr, 213) << formal << actual;
-    } else {
-        PerformCoercion(expr, formal, actual, Semantics::Assignment);
-    }
+    CheckCoercion(expr, formal, actual, CvtContext::Assignment);
 }
 
 void ReportFunctionReturnError(FunctionDecl* decl) {

@@ -237,6 +237,8 @@ class Semantics final
     Expr* BuildConversion(Expr* from, ConversionKind ck, Type* to);
     Expr* BuildSimpleCast(Expr* from, BuiltinType type);
     Expr* CoerceNull(Expr* expr, Type* formal);
+    void ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual);
+    void ReportConversionDiagnostic(ParseNode* node, QualType formal, QualType actual);
 
     struct ParamState {
         std::vector<Expr*> argv;

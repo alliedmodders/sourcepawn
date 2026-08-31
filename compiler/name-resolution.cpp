@@ -207,8 +207,10 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         if (field->value() && field->value()->Bind(sc) && sc.sema()->CheckExpr(field->value())) {
             Type* field_type = nullptr;
             if (field->value()->EvalConst(&value, &field_type)) {
-                sc.sema()->PerformCoercion(field->pos(), type_, QualType(field_type),
-                                           Semantics::Assignment, Semantics::EnumAssign);
+                if (!field_type->isInt()) {
+                    sc.sema()->CheckCoercion(field->pos(), type_, QualType(field_type),
+                                             CvtContext::Assignment);
+                }
             } else {
                 error(field->pos(), 80);
             }
@@ -419,7 +421,7 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
     }
 
-    sc.sema()->PerformCoercion(pos_, type_.type, QualType(type), Semantics::Assignment);
+    sc.sema()->CheckCoercion(pos_, type_.type, QualType(type), CvtContext::Assignment);
 
     already_bound_ = true;
     return true;

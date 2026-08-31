@@ -699,7 +699,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             if (!v.type()->isInt() && !v.type()->isInt64())
                 report(expr, 450) << v.type() << rank->inner();
         } else {
-            sema_->PerformCoercion(expr, rank->inner(), v.type(), Semantics::Assignment);
+            sema_->CheckCoercion(expr, rank->inner(), v.type(), CvtContext::Assignment);
         }
 
         prev2 = prev1;
@@ -774,7 +774,7 @@ bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
                 continue;
             }
 
-            sema_->PerformCoercion(expr, type.type, v.type(), Semantics::Assignment);
+            sema_->CheckCoercion(expr, type.type, v.type(), CvtContext::Assignment);
         }
     }
 
