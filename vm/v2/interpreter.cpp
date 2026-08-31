@@ -467,12 +467,6 @@ Interpreter::visitSHL_C(PawnReg dest, cell_t amount) {
 }
 
 bool
-Interpreter::visitEQ_C(PawnReg src, cell_t value) {
-    regs_.pri() = (regs_[src] == value) ? 1 : 0;
-    return true;
-}
-
-bool
 Interpreter::visitCompareOp(CompareOp op) {
     switch (op) {
         case CompareOp::Sgrtr:

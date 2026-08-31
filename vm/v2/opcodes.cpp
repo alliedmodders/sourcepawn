@@ -67,8 +67,6 @@ void SpewOpcode(FILE* fp, PluginRuntime* runtime, const cell_t* start, const cel
         case OP_SHL_C_ALT:
         case OP_ADD_C:
         case OP_SMUL_C:
-        case OP_EQ_C_PRI:
-        case OP_EQ_C_ALT:
         case OP_PUSH_S:
         case OP_HEAP:
         case OP_GENARRAY:

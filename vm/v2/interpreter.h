@@ -105,7 +105,6 @@ class Interpreter final : public PcodeVisitor
     bool visitNOT() override;
     bool visitNEG() override;
     bool visitINVERT() override;
-    bool visitEQ_C(PawnReg src, cell_t value) override;
     bool visitCompareOp(CompareOp op) override;
     bool visitADDR(PawnReg dest, cell_t offset) override;
     bool visitMOVS(uint32_t amount) override;

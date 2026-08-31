@@ -463,13 +463,6 @@ class PcodeReader
             case OP_GEQ_F32:
                 return visitor_->visitCompareOpF32(CompareOp::Sgeq);
 
-            case OP_EQ_C_PRI:
-            case OP_EQ_C_ALT: {
-                PawnReg reg = (op == OP_EQ_C_PRI) ? PawnReg::Pri : PawnReg::Alt;
-                cell_t val = readCell();
-                return visitor_->visitEQ_C(reg, val);
-            }
-
             case OP_INC_PRI:
                 return visitor_->visitINC(PawnReg::Pri);
             case OP_INC_ALT:

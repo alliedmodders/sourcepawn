@@ -288,15 +288,6 @@ Compiler::visitCompareOp(CompareOp op) {
 }
 
 bool
-Compiler::visitEQ_C(PawnReg src, cell_t value) {
-    Register reg = (src == PawnReg::Pri) ? pri : alt;
-    __ cmpl(reg, value);
-    __ movl(pri, 0);
-    __ set(equal, r8_al);
-    return true;
-}
-
-bool
 Compiler::visitINC(PawnReg dest) {
     Register reg = (dest == PawnReg::Pri) ? pri : alt;
     __ addl(reg, 1);

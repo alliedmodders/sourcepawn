@@ -83,7 +83,6 @@ class Compiler : public CompilerBase
     bool visitZERO(PawnReg dest) override;
     bool visitZERO_S(cell_t offset) override;
     bool visitCompareOp(CompareOp op) override;
-    bool visitEQ_C(PawnReg src, cell_t value) override;
     bool visitINC(PawnReg dest) override;
     bool visitDEC(PawnReg dest) override;
     bool visitMOVS(uint32_t amount) override;

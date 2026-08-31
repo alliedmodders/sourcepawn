@@ -112,12 +112,7 @@ namespace v2 {
     FOR_EACH(SLEQ, 72, "sleq", 1) \
     FOR_EACH(SGRTR, 73, "sgrtr", 1) \
     FOR_EACH(SGEQ, 74, "sgeq", 1) \
-    FOR_EACH(EQ_C_PRI, 75, "eq.c.pri", 2) \
-    FOR_EACH(EQ_C_ALT, 76, "eq.c.alt", 2) \
     FOR_EACH(INC_PRI, 77, "inc.pri", 1) \
-    /* INC_PRI and DEC_PRI are generated. Every other INC/DEC opcode is \
-     * deprecated. \
-     */ \
     FOR_EACH(INC_ALT, 78, "inc.alt", 1) \
     FOR_EACH(DEC_PRI, 79, "dec.pri", 1) \
     FOR_EACH(DEC_ALT, 80, "dec.alt", 1) \

@@ -82,7 +82,6 @@ class PcodeVisitor
     virtual bool visitZERO_S(cell_t offset) = 0;
     virtual bool visitZERO_S_I64(cell_t offset) = 0;
     virtual bool visitCompareOp(CompareOp op) = 0;
-    virtual bool visitEQ_C(PawnReg src, cell_t value) = 0;
     virtual bool visitINC(PawnReg dest) = 0;
     virtual bool visitDEC(PawnReg dest) = 0;
     virtual bool visitMOVS(uint32_t amount) = 0;
