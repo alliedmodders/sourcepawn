@@ -70,7 +70,11 @@ ParseNode::error(const token_pos_t& pos, int number)
 void
 Expr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
-    out->push_back(this);
+    if (kind_ == ExprKind::LogicalExpr) {
+        to<LogicalExpr>()->FlattenLogical(token, out);
+    } else {
+        out->push_back(this);
+    }
 }
 
 void
@@ -80,7 +84,7 @@ LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
         left_->FlattenLogical(token, out);
         right_->FlattenLogical(token, out);
     } else {
-        Expr::FlattenLogical(token, out);
+        out->push_back(this);
     }
 }
 

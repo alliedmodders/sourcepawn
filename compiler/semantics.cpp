@@ -946,6 +946,17 @@ IsTypeBinaryConstantFoldable(Type* type)
     return false;
 }
 
+bool Expr::FoldToConstant() {
+    switch (kind_) {
+        case ExprKind::BinaryExpr:
+            return to<BinaryExpr>()->FoldToConstant();
+        case ExprKind::TernaryExpr:
+            return to<TernaryExpr>()->FoldToConstant();
+        default:
+            return false;
+    }
+}
+
 bool
 BinaryExpr::FoldToConstant()
 {

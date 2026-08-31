@@ -583,16 +583,14 @@ class Expr : public ParseNode
     {}
 
     // Flatten a series of binary expressions into a single list.
-    virtual void FlattenLogical(int token, std::vector<Expr*>* out);
+    void FlattenLogical(int token, std::vector<Expr*>* out);
 
     // Fold the expression into a constant. The expression must have been
     // bound and analyzed. False indicates the expression is non-constant.
     //
     // If an expression folds constants during analysis, it can return false
     // here. ExprToConst handles both cases.
-    virtual bool FoldToConstant() {
-        return false;
-    }
+    bool FoldToConstant();
 
     // Evaluate as a constant. Returns false if non-const. This is a wrapper
     // around FoldToConstant().
@@ -676,7 +674,7 @@ class BinaryExpr final : public BinaryExprBase
   public:
     BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right);
 
-    bool FoldToConstant() override;
+    bool FoldToConstant();
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::BinaryExpr; }
 
@@ -701,7 +699,7 @@ class LogicalExpr final : public BinaryExprBase
       : BinaryExprBase(ExprKind::LogicalExpr, pos, token, left, right)
     {}
 
-    void FlattenLogical(int token, std::vector<Expr*>* out) override;
+    void FlattenLogical(int token, std::vector<Expr*>* out);
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::LogicalExpr; }
 };
@@ -754,7 +752,7 @@ class TernaryExpr final : public Expr
         ok &= third_->Bind(sc);
         return ok;
     }
-    bool FoldToConstant() override;
+    bool FoldToConstant();
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::TernaryExpr; }
 
