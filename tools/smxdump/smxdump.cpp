@@ -222,6 +222,9 @@ class DumpTool final {
                         fprintf(stdout, "    .visibility = public\n");
                     else
                         fprintf(stdout, "    .visibility = unknown_%u\n", visibility);
+
+                    if (method->flags & kRttiMethod_GlobalCtor)
+                        fprintf(stdout, "    .flags = global_ctor\n");
                 }
             }
 
@@ -333,7 +336,7 @@ class DumpTool final {
                 case cb::kFixedArray:
                 {
                     uint32_t size;
-                    if (!rtti.ReadCompactUint32(&size))
+                    if (!rtti.ReadUint32_Leb128(&size))
                         return {};
                     type_outer += ke::StringPrintf("[%u]", size);
                     if (!rtti.GetNextByte(&b))
@@ -348,7 +351,7 @@ class DumpTool final {
                 case cb::kEnum:
                 {
                     uint32_t value;
-                    if (!rtti.ReadCompactUint32(&value))
+                    if (!rtti.ReadUint32_Leb128(&value))
                         return {};
 
                     if (!smx_->rtti_enums()) {
@@ -362,7 +365,7 @@ class DumpTool final {
                 case cb::kTypeset:
                 {
                     uint32_t value;
-                    if (!rtti.ReadCompactUint32(&value))
+                    if (!rtti.ReadUint32_Leb128(&value))
                         return {};
                     type_inner = "typeset todo";
                     break;
@@ -370,7 +373,7 @@ class DumpTool final {
                 case cb::kEnumStruct:
                 {
                     uint32_t value;
-                    if (!rtti.ReadCompactUint32(&value))
+                    if (!rtti.ReadUint32_Leb128(&value))
                         return {};
                     type_inner = "enum struct todo";
                     break;
@@ -378,7 +381,7 @@ class DumpTool final {
                 case cb::kFunctionPtr:
                 {
                     uint32_t value;
-                    if (!rtti.ReadCompactUint32(&value))
+                    if (!rtti.ReadUint32_Leb128(&value))
                         return {};
                     type_inner = "fn todo";
                     break;
@@ -512,8 +515,6 @@ class DumpTool final {
             case OP_STACK:
             case OP_PUSH_S:
             case OP_HEAP:
-            case OP_GENARRAY:
-            case OP_GENARRAY_Z:
             case OP_CONST_PRI:
             case OP_CONST_ALT:
             case OP_LOAD_S_PRI:
@@ -663,6 +664,44 @@ class DumpTool final {
         fprintf(stdout, "\n");
     }
 
+    void PrintEscaped(std::string_view s) {
+        for (char c : s) {
+            unsigned char uc = (unsigned char)c;
+            if (uc == '\"') fprintf(stdout, "\\\"");
+            else if (uc == '\\') fprintf(stdout, "\\\\");
+            else if (uc == '\n') fprintf(stdout, "\\n");
+            else if (uc == '\r') fprintf(stdout, "\\r");
+            else if (uc == '\t') fprintf(stdout, "\\t");
+            else if (uc >= 32 && uc <= 126) fputc(uc, stdout);
+            else fprintf(stdout, "\\x%02x", uc);
+        }
+    }
+
+    void DumpString(uint16_t index) {
+        auto table = smx_->rtti_stringpool();
+        if (!table || index >= table->row_count) {
+            fprintf(stdout, " unknown_string_%u", index);
+            return;
+        }
+
+        auto entry = smx_->getRttiRow<smx_rtti_string>(table, index);
+        auto blob = smx_->ReadDataBlob(entry->offset);
+        if (!blob) {
+            fprintf(stdout, " <invalid_blob_0x%x>", entry->offset);
+            return;
+        }
+
+        std::string_view s = *blob;
+        fprintf(stdout, " \"");
+        if (s.length() > 60) {
+            PrintEscaped(s.substr(0, 57));
+            fprintf(stdout, "...");
+        } else {
+            PrintEscaped(s);
+        }
+        fprintf(stdout, "\"");
+    }
+
     void DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, v2::OPCODE op) {
         using namespace sp::v2;
         BinaryReader reader(cip + 1);
@@ -672,10 +711,6 @@ class DumpTool final {
             case OP_ADD_C:
             case OP_SMUL_C:
             case OP_HEAP:
-            case OP_GENARRAY:
-            case OP_GENARRAY_Z:
-            case OP_MOVS:
-            case OP_FILL:
                 fprintf(stdout, " %d", reader.read<cell_t>());
                 break;
 
@@ -695,6 +730,10 @@ class DumpTool final {
                 }
                 break;
             }
+
+            case OP_LOAD_STR:
+                DumpString(reader.read<uint16_t>());
+                break;
 
             case OP_PUSH_C_I8:
                 fprintf(stdout, " %d", (int)reader.read<int8_t>());
@@ -731,13 +770,6 @@ class DumpTool final {
                 break;
             }
 
-            case OP_IDXADDR: {
-                uint8_t rank_size = reader.read<uint8_t>();
-                int32_t bounds = reader.read<int32_t>();
-                fprintf(stdout, " %u %d", rank_size, bounds);
-                break;
-            }
-
             case OP_LOAD_FN:
             case OP_CALL:
             case OP_CALLN:
@@ -771,13 +803,16 @@ class DumpTool final {
                 break;
             }
 
-            case OP_INITARRAY: {
-                cell_t v0 = reader.read<cell_t>();
-                cell_t v1 = reader.read<cell_t>();
-                cell_t v2 = reader.read<cell_t>();
-                cell_t v3 = reader.read<cell_t>();
-                cell_t v4 = reader.read<cell_t>();
-                fprintf(stdout, " %d %d %d %d %d", v0, v1, v2, v3, v4);
+            case OP_NEWARRAY: {
+                uint32_t type_id = reader.read<uint32_t>();
+                auto rtti = smx_->GetTypeIdParser(type_id);
+                fprintf(stdout, " %s", DumpType(rtti).c_str());
+                break;
+            }
+
+            case OP_FILLARRAY: {
+                uint32_t data_offs = reader.read<uint32_t>();
+                fprintf(stdout, " 0x%x", data_offs);
                 break;
             }
 

@@ -14,6 +14,7 @@
 
 #include <memory>
 
+#include "environment.h"
 #include "heap-defaults.h"
 
 namespace sp {
@@ -46,8 +47,10 @@ Heap32::Chunk* Heap32::NewChunk(size_t size) {
     // allocations can fail.
     auto chunk = std::make_unique<Chunk>();
     chunk->base = (uint8_t*)malloc(size);
-    if (!chunk->base)
+    if (!chunk->base) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
+    }
 
     chunk->size = size;
     chunk->end = chunk->base + chunk->size;

@@ -23,6 +23,7 @@
 
 #include <amtl/am-hashmap.h>
 #include <smx/smx-v1.h>
+#include <smx/smx-typeinfo.h>
 #include "compile-context.h"
 #include "libsmx/data-pool.h"
 #include "libsmx/smx-builder.h"
@@ -32,6 +33,8 @@
 
 namespace sp {
 namespace cc {
+
+class DataQueue;
 
 typedef SmxBlobSection<sp_fdbg_info_t> SmxDebugInfoSection;
 typedef SmxListSection<sp_fdbg_line_t> SmxDebugLineSection;
@@ -55,6 +58,8 @@ class RttiBuilder
 
     int32_t AddLocalSlot(LocalSlotSignature* locals, QualType type);
     uint32_t AddGlobal(VarDeclBase* decl, Atom* name);
+    uint16_t AddString(Atom* atom, DataQueue* data);
+    std::optional<uint32_t> FindStringDataOffset(Atom* atom);
 
     void AddDebugFile(ucell codeidx, const char* file);
     void AddDebugLine(uint16_t addr, uint16_t line);
@@ -64,6 +69,11 @@ class RttiBuilder
         return methods_->at(method_index);
     }
     void UpdateGlobalName(uint32_t index, Atom* name);
+
+    uint32_t to_typeid(QualType type);
+    uint32_t to_typeid(Type* type) {
+        return to_typeid(QualType(type));
+    }
 
   private:
     uint32_t add_enum(Type* type);
@@ -79,11 +89,6 @@ class RttiBuilder
     void encode_struct_into(std::vector<uint8_t>& bytes, Type* type);
     void encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type);
 
-    uint32_t to_typeid(QualType type);
-    uint32_t to_typeid(Type* type) {
-        return to_typeid(QualType(type));
-    }
-
     //void add_debug_var(SmxRttiTable<smx_rtti_debug_var>* table, DebugString& str);
     void build_debuginfo();
 
@@ -94,12 +99,13 @@ class RttiBuilder
     TypeManager* types_ = nullptr;
     RefPtr<SmxNameTable> names_;
     DataPool type_pool_;
-    RefPtr<SmxBlobSection<void>> data_;
+    RefPtr<SmxBlobSection<void>> rtti_data_;
     RefPtr<SmxRttiTable<smx_rtti_method>> methods_;
     RefPtr<SmxRttiTable<smx_rtti_enum>> enums_;
     RefPtr<SmxRttiTable<smx_rtti_typeset>> typesets_;
     RefPtr<SmxRttiTable<smx_rtti_classdef>> classdefs_;
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
+    RefPtr<SmxRttiTable<smx_rtti_string>> stringpool_;
     RefPtr<SmxRttiTable<smx_rtti_enumstruct>> enumstructs_;
     RefPtr<SmxRttiTable<smx_rtti_es_field>> es_fields_;
     RefPtr<SmxRttiTable<smx_rtti_global>> globals_;
@@ -112,6 +118,8 @@ class RttiBuilder
 
     typedef ke::HashMap<Type*, uint32_t, ke::PointerPolicy<Type>> TypeIdCache;
     TypeIdCache typeid_cache_;
+    typedef ke::HashMap<Atom*, uint16_t, ke::PointerPolicy<Atom>> StringCache;
+    StringCache string_cache_;
 
     ucell last_file_addr_ = 0;
     std::string last_file_name_;

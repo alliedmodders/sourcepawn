@@ -80,6 +80,7 @@
     FOR_EACH(StructExpr) \
     FOR_EACH(StructInitFieldExpr) \
     FOR_EACH(SimpleCastExpr) \
+    FOR_EACH(SliceExpr) \
 
 
 enum class ExprKind : uint8_t

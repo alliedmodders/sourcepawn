@@ -130,10 +130,5 @@ static inline bool IsArithmetic(int token) {
     }
 }
 
-static inline bool LazyInitGlobal(VarDeclBase* decl) {
-    return !decl->type()->isArray() &&
-           !decl->type()->isEnumStruct();
-}
-
 } // namespace cc
 } // namespace sp

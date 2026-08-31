@@ -1,0 +1,130 @@
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
+//
+// Copyright (C) 2026 AlliedModders LLC
+//
+// This file is part of SourcePawn. SourcePawn is free software: you can
+// redistribute it and/or modify it under the terms of the GNU General Public
+// License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// You should have received a copy of the GNU General Public License along with
+// SourcePawn. If not, see http://www.gnu.org/licenses/.
+//
+#pragma once
+
+#include <stdint.h>
+
+namespace sp {
+
+enum class TypeKind : uint8_t {
+    Void,
+    Bool,
+    Int32,
+    Int64,
+    Float32,
+    Char8,
+    Any,
+    TopFunction,
+    Array,
+    FixedArray,
+    ArraySlice,
+};
+
+class TypeDesc final {
+  public:
+    explicit TypeDesc(TypeKind kind)
+      : kind_(kind),
+        can_global_cache_(true)
+    {
+        assert(kind < TypeKind::Array);
+    }
+
+    TypeDesc(TypeKind kind, const TypeDesc* elt)
+      : kind_(kind),
+        can_global_cache_(elt->can_global_cache()),
+        elt_(elt)
+    {
+        assert(kind == TypeKind::Array || kind == TypeKind::ArraySlice);
+        array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+    }
+
+    TypeDesc(const TypeDesc* elt, uint32_t array_size)
+      : kind_(TypeKind::FixedArray),
+        can_global_cache_(elt->can_global_cache()),
+        elt_(elt),
+        array_size_(array_size)
+    {
+        array_rank_ = elt->IsArrayish() ? elt->array_rank() + 1 : 1;
+    }
+
+    // Size needed to store a value of this type into a variable slot.
+    uint32_t slot_size() const {
+        assert(kind_ != TypeKind::Void);
+        switch (kind_) {
+            case TypeKind::Int64:
+                return sizeof(int64_t);
+            default:
+                return sizeof(int32_t);
+        }
+    }
+
+    // Size needed to store a value of this type into an element of an array.
+    uint32_t element_size() const {
+        switch (kind_) {
+            // plain old data
+            case TypeKind::Bool:
+            case TypeKind::Int32:
+            case TypeKind::Float32:
+            case TypeKind::Any:
+                return sizeof(int32_t);
+
+            case TypeKind::Int64:
+                return sizeof(int64_t);
+
+            case TypeKind::Char8:
+                return sizeof(char);
+
+            // Pointer types.
+            case TypeKind::TopFunction:
+            case TypeKind::Array:
+            case TypeKind::FixedArray:
+                return sizeof(uint32_t);
+
+            default:
+                assert(false);
+                return 0;
+        }
+    }
+
+    bool IsInt64() const { return kind_ == TypeKind::Int64; }
+
+    TypeKind kind() const { return kind_; }
+    bool can_global_cache() const { return can_global_cache_; }
+
+    // For fixed arrays, length of arrays of this type.
+    uint32_t array_size() const {
+        assert(kind_ == TypeKind::FixedArray);
+        return array_size_;
+    }
+    const TypeDesc* array_elt() const {
+        assert(IsArrayish());
+        return elt_;
+    }
+    uint32_t array_rank() const {
+        assert(IsArrayish());
+        return array_rank_;
+    }
+    bool IsArrayish() const {
+        return kind_ == TypeKind::Array || kind_ == TypeKind::FixedArray ||
+               kind_ == TypeKind::ArraySlice;
+    }
+
+  private:
+    TypeKind kind_;
+    bool can_global_cache_ = false;
+    uint8_t array_rank_ = 0;
+    const TypeDesc* elt_ = nullptr;
+    uint32_t array_size_ = 0;
+};
+
+} // namespace sp

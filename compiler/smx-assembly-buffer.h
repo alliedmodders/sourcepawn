@@ -114,12 +114,6 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<uint8_t>(param);
   }
 
-  void idxaddr(cell_t rank_size, uint32_t bounds) {
-      write<uint8_t>(OP_IDXADDR);
-      write<uint8_t>(rank_size);
-      write<uint32_t>(bounds);
-  }
-
   void PUSH_C(cell_t value) {
     if (value >= -128 && value <= 127) {
       emit(OP_PUSH_C_I8);
@@ -131,6 +125,11 @@ class SmxAssemblyBuffer : public ByteBuffer
   void load_hidden_arg(FunctionDecl* decl) {
     assert(decl->needs_hidden_arg());
     emit(OP_LOAD_S, VarSlot(-1));
+  }
+  void newbulkarray(uint8_t count, uint32_t type_id) {
+    write<uint8_t>(static_cast<uint8_t>(OP_NEWBULKARRAY));
+    write<uint8_t>(count);
+    write<uint32_t>(type_id);
   }
 
   void casetbl(cell_t ncases, Label* def) {

@@ -60,38 +60,7 @@ MethodInfo::InternalValidate() {
     max_stack_ = verifier.max_stack();
     max_eval_stack_depth_ = verifier.max_eval_stack_depth();
     max_eval_stack_bytes_ = verifier.max_eval_stack_bytes();
-    local_sizes_ = std::move(verifier.local_sizes());
-    BuildLocalOffsetTable();
-}
-
-void MethodInfo::BuildLocalOffsetTable() {
-    local_offsets_ =
-        ke::FixedArray<cell_t>(local_sizes_.size());
-
-    cell_t offset = 0;
-    for (size_t i = 0; i < local_sizes_.size(); i++) {
-        offset -= local_sizes_[i];
-        local_offsets_[i] = offset;
-    }
-}
-
-cell_t MethodInfo::StackOffset(cell_t slot) {
-    if (rt_->code().version < SmxConsts::CODE_VERSION_TYPED_STACK)
-        return slot;
-
-    if (slot < 0) {
-        // -1 is because we can't encode 0-based arguments, because 0 is local.
-        // +1 because we skip the argument count.
-        return (-slot - 1 + 1) * sizeof(cell_t);
-    }
-
-    return local_offsets_.at(slot);
-}
-
-cell_t MethodInfo::StackSizeForLocalSlots() {
-    if (local_offsets_.empty())
-        return 0;
-    return local_offsets_.back();
+    local_types_ = std::move(verifier.local_types());
 }
 
 } // namespace sp::v2

@@ -22,6 +22,7 @@
 
 #include <list>
 #include <string>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -81,11 +82,16 @@ class CodeGenerator final
     void EmitReturnArrayStmt(ReturnStmt* stmt);
     void EmitGlobalInitStmt(GlobalInitStmt* stmt);
 
+    void EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags);
+    uint32_t EmitArrayFillData(ArrayType* type, ArrayExpr* array);
+    uint32_t EmitStringFillData(ArrayType* type, StringExpr* array);
+
     // Expressions.
     enum EmitFlags {
         EMIT_DEFAULT = 0,
         EMIT_DISCARD_RESULT = (1 << 0),
         EMIT_ALLOW_LVALUE = (1 << 1),
+        EMIT_REPEATABLE = (1 << 2),
     };
 
     void EmitExpr(Expr* expr, unsigned int flags = EMIT_DEFAULT);
@@ -99,6 +105,7 @@ class CodeGenerator final
     void EmitTernaryExpr(TernaryExpr* expr, unsigned int flags);
     void EmitSymbolExpr(SymbolExpr* expr);
     void EmitIndexExpr(IndexExpr* expr);
+    void EmitSliceExpr(SliceExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
     void EmitCallExpr(CallExpr* expr, unsigned int flags);
     void EmitCallHiddenArray(CallExpr* expr);
@@ -109,13 +116,13 @@ class CodeGenerator final
     void EmitCastExpr(CastExpr* expr, unsigned int flags);
     void EmitRvalue(RvalueExpr* expr);
     void EmitCommaExpr(CommaExpr* expr, unsigned int flags);
+    void EmitArrayExpr(ArrayExpr* expr, unsigned int flags);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
     void EmitLogicalExprTest(LogicalExpr* expr, bool jump_on_true, sp::Label* target);
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
-    void EmitDefaultArray(Expr* expr, ArgDecl* arg);
     void EmitCall(FunctionDecl* fun, cell nargs);
     void InvokeGetter(MethodmapPropertyDecl* method);
     void EmitRvalue(const value& lval);
@@ -138,6 +145,8 @@ class CodeGenerator final
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
     void EmitLoopControl(int token);
+
+    void Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slots);
 
     // Emit any precursor instructions needed to load or store from an l-value.
     //
@@ -254,6 +263,10 @@ class CodeGenerator final
     tr::unordered_set<SymbolScope*> static_scopes_;
     std::list<std::pair<uint32_t, BuiltinType>> free_temp_slots_;
     std::list<std::pair<uint32_t, BuiltinType>> used_temp_slots_;
+    Label ret_2d_array_;
+
+    // Data queue cache.
+    std::unordered_map<Expr*, uint32_t> fill_data_cache_;
 
     // Loop handling.
     struct LoopContext {

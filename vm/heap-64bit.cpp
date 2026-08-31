@@ -21,6 +21,7 @@
 
 #include <amtl/am-bits.h>
 #include <amtl/am-platform.h>
+#include "environment.h"
 #include "heap-defaults.h"
 
 namespace sp {
@@ -39,8 +40,10 @@ bool Heap64::Initialize() {
 
     constexpr int flags = MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE;
     void* base = mmap(nullptr, map_len_, PROT_NONE, flags, -1, 0);
-    if (base == MAP_FAILED)
+    if (base == MAP_FAILED) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return false;
+    }
     map_base_ = (uint8_t*)base;
 #else
     return false;
@@ -68,8 +71,10 @@ Heap64::~Heap64() {
 uint8_t* Heap64::SlowAllocate(uint32_t size) {
     assert(ke::IsAligned(size, sizeof(uint32_t)));
 
-    if ((pos_ - map_base_) + size > map_len_)
+    if ((pos_ - map_base_) + size > map_len_) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
+    }
 
     size_t uncommitted = map_end_ - high_watermark_;
 
@@ -84,8 +89,10 @@ uint8_t* Heap64::SlowAllocate(uint32_t size) {
         needed = kDefaultHeapChunkSize;
 
 #ifdef KE_POSIX
-    if (mprotect(high_watermark_, needed, PROT_READ | PROT_WRITE) == -1)
+    if (mprotect(high_watermark_, needed, PROT_READ | PROT_WRITE) == -1) {
+        Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
         return nullptr;
+    }
 #else
     assert(false);
 #endif

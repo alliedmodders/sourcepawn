@@ -25,6 +25,7 @@
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
+#include "objects.h"
 #include "v2/interpreter.h"
 #include "v2/method-info.h"
 #include "v2/pcode-reader.h"
@@ -48,7 +49,7 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
  : env_(Environment::get()),
    rt_(cx),
    smx_(rt_->image()),
-   cx_(cx),
+   heap_(rt_->heap()),
    method_(std::move(method)),
    code_(rt_->code().bytes),
    reader_(code_ + method_->pcode_offset(), code_ + rt_->code().length),
@@ -61,18 +62,24 @@ Interpreter::Interpreter(Runtime* cx, RefPtr<MethodInfo> method)
 bool Interpreter::run() {
     const uint8_t* insn_begin = reader_.cursor();
 
-    InterpInvokeFrame ivk(cx_, method_, &insn_begin);
+    InterpInvokeFrame ivk(rt_, method_, &insn_begin);
     ke::SaveAndSet<InterpInvokeFrame*> enterIvk(&ivk_, &ivk);
-    ke::SaveRestore<uint32_t> saveSp(cx_->sp());
-    ke::SaveRestore<uint32_t> saveHpScope(cx_->hp_scope());
+    ke::SaveRestore<uint32_t> saveSp(rt_->sp());
 
-    auto pos = cx_->heap().GetPosition();
-    auto restorePos = ke::ScopeGuard([&, this]() -> void {
-        cx_->heap().RestorePosition(pos);
-    });
+    const smx_rtti_method* rtti = smx_->GetMethod(method_->method_index());
+    bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
 
-    cell_t stack_needed = method_->StackSizeForLocalSlots();
-    if (stack_needed && !cx_->addStack(stack_needed))
+    std::optional<ke::SaveRestore<uint32_t>> saveHpScope;
+    std::optional<HeapSave> saveHp;
+    if (!is_global_ctor) {
+        saveHpScope.emplace(rt_->hp_scope());
+        saveHp.emplace(rt_->heap());
+    }
+
+    cell_t locals_size = CalcLocalsSize();
+    assert(locals_size >= 0);
+
+    if (locals_size && !rt_->addStack(-locals_size))
         return false;
 
     uint32_t eval_depth = method_->max_eval_stack_depth();
@@ -82,10 +89,10 @@ bool Interpreter::run() {
     if (stack_bytes + eval_depth > 0) {
         // Round up depth to keep sp_ aligned.
         eval_depth = ke::Align(eval_depth, sizeof(cell_t));
-        if (!cx_->addStack(-(cell_t)(stack_bytes + eval_depth)))
+        if (!rt_->addStack(-(cell_t)(stack_bytes + eval_depth)))
             return false;
 
-        uint8_t* base = cx_->heap().ToPhysAddr<uint8_t*>(cx_->sp());
+        uint8_t* base = rt_->heap().ToPhysAddr<uint8_t*>(rt_->sp());
 
         // We reserve two chunks of data off the stack.
         //    "eval_stack", which holds the operand stack.
@@ -107,12 +114,15 @@ bool Interpreter::run() {
         stack_types_ptr_ = stack_types_top_;
     }
 
+    if (!InitLocals())
+        return false;
+
     while (!has_returned_ && reader_.more()) {
         insn_begin = reader_.cursor();
 
         if (Environment::get()->IsDebugBreakEnabled()) {
             if (smx_->IsLineBoundary((uint32_t)(insn_begin - code_))) {
-                InvokeDebugger(cx_, nullptr);
+                InvokeDebugger(rt_, nullptr);
                 if (env_->hasPendingException())
                     return false;
             }
@@ -127,16 +137,18 @@ bool Interpreter::run() {
             case OP_NOP:
                 break;
             case OP_LOAD_GLB: {
-                cell_t addr = reader_.readCell();
+                uint16_t index = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
                 cell_t val;
-                if (!cx_->getCellValue(addr, &val))
+                if (!rt_->getCellValue(addr, &val))
                     return false;
                 pushCell(val);
                 break;
             }
             case OP_LOAD_GLB_I64: {
-                cell_t addr = reader_.readCell();
-                int64_t* ptr = cx_->acquireInt64Addr(addr);
+                uint16_t index = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
+                int64_t* ptr = rt_->acquireInt64Addr(addr);
                 if (!ptr)
                     return false;
                 pushInt64(*ptr);
@@ -158,7 +170,7 @@ bool Interpreter::run() {
                 cell_t slot = reader_.readInt16();
                 cell_t addr = getLocalCell(slot);
                 cell_t val;
-                if (!cx_->getCellValue(addr, &val))
+                if (!rt_->getCellValue(addr, &val))
                     return false;
                 pushCell(val);
                 break;
@@ -166,14 +178,14 @@ bool Interpreter::run() {
             case OP_LOAD_I: {
                 cell_t addr = popCell();
                 cell_t val;
-                if (!cx_->getCellValue(addr, &val))
+                if (!rt_->getCellValue(addr, &val))
                     return false;
                 pushCell(val);
                 break;
             }
             case OP_LOAD_I_I64: {
                 cell_t addr = popCell();
-                int64_t* ptr = cx_->acquireInt64Addr(addr);
+                int64_t* ptr = rt_->acquireInt64Addr(addr);
                 if (!ptr)
                     return false;
                 pushInt64(*ptr);
@@ -182,23 +194,30 @@ bool Interpreter::run() {
             case OP_LODB_I: {
                 cell_t addr = popCell();
                 cell_t val;
-                if (!cx_->getCellValue(addr, &val))
+                if (!rt_->getCellValue(addr, &val))
                     return false;
                 val &= 0xff;
                 pushCell(val);
                 break;
             }
+            case OP_ADDR_GLB: {
+                uint16_t index = reader_.read<uint16_t>();
+                pushCell(rt_->GetGlobalAddr(index));
+                break;
+            }
             case OP_STOR_GLB: {
-                cell_t addr = reader_.readCell();
+                uint16_t index = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
                 cell_t val = popCell();
-                if (!cx_->setCellValue(addr, val))
+                if (!rt_->setCellValue(addr, val))
                     return false;
                 break;
             }
             case OP_STOR_GLB_I64: {
-                cell_t addr = reader_.readCell();
+                uint16_t index = reader_.read<uint16_t>();
+                cell_t addr = rt_->GetGlobalAddr(index);
                 int64_t val = popInt64();
-                int64_t* ptr = cx_->acquireInt64Addr(addr);
+                int64_t* ptr = rt_->acquireInt64Addr(addr);
                 if (!ptr)
                     return false;
                 *ptr = val;
@@ -220,21 +239,21 @@ bool Interpreter::run() {
                 cell_t slot = reader_.readInt16();
                 cell_t addr = getLocalCell(slot);
                 cell_t val = popCell();
-                if (!cx_->setCellValue(addr, val))
+                if (!rt_->setCellValue(addr, val))
                     return false;
                 break;
             }
             case OP_STOR_I: {
                 cell_t val = popCell();
                 cell_t addr = popCell();
-                if (!cx_->setCellValue(addr, val))
+                if (!rt_->setCellValue(addr, val))
                     return false;
                 break;
             }
             case OP_STOR_I_I64: {
                 int64_t val = popInt64();
                 cell_t addr = popCell();
-                int64_t* ptr = cx_->acquireInt64Addr(addr);
+                int64_t* ptr = rt_->acquireInt64Addr(addr);
                 if (!ptr)
                     return false;
                 *ptr = val;
@@ -243,22 +262,37 @@ bool Interpreter::run() {
             case OP_STRB_I: {
                 cell_t val = popCell();
                 cell_t addr_val = popCell();
-                uint8_t* addr = cx_->heap().ToPhysAddr<uint8_t*>(addr_val);
+                uint8_t* addr = rt_->heap().ToPhysAddr<uint8_t*>(addr_val);
                 if (!addr)
                     return false;
                 *addr = uint8_t(val);
                 break;
             }
             case OP_IDXADDR: {
-                uint8_t rank_size = reader_.read<uint8_t>();
-                int32_t bounds = reader_.read<int32_t>();
-                cell_t index = popCell();
-                cell_t base = popCell();
-                if (size_t(index) >= size_t(bounds)) {
-                    ReportOutOfBoundsError(index, bounds);
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
                     return false;
                 }
-                pushCell(base + (index * rank_size));
+
+                void* elt_addr = rt_->GetArrayElem(array, index);
+                pushCell(rt_->heap().ToLocalAddr(elt_addr));
+                break;
+            }
+            case OP_SLICE: {
+                uint32_t index = popCell();
+                uint32_t base = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(base);
+                if (index >= array->length) {
+                    ReportOutOfBoundsError(index, array->length);
+                    return false;
+                }
+                auto slice = rt_->NewSlice(array, index);
+                if (!slice)
+                    return false;
+                pushCell(rt_->heap().ToLocalAddr(slice));
                 break;
             }
             case OP_POP: {
@@ -302,9 +336,9 @@ bool Interpreter::run() {
                 break;
             }
             case OP_HEAP: {
-                cell_t amount = reader_.readCell();
+                uint32_t amount = reader_.read<uint32_t>();
                 cell_t address;
-                if (!cx_->heapAlloc(amount, &address))
+                if (!rt_->heapAlloc(amount, &address))
                     return false;
                 pushCell(address);
                 break;
@@ -346,7 +380,7 @@ bool Interpreter::run() {
                 int64_t result;
                 int err = Int64Div(&right, &left, &result);
                 if (err != SP_ERROR_NONE) {
-                    cx_->ReportErrorNumber(err);
+                    rt_->ReportErrorNumber(err);
                     return false;
                 }
                 pushInt64(result);
@@ -358,7 +392,7 @@ bool Interpreter::run() {
                 int64_t result;
                 int err = Int64Mod(&right, &left, &result);
                 if (err != SP_ERROR_NONE) {
-                    cx_->ReportErrorNumber(err);
+                    rt_->ReportErrorNumber(err);
                     return false;
                 }
                 pushInt64(result);
@@ -443,6 +477,11 @@ bool Interpreter::run() {
                 pushCell(id);
                 break;
             }
+            case OP_LOAD_STR: {
+                uint16_t index = reader_.read<uint16_t>();
+                pushCell(rt_->GetStringAddr(index));
+                break;
+            }
             case OP_CALL:
             case OP_CALLN: {
                 uint32_t method_index = (uint32_t)reader_.readCell();
@@ -454,7 +493,7 @@ bool Interpreter::run() {
                     auto parser = smx_->GetTypeParser(method->signature);
                     uint32_t arg_count;
                     if (!parser.ReadFunctionSignatureArgCount(&arg_count)) {
-                        cx_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
+                        rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
                         return false;
                     }
                     pushCell(arg_count);
@@ -468,27 +507,28 @@ bool Interpreter::run() {
                     NativeEntry* native = rt_->NativeAt(native_index);
                     ivk_->enterNativeCall(native_index);
                     if (native->status == SP_NATIVE_BOUND) {
-                        ke::SaveAndSet<cell_t> saveSpInner(cx_->addressOfSp(), cx_->sp());
-                        ke::SaveAndSet<cell_t> saveHp(cx_->addressOfHp(), cx_->hp());
+                        HeapSave save_hp(rt_->heap());
+                        ke::SaveRestore<uint32_t> save_sp(rt_->sp());
+
                         if (native->legacy_fn)
-                            result = native->legacy_fn(cx_, params);
+                            result = native->legacy_fn(rt_, params);
                         else
-                            result = native->callback->Invoke(cx_, params);
+                            result = native->callback->Invoke(rt_, params);
                     } else {
-                        cx_->ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
+                        rt_->ReportErrorNumber(SP_ERROR_INVALID_NATIVE);
                     }
                     ivk_->leaveNativeCall();
                     if (env_->hasPendingException())
                         return false;
                 } else {
-                    RefPtr<MethodInfo> target = cx_->AcquireMethod(method_index);
+                    RefPtr<MethodInfo> target = rt_->AcquireMethod(method_index);
                     if (!target->Validate())
                         return false;
                     {
                         // Update sp_ so that the callee can find its parameters.
-                        auto updated_sp = (cell_t)((uint8_t*)eval_stack_ptr_ - cx_->memory());
-                        ke::SaveAndSet<cell_t> saveSpInner(cx_->addressOfSp(), updated_sp);
-                        if (!Run(cx_, target, &result))
+                        auto updated_sp = rt_->heap().ToLocalAddr(eval_stack_ptr_);
+                        ke::SaveAndSet<uint32_t> save_updated_sp(&rt_->sp(), updated_sp);
+                        if (!Run(rt_, target, &result))
                             return false;
                     }
                 }
@@ -505,7 +545,7 @@ bool Interpreter::run() {
                 cell_t offset = reader_.readCell();
                 if (offset < (cell_t)(insn_begin - code_)) {
                     if (!Environment::get()->watchdog()->HandleInterrupt()) {
-                        cx_->ReportErrorNumber(SP_ERROR_TIMEOUT);
+                        rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
                         return false;
                     }
                 }
@@ -567,7 +607,7 @@ bool Interpreter::run() {
                 if (jump) {
                     if (offset < (cell_t)(insn_begin - code_)) {
                         if (!Environment::get()->watchdog()->HandleInterrupt()) {
-                            cx_->ReportErrorNumber(SP_ERROR_TIMEOUT);
+                            rt_->ReportErrorNumber(SP_ERROR_TIMEOUT);
                             return false;
                         }
                     }
@@ -603,11 +643,11 @@ bool Interpreter::run() {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 if (b == 0) {
-                    cx_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
+                    rt_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
                     return false;
                 }
                 if (b == -1 && a == cell_t(0x80000000)) {
-                    cx_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
+                    rt_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
                     return false;
                 }
                 pushCell(a / b);
@@ -617,11 +657,11 @@ bool Interpreter::run() {
                 cell_t b = popCell();
                 cell_t a = popCell();
                 if (b == 0) {
-                    cx_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
+                    rt_->ReportErrorNumber(SP_ERROR_DIVIDE_BY_ZERO);
                     return false;
                 }
                 if (b == -1 && a == cell_t(0x80000000)) {
-                    cx_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
+                    rt_->ReportErrorNumber(SP_ERROR_INTEGER_OVERFLOW);
                     return false;
                 }
                 pushCell(a % b);
@@ -826,28 +866,28 @@ bool Interpreter::run() {
                 pushCell(val - 1);
                 break;
             }
-            case OP_MOVS: {
-                cell_t amount = reader_.readCell();
-                cell_t src_addr = popCell();
-                cell_t dest_addr = popCell();
-                cell_t* src = cx_->acquireAddrRange(src_addr, amount);
-                if (!src)
+            case OP_COPYARRAY: {
+                SpArray* src = heap_.ToPhysAddr<SpArray*>(popCell());
+                SpArray* dest = heap_.ToPhysAddr<SpArray*>(popCell());
+                if (src->td->kind() != TypeKind::FixedArray ||
+                    dest->td->kind() != TypeKind::FixedArray)
+                {
+                    rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
                     return false;
-                cell_t* dest = cx_->acquireAddrRange(dest_addr, amount);
-                if (!dest)
+                }
+                auto src_elt = src->td->array_elt();
+                auto dest_elt = dest->td->array_elt();
+                if (src_elt->element_size() != dest_elt->element_size()) {
+                    rt_->ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
                     return false;
-                memmove(dest, src, amount);
-                break;
-            }
-            case OP_FILL: {
-                cell_t amount = reader_.readCell();
-                cell_t val = popCell();
-                cell_t dest_addr = popCell();
-                cell_t* dest = cx_->acquireAddrRange(dest_addr, amount);
-                if (!dest)
+                }
+                if (src->length > dest->length) {
+                    rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
                     return false;
-                for (size_t i = 0; i < (amount / sizeof(cell_t)); i++)
-                    dest[i] = val;
+                }
+                auto src_data = heap_.ToPhysAddr<uint8_t*>(src->data);
+                auto dest_data = heap_.ToPhysAddr<uint8_t*>(dest->data);
+                memcpy(dest_data, src_data, src->length * src_elt->element_size());
                 break;
             }
             case OP_ADDR_S: {
@@ -856,35 +896,13 @@ bool Interpreter::run() {
                 pushCell(address);
                 break;
             }
-            case OP_GENARRAY:
-            case OP_GENARRAY_Z: {
-                uint32_t dims = reader_.readCell();
-                bool autozero = (op == OP_GENARRAY_Z);
-
-                int err = cx_->generateArray(dims, eval_stack_ptr_, autozero);
-                if (err != SP_ERROR_NONE) {
-                    cx_->ReportErrorNumber(err);
-                    return false;
-                }
-                cell_t result = eval_stack_ptr_[dims - 1];
-
-                for (size_t i = 0; i < dims; i++)
-                    popStack();
-                pushCell(result);
-                break;
-            }
-            case OP_STRADJUST: {
-                cell_t val = popCell();
-                pushCell((val + 4) >> 2);
-                break;
-            }
             case OP_SWITCH: {
                 cell_t tableOffset = reader_.readCell();
-                BinaryReader tableReader(code_ + tableOffset, code_ + rt_->code().length);
-                assert((OPCODE)tableReader.read<uint8_t>() == OP_CASETBL);
-                cell_t ncases = tableReader.readCell();
-                cell_t defaultOffset = tableReader.readCell();
-                const CaseTableEntry* cases = reinterpret_cast<const CaseTableEntry*>(tableReader.getBytes(ncases * sizeof(CaseTableEntry)));
+                BinaryReader table(code_ + tableOffset, code_ + rt_->code().length);
+                assert((OPCODE)table.read<uint8_t>() == OP_CASETBL);
+                cell_t ncases = table.readCell();
+                cell_t defaultOffset = table.readCell();
+                auto cases = reinterpret_cast<const CaseTableEntry*>(table.getBytes(ncases * sizeof(CaseTableEntry)));
                 cell_t val = popCell();
                 cell_t jumpOffset = defaultOffset;
                 for (cell_t i = 0; i < ncases; i++) {
@@ -901,27 +919,63 @@ bool Interpreter::run() {
                 reader_.getBytes(((ncases * 2) + 1) * sizeof(cell_t));
                 break;
             }
-            case OP_INITARRAY: {
-                cell_t addr = reader_.readCell();
-                cell_t iv_size = reader_.readCell();
-                cell_t data_copy_size = reader_.readCell();
-                cell_t data_fill_size = reader_.readCell();
-                cell_t fill_value = reader_.readCell();
-                cell_t base = popCell();
-                if (!cx_->initArray(base, addr, iv_size, data_copy_size, data_fill_size, fill_value))
-                    return false;
-                break;
-            }
             case OP_HEAP_SAVE: {
-                if (!cx_->enterHeapScope())
+                if (!rt_->enterHeapScope())
                     return false;
                 break;
             }
             case OP_HEAP_RESTORE: {
-                if (!cx_->leaveHeapScope())
+                rt_->leaveHeapScope();
+                break;
+            }
+            case OP_NEWARRAY: {
+                uint32_t type_id = reader_.read<uint32_t>();
+                auto td = rt_->LoadTypeFromId(type_id);
+                uint32_t size;
+                if (td->kind() == TypeKind::Array) {
+                    size = popCell();
+                    if (size < 0) {
+                        rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+                        return false;
+                    }
+                } else {
+                    size = td->array_size();
+                }
+                auto array = rt_->NewArray(td, size);
+                if (!array)
+                    return false;
+                pushCell(rt_->heap().ToLocalAddr(array));
+                break;
+            }
+            case OP_NEWBULKARRAY: {
+                uint8_t dims = reader_.read<uint8_t>();
+                uint32_t type_id = reader_.read<uint32_t>();
+                auto td = rt_->LoadTypeFromId(type_id);
+                auto array = rt_->NewBulkArray(td, dims, eval_stack_ptr_);
+                if (!array)
+                    return false;
+                for (size_t i = 0; i < dims; i++)
+                    popStack();
+                pushCell(rt_->heap().ToLocalAddr(array));
+                break;
+            }
+            case OP_FILLARRAY: {
+                uint32_t data_offset = reader_.readCell();
+
+                uint32_t addr = popCell();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(addr);
+                if (!rt_->FillArray(array, data_offset))
                     return false;
                 break;
             }
+            case OP_ARRAY_TO_NATIVE: {
+                uint32_t addr = popCell();
+                assert((addr & kNativePointerTag) == 0);
+
+                pushCell(addr | kNativePointerTag);
+                break;
+            }
+
             default:
                 assert(false);
                 return false;
@@ -931,8 +985,14 @@ bool Interpreter::run() {
     return true;
 }
 
-cell_t Interpreter::StackOffset(cell_t offset) {
-    return method_->StackOffset(offset);
+cell_t Interpreter::StackOffset(cell_t slot) {
+    if (slot < 0) {
+        // -1 is because we can't encode 0-based arguments, because 0 is local.
+        // +1 because we skip the argument count.
+        return (-slot - 1 + 1) * sizeof(cell_t);
+    }
+
+    return method_->local_offsets().at(slot);
 }
 
 cell_t Interpreter::getLocalCell(int32_t slot) {
@@ -1004,12 +1064,44 @@ Interpreter::StackValue Interpreter::popValue() {
     return v;
 }
 
-void
-Interpreter::pushValue(const StackValue& v) {
+void Interpreter::pushValue(const StackValue& v) {
     if (v.type == StackType::Cell)
         pushCell(v.u.cell);
     else if (v.type == StackType::Int64)
         pushInt64(v.u.i64);
+}
+
+int32_t Interpreter::CalcLocalsSize() {
+    if (!method_->local_offsets().empty())
+        return -method_->local_offsets().back();
+
+    if (method_->local_types().empty())
+        return 0;
+
+    // Cache this calculation for future runs.
+    method_->local_offsets() = ke::FixedArray<int32_t>(method_->local_types().size());
+
+    int32_t size = 0;
+    for (size_t i = 0; i < method_->local_types().size(); i++) {
+        auto td = method_->local_types().at(i);
+
+        size += td->slot_size();
+        method_->local_offsets().at(i) = -size;
+    }
+    return size;
+}
+
+bool Interpreter::InitLocals() {
+    for (size_t i = 0; i < method_->local_types().size(); i++) {
+        auto td = method_->local_types().at(i);
+        if (td->kind() == TypeKind::FixedArray) {
+            auto array = rt_->NewArray(td, td->array_size());
+            if (!array)
+                return false;
+            setLocalCell(i, rt_->heap().ToLocalAddr(array));
+        }
+    }
+    return true;
 }
 
 } // namespace sp::v2

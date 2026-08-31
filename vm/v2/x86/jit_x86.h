@@ -97,8 +97,6 @@ class Compiler : public CompilerBase
     bool visitGENARRAY(uint32_t dims, bool autozero) override;
     bool visitSTRADJUST_PRI() override;
     bool visitSWITCH(cell_t defaultOffset, const CaseTableEntry* cases, size_t ncases) override;
-    bool visitINITARRAY_ALT(cell_t addr, cell_t iv_size, cell_t data_copy_size,
-                            cell_t data_fill_size, cell_t fill_value) override;
     bool visitHEAP_SAVE() override;
     bool visitHEAP_RESTORE() override;
     bool visitMOVE_I64() override;

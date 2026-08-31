@@ -30,18 +30,13 @@ MethodVerifier::MethodVerifier(Runtime* rt, uint32_t method_index)
    smx_(rt->image()),
    block_(nullptr),
    method_index_(method_index),
-   memSize_(rt_->HeapSize()),
    datSize_(rt_->image()->DescribeData().length),
-   heapSize_(memSize_ - datSize_),
    max_stack_(0),
    code_(nullptr),
    cip_(nullptr),
    prev_cip_(nullptr),
    stop_at_(nullptr)
 {
-    assert(datSize_ < memSize_);
-    assert(heapSize_ <= memSize_ - datSize_);
-
     code_version_ = rt_->image()->DescribeCode().version;
     code_features_ = rt_->image()->DescribeCode().features;
 }
@@ -116,9 +111,7 @@ MethodVerifier::verifyOp(OPCODE op) {
             return popStack(OperandType::Int64) && popStack(OperandType::Cell);
 
         case OP_IDXADDR:
-            // rank_size(uint8_t), bounds(uint32_t)
-            read<uint8_t>();
-            read<int32_t>();
+        case OP_SLICE:
             // Pops index, pops base address, pushes result.
             return popStack(OperandType::Cell) && popStack(OperandType::Cell) && pushStack(OperandType::Cell);
 
@@ -160,9 +153,6 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_NEG_F32:
         case OP_CVT_F32:
         case OP_TEST_F32:
-            return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
-
-        case OP_STRADJUST:
             return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
 
         case OP_TRUNCATE_I64:
@@ -288,34 +278,51 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_LOAD_GLB:
         {
-            cell_t offset = readCell();
-            if (!verifyDatOffset(offset))
+            uint16_t index = read<uint16_t>();
+            auto td = verifyGlobalIndex(index);
+            if (!td)
                 return false;
             return pushStack(OperandType::Cell);
         }
 
         case OP_LOAD_GLB_I64:
         {
-            cell_t offset = readCell();
-            if (!verifyDatOffset(offset))
+            uint16_t index = read<uint16_t>();
+            auto td = verifyGlobalIndex(index);
+            if (!td)
                 return false;
+            if (!td->IsInt64())
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return pushStack(OperandType::Int64);
         }
 
         case OP_STOR_GLB:
         {
-            cell_t offset = readCell();
-            if (!verifyDatOffset(offset))
+            uint16_t index = read<uint16_t>();
+            auto td = verifyGlobalIndex(index);
+            if (!td)
                 return false;
             return popStack(OperandType::Cell);
         }
 
         case OP_STOR_GLB_I64:
         {
-            cell_t offset = readCell();
-            if (!verifyDatOffset(offset))
+            uint16_t index = read<uint16_t>();
+            auto td = verifyGlobalIndex(index);
+            if (!td)
                 return false;
+            if (!td->IsInt64())
+                return reportError(SP_ERROR_INVALID_INSTRUCTION);
             return popStack(OperandType::Int64);
+        }
+
+        case OP_ADDR_GLB:
+        {
+            uint16_t index = read<uint16_t>();
+            auto td = verifyGlobalIndex(index);
+            if (!td)
+                return false;
+            return pushStack(OperandType::Cell);
         }
 
         case OP_LODB_I:
@@ -408,18 +415,57 @@ MethodVerifier::verifyOp(OPCODE op) {
             cip_ = insn_ + GetCaseTableSize(insn_);
             return true;
 
-        case OP_MOVS: {
-            cell_t val = readCell();
-            if (!verifyMemAmount(val))
-                return false;
+        case OP_COPYARRAY:
             return popStack(OperandType::Cell) && popStack(OperandType::Cell);
+
+        case OP_NEWARRAY: {
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td)
+                return false;
+            if (td->kind() == TypeKind::Array) {
+                if (!popStack(OperandType::Cell))
+                    return false;
+            } else if (td->kind() != TypeKind::FixedArray) {
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            }
+            return pushStack(OperandType::Cell);
         }
 
-        case OP_FILL: {
-            cell_t val = readCell();
-            if (!verifyMemAmount(val))
+        case OP_NEWBULKARRAY: {
+            uint8_t count = read<uint8_t>();
+            if (count < 1)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            uint32_t type_id = read<uint32_t>();
+            auto td = rt_->LoadTypeFromId(type_id);
+            if (!td)
                 return false;
-            return popStack(OperandType::Cell) && popStack(OperandType::Cell);
+
+            uint32_t dynamic_rank = 0;
+            for (auto iter = td; iter->kind() == TypeKind::Array; iter = iter->array_elt())
+                dynamic_rank++;
+
+            if (count > dynamic_rank)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+            for (uint32_t i = 0; i < count; i++) {
+                if (!popStack(OperandType::Cell))
+                    return false;
+            }
+            return pushStack(OperandType::Cell);
+        }
+
+        case OP_FILLARRAY: {
+            if (!popStack(OperandType::Cell))
+                return false;
+            uint32_t data_offs = read<uint32_t>();
+            if (!smx_->IsValidDataOffset(data_offs))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            BinaryReader reader = smx_->GetDataReader(data_offs);
+            auto bytes = reader.readCompactUint32();
+            if (!bytes || !reader.canRead(*bytes))
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return true;
         }
 
         // Note - STACK and HEAP are verified at runtime.
@@ -433,52 +479,6 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (value > INT_MAX / 4)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(OperandType::Cell);
-        }
-
-        case OP_GENARRAY:
-        case OP_GENARRAY_Z: {
-            cell_t ndims = readCell();
-            if (!verifyDimensionCount(ndims))
-                return false;
-            for (cell_t i = 0; i < ndims; i++) {
-                if (!popStack(OperandType::Cell))
-                    return false;
-            }
-            return pushStack(OperandType::Cell);
-        }
-
-        case OP_INITARRAY: {
-            constexpr cell_t kMaxCells = INT_MAX / (2 * (int)sizeof(cell_t));
-
-            if (!popStack(OperandType::Cell))
-                return false;
-
-            cell_t addr = readCell();
-            cell_t iv_size = readCell();
-            cell_t data_copy_size = readCell();
-            cell_t data_fill_size = readCell();
-            cell_t fill_value = readCell();
-            if (iv_size < 0 || data_copy_size < 0 || data_fill_size < 0 || iv_size >= kMaxCells ||
-                data_copy_size >= kMaxCells || data_fill_size >= kMaxCells ||
-                (!data_fill_size && fill_value) || !ke::IsAligned(addr, sizeof(cell_t))) {
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
-
-            cell_t copy_addr = addr + iv_size * sizeof(cell_t);
-            cell_t fill_addr = copy_addr + data_copy_size * sizeof(cell_t);
-            if (copy_addr < addr || fill_addr < copy_addr ||
-                !ke::IsUintAddSafe<uint32_t>(fill_addr, data_fill_size * sizeof(cell_t))) {
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            }
-
-            // If there's nothing to read from DAT, we can early return.
-            if (!iv_size && !data_copy_size)
-                return true;
-
-            cell_t end_addr = addr + (iv_size + data_copy_size) * sizeof(cell_t);
-            if (!verifyDatOffset(addr) || !verifyDatOffset(end_addr - 1))
-                return false;
-            return true;
         }
 
         case OP_HEAP_SAVE:
@@ -505,6 +505,16 @@ MethodVerifier::verifyOp(OPCODE op) {
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(OperandType::Cell);
         }
+
+        case OP_LOAD_STR: {
+            uint32_t offset = read<uint16_t>();
+            if (!verifyDatString(offset))
+                return false;
+            return pushStack(OperandType::Cell);
+        }
+
+        case OP_ARRAY_TO_NATIVE:
+            return popStack(OperandType::Cell) && pushStack(OperandType::Cell);
 
         default:
             // Should have been caught earlier.
@@ -662,20 +672,44 @@ bool MethodVerifier::verifyStackOffset(cell_t offset, uint32_t op_size) {
         if (arg_slot >= arg_count_)
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
     } else {
-        if (offset >= local_sizes_.size())
+        if (offset >= local_types_.size())
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
-        if (op_size && local_sizes_[offset] != op_size)
+        if (op_size && local_types_[offset]->slot_size() != op_size)
             return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
 }
 
-bool
-MethodVerifier::verifyDatOffset(cell_t offset) {
+bool MethodVerifier::verifyDatAddress(cell_t offset) {
     if (offset < 0 || size_t(offset) >= datSize_) {
         return reportError(SP_ERROR_INSTRUCTION_PARAM);
     }
     return true;
+}
+
+bool MethodVerifier::verifyDatString(uint16_t index) {
+    const smx_rtti_table_header* table = smx_->rtti_stringpool();
+    if (!table || index >= table->row_count)
+        return reportError(SP_ERROR_INSTRUCTION_PARAM);
+
+    // If loaded in data only mode, we skipped verifying the string table.
+    if (rt_->data_only()) {
+        const smx_rtti_string* row = smx_->getRttiRow<smx_rtti_string>(table, index);
+        if (!smx_->ReadDataBlob(row->offset))
+            return false;
+    }
+    return true;
+}
+
+const TypeDesc* MethodVerifier::verifyGlobalIndex(uint16_t index) {
+    const smx_rtti_table_header* globals = smx_->rtti_globals();
+    if (!globals || index >= globals->row_count) {
+        reportError(SP_ERROR_INSTRUCTION_PARAM);
+        return nullptr;
+    }
+
+    const smx_rtti_global* global = smx_->getRttiRow<smx_rtti_global>(globals, index);
+    return rt_->LoadTypeFromId(global->type_id);
 }
 
 bool
@@ -701,36 +735,6 @@ bool MethodVerifier::verifyCallIndex(uint32_t method_index) {
     return true;
 }
 
-bool
-MethodVerifier::verifyStackAmount(cell_t amount) {
-    // This is a rough estimate, we just make sure it definitely
-    // won't go out of the heap.
-    size_t estimate = size_t((amount < 0) ? -amount : amount);
-    if (estimate >= heapSize_) {
-        return reportError(SP_ERROR_INSTRUCTION_PARAM);
-    }
-    return true;
-}
-
-bool
-MethodVerifier::verifyHeapAmount(cell_t amount) {
-    // This is a rough estimate, we just make sure it definitely
-    // won't go out of the heap.
-    size_t estimate = size_t((amount < 0) ? -amount : amount);
-    if (estimate >= heapSize_) {
-        return reportError(SP_ERROR_INSTRUCTION_PARAM);
-    }
-    return true;
-}
-
-bool
-MethodVerifier::verifyMemAmount(cell_t amount) {
-    if (amount < 0 || size_t(amount) > memSize_) {
-        return reportError(SP_ERROR_INSTRUCTION_PARAM);
-    }
-    return true;
-}
-
 void
 MethodVerifier::collectExternalFuncRefs(const ExternalFuncRefCallback& callback) {
     collect_func_refs_ = callback;
@@ -744,14 +748,12 @@ MethodVerifier::reportError(int err) {
 }
 
 bool MethodVerifier::verifyLocalSlots() {
-    if (!method_) {
+    if (!method_)
         return reportError(SP_ERROR_FILE_FORMAT);
-    }
 
     auto parser = rt_->image()->GetTypeParser(method_->signature);
-    if (!parser.ReadFunctionSignatureArgCount(&arg_count_)) {
+    if (!parser.ReadFunctionSignatureArgCount(&arg_count_))
         return reportError(SP_ERROR_FILE_FORMAT);
-    }
 
     if (!method_->locals)
         return true;
@@ -759,54 +761,18 @@ bool MethodVerifier::verifyLocalSlots() {
     parser = rt_->image()->GetTypeParser(method_->locals);
 
     uint16_t count;
-    if (!parser.ReadLocalSlotCount(&count)) {
+    if (!parser.ReadLocalSlotCount(&count))
         return reportError(SP_ERROR_FILE_FORMAT);
-    }
 
-    local_sizes_ = ke::FixedArray<uint8_t>(count);
+    local_types_ = ke::FixedArray<const TypeDesc*>(count);
     for (uint16_t i = 0; i < count; i++) {
-        uint8_t b;
-        if (!parser.GetByte(&b))
+        auto td = rt_->LoadType(parser);
+        if (!td)
             return false;
-
-        if (b == cb::kConst) {
-            parser.GetNextByte(&b);
-            if (!parser.GetByte(&b))
-                return false;
-        }
-
-        switch (b) {
-            case cb::kBool:
-            case cb::kInt32:
-            case cb::kFloat32:
-            case cb::kChar8:
-            case cb::kAny:
-            case cb::kTopFunction:
-            case cb::kEnum:
-                // Always int32.
-                local_sizes_[i] = sizeof(cell_t);
-                break;
-
-            case cb::kFixedArray:
-            case cb::kArray:
-            case cb::kEnumStruct:
-            case cb::kFunctionPtr:
-            case cb::kTypeset:
-                // Address-based but int32 for now.
-                local_sizes_[i] = sizeof(cell_t);
-                break;
-
-            case cb::kInt64:
-                local_sizes_[i] = sizeof(int64_t);
-                break;
-
-            default:
-                return reportError(SP_ERROR_FILE_FORMAT);
-        }
-
-        parser.SkipNextType();
-    }
-    return true;
+        // :TODO: forbid references
+        local_types_[i] = td;
+   }
+   return true;
 }
 
 } // namespace sp::v2

@@ -22,6 +22,7 @@
 #include "code-allocator.h"
 #include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
+#include "type-cache.h"
 
 namespace sp {
 
@@ -216,6 +217,8 @@ class Environment : public ISourcePawnEnvironment
         spew_interp_ops_ = spew;
     }
 
+    TypeCache* types() { return &types_; }
+
   public:
     static inline size_t offsetOfTopFrame() {
         return offsetof(Environment, top_);
@@ -279,6 +282,9 @@ class Environment : public ISourcePawnEnvironment
 
     InvokeFrame* top_;
     intptr_t* exit_fp_;
+
+    // Global type cache.
+    TypeCache types_;
 };
 
 class EnterProfileScope

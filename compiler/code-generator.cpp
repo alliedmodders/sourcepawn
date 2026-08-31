@@ -35,6 +35,7 @@
 #include "sctracker.h"
 #include "semantics-inl.h"
 #include "symbols.h"
+#include "utils/compact-encoding.h"
 #include "value-inl.h"
 
 namespace sp {
@@ -296,7 +297,7 @@ void CodeGenerator::EmitVarDecl(VarDeclBase* decl) {
 
 void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
     Atom* name = decl->name();
-    if (decl->vclass() == sSTATIC)
+    if (decl->vclass() == sSTATIC && fun_)
         name = cc_.atom(fun_->name()->str() + "." + name->str());
 
     if (!decl->label()->bound()) {
@@ -312,25 +313,6 @@ void CodeGenerator::EmitGlobalVar(VarDeclBase* decl) {
     }
 
     decl->set_is_emitted();
-#if 0
-
-    if (decl->type()->isArray() || decl->type()->isEnumStruct()) {
-        ArrayData array;
-        BuildCompoundInitializer(decl, &array, data_.dat_address());
-
-        data_.Add(std::move(array.iv));
-        data_.Add(std::move(array.data));
-        data_.AddZeroes(array.zeroes);
-    } else {
-        cell_t cells = 1;
-        if (auto es = decl->type()->asEnumStruct())
-            cells = es->array_size();
-        else if (decl->type()->isInt64())
-            cells = 2;
-
-        data_.AddZeroes(cells);
-    }
-#endif
 }
 
 uint16_t CodeGenerator::AcquireGlobalSlot(VarDeclBase* decl) {
@@ -347,29 +329,200 @@ uint16_t CodeGenerator::AcquireGlobalSlot(VarDeclBase* decl) {
 
 void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
     for (const auto& var : stmt->vars()) {
-        auto init = var->init();
+        auto init = var->init_rhs();
 
         if (!var->is_emitted())
             continue;
 
         AddDebugLine(init->pos());
 
-        if (auto n64 = init->right()->as<Number64Expr>()) {
+        if (auto array = var->type()->as<ArrayType>()) {
+            if (array->is_fixed())
+                __ emit(OP_LOAD_GLB, VarSlot(var->addr()));
+            EmitArrayCtor(array, init, 0);
+            if (!array->is_fixed())
+                __ emit(OP_STOR_GLB, VarSlot(var->addr()));
+        } else if (auto n64 = init->as<Number64Expr>()) {
             __ emit(OP_PUSH_C_I64, Int64Value(*n64->ToInt64()));
             __ emit(OP_STOR_GLB_I64, VarSlot(var->addr()));
-        } else {
-            assert(init->right()->val().ident == iCONSTEXPR);
-            __ PUSH_C(init->right()->val().constval());
+        } else if (init->val().ident == iCONSTEXPR) {
+            __ PUSH_C(init->val().constval());
             __ emit(OP_STOR_GLB, VarSlot(var->addr()));
+        } else {
+            assert(false);
         }
     }
+}
+
+static inline uint32_t DeduceArraySize(Expr* ctor) {
+    if (auto array = ctor->as<ArrayExpr>())
+        return (uint32_t)array->exprs().size();
+    if (auto se = ctor->as<StringExpr>())
+        return se->text()->str().size() + 1;
+
+    assert(false);
+    return 0;
+}
+
+void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
+    auto type = expr->val().type()->as<ArrayType>();
+    auto type_id = rtti_->to_typeid(type);
+
+    __ emit(OP_NEWARRAY, type_id);
+    __ emit(OP_DUP);
+    EmitArrayCtor(type, expr, flags);
+}
+
+void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags) {
+    if (auto new_array = ctor->as<NewArrayExpr>()) {
+        assert(!type->is_fixed());
+        EmitNewArrayExpr(new_array);
+        return;
+    }
+
+    if (!type->is_fixed()) {
+        // The array has not been allocated yet.
+        uint32_t size = DeduceArraySize(ctor);
+        uint32_t type_id = rtti_->to_typeid(type);
+        __ PUSH_C(size);
+        __ emit(OP_NEWARRAY, type_id);
+    } else {
+        // Otherwise, the address has been pushed onto the stack by the caller.
+    }
+
+    if (ArrayType* inner = type->inner()->as<ArrayType>()) {
+        ArrayExpr* array = ctor->to<ArrayExpr>();
+
+        for (size_t i = 0; i < array->exprs().size(); i++) {
+            __ emit(OP_DUP);
+            __ PUSH_C(i);
+            __ emit(OP_IDXADDR);
+
+            // If the inner array is fixed, then it's already been allocated.
+            if (inner->is_fixed())
+                __ emit(OP_LOAD_I);
+
+            EmitArrayCtor(inner, array->exprs().at(i), 0);
+
+            // Otherwise, the allocation is now on the stack.
+            if (!inner->is_fixed())
+                __ emit(OP_STOR_I);
+        }
+
+        // No longer need the parent address.
+        if (type->is_fixed())
+            __ emit(OP_POP);
+    } else {
+        uint32_t fill_data_pos;
+
+        auto iter = fill_data_cache_.find(ctor);
+        if (iter != fill_data_cache_.end()) {
+            fill_data_pos = iter->second;
+        } else if (auto array = ctor->as<ArrayExpr>()) {
+            fill_data_pos = EmitArrayFillData(type, array);
+        } else if (auto str = ctor->as<StringExpr>()) {
+            fill_data_pos = EmitStringFillData(type, str);
+        } else {
+            assert(false);
+            return;
+        }
+
+        if (flags & EMIT_REPEATABLE)
+            fill_data_cache_.emplace(ctor, fill_data_pos);
+
+        // If this is fixed array, the address was pushed onto the stack by our
+        // caller, and now we're consuming it. Otherwise, the caller expects the
+        // address to be returned on the stack.
+        if (!type->is_fixed())
+            __ emit(OP_DUP);
+        __ emit(OP_FILLARRAY, fill_data_pos);
+    }
+}
+
+template <typename T>
+static inline void AddValue(std::string* out, T value) {
+    union {
+        T value;
+        char bytes[sizeof(T)];
+    } u;
+    u.value = value;
+    out->append(u.bytes, sizeof(u.bytes));
+}
+
+uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
+    std::string data;
+
+    uint32_t num_items = 0;
+    std::optional<cell_t> prev1, prev2;
+    for (const auto& item : array->exprs()) {
+        prev2 = prev1;
+        if (auto n64 = item->as<Number64Expr>()) {
+            AddValue<int64_t>(&data, *n64->ToInt64());
+            prev1 = {};
+        } else {
+            assert(item->val().ident == iCONSTEXPR);
+            cell_t cv = item->val().constval();
+            if (type->inner()->isInt64())
+                AddValue<int64_t>(&data, cv);
+            else
+                AddValue<int32_t>(&data, cv);
+            prev1 = {cv};
+        }
+        num_items++;
+    }
+
+    // If we have ellipses, it should be a fixed array.
+    assert(!array->ellipses() || type->size());
+
+    if (array->ellipses() && num_items < type->size()) {
+        cell_t step = 0;
+        if (prev2)
+            step = *prev1 - *prev2;
+
+        cell_t next_value = *prev1 + step;
+        while (num_items < type->size()) {
+            if (type->inner()->isInt64())
+                AddValue<int64_t>(&data, next_value);
+            else
+                AddValue<int32_t>(&data, next_value);
+            next_value += step;
+            num_items++;
+        }
+    }
+
+    std::string prefix;
+    if (!EncodeCompactUint32(&prefix, data.size())) {
+        report(array, 431);
+        return 0;
+    }
+
+    uint32_t pos = data_.dat_address();
+    data_.Add(prefix);
+    data_.Add(data);
+    return pos;
+}
+
+uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, StringExpr* array) {
+    assert(type->inner()->isChar());
+
+    auto text = array->text();
+
+    std::string prefix;
+    if (!EncodeCompactUint32(&prefix, text->str().size())) {
+        report(array, 431);
+        return 0;
+    }
+
+    uint32_t pos = data_.dat_address();
+    data_.Add(prefix);
+    data_.Add(text->str());
+    return pos;
 }
 
 void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
 
     bool is_struct = decl->type()->isEnumStruct();
-    bool is_array = decl->type()->isArray();
 
     int num_cells;
     if (decl->type()->isBuiltin(BuiltinType::Int64))
@@ -382,7 +535,18 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         report(decl->pos(), 467);
     decl->BindAddress(slot);
 
-    if (!is_array && !is_struct) {
+    auto init_rhs = decl->init_rhs();
+    if (auto array = decl->type()->as<ArrayType>()) {
+        if (!init_rhs)
+            return;
+        if (array->is_fixed())
+            __ emit(OP_LOAD_S, VarSlot(slot));
+        EmitArrayCtor(array, init_rhs, 0);
+        if (!array->is_fixed())
+            __ emit(OP_STOR_S, VarSlot(slot));
+    } else if (is_struct) {
+        assert(false);
+    } else {
         if (init) {
             const auto& val = init->right()->val();
             if (val.ident == iCONSTEXPR) {
@@ -404,65 +568,6 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         } else if (num_cells == 1) {
             // Note: we no longer honor "decl" for scalars.
             __ emit(OP_ZERO_S, VarSlot(slot));
-        }
-    } else {
-        auto init_rhs = decl->init_rhs();
-        if (init_rhs && init_rhs->as<NewArrayExpr>()) {
-            EmitExpr(init_rhs->as<NewArrayExpr>());
-            __ emit(OP_STOR_S, VarSlot(slot));
-        } else if (!init_rhs || decl->type()->isArray() || is_struct) {
-            ArrayData array;
-            BuildCompoundInitializer(decl, &array, 0);
-
-            cell iv_size = (cell)array.iv.size();
-            cell data_size = (cell)array.data.size() + array.zeroes;
-            cell total_size = iv_size + data_size;
-
-            max_array_size_ = std::max(max_array_size_, total_size);
-
-            cell iv_addr = data_.dat_address();
-            data_.Add(std::move(array.iv));
-            data_.Add(std::move(array.data));
-
-            if (array.zeroes < 16) {
-                // For small numbers of extra zeroes, fold them into the data
-                // section.
-                data_.AddZeroes(array.zeroes);
-                array.zeroes = 0;
-            }
-
-            cell non_filled = data_size - array.zeroes;
-
-            // the decl keyword is deprecated, but we preserve its
-            // optimization for older plugins so we don't introduce any
-            // surprises. Note we zap the fill size *after* computing the
-            // non-fill size, since we need to compute the copy size correctly.
-            if (!decl->autozero() && array.zeroes)
-                array.zeroes = 0;
-
-            __ emit(OP_HEAP, total_size * sizeof(cell));
-            __ emit(OP_DUP);
-            __ emit(OP_INITARRAY, iv_addr, iv_size, non_filled, array.zeroes, 0);
-            __ emit(OP_STOR_S, VarSlot(slot));
-        } else if (StringExpr* ctor = init_rhs->as<StringExpr>()) {
-            auto queue_size = data_.size();
-            auto str_addr = data_.dat_address();
-            data_.Add(ctor->text()->chars(), ctor->text()->length());
-
-            auto cells = data_.size() - queue_size;
-            assert(cells > 0);
-
-            __ PUSH_C(cells);
-            if (decl->autozero())
-                __ emit(OP_GENARRAY_Z, 1);
-            else
-                __ emit(OP_GENARRAY, 1);
-            __ emit(OP_DUP);
-            __ PUSH_C(str_addr);
-            __ emit(OP_MOVS, cells * sizeof(cell));
-            __ emit(OP_STOR_S, VarSlot(decl->addr()));
-        } else {
-            assert(false);
         }
     }
 }
@@ -554,20 +659,14 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
         }
         case ExprKind::StringExpr: {
             auto se = expr->to<StringExpr>();
-            auto addr = data_.dat_address();
-            data_.Add(se->text()->chars(), se->text()->length());
-            __ PUSH_C(addr);
+            uint16_t index = rtti_->AddString(se->text(), &data_);
+            __ emit(OP_LOAD_STR, VarSlot(index));
             break;
-            }
-            case ExprKind::ArrayExpr: {
-            auto e = expr->to<ArrayExpr>();
+        }
 
-            auto addr = data_.dat_address();
-            for (const auto& expr : e->exprs())
-                data_.Add(expr->val().constval());
-            __ PUSH_C(addr);
+        case ExprKind::ArrayExpr:
+            EmitArrayExpr(expr->to<ArrayExpr>(), flags);
             break;
-            }
         case ExprKind::IndexExpr:
             EmitIndexExpr(expr->to<IndexExpr>());
             break;
@@ -591,6 +690,9 @@ void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
             break;
         case ExprKind::SimpleCastExpr:
             EmitSimpleCastExpr(expr->to<SimpleCastExpr>());
+            break;
+        case ExprKind::SliceExpr:
+            EmitSliceExpr(expr->to<SliceExpr>());
             break;
 
         default:
@@ -768,7 +870,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         EmitExpr(right);
         if (!(flags & EMIT_DISCARD_RESULT))
             __ emit(OP_DUP_ROTATE);
-        __ emit(OP_MOVS, expr->array_copy_length() * sizeof(cell));
+        __ emit(OP_COPYARRAY);
         return;
     }
 
@@ -1114,31 +1216,14 @@ CodeGenerator::EmitSymbolExpr(SymbolExpr* expr)
     }
 }
 
-void
-CodeGenerator::EmitIndexExpr(IndexExpr* expr)
-{
+void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
     EmitExpr(expr->base());
-
-    auto& base_val = expr->base()->val();
-
-    cell_t rank_size = sizeof(cell_t);
-
-    auto array_type = base_val.type()->as<ArrayType>();
-    if (!array_type->inner()->isArray()) {
-        if (array_type->inner()->isChar())
-            rank_size = 1;
-        else if (array_type->inner()->isInt64())
-            rank_size = sizeof(cell_t) * 2;
-        else if (auto es = array_type->inner()->asEnumStruct())
-            rank_size = es->array_size() * sizeof(cell_t);
-    }
-
-    assert(rank_size == 1 || (rank_size % sizeof(cell_t) == 0));
-
     EmitExpr(expr->index());
 
-    uint32_t bounds = array_type->size() ? array_type->size() : INT_MAX;
-    __ idxaddr(rank_size, bounds);
+    __ emit(OP_IDXADDR);
+
+    auto& base_val = expr->base()->val();
+    auto array_type = base_val.type()->as<ArrayType>();
 
     // The indexed item is another array (multi-dimensional arrays).
     if (array_type->inner()->isArray()) {
@@ -1147,9 +1232,14 @@ CodeGenerator::EmitIndexExpr(IndexExpr* expr)
     }
 }
 
-void
-CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr)
-{
+void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
+    EmitExpr(slice->expr()->base());
+    EmitExpr(slice->expr()->index());
+
+    __ emit(OP_SLICE);
+}
+
+void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
     assert(expr->token() == '.');
 
     // Note that we do not load an iACCESSOR here, we only make sure the base
@@ -1257,6 +1347,9 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_STOR_S_I64, VarSlot(slot));
             __ emit(OP_ADDR_S, VarSlot(slot));
         }
+
+        if (val.type()->isArray() && call->fun()->is_native())
+            __ emit(OP_ARRAY_TO_NATIVE);
     }
 
     std::optional<uint32_t> hidden_slot;
@@ -1269,6 +1362,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_DUP);
             __ emit(OP_STOR_S, VarSlot(*hidden_slot));
         } else if (return_type->isEnumStruct()) {
+#if 0
             cell retsize = return_type->CellStorageSize();
             assert(retsize);
 
@@ -1276,6 +1370,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
             __ emit(OP_HEAP, retsize * sizeof(cell));
             __ emit(OP_DUP);
             __ emit(OP_STOR_S, VarSlot(*hidden_slot));
+#endif
+            assert(false);
         } else {
             assert(return_type->isInt64());
 
@@ -1301,86 +1397,56 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 void CodeGenerator::EmitCallHiddenArray(CallExpr* call) {
     auto fun = call->fun();
 
-    ArrayData array;
-    BuildCompoundInitializer(QualType(fun->return_type()), nullptr, &array);
+    auto type = fun->return_type()->as<ArrayType>();
+    assert(type);
 
-    cell retsize = call->fun()->return_type()->CellStorageSize();
-    assert(retsize);
+    for (auto iter = type; iter; iter = iter->inner()->as<ArrayType>())
+        assert(iter->size() > 0);
 
-    __ emit(OP_HEAP, retsize * sizeof(cell));
-    __ emit(OP_DUP);
+    uint32_t type_id = rtti_->to_typeid(type);
 
-    auto info = fun->return_array();
-    if (array.iv.empty()) {
-        __ PUSH_C(0);
-        __ emit(OP_FILL, retsize);
-    } else {
-        if (!info->iv_size) {
-            // No initializer, so we should have no data.
-            assert(array.data.empty());
-            assert(array.zeroes);
-
-            info->iv_size = (cell_t)array.iv.size();
-            info->dat_addr = data_.dat_address();
-            info->zeroes = array.zeroes;
-            data_.Add(std::move(array.iv));
-        }
-
-        cell dat_addr = info->dat_addr;
-        cell iv_size = info->iv_size;
-        assert(iv_size);
-        assert(info->zeroes);
-
-        __ emit(OP_INITARRAY, dat_addr, iv_size, 0, info->zeroes, 0);
-    }
+    __ emit(OP_NEWARRAY, type_id);
 }
 
-void
-CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr)
-{
+void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     const auto& arg = expr->arg();
     assert(!arg->type()->isInt64());
 
-    if (arg->type()->isReference()) {
-        auto temp_slot = AcquireTempSlot(expr, BuiltinType::Int);
-        __ PUSH_C(arg->default_value()->val.get());
-        __ emit(OP_STOR_S, VarSlot(temp_slot));
-        __ emit(OP_ADDR_S, VarSlot(temp_slot));
-    } else if (arg->type()->isArray()) {
-        EmitDefaultArray(expr, arg);
+    auto init = arg->init_rhs();
+
+    if (auto array = init->as<ArrayExpr>()) {
+        auto type = arg->type()->as<ArrayType>();
+        auto type_id = rtti_->to_typeid(type);
+
+        if (type->size() == 0)
+            __ emit(OP_PUSH_C, (uint32_t)array->exprs().size());
+        __ emit(OP_NEWARRAY, type_id);
+        __ emit(OP_DUP);
+        EmitArrayCtor(type, array, EMIT_REPEATABLE);
     } else {
-        if (arg->type()->isEnumStruct())
-            EmitDefaultArray(expr, arg);
-        else
-            __ PUSH_C(arg->default_value()->val.get());
+        EmitExpr(init);
+        if (arg->type()->isReference()) {
+            auto temp_slot = AcquireTempSlot(expr, BuiltinType::Int);
+            __ emit(OP_STOR_S, VarSlot(temp_slot));
+            __ emit(OP_ADDR_S, VarSlot(temp_slot));
+        }
     }
 }
 
 void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
-    const auto& type = expr->type();
-    auto innermost = type;
-    while (innermost->isArray())
-        innermost = innermost->to<ArrayType>()->inner();
+    uint32_t type_id = rtti_->to_typeid(expr->type());
 
-    int numdim = 0;
-    auto& exprs = expr->exprs();
-    for (size_t i = 0; i < exprs.size(); i++) {
+    const auto& exprs = expr->exprs();
+    for (size_t i = exprs.size() - 1; i < exprs.size(); i--)
         EmitExpr(exprs[i]);
 
-        if (i == exprs.size() - 1) {
-            if (innermost->isChar()) {
-                __ emit(OP_STRADJUST);
-            } else if (auto es = innermost->asEnumStruct(); es && es->array_size() > 1) {
-                __ emit(OP_SMUL_C, es->array_size());
-            }
-        }
-        numdim++;
-    }
+    if (exprs.size() > std::numeric_limits<uint8_t>::max())
+        report(expr, 431);
 
-    if (expr->autozero())
-        __ emit(OP_GENARRAY_Z, numdim);
+    if (exprs.size() == 1)
+        __ emit(OP_NEWARRAY, type_id);
     else
-        __ emit(OP_GENARRAY, numdim);
+        __ newbulkarray((uint8_t)exprs.size(), type_id);
 }
 
 void
@@ -1404,49 +1470,17 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 }
 
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
-    ArrayData array;
-    BuildCompoundInitializer(QualType(stmt->expr()->val().type()), nullptr, &array);
+    auto type = fun_->return_type()->as<ArrayType>();
 
-    auto info = fun_->return_array();
-    if (array.iv.empty()) {
-        // A much simpler copy can be emitted.
+    if (type->inner()->isArray()) {
+        EmitExpr(stmt->expr());
+        __ emit(OP_JUMP, &ret_2d_array_);
+    } else {
         __ load_hidden_arg(fun_);
         EmitExpr(stmt->expr());
-
-        cell size = fun_->return_type()->CellStorageSize();
-        __ emit(OP_MOVS, size * sizeof(cell));
-        return;
+        __ emit(OP_COPYARRAY);
+        __ emit(OP_RETV);
     }
-
-    if (!info->iv_size) {
-        // No initializer, so we should have no data.
-        assert(array.data.empty());
-        assert(array.zeroes);
-
-        info->iv_size = (cell_t)array.iv.size();
-        info->dat_addr = data_.dat_address();
-        info->zeroes = array.zeroes;
-        data_.Add(std::move(array.iv));
-    }
-
-    cell dat_addr = info->dat_addr;
-    cell iv_size = info->iv_size;
-    assert(iv_size);
-    assert(info->zeroes);
-
-    // Get the data address of the source array.
-    EmitExpr(stmt->expr());
-    __ emit(OP_ADD_C, iv_size * sizeof(cell));
-
-    // Initialize the dest aray.
-    __ load_hidden_arg(fun_);
-    __ emit(OP_DUP);
-    __ emit(OP_INITARRAY, dat_addr, iv_size, 0, 0, 0);
-    __ emit(OP_ADD_C, iv_size * sizeof(cell));
-    __ emit(OP_SWAP);
-    __ emit(OP_MOVS, info->zeroes * sizeof(cell));
-
-    __ load_hidden_arg(fun_);
 }
 
 void
@@ -1456,7 +1490,6 @@ CodeGenerator::EmitReturnStmt(ReturnStmt* stmt)
         const auto& v = stmt->expr()->val();
         if (v.type()->isArray() || v.type()->isEnumStruct()) {
             EmitReturnArrayStmt(stmt);
-            __ emit(OP_RETV);
         } else if (v.type()->isInt64()) {
             // Must copy to the hidden arg.
             __ load_hidden_arg(fun_);
@@ -1558,14 +1591,10 @@ void CodeGenerator::EmitRvalue(const value& lval) {
                 }
             } else {
                 uint16_t slot = AcquireGlobalSlot(var);
-                if (!var->type()->isComposite()) {
-                    if (var->type()->isInt64())
-                        __ emit(OP_LOAD_GLB_I64, VarSlot(slot));
-                    else
-                        __ emit(OP_LOAD_GLB, VarSlot(slot));
-                } else {
-                    __ emit(OP_ADDR_GLB, VarSlot(slot));
-                }
+                if (var->type()->isInt64())
+                    __ emit(OP_LOAD_GLB_I64, VarSlot(slot));
+                else
+                    __ emit(OP_LOAD_GLB, VarSlot(slot));
             }
             break;
         }
@@ -1650,7 +1679,10 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
             __ emit(OP_ADDR_S, VarSlot(decl->addr()));
     } else {
         uint16_t slot = AcquireGlobalSlot(decl);
-        __ emit(OP_ADDR_GLB, VarSlot(slot));
+        if (decl->type()->isComposite())
+            __ emit(OP_LOAD_GLB, VarSlot(slot));
+        else
+            __ emit(OP_ADDR_GLB, VarSlot(slot));
     }
 }
 
@@ -1900,6 +1932,7 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     locals_ = {};
     free_temp_slots_ = {};
     used_temp_slots_ = {};
+    ret_2d_array_ = {};
 
     {
         AutoEnterScope arg_scope(this, &local_syms_);
@@ -1922,6 +1955,13 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
 
     assert(!has_stack_or_heap_scopes());
 
+    if (ret_2d_array_.used()) {
+        __ bind(&ret_2d_array_);
+        std::vector<uint32_t> slots;
+        Emit2dArrayCopy(fun_->return_type()->as<ArrayType>(), slots);
+        __ emit(OP_RETV);
+    }
+
     if (info->body()->flow_type() != Flow_Return) {
         if (info->MustReturnValue()) {
             __ PUSH_C(0);
@@ -1938,9 +1978,52 @@ void CodeGenerator::EmitFunctionDecl(FunctionDecl* info) {
     rtti_->finish_method(info, debug_info_, std::move(locals_), pcode_end);
 }
 
-void
-CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl)
-{
+void CodeGenerator::Emit2dArrayCopy(ArrayType* type, std::vector<uint32_t>& slots) {
+    assert(type->size());
+    assert(type->inner()->isArray());
+
+    uint32_t iter_slot = AcquireTempSlot(fun_, BuiltinType::Int);
+    __ emit(OP_STOR_S_C, VarSlot(iter_slot), 0);
+
+    slots.emplace_back(iter_slot);
+
+    Label done, cont;
+    __ bind(&cont);
+    __ emit(OP_DUP);
+    __ emit(OP_LOAD_S, VarSlot(iter_slot));
+    __ emit(OP_IDXADDR);
+    __ emit(OP_LOAD_I);
+
+    auto inner = type->inner()->as<ArrayType>();
+    if (inner->inner()->isArray()) {
+        Emit2dArrayCopy(inner, slots);
+    } else {
+        __ load_hidden_arg(fun_);
+        for (const auto& slot : slots) {
+            __ emit(OP_LOAD_S, VarSlot(slot));
+            __ emit(OP_IDXADDR);
+            __ emit(OP_LOAD_I);
+        }
+        __ emit(OP_SWAP);
+        __ emit(OP_COPYARRAY);
+    }
+
+    __ emit(OP_LOAD_S, VarSlot(iter_slot));
+    __ emit(OP_INC);
+    __ emit(OP_DUP);
+    __ PUSH_C(type->size());
+    __ emit(OP_JSGEQ, &done);
+    __ emit(OP_STOR_S, VarSlot(iter_slot));
+    __ emit(OP_JUMP, &cont);
+    __ bind(&done);
+
+    slots.pop_back();
+
+    // Caller pushed a value.
+    __ emit(OP_POP);
+}
+
+void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {
     for (const auto& fun : decl->methods())
         EmitFunctionDecl(fun);
 }
@@ -1980,46 +2063,6 @@ void CodeGenerator::EmitCall(FunctionDecl* fun, cell nargs) {
         __ emit(OP_CALLN, &fun->cg()->method_id, static_cast<uint8_t>(nargs));
     } else {
         __ emit(OP_CALL, &fun->cg()->method_id);
-    }
-}
-
-void
-CodeGenerator::EmitDefaultArray(Expr* expr, ArgDecl* arg)
-{
-    DefaultArg* def = arg->default_value();
-    if (def->sym) {
-        // Need to use the address label rather than raw address, since the
-        // variable may not be emitted yet.
-        // :TODO: If we switch _GLB opcodes to use RTTI, this will need to
-        // change.
-        __ emit(OP_PUSH_C, def->sym->label());
-        return;
-    }
-
-    if (!def->val) {
-        def->val = ke::Some(data_.dat_address());
-
-        data_.Add(std::move(def->array->iv));
-        data_.Add(std::move(def->array->data));
-        data_.AddZeroes(def->array->zeroes);
-    }
-
-    if (arg->type_info().is_const || !def->array) {
-        // No modification is possible, so use the array we emitted. (This is
-        // why we emitted the zeroes above.)
-        __ PUSH_C(def->val.get());
-    } else {
-        cell iv_size = def->array->iv_size;
-        cell data_size = def->array->data_size;
-        cell total_size = iv_size + data_size + def->array->zeroes;
-
-        //  heap <size>
-        //  move.alt        ; pri = new address
-        //  init.array
-        //  move.alt        ; pri = new address
-        __ emit(OP_HEAP, total_size * sizeof(cell));
-        __ emit(OP_DUP);
-        __ emit(OP_INITARRAY, def->val.get(), iv_size, data_size, def->array->zeroes, 0);
     }
 }
 

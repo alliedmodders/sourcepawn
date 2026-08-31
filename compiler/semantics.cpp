@@ -100,6 +100,12 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
 
     assert(!file_ctors.empty());
 
+    if (file_ctors.size() == 1) {
+        file_ctors[0]->set_name(cc_.atom(".ctor"));
+        tree->global_ctors() = PoolArray<FunctionDecl*>(file_ctors);
+        return;
+    }
+
     declinfo_t decl{};
     decl.name = cc_.atom(".ctor");
     decl.type.type = types_->type_void();
@@ -113,6 +119,7 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
     }
     fun->set_body(new BlockStmt(fun->pos(), stmts));
     fun->set_is_live();
+    fun->set_is_global_ctor();
 
     file_ctors.insert(file_ctors.begin(), fun);
 
@@ -132,6 +139,7 @@ FunctionDecl* Semantics::GenerateInitFunction(const std::vector<VarDeclBase*>& v
     auto init = new GlobalInitStmt(fun->pos(), vars);
     fun->set_body(init);
     fun->set_is_live();
+    fun->set_is_global_ctor();
     return fun;
 }
 
@@ -234,6 +242,8 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (!decl->as<ArgDecl>() && is_const && !decl->init() && !decl->is_public())
         report(decl->pos(), 251);
 
+    auto vclass = decl->vclass();
+
     // CheckArrayDecl works on enum structs too.
     if (type->isArray() || type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
@@ -242,36 +252,28 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
             decl->mutable_type_info()->is_const = false;
         if (decl->vclass() == sLOCAL)
             pending_heap_allocation_ = true;
-        return true;
-    }
+    } else {
+        // Since we always create an assignment expression, all type checks will
+        // be performed by the Analyze(sc) call here.
+        auto init = decl->init();
+        if (init && !CheckRvalue(init))
+            return false;
 
-    auto init = decl->init();
-    auto vclass = decl->vclass();
+        auto init_rhs = decl->init_rhs();
+        if (init && vclass != sLOCAL) {
+            if (!init_rhs->EvalConst(nullptr, nullptr)) {
+                if (vclass == sARGUMENT && init_rhs->is(ExprKind::SymbolExpr))
+                    return true;
 
-    // Since we always create an assignment expression, all type checks will
-    // be performed by the Analyze(sc) call here.
-    //
-    // :TODO: write flag when removing ProcessUses
-    if (init && !CheckRvalue(init))
-        return false;
-
-    if (vclass == sGLOBAL || vclass == sSTATIC) {
-        if (init && LazyInitGlobal(decl))
-            globals_to_init_.emplace_back(decl);
-    }
-
-    auto init_rhs = decl->init_rhs();
-    if (init && vclass != sLOCAL) {
-        if (!init_rhs->EvalConst(nullptr, nullptr)) {
-            if (vclass == sARGUMENT && init_rhs->is(ExprKind::SymbolExpr))
-                return true;
-            if ((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>())
-                return true;
-
-            // Make a special exception for int64 lits.
-            report(init_rhs->pos(), 8);
+                // Make a special exception for int64 lits.
+                if (!((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>()))
+                    report(init_rhs->pos(), 8);
+            }
         }
     }
+
+    if (decl->init() && (vclass == sGLOBAL || vclass == sSTATIC))
+        globals_to_init_.emplace_back(decl);
 
     return true;
 }
@@ -584,6 +586,14 @@ RvalueExpr::RvalueExpr(Expr* lval)
         if (val_.type()->isReference())
             val_.set_type(val_.type()->inner());
     }
+}
+
+SliceExpr::SliceExpr(IndexExpr* expr, Type* type)
+  : EmitOnlyExpr(ExprKind::SliceExpr, expr->pos()),
+    expr_(expr)
+{
+    val_.ident = iEXPRESSION;
+    val_.set_type(type);
 }
 
 bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
@@ -2029,6 +2039,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         auto result = CheckArgument(call, arglist[argidx], param, &ps, argpos);
         if (!result)
             return false;
+
         ps.argv[argpos] = result;
 
         nargs++;
@@ -2067,17 +2078,6 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     return true;
 }
 
-static inline bool CanImplicitSliceArgument(const value* val, ArrayType* to) {
-    if (to->inner()->isArray() && !to->inner()->isEnumStruct())
-        return false;
-    if (val->ident == iARRAYCELL || val->ident == iARRAYCHAR) {
-        if (val->type()->isEnumStruct() || val->type()->isArray())
-            return false;
-        return true;
-    }
-    return false;
-}
-
 Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
                                ParamState* ps, unsigned int pos)
 {
@@ -2091,7 +2091,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             report(call, 92); // argument count mismatch
             return nullptr;
         }
-        if (!arg->default_value()) {
+        if (!arg->init_rhs()) {
             report(call, 34) << visual_pos; // argument has no default value
             return nullptr;
         }
@@ -2101,12 +2101,8 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         else
             param->as<DefaultArgExpr>()->set_arg(arg);
 
-        if (arg->type()->isReference() ||
-            ((arg->type()->isArray() || arg->type()->isEnumStruct()) &&
-             !arg->type_info().is_const && arg->default_value()->array))
-        {
+        if (arg->type()->isReference())
             NeedsHeapAlloc(param);
-        }
 
         if (param->val().type())
             assert(!param->val().type()->isInt64());
@@ -2159,6 +2155,8 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
         } else if (!checktag_string(*arg->type(), val) && !checktag(*arg->type(), type)) {
             report(param, 213) << arg->type() << type;
         }
+        if (auto slice = ParamNeedsSliceWrapper(param, nullptr))
+            param = slice;
     } else if (arg->type()->isReference()) {
         assert(!handling_this);
 
@@ -2184,19 +2182,14 @@ Expr* Semantics::CheckArgument(CallExpr* call, ArgDecl* arg, Expr* param,
             checktag(arg->type()->inner(), val->type());
         }
     } else if (auto to_array = arg->type()->as<ArrayType>()) {
-        // If the input type is an index into an array, create an implicit
-        // array type to represent the slice.
-        QualType type;
-        if (CanImplicitSliceArgument(val, to_array)) {
-            type = types_->defineArray(val->type(), 0);
-        } else if (lvalue) {
+        if (auto slice = ParamNeedsSliceWrapper(param, to_array))
+            param = slice;
+        if (param->lvalue())
             param = new RvalueExpr(param);
-            val = &param->val();
-        }
 
-        if (!type)
-            type = param->val().type();
+        val = &param->val();
 
+        auto type = val->type();
         TypeChecker tc(param, arg->type(), QualType(type), TypeChecker::Argument);
         if (!tc.Coerce())
             return nullptr;
@@ -2819,6 +2812,28 @@ bool Semantics::CheckFunctionDeclImpl(FunctionDecl* info) {
         info->set_needs_hidden_arg();
     }
 
+    auto canonical = info->canonical();
+    for (const auto& arg : info->args()) {
+        if (!arg->init())
+            continue;
+
+        if (canonical != info) {
+            report(arg, 471);
+            continue;
+        }
+
+        if (!CheckVarDecl(arg))
+            continue;
+
+        auto type = arg->type();
+        if (!type->isArray()) {
+            // Note: arrays were checked earlier in ArrayValidator.
+            const auto& rhs = arg->init_rhs();
+            if (rhs->val().ident != iCONSTEXPR)
+                report(rhs, 8);
+        }
+    }
+
     if (info->is_native()) {
         auto rt = info->return_type();
         if ((rt->isArray() || rt->isEnumStruct()) && !CheckNativeCompoundReturn(info))
@@ -2957,27 +2972,6 @@ int argcompare(ArgDecl* a1, ArgDecl* a2) {
         result = a1->type_info().is_const == a2->type_info().is_const; /* "const" flag */
     if (result)
         result = a1->type() == a2->type();
-    if (result)
-        result = !!a1->default_value() == !!a2->default_value(); /* availability of default value */
-    if (auto a1_def = a1->default_value()) {
-        auto a2_def = a2->default_value();
-        if (a1->type()->isArray()) {
-            if (result)
-                result = !!a1_def->array == !!a2_def->array;
-            if (result && a1_def->array)
-                result = a1_def->array->total_size() == a2_def->array->total_size();
-            /* ??? should also check contents of the default array (these troubles
-             * go away in a 2-pass compiler that forbids double declarations, but
-             * Pawn currently does not forbid them) */
-        } else {
-            if (result)
-                result = a1_def->val.isValid() == a2_def->val.isValid();
-            if (result && a1_def->val)
-                result = a1_def->val.get() == a2_def->val.get();
-        }
-        if (result)
-            result = a1_def->type == a2_def->type;
-    }
     return result;
 }
 
@@ -2990,27 +2984,6 @@ bool IsLegacyEnumType(SymbolScope* scope, Type* type) {
     if (auto ed = decl->as<EnumDecl>())
         return !ed->mm();
     return false;
-}
-
-void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl) {
-    auto def = new DefaultArg();
-    def->type = decl->type();
-
-    if (auto expr = decl->init_rhs()->as<SymbolExpr>()) {
-        Decl* sym = expr->decl();
-        assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
-        assert(sym->as<VarDecl>());
-
-        def->sym = sym->as<VarDecl>();
-    } else {
-        auto array = cc.NewDefaultArrayData();
-        BuildCompoundInitializer(decl, array, 0);
-
-        def->array = array;
-        def->array->iv_size = (cell_t)array->iv.size();
-        def->array->data_size = (cell_t)array->data.size();
-    }
-    decl->set_default_value(def);
 }
 
 bool Semantics::CheckChangeScopeNode(ChangeScopeNode* node) {
@@ -3123,6 +3096,36 @@ Expr* Semantics::BuildSimpleCast(Expr* from, BuiltinType type) {
     to->val().ident = iEXPRESSION;
     to->val().set_type(types_->GetBuiltin(type));
     return to;
+}
+
+static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
+    if (to && !(to->inner()->isArray() || to->inner()->isEnumStruct()))
+        return false;
+    if (val.ident == iARRAYCELL || val.ident == iARRAYCHAR) {
+        if (val.type()->isEnumStruct() || val.type()->isArray())
+            return false;
+        if (to && (val.type()->lit_size() != to->inner()->lit_size()))
+            return false;
+        return true;
+    }
+    return false;
+}
+
+SliceExpr* Semantics::ParamNeedsSliceWrapper(Expr* param, ArrayType* to) {
+    if (!CanImplicitSliceArgument(param->val(), to))
+        return nullptr;
+
+    assert(param->as<IndexExpr>());
+
+    IndexExpr* index = param->as<IndexExpr>();
+    if (!index)
+        return nullptr;
+
+    Type* type = types_->defineArray(param->val().type(), 0);
+
+    auto slice = new SliceExpr(index, type);
+    NeedsHeapAlloc(slice);
+    return slice;
 }
 
 } // namespace cc

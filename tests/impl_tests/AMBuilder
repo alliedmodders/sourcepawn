@@ -16,12 +16,8 @@ binary.sources += [
 ]
 
 # Link with gtest and amtl
-arch = binary.compiler.target.arch
-binary.compiler.linkflags += [
-    gtest,
-    SP.libamtl[arch],
-    SP.static_libsp[arch],
-]
+SP.AddStaticLibraries(binary)
+binary.compiler.linkflags += [gtest]
 
 if binary.compiler.like('gcc'):
     binary.compiler.linkflags += ['-lpthread']

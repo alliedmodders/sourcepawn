@@ -24,7 +24,6 @@
 #include <string>
 #include <unordered_set>
 
-#include "array-data.h"
 #include "utils/pool-allocator.h"
 #include "utils/string-pool.h"
 #include "source-file.h"
@@ -126,7 +125,6 @@ class CompileContext final
     void operator =(const CompileContext&) = delete;
     void operator =(CompileContext&&) = delete;
 
-    DefaultArrayData* NewDefaultArrayData();
     tr::unordered_map<Atom*, Decl*>* NewSymbolMap();
 
   private:
@@ -161,7 +159,6 @@ class CompileContext final
     SemaContext* sc_ = nullptr;
 
     // AST attachments.
-    tr::forward_list<DefaultArrayData> default_array_data_objects_;
     tr::forward_list<tr::unordered_map<Atom*, Decl*>> symbol_maps_;
 
     size_t malloc_bytes_ = 0;

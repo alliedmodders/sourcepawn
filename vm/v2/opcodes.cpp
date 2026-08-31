@@ -69,14 +69,10 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_ADD_C:
         case OP_SMUL_C:
         case OP_HEAP:
-        case OP_GENARRAY:
-        case OP_GENARRAY_Z:
-        case OP_MOVS:
         case OP_LOAD_GLB:
         case OP_LOAD_GLB_I64:
         case OP_STOR_GLB:
         case OP_STOR_GLB_I64:
-        case OP_FILL:
             fprintf(fp, "%d", reader.read<cell_t>());
             break;
 
@@ -164,16 +160,6 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         {
             cell_t target_offs = reader.read<cell_t>();
             fprintf(fp, "%05d:%04d", target_offs, (int)((runtime->code().bytes + target_offs) - start));
-            break;
-        }
-
-        case OP_INITARRAY: {
-            cell_t v0 = reader.read<cell_t>();
-            cell_t v1 = reader.read<cell_t>();
-            cell_t v2 = reader.read<cell_t>();
-            cell_t v3 = reader.read<cell_t>();
-            cell_t v4 = reader.read<cell_t>();
-            fprintf(fp, "%d %d %d %d %d", v0, v1, v2, v3, v4);
             break;
         }
 

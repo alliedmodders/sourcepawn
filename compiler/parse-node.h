@@ -401,12 +401,6 @@ class ArgDecl : public VarDeclBase
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ArgDecl; }
-
-    DefaultArg* default_value() const { return default_value_; }
-    void set_default_value(DefaultArg* arg) { default_value_ = arg; }
-
-  private:
-    DefaultArg* default_value_ = nullptr;
 };
 
 class ConstDecl : public VarDecl
@@ -1049,6 +1043,19 @@ class RvalueExpr final : public EmitOnlyExpr
     Expr* lval_;
 };
 
+class SliceExpr final : public EmitOnlyExpr
+{
+  public:
+    explicit SliceExpr(IndexExpr* expr, Type* type);
+
+    static bool is_a(Expr* node) { return node->kind() == ExprKind::SliceExpr; }
+
+    IndexExpr* expr() const { return expr_; }
+
+  private:
+    IndexExpr* expr_;
+};
+
 class SimpleCastExpr final : public EmitOnlyExpr
 {
   public:
@@ -1584,6 +1591,8 @@ class FunctionDecl : public Decl
     void set_returns_value(bool value) { returns_value_ = value; }
     bool is_live() const { return is_live_; }
     void set_is_live() { is_live_ = true; }
+    bool is_global_ctor() const { return is_global_ctor_; }
+    void set_is_global_ctor() { is_global_ctor_ = true; }
     bool maybe_used() const { return maybe_used_; }
     void set_maybe_used() { maybe_used_ = true; }
     bool needs_hidden_arg() const { return needs_hidden_arg_; }
@@ -1660,6 +1669,7 @@ class FunctionDecl : public Decl
     bool is_callback_ SP_BITFIELD(1);
     bool returns_value_ SP_BITFIELD(1);  // whether any path returns a value
     bool is_live_ SP_BITFIELD(1);        // must have code generated/linkage
+    bool is_global_ctor_ SP_BITFIELD(1); // global constructor (.ctor)
     bool maybe_used_ SP_BITFIELD(1);     // not necessarily live, but do not warn if unused.
     bool needs_hidden_arg_ SP_BITFIELD(1);
     bool checked_one_signature SP_BITFIELD(1);

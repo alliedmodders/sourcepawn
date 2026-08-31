@@ -265,6 +265,8 @@ Environment::PatchAllJumpsForTimeout() {
     }
     for (auto rt : v2_runtimes_) {
         for (const auto& method : rt->AllMethods()) {
+            if (!method)
+                continue;
             CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
@@ -292,6 +294,8 @@ Environment::UnpatchAllJumpsFromTimeout() {
     }
     for (auto rt : v2_runtimes_) {
         for (const auto& method : rt->AllMethods()) {
+            if (!method)
+                continue;
             CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
@@ -401,7 +405,7 @@ static BaseRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file,
     if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
         pRuntime = std::make_unique<sp::v1::PluginRuntime>(image.release());
     } else {
-        pRuntime = std::make_unique<sp::v2::Runtime>(image.release());
+        pRuntime = std::make_unique<sp::v2::Runtime>(image.release(), data_only);
     }
 
     ExceptionHandler eh(Environment::get());

@@ -20,6 +20,7 @@
 #include "rtti-builder.h"
 
 #include "code-generator.h"
+#include "utils/compact-encoding.h"
 
 namespace sp {
 namespace cc {
@@ -30,12 +31,14 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
 {
     types_ = cc_.types();
     typeid_cache_.init(128);
-    data_ = new SmxBlobSection<void>("rtti.data");
+    string_cache_.init(128);
+    rtti_data_ = new SmxBlobSection<void>("rtti.data");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
     classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
+    stringpool_ = new SmxRttiTable<smx_rtti_string>("rtti.stringpool");
     enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
     es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
     globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
@@ -57,14 +60,15 @@ RttiBuilder::finish(SmxBuilder& builder)
     build_debuginfo();
 
     const ByteBuffer& buffer = type_pool_.buffer();
-    data_->add(buffer.bytes(), buffer.size());
+    rtti_data_->add(buffer.bytes(), buffer.size());
 
-    builder.add(data_);
+    builder.add(rtti_data_);
     builder.add(methods_);
     builder.addIfNotEmpty(enums_);
     builder.addIfNotEmpty(typesets_);
     builder.addIfNotEmpty(classdefs_);
     builder.addIfNotEmpty(fields_);
+    builder.addIfNotEmpty(stringpool_);
     builder.addIfNotEmpty(enumstructs_);
     builder.addIfNotEmpty(es_fields_);
     builder.addIfNotEmpty(globals_);
@@ -207,6 +211,9 @@ void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& 
     else if (fun->is_native())
         method.flags = kRttiMethod_Native;
 
+    if (fun->is_global_ctor())
+        method.flags |= kRttiMethod_GlobalCtor;
+
     // Only add a method table entry if we actually had locals or lines.
     if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
         dbg_methods_->add(entry);
@@ -296,6 +303,44 @@ uint32_t RttiBuilder::AddGlobal(VarDeclBase* decl, Atom* name) {
         global.flags = kRttiGlobal_Public;
 
     return index;
+}
+
+uint16_t RttiBuilder::AddString(Atom* atom, DataQueue* data) {
+    StringCache::Insert p = string_cache_.findForAdd(atom);
+    if (p.found())
+        return p->value;
+
+    if (stringpool_->count() >= UINT16_MAX) {
+        report(469);
+        return 0;
+    }
+
+    uint32_t offset = data->dat_address();
+
+    std::string blob;
+    if (!EncodeCompactUint32(&blob, (uint32_t)atom->length())) {
+        report(470);
+        return 0;
+    }
+    blob.append(atom->chars(), atom->length());
+
+    data->Add(blob.data(), blob.length());
+
+    uint16_t index = (uint16_t)stringpool_->count();
+    smx_rtti_string& entry = stringpool_->add();
+    entry.offset = offset;
+
+    string_cache_.add(p, atom, index);
+    return index;
+}
+
+std::optional<uint32_t> RttiBuilder::FindStringDataOffset(Atom* atom) {
+    StringCache::Result p = string_cache_.find(atom);
+    if (!p.found())
+        return {};
+
+    auto index = p->value;
+    return {stringpool_->at(index).offset};
 }
 
 void RttiBuilder::UpdateGlobalName(uint32_t index, Atom* name) {

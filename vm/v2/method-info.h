@@ -14,6 +14,7 @@
 
 #include <optional>
 
+#include <amtl/am-fixedarray.h>
 #include <amtl/am-refcounting.h>
 #include <smx/smx-headers.h>
 #include <sp_vm_types.h>
@@ -46,31 +47,26 @@ class MethodInfo final : public BaseMethodInfo
         graph_ = nullptr;
         return *checked_;
     }
-    uint8_t local_size(unsigned index) { return local_sizes_[index]; }
 
     uint32_t pcode_offset() const override;
     int32_t max_stack() const { return max_stack_; }
+    uint32_t method_index() const { return method_index_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
+    const ke::FixedArray<const TypeDesc*>& local_types() const { return local_types_; }
+    ke::FixedArray<int32_t>& local_offsets() { return local_offsets_; }
 
     void setCompiledFunction(CompiledFunction* fun);
     CompiledFunction* jit() const override {
         return jit_.get();
     }
 
-    // Note: these are only valid during interpreting or compilation.
-    cell_t StackOffset(cell_t slot);
-    // Returns the amount to change SP. It is always <= 0 since the stack
-    // growns down.
-    cell_t StackSizeForLocalSlots();
-
     void ClearCompilerCache() {
-        local_offsets_ = {};
+        local_types_ = {};
     }
 
   private:
     void InternalValidate();
-    void BuildLocalOffsetTable();
 
   private:
     Runtime* rt_;
@@ -82,8 +78,8 @@ class MethodInfo final : public BaseMethodInfo
     int32_t max_stack_;
     uint32_t max_eval_stack_depth_;
     uint32_t max_eval_stack_bytes_;
-    ke::FixedArray<uint8_t> local_sizes_;
-    ke::FixedArray<cell_t> local_offsets_;
+    ke::FixedArray<const TypeDesc*> local_types_;
+    ke::FixedArray<int32_t> local_offsets_;
 };
 
 } // namespace sp

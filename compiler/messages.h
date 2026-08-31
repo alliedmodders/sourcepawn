@@ -352,4 +352,8 @@ static const char* errmsg_ex[] = {
     /*466*/ "void result cannot be used in an expression\n",
     /*467*/ "too many local slots used\n",
     /*468*/ "too many global slots used\n",
+    /*469*/ "too many string literals\n",
+    /*470*/ "string literal is too large\n",
+    /*471*/ "default argument must be moved to the function prototype\n",
+    /*472*/ "default value must be constant literal or global variable\n",
 };

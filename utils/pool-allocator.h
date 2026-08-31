@@ -60,7 +60,7 @@ class PoolAllocator final
     Pool* ensurePool(size_t actualBytes);
 
   public:
-    PoolAllocator();
+    PoolAllocator(size_t chunk_size = 0);
     ~PoolAllocator();
 
     void memoryUsage(size_t* allocated, size_t* reserved, size_t* bookkeeping) const {
@@ -103,6 +103,9 @@ class PoolAllocator final
 
         return reinterpret_cast<T*>(ptr);
     }
+
+  private:
+    size_t chunk_size_;
 };
 
 } // namespace sp

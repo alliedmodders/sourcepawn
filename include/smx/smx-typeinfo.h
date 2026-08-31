@@ -81,6 +81,7 @@ static constexpr uint32_t kRttiMethodVisibilityMask = 0x3;
 static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
 static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
 static constexpr uint32_t kRttiMethod_Native = 0x4;
+static constexpr uint32_t kRttiMethod_GlobalCtor = 0x8;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {
@@ -173,6 +174,15 @@ struct smx_rtti_es_field {
     uint32_t offset;
 };
 
+// The rtti.field_refs table has the following row structure:
+struct smx_rtti_field_ref {
+    // Index into the classdef table.
+    uint32_t cls_index;
+
+    // Index into the field table.
+    uint32_t field_index;
+};
+
 // The rtti.classdef table has the following row structure:
 struct smx_rtti_classdef {
     // Bits 0-1 indicate the definition type.
@@ -202,6 +212,19 @@ struct smx_rtti_field {
 
     // Type id.
     uint32_t type_id;
+};
+
+// The rtti.stringpool table has the following row structure:
+struct smx_rtti_string {
+    // Offset into the data section, containing a compact encoded uint32 byte
+    // length, followed by that many bytes.
+    //
+    // The compact encoding is:
+    //     0b0??????? - 7 bits (1 byte)
+    //     0b10?????? ???????? - 14 bits (2 bytes)
+    //     0b110????? ???????? ???????? ???????? - 29 bits (4 bytes)
+    //     0b111????? - Invalid
+    uint32_t offset;
 };
 
 static const uint32_t kClassDefType_Struct = 0x0;

@@ -19,6 +19,8 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
+#include <string>
+#include <vector>
 #include "sc.h"
 #include "symbols.h"
 
@@ -35,12 +37,16 @@ class DataQueue final
     void Add(const char* text, size_t length);
     void AddZeroes(cell count);
 
-    cell size() const { return (cell)buffer_.size() * sizeof(cell); }
-    cell dat_address() const { return (cell)buffer_.size() * sizeof(cell); }
+    void Add(const std::string& str) {
+        Add(str.data(), str.size());
+    }
+
+    cell size() const { return (cell)buffer_.size(); }
+    cell dat_address() const { return (cell)buffer_.size(); }
     const uint8_t* dat() const { return reinterpret_cast<const uint8_t*>(buffer_.data()); }
 
   private:
-    tr::vector<cell> buffer_;
+    std::string buffer_;
 };
 
 } // namespace cc

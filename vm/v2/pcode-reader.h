@@ -422,30 +422,11 @@ class PcodeReader
             case OP_DEC:
                 return visitor_->visitDEC();
 
-            case OP_MOVS: {
-                cell_t val = readCell();
-                return visitor_->visitMOVS(val);
-            }
-
-            case OP_FILL: {
-                cell_t val = readCell();
-                return visitor_->visitFILL(val);
-            }
-
             case OP_ADDR_S:
             {
                 cell_t slot = readInt16();
                 return visitor_->visitADDR_S(slot);
             }
-
-            case OP_GENARRAY:
-            case OP_GENARRAY_Z: {
-                cell_t val = readCell();
-                return visitor_->visitGENARRAY(val, (op == OP_GENARRAY_Z));
-            }
-
-            case OP_STRADJUST:
-                return visitor_->visitSTRADJUST();
 
             case OP_SWITCH: {
                 cell_t tableOffset = readCell();
@@ -478,16 +459,6 @@ class PcodeReader
 
                 // Nothing to do here. This is handled in OP_SWITCH.
                 return true;
-            }
-
-            case OP_INITARRAY: {
-                cell_t addr = readCell();
-                cell_t iv_size = readCell();
-                cell_t data_copy_size = readCell();
-                cell_t data_fill_size = readCell();
-                cell_t fill_value = readCell();
-                return visitor_->visitINITARRAY(addr, iv_size, data_copy_size, data_fill_size,
-                                                fill_value);
             }
 
             case OP_HEAP_SAVE:

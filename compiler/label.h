@@ -102,6 +102,13 @@ class Label
     status_ = 0;
   }
 
+  Label& operator =(const Label& other) = default;
+  Label& operator =(Label&& other) {
+      status_ = other.status_;
+      other.status_ = 0;
+      return *this;
+  }
+
  protected:
   // Note that 0 as an invalid offset is okay, because the offset we save for
   // pending jumps are after the jump opcode itself, and therefore 0 is never

@@ -79,7 +79,7 @@ bool FastRtti::SkipNextType() {
             case cb::kFixedArray:
             {
                 uint32_t size;
-                if (!ReadCompactUint32(&size))
+                if (!ReadUint32_Leb128(&size))
                     return false;
                 continue;
             }
@@ -93,7 +93,7 @@ bool FastRtti::SkipNextType() {
             case cb::kFunctionPtr:
             {
                 uint32_t value;
-                if (!ReadCompactUint32(&value))
+                if (!ReadUint32_Leb128(&value))
                     return false;
                 return true;
             }
@@ -105,7 +105,7 @@ bool FastRtti::SkipNextType() {
     }
 }
 
-bool FastRtti::ReadCompactUint32(uint32_t* out) {
+bool FastRtti::ReadUint32_Leb128(uint32_t* out) {
     uint32_t value = 0;
     uint32_t shift = 0;
     for (;;) {

@@ -103,16 +103,6 @@ bool Type::isCharArray() const {
     return isArray() && inner()->isChar();
 }
 
-cell_t Type::CellStorageSize() {
-    if (auto at = as<ArrayType>())
-        return CalcArraySize(at);
-    if (auto es = asEnumStruct())
-        return es->array_size();
-    if (isInt64())
-        return 2;
-    return 1;
-}
-
 ArrayType::ArrayType(Type* inner, int size)
   : Type(nullptr, TypeKind::Array)
 {

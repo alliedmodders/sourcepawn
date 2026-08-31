@@ -20,7 +20,6 @@
 //  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
-#include "array-data.h"
 #include "parse-node.h"
 
 namespace sp {
@@ -37,9 +36,6 @@ bool ResolveArrayType(Semantics* sema, const token_pos_t& pos, typeinfo_t* type,
 
 // Perform type and size checks of an array and its initializer if present.
 bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
-
-void BuildCompoundInitializer(VarDeclBase* decl, ArrayData* array, cell_t base_addr);
-void BuildCompoundInitializer(QualType type, Expr* init, ArrayData* array);
 
 cell_t CalcArraySize(Type* type);
 

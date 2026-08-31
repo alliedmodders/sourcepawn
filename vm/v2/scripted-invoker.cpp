@@ -17,6 +17,7 @@
 #include "environment.h"
 #include "v2/method-info.h"
 #include "v2/runtime.h"
+#include "objects.h"
 
 /********************
  * ScriptedInvoker  *
@@ -26,8 +27,7 @@ using namespace sp::v2;
 using namespace SourcePawn;
 
 ScriptedInvoker::ScriptedInvoker(Runtime* runtime, uint32_t method_index)
- : env_(Environment::get()),
-   context_(runtime->context()),
+ : context_(runtime->context()),
    method_index_(method_index)
 {
 }
@@ -90,14 +90,16 @@ void ScriptedInvoker::Cancel() {
 }
 
 bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
-    assert(!env_->hasPendingException());
+    Environment* env = context_->env();
+
+    assert(!env->hasPendingException());
 
     if (!IsRunnable()) {
-        env_->ReportError(SP_ERROR_NOT_RUNNABLE);
+        env->ReportError(SP_ERROR_NOT_RUNNABLE);
         return false;
     }
     if (args.error) {
-        env_->ReportError(SP_ERROR_PARAMS_MAX);
+        env->ReportError(SP_ERROR_PARAMS_MAX);
         return false;
     }
 
@@ -139,26 +141,24 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
                 break;
             }
             case CallArgs::ARG_ARRAY: {
-                nbytes = arg.array_size * sizeof(cell_t);
-                int err = context_->AllocArray(nbytes, &params[i],
-                                               reinterpret_cast<cell_t**>(&addr));
-                if (err != SP_ERROR_NONE) {
-                    env_->ReportError(err);
+                auto elt_type = env->types()->GetPrimitive(TypeKind::Int32);
+                auto type = env->types()->GetArray(elt_type);
+                auto array = context_->NewArray(type, arg.array_size);
+                if (!array)
                     return false;
-                }
+
+                params[i] = context_->heap().ToLocalAddr(array);
                 memcpy(addr, arg.u.addr, arg.array_size * sizeof(cell_t));
                 break;
             }
             case CallArgs::ARG_CHAR_ARRAY: {
-                uint32_t ncells = (arg.array_size + sizeof(cell_t) - 1) / sizeof(cell_t);
-                nbytes = ncells * sizeof(cell_t);
-
-                int err = context_->AllocArray(nbytes, &params[i],
-                                               reinterpret_cast<cell_t**>(&addr));
-                if (err != SP_ERROR_NONE) {
-                    env_->ReportError(err);
+                auto elt_type = env->types()->GetPrimitive(TypeKind::Char8);
+                auto type = env->types()->GetArray(elt_type);
+                auto array = context_->NewArray(type, arg.array_size);
+                if (!array)
                     return false;
-                }
+
+                params[i] = context_->heap().ToLocalAddr(array);
 
                 if (arg.flags & SM_PARAM_STRING_COPY) {
                     if (arg.flags & SM_PARAM_STRING_UTF8) {
@@ -178,7 +178,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
             }
 
             default:
-                env_->ReportError(SP_ERROR_PARAM);
+                env->ReportError(SP_ERROR_PARAM);
                 return false;
         }
 
@@ -193,10 +193,10 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         SafeStrcpy((char*)debugNameForCrashDumps + 1, debugNameLength - 1, debugName);
     }
 
-    if (!context_->Invoke(GetFunctionID(), params.data(), args.argc, result))
+    if (!context_->InvokeMethod(GetFunctionID(), params.data(), args.argc, result))
         return false;
 
-    assert(!env_->hasPendingException());
+    assert(!env->hasPendingException());
 
     for (uint32_t i = 0; i < ncows; i++) {
         void* src = cows[i].first;
@@ -220,7 +220,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         }
     }
 
-    return !env_->hasPendingException();
+    return !env->hasPendingException();
 }
 
 int ScriptedInvoker::Execute(cell_t* result) {

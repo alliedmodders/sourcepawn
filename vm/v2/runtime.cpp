@@ -22,11 +22,13 @@
 #include <deque>
 #include <unordered_set>
 
+#include <amtl/am-bits.h>
 #include <smx/smx-v2-opcodes.h>
 #include "legacy/builtins.h"
 #include "compiled-function.h"
 #include "environment.h"
 #include "md5/md5.h"
+#include "objects.h"
 #include "v2/method-info.h"
 #include "v2/method-verifier.h"
 #include "watchdog_timer.h"
@@ -36,16 +38,14 @@ namespace v2 {
 
 using namespace SourcePawn;
 
-static const size_t kMinHeapSize = 16384;
-#define CELLBOUNDMAX (INT_MAX / sizeof(cell_t))
-
-Runtime::Runtime(SmxImage* image)
+Runtime::Runtime(SmxImage* image, bool data_only)
  : BaseRuntime(image),
-   data_size_(data().length)
+   env_(Environment::get()),
+   data_only_(data_only)
 {
 
-    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
-    Environment::get()->RegisterRuntime(this);
+    std::lock_guard<ke::Mutex> lock(env_->lock());
+    env_->RegisterRuntime(this);
 }
 
 Runtime::~Runtime() {
@@ -53,11 +53,9 @@ Runtime::~Runtime() {
     // runtimes. It is not enough to ensure that the unlinking of the runtime is
     // protected; we cannot delete functions or code while the watchdog might be
     // executing. Therefore, the entire destructor is guarded.
-    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
+    std::lock_guard<ke::Mutex> lock(env_->lock());
 
-    Environment::get()->DeregisterRuntime(this);
-
-    delete[] memory_;
+    env_->DeregisterRuntime(this);
 }
 
 bool Runtime::Initialize() {
@@ -102,6 +100,9 @@ bool Runtime::Initialize() {
         return false;
     memset(pubvars_.get(), 0, sizeof(sp_pubvar_t) * image_->NumPubvars());
 
+    if (data_only_)
+        return true;
+
     if (!InitializeContext())
         return false;
     if (!InitializeGlobals())
@@ -125,15 +126,48 @@ bool Runtime::InitializeContext() {
 }
 
 bool Runtime::InitializeGlobals() {
-    global_addrs_ = ke::FixedArray<uint32_t>(image_->rtti_globals()->row_count);
-    for (uint32_t i = 0; i < image_->rtti_globals()->row_count; i++) {
+    uint32_t num_globals = 0;
+    if (image_->rtti_globals())
+        num_globals = image_->rtti_globals()->row_count;
+
+    global_addrs_ = ke::FixedArray<uint32_t>(num_globals);
+    for (uint32_t i = 0; i < num_globals; i++) {
         auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), i);
         assert(global);
 
-        uint8_t* p = heap_.Allocate(sizeof(cell_t));
-        if (!p)
+        auto td = LoadTypeFromId(global->type_id);
+        if (!td)
             return false;
-        global_addrs_[i] = heap_.ToLocalAddr(p);
+        auto ptr = AllocateGlobal(td);
+        if (!ptr)
+            return false;
+        global_addrs_[i] = ptr;
+    }
+
+    uint32_t num_strings = 0;
+    if (image_->rtti_stringpool())
+        num_strings = image_->rtti_stringpool()->row_count;
+
+    string_addrs_ = ke::FixedArray<uint32_t>(num_strings);
+    for (uint32_t i = 0; i < num_strings; i++) {
+        auto string = image_->getRttiRow<smx_rtti_string>(image_->rtti_stringpool(), i);
+        assert(string);
+
+        auto blob = image_->ReadDataBlob(string->offset);
+        assert(blob);
+
+        auto td = types_.GetFixedArray(types_.GetPrimitive(TypeKind::Char8), blob->size() + 1);
+        assert(td);
+
+        auto array = NewArray(td, td->array_size());
+        if (!array)
+            return false;
+
+        auto data = heap_.ToPhysAddr<char*>(array->data);
+        memcpy(data, blob->data(), blob->size());
+        *(data + blob->size()) = '\0';
+
+        string_addrs_[i] = heap_.ToLocalAddr(array);
     }
 
     /* Initialize the null references */
@@ -176,7 +210,7 @@ RefPtr<MethodInfo> Runtime::AcquireMethod(uint32_t method_index) {
     // Grab the lock before linking code in, since the watchdog timer will look
     // at this list on another thread.
     {
-        std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
+        std::lock_guard<ke::Mutex> lock(env_->lock());
         if (method_index >= methods_.size())
             methods_.resize(method_index + 1);
         methods_[method_index] = method;
@@ -185,7 +219,7 @@ RefPtr<MethodInfo> Runtime::AcquireMethod(uint32_t method_index) {
 }
 
 const std::vector<RefPtr<MethodInfo>>& Runtime::AllMethods() const {
-    Environment::get()->lock().AssertCurrentThreadOwns();
+    env_->lock().AssertCurrentThreadOwns();
     return methods_;
 }
 
@@ -384,14 +418,13 @@ size_t Runtime::GetMemUsage() {
 
 
 bool Runtime::PerformFullValidation() {
-    Environment* env = Environment::get();
     for (uint32_t i = 0; i < image_->rtti_methods()->row_count; i++) {
         const smx_rtti_method* method = image_->GetMethod(i);
         if (method->flags & kRttiMethod_Native)
             continue;
 
 
-        ExceptionHandler eh(env);
+        ExceptionHandler eh(env_);
 
         MethodVerifier verifier(this, i);
         if (!verifier.verify()) {
@@ -404,7 +437,7 @@ bool Runtime::PerformFullValidation() {
                 eh.ClearException();
             }
 
-            env->ReportErrorFmt(code, "%s: %s", name, message.c_str());
+            env_->ReportErrorFmt(code, "%s: %s", name, message.c_str());
             eh.Rethrow();
             return false;
         }
@@ -434,48 +467,23 @@ bool Runtime::CallGlobalCtor() {
     return InvokeMethod(*ctor_index, &ignore_result, 0, &ignore_result);
 }
 
-int Runtime::HeapAlloc(unsigned int cells, cell_t* local_addr, cell_t** phys_addr) {
-    if (!IsUint32MultiplySafe(cells, sizeof(cell_t)))
-        return SP_ERROR_HEAPLOW;
-
-    uint32_t alloc_size = cells * sizeof(cell_t);
-    if (!IsUint32AddSafe(cells, sizeof(HeapImpl::Position)))
-        return SP_ERROR_HEAPLOW;
-    alloc_size += sizeof(HeapImpl::Position);
-
-    auto save_pos = heap_.GetPosition();
-    uint8_t* p = heap_.Allocate(alloc_size);
-    if (!p)
-        return SP_ERROR_HEAPLOW;
-
-    *reinterpret_cast<HeapImpl::Position*>(p) = save_pos;
-    p += sizeof(HeapImpl::Position);
-
-    *local_addr = heap_.ToLocalAddr(p);
-    *phys_addr = reinterpret_cast<cell_t*>(p);
-    return SP_ERROR_NONE;
-}
-
-int Runtime::HeapPop(cell_t local_addr) {
-    uint8_t* p = heap_.ToPhysAddr<uint8_t*>(local_addr);
-    p -= sizeof(HeapImpl::Position);
-    auto pos = *reinterpret_cast<HeapImpl::Position*>(p);
-
-    heap_.RestorePosition(pos);
-    return SP_ERROR_NONE;
-}
-
-int Runtime::HeapRelease(cell_t local_addr) {
-    return SP_ERROR_PARAM;
-}
-
 int Runtime::LocalToPhysAddr(cell_t local_addr, cell_t** phys_addr) {
+    if (auto array = LocalToCompatArray(local_addr)) {
+        if (phys_addr)
+            *phys_addr = heap_.ToPhysAddr<cell_t*>(array->data);
+        return SP_ERROR_NONE;
+    }
     if (phys_addr)
         *phys_addr = heap_.ToPhysAddr<cell_t*>(local_addr);
     return SP_ERROR_NONE;
 }
 
 int Runtime::LocalToString(cell_t local_addr, char** addr) {
+    if (auto array = LocalToCompatArray(local_addr)) {
+        if (addr)
+            *addr = heap_.ToPhysAddr<char*>(array->data);
+        return SP_ERROR_NONE;
+    }
     if (addr)
         *addr = heap_.ToPhysAddr<char*>(local_addr);
     return SP_ERROR_NONE;
@@ -486,7 +494,11 @@ int Runtime::StringToLocal(cell_t local_addr, size_t bytes, const char* source) 
         return SP_ERROR_NONE;
 
     size_t len = strlen(source);
-    char* dest = heap_.ToPhysAddr<char*>(local_addr);
+    char* dest;
+    if (auto array = LocalToCompatArray(local_addr))
+        dest = heap_.ToPhysAddr<char*>(array->data);
+    else
+        dest = heap_.ToPhysAddr<char*>(local_addr);
 
     if (len >= bytes)
         len = bytes - 1;
@@ -532,7 +544,11 @@ int Runtime::StringToLocalUTF8(cell_t local_addr, size_t maxbytes, const char* s
         return SP_ERROR_NONE;
 
     size_t len = strlen(source);
-    auto dest = heap_.ToPhysAddr<char*>(local_addr);
+    char* dest;
+    if (auto array = LocalToCompatArray(local_addr))
+        dest = heap_.ToPhysAddr<char*>(array->data);
+    else
+        dest = heap_.ToPhysAddr<char*>(local_addr);
 
     bool needtocheck = false;
     if ((size_t)len >= maxbytes) {
@@ -618,8 +634,10 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
     }
 
     /* Save our previous state. */
-    uint32_t save_sp = sp_;
+    ke::SaveRestore<uint32_t> save_sp(sp_);
 #ifndef NDEBUG
+    const smx_rtti_method* rtti = image_->GetMethod(method_index);
+    bool is_global_ctor = (rtti->flags & kRttiMethod_GlobalCtor) != 0;
     uint32_t save_hp_scope = hp_scope_;
     auto heap_pos = heap_.GetPosition();
 #endif
@@ -638,10 +656,11 @@ bool Runtime::InvokeMethod(uint32_t method_index, const cell_t* params,
     bool ok = env_->Invoke(this, method, result);
 
 #ifndef NDEBUG
-    assert(hp_scope_ == save_hp_scope);
-    assert(heap_pos == heap_.GetPosition());
+    if (!is_global_ctor) {
+        assert(hp_scope_ == save_hp_scope);
+        assert(heap_pos == heap_.GetPosition());
+    }
 #endif
-    sp_ = save_sp;
     return ok;
 }
 
@@ -753,22 +772,17 @@ int Runtime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
         return SP_ERROR_ARRAY_TOO_BIG;
 
     uint32_t bytes = cells * sizeof(cell_t);
-    if (!ke::IsUint32AddSafe(hp_, bytes))
-        return SP_ERROR_ARRAY_TOO_BIG;
-
-    uint32_t new_hp = hp_ + bytes;
-    if (new_hp >= sp_ - STACKMARGIN)
+    auto base = heap_.Allocate(bytes);
+    if (!base)
         return SP_ERROR_HEAPLOW;
 
-    cell_t* base = reinterpret_cast<cell_t*>(memory_ + hp_);
-
     if (autozero) {
-        memset(reinterpret_cast<uint8_t*>(base) + iv_size, 0, bytes - iv_size);
+        memset(base + iv_size, 0, bytes - iv_size);
     }
 
     abs_iv_data_t info;
-    info.addr = hp_;
-    info.ptr = reinterpret_cast<uint8_t*>(base);
+    info.addr = heap_.ToLocalAddr(base);
+    info.ptr = base;
     info.iv_cursor = 0;
     info.data_cursor = iv_size;
     info.dims = argv;
@@ -778,8 +792,7 @@ int Runtime::generateFullArray(uint32_t argc, cell_t* argv, int autozero) {
     assert(info.iv_cursor == iv_size);
     assert(info.data_cursor == (cell_t)bytes);
 
-    argv[argc - 1] = hp_;
-    hp_ = new_hp;
+    argv[argc - 1] = heap_.ToLocalAddr(base);
     return SP_ERROR_NONE;
 }
 
@@ -790,17 +803,16 @@ int Runtime::generateArray(cell_t dims, cell_t* stk, bool autozero) {
             return SP_ERROR_INVALID_ARRAY_SIZE;
         if (!ke::IsUint32MultiplySafe(size, 4))
             return SP_ERROR_ARRAY_TOO_BIG;
-        *stk = hp_;
 
         uint32_t bytes = size * 4;
-
-        if (uintptr_t(memory_ + hp_ + bytes) >= uintptr_t(stk))
+        auto base = heap_.Allocate(bytes);
+        if (!base)
             return SP_ERROR_HEAPLOW;
 
-        hp_ += bytes;
+        *stk = heap_.ToLocalAddr(base);
 
         if (autozero)
-            memset(memory_ + *stk, 0, bytes);
+            memset(base, 0, bytes);
 
         return SP_ERROR_NONE;
     }
@@ -838,29 +850,19 @@ bool Runtime::setCellValue(cell_t address, cell_t value) {
     return true;
 }
 
-bool Runtime::heapAlloc(cell_t amount, cell_t* out) {
+bool Runtime::heapAlloc(uint32_t amount, cell_t* out) {
     return heapAllocEx(amount, out) != nullptr;
 }
 
-cell_t* Runtime::heapAllocEx(cell_t amount, cell_t* out) {
-    cell_t new_hp = hp_ + amount;
-
-    if (amount < 0) {
-        // Note: signed compare, in case new_hp is negative.
-        if (new_hp < cell_t(data_size_)) {
-            ReportErrorNumber(SP_ERROR_HEAPMIN);
-            return nullptr;
-        }
-    } else {
-        if (new_hp + STACKMARGIN > sp_) {
-            ReportErrorNumber(SP_ERROR_HEAPLOW);
-            return nullptr;
-        }
+cell_t* Runtime::heapAllocEx(uint32_t amount, cell_t* out) {
+    auto ptr = heap_.Allocate(amount);
+    if (!ptr) {
+        ReportErrorNumber(SP_ERROR_HEAPLOW);
+        return nullptr;
     }
 
-    *out = hp_;
-    hp_ = new_hp;
-    return reinterpret_cast<cell_t*>(memory_ + *out);
+    *out = heap_.ToLocalAddr(ptr);
+    return reinterpret_cast<cell_t*>(ptr);
 }
 
 cell_t* Runtime::acquireAddrRange(cell_t address, uint32_t bounds) {
@@ -876,67 +878,7 @@ bool Runtime::addStack(cell_t amount) {
         return false;
     }
 
-    sp_ += new_sp;
-    return true;
-}
-
-bool Runtime::initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
-                         cell_t data_fill_size, cell_t fill_value) {
-    int err;
-
-    cell_t* iv_vec;
-    if ((err = LocalToPhysAddr(array_addr, &iv_vec)) != SP_ERROR_NONE) {
-        ReportErrorNumber(err);
-        return false;
-    }
-
-    // Note: we don't use LocalToPhysAddr here because the address could be the
-    // very end of DAT and it could throw an error.
-    cell_t* data_vec = iv_vec + iv_size;
-    assert(iv_vec <= data_vec);
-
-    cell_t* mem_end = reinterpret_cast<cell_t*>(memory_ + mem_size_);
-    if (data_vec + data_copy_size + data_fill_size - 1 >= mem_end) {
-        ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
-        return false;
-    }
-
-    // Only attempt address conversions if there's a template to copy from.
-    if (iv_size || data_copy_size) {
-        cell_t* tpl_iv_vec;
-        if ((err = LocalToPhysAddr(dat_addr, &tpl_iv_vec)) != SP_ERROR_NONE) {
-            ReportErrorNumber(err);
-            return false;
-        }
-
-        cell_t* tpl_data_vec = tpl_iv_vec + iv_size;
-        assert(tpl_iv_vec <= tpl_data_vec);
-
-        cell_t* dat_end = reinterpret_cast<cell_t*>(memory_ + data_size_);
-        if (tpl_data_vec + data_copy_size - 1 >= dat_end) {
-            ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
-            return false;
-        }
-
-        while (iv_vec < data_vec) {
-            *iv_vec = *tpl_iv_vec + array_addr;
-            iv_vec++;
-            tpl_iv_vec++;
-        }
-        memcpy(data_vec, tpl_data_vec, data_copy_size * sizeof(cell_t));
-    }
-
-    if (!data_fill_size)
-        return true;
-
-    cell_t* fill_pos = data_vec + data_copy_size;
-    if (fill_value) {
-        cell_t* fill_end = fill_pos + data_fill_size;
-        while (fill_pos < fill_end)
-            *fill_pos++ = fill_value;
-    } else {
-        memset(fill_pos, 0, data_fill_size * sizeof(cell_t));
-    }
+    sp_ = new_sp;
     return true;
 }
 
@@ -947,35 +889,26 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
         return false;
     }
 
-    cell_t argv[2] = {(cell_t)stride, (cell_t)length};
-    int rv = generateFullArray(2, argv, !init);
-    if (rv != SP_ERROR_NONE) {
-        ReportErrorNumber(rv);
+    const TypeDesc* elt_td = types_.GetArray(types_.GetPrimitive(TypeKind::Any));
+    const TypeDesc* td = types_.GetArray(elt_td);
+
+    SpArray* array = NewArray(td, length);
+    if (!array)
         return false;
-    }
 
-    cell_t array_base = argv[1];
-    *local_addr = array_base;
+    *local_addr = heap_.ToLocalAddr(array);
 
-    cell_t* array_phys;
-    if ((rv = LocalToPhysAddr(array_base, &array_phys)) != SP_ERROR_NONE) {
-        ReportErrorNumber(rv);
-        return false;
-    }
-
-    if (!init)
-        return true;
-
+    cell_t* array_phys = heap_.ToPhysAddr<cell_t*>(array->data);
     for (unsigned int i = 0; i < length; i++) {
-        cell_t elt_base = array_phys[i];
-
-        cell_t* elt_phys;
-        if ((rv = LocalToPhysAddr(elt_base, &elt_phys)) != SP_ERROR_NONE) {
-            ReportErrorNumber(rv);
+        SpArray* elt = NewArray(elt_td, stride);
+        if (!elt)
             return false;
-        }
+        array_phys[i] = heap_.ToLocalAddr(elt);
 
-        memcpy(elt_phys, &init[i * stride], stride * sizeof(cell_t));
+        if (init) {
+            cell_t* elt_phys = heap_.ToPhysAddr<cell_t*>(elt->data);
+            memcpy(elt_phys, &init[i * stride], stride * sizeof(cell_t));
+        }
     }
     return true;
 }
@@ -1017,111 +950,281 @@ IPluginFunction* Runtime::GetFunctionByIdOrError(funcid_t func_id) {
     return nullptr;
 }
 
-int
-Runtime::AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr)
-{
-    if (cells > CELLBOUNDMAX)
-        return SP_ERROR_ARRAY_TOO_BIG;
-    cell_t realmem = cells * sizeof(cell_t);
-    cell_t addr;
-    if (heapAllocEx(realmem, &addr) == nullptr)
-        return SP_ERROR_HEAPLOW;
-
-    if (local_addr)
-        *local_addr = addr;
-    if (phys_addr)
-        *phys_addr = (cell_t*)(memory_ + addr);
-
+int Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out) {
+    uint32_t handle = base & ~kNativePointerTag;
+    *out = reinterpret_cast<ARRAY_PTR>(heap_.ToPhysAddr<SpArray*>(handle));
     return SP_ERROR_NONE;
 }
 
-bool
-Runtime::Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params,
-                cell_t* result)
-{
-    EnterProfileScope profileScope("SourcePawn", "EnterJIT");
-
-    if (!env_->watchdog()->HandleInterrupt()) {
-        ReportErrorNumber(SP_ERROR_TIMEOUT);
-        return false;
-    }
-
-    assert((fnid & 1) != 0);
-
-    unsigned public_id = fnid >> 1;
-    ScriptedInvoker* cfun = GetFunctionByMethodIndex(public_id);
-    if (!cfun) {
-        ReportErrorNumber(SP_ERROR_NOT_FOUND);
-        return false;
-    }
-
-    if (IsPaused()) {
-        ReportErrorNumber(SP_ERROR_NOT_RUNNABLE);
-        return false;
-    }
-
-    env_->clearPendingException();
-
-    cell_t ignore_result;
-    if (result == NULL)
-        result = &ignore_result;
-
-    EnterProfileScope scriptScope("SourcePawn", cfun->DebugName());
-
-    RefPtr<MethodInfo> method = cfun->AcquireMethod();
-    if (!method) {
-        ReportErrorNumber(SP_ERROR_INVALID_ADDRESS);
-        return false;
-    }
-
-    uint32_t save_sp = sp_;
-#ifndef NDEBUG
-    uint32_t save_hp_scope = hp_scope_;
-    auto heap_pos = heap_.GetPosition();
-#endif
-
-    if (!addStack(-int32_t((num_params + 1) * sizeof(cell_t))))
-        return false;
-    cell_t* sp = heap_.ToPhysAddr<cell_t*>(sp_);
-
-    sp[0] = num_params;
-    for (unsigned int i = 0; i < num_params; i++)
-        sp[i + 1] = params[i];
-
-    bool ok = env_->Invoke(this, method, result);
-
-#ifndef NDEBUG
-    assert(hp_scope_ == save_hp_scope);
-    assert(heap_pos == heap_.GetPosition());
-#endif
-    sp_ = save_sp;
-    return ok;
-}
-
-int
-Runtime::LocalToArrayPtr(cell_t base, ARRAY_PTR* out)
-{
-    cell_t* phys;
-    if (int err = LocalToPhysAddr(base, &phys))
-        return err;
-    *out = reinterpret_cast<ARRAY_PTR>(phys);
-    return SP_ERROR_NONE;
-}
-
-void*
-Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size)
-{
+void* Runtime::GetArrayData(ARRAY_PTR handle, uint32_t* size) {
+    SpArray* array = reinterpret_cast<SpArray*>(handle);
     if (size)
-        *size = 0;
-    return reinterpret_cast<void*>(handle);
+        *size = array->length;
+    return heap_.ToPhysAddr<void*>(array->data);
 }
 
-size_t Runtime::HeapSize() const {
-    return heap_.committed();
+const TypeDesc* Runtime::LoadType(FastRtti& parser) {
+    uint8_t b;
+    if (!parser.GetNextByte(&b)) {
+        ReportError("Invalid type data");
+        return nullptr;
+    }
+
+    // We completely ignore const in the VM. It's just documentation.
+    if (b == cb::kConst && !parser.GetNextByte(&b)) {
+        ReportError("Invalid type data");
+        return nullptr;
+    }
+
+    auto global_types = env_->types();
+    switch (b) {
+        case cb::kBool:
+            return global_types->GetPrimitive(TypeKind::Bool);
+        case cb::kInt32:
+            return global_types->GetPrimitive(TypeKind::Int32);
+        case cb::kFloat32:
+            return global_types->GetPrimitive(TypeKind::Float32);
+        case cb::kChar8:
+            return global_types->GetPrimitive(TypeKind::Char8);
+        case cb::kAny:
+            return global_types->GetPrimitive(TypeKind::Any);
+        case cb::kTopFunction:
+            return global_types->GetPrimitive(TypeKind::TopFunction);
+        case cb::kEnum: {
+            uint32_t index;
+            if (!parser.ReadUint32_Leb128(&index))
+                ReportError("invalid type data");
+            if (index >= image_->rtti_enums()->row_count)
+                ReportError("invalid enum index in type data");
+            // Rewrite to int32 for now.
+            return global_types->GetPrimitive(TypeKind::Int32);
+        }
+        case cb::kInt64:
+            return global_types->GetPrimitive(TypeKind::Int64);
+        case cb::kFixedArray: {
+            uint32_t size;
+            if (!parser.ReadUint32_Leb128(&size) || !size) {
+                ReportError("Invalid type data");
+                return nullptr;
+            }
+            auto td = LoadType(parser);
+            if (!td)
+                return nullptr;
+            if (td->can_global_cache())
+                return global_types->GetFixedArray(td, size);
+            return types_.GetFixedArray(td, size);
+        }
+        case cb::kArray: {
+            auto td = LoadType(parser);
+            if (!td)
+                return nullptr;
+            if (td->can_global_cache())
+                return global_types->GetArray(td);
+            return types_.GetArray(td);
+        }
+        case cb::kFunctionPtr: {
+            uint32_t index;
+            if (!parser.ReadUint32_Leb128(&index)) {
+                ReportError("Invalid type data");
+                return nullptr;
+            }
+            return global_types->GetPrimitive(TypeKind::TopFunction);
+        }
+        default:
+            assert(false);
+
+            ReportError("Invalid type data byte: %x", b);
+            return nullptr;
+    }
 }
 
-size_t Runtime::DataSize() const {
-    return data_size_;
+const TypeDesc* Runtime::LoadTypeFromId(uint32_t type_id) {
+    FastRtti parser = image_->GetTypeIdParser(type_id);
+    return LoadType(parser);
+}
+
+uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
+    uint8_t* ptr = heap_.Allocate(td->slot_size());
+    if (!ptr)
+        return 0;
+
+    switch (td->kind()) {
+        case TypeKind::Bool:
+        case TypeKind::Int32:
+        case TypeKind::Int64:
+        case TypeKind::Float32:
+        case TypeKind::Char8:
+        case TypeKind::Any:
+        case TypeKind::TopFunction:
+        case TypeKind::Array:
+            break;
+
+        case TypeKind::FixedArray: {
+            auto array = NewArray(td, td->array_size());
+            if (!array)
+                return 0;
+            *reinterpret_cast<uint32_t*>(ptr) = heap_.ToLocalAddr(array);
+            break;
+        }
+
+        default:
+            assert(false);
+            return 0;
+    }
+
+    return heap_.ToLocalAddr(ptr);
+}
+
+SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {
+    assert(td->kind() == TypeKind::Array ||
+           (td->kind() == TypeKind::FixedArray && size == td->array_size()));
+
+    uint32_t elt_size = td->array_elt()->element_size();
+
+    if (!ke::IsUintMultiplySafe(size, elt_size)) {
+        env_->ReportError(SP_ERROR_INVALID_ARRAY_SIZE);
+        return nullptr;
+    }
+
+    SpArray* base = heap_.AllocTyped<SpArray>();
+    if (!base)
+        return nullptr;
+    base->td = td;
+    base->length = size;
+    base->data = 0;
+
+    if (!size)
+        return base;
+
+    uint8_t* data = heap_.Allocate(size * elt_size);
+    if (!data)
+        return nullptr;
+
+    memset(data, 0, size * elt_size);
+    base->data = heap_.ToLocalAddr(data);
+
+    auto array_elt = td->array_elt();
+    switch (array_elt->kind()) {
+        case TypeKind::Bool:
+        case TypeKind::Int32:
+        case TypeKind::Int64:
+        case TypeKind::Float32:
+        case TypeKind::Char8:
+        case TypeKind::Any:
+        case TypeKind::TopFunction:
+        case TypeKind::Array:
+            break;
+
+        case TypeKind::FixedArray: {
+            uint32_t* slots = reinterpret_cast<uint32_t*>(data);
+            for (uint32_t i = 0; i < size; i++) {
+                auto p = NewArray(array_elt, array_elt->array_size());
+                if (!p)
+                    return nullptr;
+                slots[i] = heap_.ToLocalAddr(p);
+            }
+            break;
+        }
+
+        default:
+            assert(false);
+    }
+
+    return base;
+}
+
+SpArray* Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) {
+    if (*sizes < 0) {
+        ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+        return nullptr;
+    }
+
+    uint32_t size = *sizes;
+    auto array = NewArray(td, size);
+    if (!array)
+        return nullptr;
+
+    if (!size || dims == 1)
+        return array;
+
+    auto inner = td->array_elt();
+    if (inner->kind() != TypeKind::Array)
+        return array;
+
+    assert(dims > 1);
+
+    uint32_t* parent_slots = heap_.ToPhysAddr<uint32_t*>(array->data);
+    for (uint32_t i = 0; i < size; i++) {
+        auto child = NewBulkArray(inner, dims - 1, sizes + 1);
+        if (!child)
+            return nullptr;
+        parent_slots[i] = heap_.ToLocalAddr(child);
+    }
+    return array;
+}
+
+bool Runtime::FillArray(SpArray* array, uint32_t data_offset) {
+    BinaryReader br = image_->GetDataReader(data_offset);
+    auto data_bytes = br.readCompactUint32();
+    assert(data_bytes);
+
+    auto elt_size = array->td->array_elt()->element_size();
+    if (*data_bytes % elt_size != 0) {
+        ReportErrorNumber(SP_ERROR_INSTRUCTION_PARAM);
+        return false;
+    }
+    auto elt_count = *data_bytes / elt_size;
+    if (elt_count > array->length) {
+        ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+        return false;
+    }
+
+    auto data = heap_.ToPhysAddr<uint8_t*>(array->data);
+    memcpy(data, br.cursor(), *data_bytes);
+    return true;
+}
+
+void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {
+    assert(index < array->length);
+
+    uint32_t elt_size = array->td->array_elt()->element_size();
+    uint8_t* data = heap_.ToPhysAddr<uint8_t*>(array->data);
+    return data + (index * elt_size);
+}
+
+SpArray* Runtime::NewSlice(SpArray* array, uint32_t index) {
+    // We are only allowed to slice one-dimensional arrays.
+    // :TODO: check this in verifier, not here.
+    if (array->td->array_elt()->IsArrayish()) {
+        ReportErrorNumber(SP_ERROR_INVALID_INSTRUCTION);
+        return nullptr;
+    }
+
+    assert(index <= array->length);
+
+    auto td = array->td;
+    if (td->kind() != TypeKind::ArraySlice) {
+        if (td->array_elt()->can_global_cache())
+            td = env_->types()->GetSlice(td->array_elt());
+        else
+            td = types_.GetSlice(td->array_elt());
+    }
+
+    auto slice = heap_.AllocTyped<SpArray>();
+    if (!slice)
+        return nullptr;
+    slice->td = td;
+    slice->length = array->length - index;
+    slice->data = heap_.ToLocalAddr(GetArrayElem(array, index));
+    return slice;
+}
+
+SpArray* Runtime::LocalToCompatArray(cell_t local_addr) {
+    if (local_addr & kNativePointerTag) {
+        uint32_t handle = local_addr & ~kNativePointerTag;
+        return heap_.ToPhysAddr<SpArray*>(handle);
+    }
+    return nullptr;
 }
 
 } // namespace v2

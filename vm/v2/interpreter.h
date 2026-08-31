@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <sp_vm_types.h>
 #include "binary-reader.h"
+#include "heap-defaults.h"
 #include "stack-frames.h"
 
 namespace sp {
@@ -42,8 +43,10 @@ class Interpreter final
     Interpreter(Runtime* cx, RefPtr<MethodInfo> method);
 
     bool run();
-
     cell_t return_value() const { return return_value_; }
+
+    int32_t CalcLocalsSize();
+    bool InitLocals();
 
   private:
     cell_t StackOffset(cell_t offset);
@@ -77,7 +80,7 @@ class Interpreter final
     Environment* env_;
     Runtime* rt_;
     SmxImage* smx_;
-    Runtime* cx_;
+    HeapImpl& heap_;
     RefPtr<MethodInfo> method_;
     const uint8_t* code_;
     BinaryReader reader_;

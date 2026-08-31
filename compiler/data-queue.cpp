@@ -51,15 +51,18 @@ DataQueue::DataQueue()
 void
 DataQueue::Add(cell value)
 {
-    buffer_.emplace_back(value);
+    union {
+        cell value;
+        char bytes[sizeof(cell)];
+    } u;
+    u.value = value;
+    buffer_.append(u.bytes, sizeof(u.bytes));
 }
 
 void
 DataQueue::Add(const char* text, size_t length)
 {
-    StringToCells(text, length, [this](cell value) -> void {
-        buffer_.emplace_back(value);
-    });
+    buffer_.append(text, length);
 }
 
 void
@@ -68,15 +71,14 @@ DataQueue::Add(tr::vector<cell>&& cells)
     if (cells.empty())
         return;
 
-    for (const auto& value : cells)
-        buffer_.emplace_back(value);
+    buffer_.append(reinterpret_cast<const char*>(cells.data()), cells.size() * sizeof(cell));
     cells.clear();
 }
 
 void
 DataQueue::AddZeroes(cell count)
 {
-    buffer_.resize(buffer_.size() + count, 0);
+    buffer_.resize(count * sizeof(cell), 0);
 }
 
 } // namespace cc

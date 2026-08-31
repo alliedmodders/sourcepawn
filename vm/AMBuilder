@@ -27,6 +27,7 @@ module.sources += [
   'rtti.cpp',
   'smx-image.cpp',
   'stack-frames.cpp',
+  'type-cache.cpp',
   'watchdog_timer.cpp',
 ]
 

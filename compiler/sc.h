@@ -59,16 +59,8 @@ namespace cc {
 #define PUBLIC_CHAR '@' /* character that defines a function "public" */
 #define sDEF_PREFIX "sourcemod.inc" /* default prefix filename */
 
-struct DefaultArrayData;
 class VarDecl;
 
-struct DefaultArg : public PoolObject {
-    QualType type{nullptr};
-    ke::Maybe<cell> val;
-    DefaultArrayData* array = nullptr;
-    VarDecl* sym = nullptr;
-};
- 
 // Values for symbol::usage.
 #define uREAD       0x1     // Used/accessed.
 #define uWRITTEN    0x2     // Altered/written (variables only).

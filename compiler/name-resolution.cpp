@@ -828,51 +828,17 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     return ok;
 }
 
-bool
-FunctionDecl::BindArgs(SemaContext& sc)
-{
+bool FunctionDecl::BindArgs(SemaContext& sc) {
     AutoCountErrors errors;
 
     for (auto& var : args_) {
-        const auto& typeinfo = var->type_info();
-
-        AutoErrorPos pos(var->pos());
-
-        Type* type = typeinfo.type;
-        if (type->isArray() || typeinfo.type->isEnumStruct()) {
-            if (sc.sema()->CheckVarDecl(var) && var->init_rhs())
-                fill_arg_defvalue(sc.cc(), var);
-        } else {
-            Expr* init = var->init_rhs();
-            if (init && sc.sema()->CheckExpr(init)) {
-                AutoErrorPos pos(init->pos());
-
-                assert(!typeinfo.is_varargs);
-                var->set_default_value(new DefaultArg());
-
-                cell val;
-                Type* type;
-                if (!init->EvalConst(&val, &type)) {
-                    error(var->pos(), 8);
-
-                    // Populate to avoid errors.
-                    val = 0;
-                    type = typeinfo.type;
-                }
-                var->default_value()->type = QualType(type);
-                var->default_value()->val = ke::Some(val);
-
-                matchtag(*var->type(), type, MATCHTAG_COERCE);
-            }
-        }
-
         if (var->type()->isReference())
             var->set_is_read();
         if (is_callback_ || is_public_)
             var->set_is_read();
 
         /* arguments of a public function may not have a default value */
-        if (is_public_ && var->default_value())
+        if (is_public_ && var->init_rhs())
             report(var->pos(), 59) << var->name();
     }
 
@@ -982,8 +948,7 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
 
         field->set_offset(position);
 
-        cell size = field->type()->CellStorageSize();
-        position += size;
+        position += sizeof(cell_t);
     }
 
     if (fields_.empty())

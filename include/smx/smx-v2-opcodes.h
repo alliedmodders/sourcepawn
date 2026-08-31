@@ -49,8 +49,7 @@ namespace v2 {
     FOR_EACH(SREF_S, 12, "sref.s", 3) \
     FOR_EACH(STOR_I, 13, "stor.i", 1) \
     FOR_EACH(STRB_I, 14, "strb.i", 1) \
-    /* rank_size(uint8_t), bounds(uint32_t) */ \
-    FOR_EACH(IDXADDR, 15, "idxaddr", 6) \
+    FOR_EACH(IDXADDR, 15, "idxaddr", 1) \
     FOR_EACH(PUSH_C, 16, "push.c", 5) \
     FOR_EACH(HEAP, 17, "heap", 5) \
     FOR_EACH(RETN, 18, "retn", 1) \
@@ -90,15 +89,19 @@ namespace v2 {
     FOR_EACH(SGEQ, 52, "sgeq", 1) \
     FOR_EACH(INC, 53, "inc", 1) \
     FOR_EACH(DEC, 54, "dec", 1) \
-    FOR_EACH(MOVS, 55, "movs", 5) \
-    FOR_EACH(FILL, 56, "fill", 5) \
+    /* Pops two arrays off the stack:
+     *   left = pop()
+     *   right = pop()
+     *
+     * |left| and |right| must both be fixed-array types.
+     * |left.length| must be >= |right.length|.
+     * |left| and |right| must have types with the same element size, and
+     * neither element type can be an array.
+     */ \
+    FOR_EACH(COPYARRAY, 55, "copyarray", 1) \
     FOR_EACH(SWITCH, 57, "switch", 5) \
     FOR_EACH(CASETBL, 58, "casetbl", -1) \
     FOR_EACH(ADDR_S, 59, "addr.s", 3) \
-    FOR_EACH(GENARRAY, 60, "genarray", 5) \
-    FOR_EACH(GENARRAY_Z, 61, "genarray.z", 5) \
-    FOR_EACH(STRADJUST, 62, "stradjust", 1) \
-    FOR_EACH(INITARRAY, 63, "initarray", 21) \
     FOR_EACH(HEAP_SAVE, 64, "heap.save", 1) \
     FOR_EACH(HEAP_RESTORE, 65, "heap.restore", 1) \
     FOR_EACH(TEST_F32, 66, "test.f32", 1) \
@@ -151,6 +154,50 @@ namespace v2 {
     FOR_EACH(CALLN, 113, "calln", 6) \
     FOR_EACH(PUSH_C_I64, 114, "push.c.i64", 9) \
     FOR_EACH(ADDR_GLB, 115, "addr.glb", 3) \
+    FOR_EACH(LOAD_STR, 116, "load.str", 3) \
+    /* Allocate a new array on the heap, given a uint32_t type_id for the
+     * array. The size of the outermost dimension must be pushed onto the
+     * stack as a cell_t. The resulting address of the array is pushed onto
+     * the stack. If the outermost dimension is fixed, no value is popped
+     * from the stack.
+     */ \
+    FOR_EACH(NEWARRAY, 117, "newarray", 5) \
+    /* Same as newarray, except that there must be N values on the stack,
+     * where N is <= number of kArrays in the type before any non-kArray
+     * types appear. Eg, int[][][25][] must have two integers pushed onto
+     * the stack. N must be >= 1, and is encoded as a uint8_t, which is
+     * followed by a uint32_t type_id.
+     *
+     * This is effectively the same as GENARRAY from the v1 VM - it
+     * initializes a tree of array pointers for the user.
+     *
+     * NEWBULKARRAY with N=1 is the same as NEWARRAY.
+     */ \
+    FOR_EACH(NEWBULKARRAY, 118, "newbulkarray", 6) \
+    /* Pops an array address off the stack, then copies a preset set of
+     * values from the constant pool (data section) to that array. The offset
+     * to the values is encoded as a uint32_t argument.
+     *
+     * At that offset, there must be a compact-encoded uint32_t specifying the
+     * number of bytes to read, followed by that many bytes. Each value is
+     * sized according to the array type:
+     *   kChar8: int8_t
+     *   kInt64: int64_t
+     *   everything else: int32_t
+     */ \
+    FOR_EACH(FILLARRAY, 119, "fillarray", 5) \
+    FOR_EACH(ARRAY_TO_NATIVE, 120, "array2native", 1) \
+    FOR_EACH(SLICE, 121, "slice", 1) \
+    /* Pops a value from the stack, which must be an address to an object-
+     * like structure. Loads a value from the specified field, which is
+     * encoded as an index into the smx_rtti_field_refs table. The value
+     * is then pushed onto the stack (except in the ADDR case, when the
+     * address is pushed instead).
+     *
+     * The type in the field ref must match the type of the object.
+     */ \
+    FOR_EACH(LOAD_FLD, 122, "load.fld", 5) \
+    FOR_EACH(ADDR_FLD, 123, "addr.fld", 5) \
 
 
 enum OPCODE {

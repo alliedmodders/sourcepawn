@@ -274,9 +274,35 @@ class Type : public PoolObject
 
     bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
 
-    cell_t CellStorageSize();
-
     bool canOperatorOverload() const;
+
+    uint32_t lit_size() const {
+        if (isBuiltin()) {
+            switch (builtin_type_) {
+                case BuiltinType::Char:
+                    return 1;
+                case BuiltinType::Bool:
+                case BuiltinType::Int:
+                case BuiltinType::Float:
+                case BuiltinType::Null:
+                case BuiltinType::Any:
+                    return 4;
+                case BuiltinType::Int64:
+                    return 8;
+                default:
+                    assert(false);
+                    return 0;
+            }
+        }
+        switch (kind_) {
+            case TypeKind::Methodmap:
+            case TypeKind::Enum:
+                return sizeof(cell_t);
+            default:
+                assert(false);
+                return 0;
+        }
+    }
 
     bool coercesFromInt() const {
         if (kind_ == TypeKind::Enum || kind_ == TypeKind::Methodmap)
@@ -435,6 +461,7 @@ class ArrayType : public Type {
     ArrayType(Type* inner, int size);
 
     int size() const { return size_; }
+    bool is_fixed() const { return size_ != 0; }
 
     static bool is_a(Type* type) { return type->kind() == TypeKind::Array; }
 

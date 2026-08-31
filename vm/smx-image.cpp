@@ -13,6 +13,7 @@
 #include <zlib/zlib.h>
 #include "environment.h"
 #include "smx-image.h"
+#include "utils/compact-encoding.h"
 
 using namespace ke;
 using namespace sp;
@@ -29,17 +30,17 @@ SmxImage::SmxImage(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
  : FileReader(addr, length, dtor) {
 }
 
-bool SmxImage::error(const char* msg) {
+bool SmxImage::error(const char* msg) const {
     Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg);
     return false;
 }
 
-bool SmxImage::error(const std::string& msg) {
+bool SmxImage::error(const std::string& msg) const {
     Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg.c_str());
     return false;
 }
 
-bool SmxImage::errorf(const char* fmt, ...) {
+bool SmxImage::errorf(const char* fmt, ...) const {
     va_list ap;
     va_start(ap, fmt);
     Environment::get()->ReportErrorVA(SP_ERROR_FILE_FORMAT, fmt, ap);
@@ -447,6 +448,9 @@ SmxImage::validateRtti() {
     rtti_globals_ = findRttiSection("rtti.globals");
     if (rtti_globals_ && !validateRttiGlobals())
         return false;
+
+    rtti_stringpool_ = findRttiSection("rtti.stringpool");
+
     return true;
 }
 
@@ -577,11 +581,19 @@ SmxImage::validateRttiMethods() {
         if (method->pcode_end > code_.header()->size)
             return error("invalid method code end");
         if (rtti_methods_->row_size >= 20) {
-            if (!rtti_data_->validateLocalSlots(method->locals))
-                return error("invalid local signature");
+            if (hdr_->version >= SmxConsts::SP_VERSION_2) {
+                // Lazy validation.
+                if (method->locals >= rtti_data_->size())
+                    return error("invalid local signature offset");
+            } else {
+                if (!rtti_data_->validateLocalSlots(method->locals))
+                    return error("invalid local signature");
+            }
         }
         if (rtti_methods_->row_size >= 24) {
-            uint32_t supported_flags = kRttiMethodVisibilityMask | kRttiMethod_Native;
+            uint32_t supported_flags = kRttiMethodVisibilityMask |
+                                       kRttiMethod_Native |
+                                       kRttiMethod_GlobalCtor;
             uint32_t unknown_flags = method->flags & ~supported_flags;
             if (unknown_flags)
                 return error("invalid method flags");
@@ -844,6 +856,24 @@ SmxImage::DescribeData() const -> Data {
     data.bytes = data_.blob();
     data.length = data_.length();
     return data;
+}
+
+std::optional<std::string_view> SmxImage::ReadDataBlob(uint32_t offset) const {
+    if (offset >= data_.length()) {
+        error("invalid data offset");
+        return {};
+    }
+
+    const uint8_t* cursor = data_.blob() + offset;
+    const uint8_t* end = data_.blob() + data_.length();
+
+    auto len = DecodeCompact(cursor, end);
+    if (!len || *len > end - cursor) {
+        error("invalid length for data blob");
+        return {};
+    }
+
+    return {std::string_view(reinterpret_cast<const char*>(cursor), *len)};
 }
 
 size_t

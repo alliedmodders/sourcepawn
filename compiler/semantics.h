@@ -219,6 +219,7 @@ class Semantics final
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
     FunctionDecl* BindNewTarget(Expr* target);
     FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
+    SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
     void NeedsHeapAlloc(Expr* expr);
     void AssignHeapOwnership(ParseNode* node);
@@ -291,7 +292,6 @@ void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
 bool check_operatortag(int opertok, Type* result_type, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
-void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumType(SymbolScope* scope, Type* type);
 
 } // namespace cc

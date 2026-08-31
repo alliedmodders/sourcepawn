@@ -551,6 +551,13 @@ void AstPrinter::PrintRvalueExpr(RvalueExpr* node, bool is_last) {
     stack_.pop_back();
 }
 
+void AstPrinter::PrintSliceExpr(SliceExpr* node, bool is_last) {
+    fprintf(out_, "RvalueExpr\n");
+    stack_.push_back(is_last);
+    Print(node->expr(), true);
+    stack_.pop_back();
+}
+
 void AstPrinter::PrintCommaExpr(CommaExpr* node, bool is_last) {
     fprintf(out_, "CommaExpr\n");
     stack_.push_back(is_last);

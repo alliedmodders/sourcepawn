@@ -20,8 +20,10 @@
 #include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
 #include "control-flow.h"
+#include "type-desc.h"
 
-namespace sp::v2 {
+namespace sp {
+namespace v2 {
 
 class Runtime;
 
@@ -43,7 +45,7 @@ class MethodVerifier final
     int32_t max_stack() const { return max_stack_; }
     uint32_t max_eval_stack_depth() const { return max_eval_stack_depth_; }
     uint32_t max_eval_stack_bytes() const { return max_eval_stack_bytes_; }
-    ke::FixedArray<uint8_t>&& local_sizes() { return std::move(local_sizes_); }
+    ke::FixedArray<const TypeDesc*>&& local_types() { return std::move(local_types_); }
 
   private:
     bool more() const {
@@ -53,13 +55,12 @@ class MethodVerifier final
   private:
     bool verifyOp(OPCODE op);
     bool verifyStackOffset(cell_t offset, uint32_t op_size);
-    bool verifyDatOffset(cell_t offset);
+    bool verifyDatAddress(cell_t offset);
+    bool verifyDatString(uint16_t index);
+    const TypeDesc* verifyGlobalIndex(uint16_t index);
     bool verifyJumpOffset(cell_t offset);
     bool verifyParamCount(cell_t nparams);
     bool verifyDimensionCount(cell_t ndims);
-    bool verifyStackAmount(cell_t amount);
-    bool verifyHeapAmount(cell_t amount);
-    bool verifyMemAmount(cell_t amount);
     bool verifyCallIndex(uint32_t method_index);
     bool reportError(int err);
 
@@ -119,15 +120,13 @@ class MethodVerifier final
     ke::RefPtr<ControlFlowGraph> graph_;
     Block* block_;
     const smx_rtti_method* method_ = nullptr;
+    ke::FixedArray<const TypeDesc*> local_types_;
     std::vector<Block*> verify_joins_;
-    ke::FixedArray<uint8_t> local_sizes_;
     uint32_t arg_count_ = 0;
     int code_version_;
     uint32_t code_features_;
     uint32_t method_index_;
-    size_t memSize_;
     size_t datSize_;
-    size_t heapSize_;
     uint32_t max_stack_;
     uint32_t max_eval_stack_depth_ = 0;
     uint32_t max_eval_stack_bytes_ = 0;
@@ -139,4 +138,5 @@ class MethodVerifier final
     ExternalFuncRefCallback collect_func_refs_;
 };
 
-} // namespace sp::v2
+} // namespace v2
+} // namespace sp

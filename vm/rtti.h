@@ -70,7 +70,7 @@ class FastRtti final {
 
     void NextByte() { offset_++; }
 
-    bool ReadCompactUint32(uint32_t* out);
+    bool ReadUint32_Leb128(uint32_t* out);
 
   private:
     const uint8_t* data_;

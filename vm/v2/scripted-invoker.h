@@ -62,7 +62,6 @@ class ScriptedInvoker : public IPluginFunction
     RefPtr<MethodInfo> AcquireMethod();
 
   private:
-    Environment* env_;
     Runtime* context_;
     uint32_t method_index_;
     CallArgs default_args_;

@@ -26,8 +26,11 @@
 
 namespace sp {
 
-PoolAllocator::PoolAllocator()
+PoolAllocator::PoolAllocator(size_t chunk_size)
 {
+    chunk_size_ = chunk_size;
+    if (!chunk_size_)
+        chunk_size_ = kDefaultPoolSize;
 }
 
 PoolAllocator::~PoolAllocator()
@@ -38,8 +41,8 @@ PoolAllocator::Pool*
 PoolAllocator::ensurePool(size_t actualBytes)
 {
     size_t bytesNeeded = actualBytes;
-    if (bytesNeeded < kDefaultPoolSize)
-        bytesNeeded = kDefaultPoolSize;
+    if (bytesNeeded < chunk_size_)
+        bytesNeeded = chunk_size_;
 
     auto pool = std::make_unique<Pool>();
     pool->base = std::make_unique<char[]>(bytesNeeded);

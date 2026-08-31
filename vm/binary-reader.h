@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include <sp_vm_types.h>
+#include <utils/compact-encoding.h>
 
 namespace sp {
 
@@ -23,6 +24,7 @@ class BinaryReader final {
       : cursor_(cursor),
         stop_(stop)
     {}
+    BinaryReader(BinaryReader&&) = default;
 
     template <typename T> T read() {
         assert(!stop_ || cursor_ + sizeof(T) <= stop_);
@@ -37,11 +39,22 @@ class BinaryReader final {
     int16_t readInt16() {
         return read<int16_t>();
     }
+    std::optional<uint32_t> readCompactUint32() {
+        return DecodeCompact(cursor_, stop_);
+    }
 
     const uint8_t* cursor() const { return cursor_; }
 
     bool more() const {
         return !stop_ || cursor_ < stop_;
+    }
+
+    bool canRead(size_t bytes) const {
+        if (!stop_)
+            return true;
+        if (bytes > static_cast<size_t>(stop_ - cursor_))
+            return false;
+        return true;
     }
 
     void set_cursor(const uint8_t* cursor) {
@@ -55,6 +68,8 @@ class BinaryReader final {
         cursor_ += n;
         return result;
     }
+
+    BinaryReader& operator =(BinaryReader&& other) = default;
 
   private:
     const uint8_t* cursor_;

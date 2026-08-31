@@ -32,4 +32,23 @@ using HeapImpl = Heap64;
 using HeapImpl = Heap32;
 #endif
 
+struct HeapSave final {
+    HeapSave(HeapImpl& heap)
+      : heap(heap),
+        pos(heap.GetPosition())
+    {}
+    HeapSave(HeapSave&& other) = default;
+    HeapSave(const HeapSave& other) = delete;
+
+    ~HeapSave() {
+        heap.RestorePosition(pos);
+    }
+
+    HeapSave& operator =(HeapSave&& other) = delete;
+    HeapSave& operator =(const HeapSave& other) = delete;
+
+    HeapImpl& heap;
+    HeapImpl::Position pos;
+};
+
 } // namespace sp

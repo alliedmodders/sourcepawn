@@ -125,6 +125,7 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
     is_callback_(false),
     returns_value_(false),
     is_live_(false),
+    is_global_ctor_(false),
     maybe_used_(false)
 {
 }

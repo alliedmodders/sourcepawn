@@ -81,14 +81,6 @@ InvokeGenerateFullArray(Runtime* cx, uint32_t argc, cell_t* argv, int autozero) 
     return cx->generateFullArray(argc, argv, autozero);
 }
 
-static int
-InvokeInitArray(Runtime* cx, cell_t base_addr, cell_t dat_addr, cell_t iv_size,
-                cell_t data_copy_size, cell_t data_fill_size, cell_t fill_value) {
-    return cx->initArray(base_addr, dat_addr, iv_size, data_copy_size, data_fill_size, fill_value)
-               ? 1
-               : 0;
-}
-
 bool
 Compiler::visitMOVE(PawnReg reg) {
     if (reg == PawnReg::Pri)

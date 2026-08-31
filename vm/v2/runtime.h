@@ -21,15 +21,19 @@
 #include <sp_vm_api.h>
 #include "base-runtime.h"
 #include "heap-defaults.h"
+#include "scripted-invoker.h"
 #include "smx-image.h"
-#include "v2/scripted-invoker.h"
+#include "type-cache.h"
 
 namespace sp {
 namespace v2 {
 
 using namespace ke;
 
+static constexpr cell_t kNativePointerTag = 1;
+
 class MethodInfo;
+struct SpArray;
 
 struct NativeEntry : public sp_native_t {
     NativeEntry() : legacy_fn(nullptr) {}
@@ -44,7 +48,7 @@ class Runtime final : public BaseRuntime,
                       public ke::InlineListNode<Runtime>
 {
   public:
-    Runtime(SmxImage* image);
+    Runtime(SmxImage* image, bool data_only = false);
     ~Runtime();
 
     bool Initialize() override;
@@ -83,8 +87,6 @@ class Runtime final : public BaseRuntime,
                           size_t* wrtnbytes) override;
     cell_t* GetNullRef(SP_NULL_TYPE type) override;
     int LocalToStringNULL(cell_t local_addr, char** addr) override;
-    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
-    void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
     IPluginRuntime* GetRuntime() override { return this; }
     cell_t* GetLocalParams() override;
     bool HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
@@ -95,11 +97,10 @@ class Runtime final : public BaseRuntime,
     bool IsNullFunctionId(funcid_t func) override;
     bool GetFunctionByIdOrNull(funcid_t func, IPluginFunction** out) override;
     IPluginFunction* GetFunctionByIdOrError(funcid_t func_id) override;
+    int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) override;
+    void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override;
     bool InvokeMethod(uint32_t method_index, const cell_t* params, unsigned int num_params, cell_t* result);
     bool IsInExec() override;
-
-    int AllocArray(unsigned int cells, cell_t* local_addr, cell_t** phys_addr);
-    bool Invoke(funcid_t fnid, const cell_t* params, unsigned int num_params, cell_t* result);
 
   public:
     ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const override;
@@ -110,6 +111,19 @@ class Runtime final : public BaseRuntime,
     ScriptedInvoker* GetScriptedInvoker(funcid_t func_id);
     ScriptedInvoker* GetFunctionByMethodIndex(uint32_t method_index);
     bool GetNativeIndex(uint32_t method_index, uint32_t* index) const;
+    uint32_t GetGlobalAddr(uint16_t index) const { return global_addrs_[index]; }
+    uint32_t GetStringAddr(uint16_t index) const { return string_addrs_[index]; }
+
+    const TypeDesc* LoadType(FastRtti& rtti);
+    const TypeDesc* LoadTypeFromId(uint32_t type_id);
+    uint32_t AllocStringBlobFromData(uint32_t data_offset);
+    uint32_t AllocateGlobal(const TypeDesc* td);
+
+    SpArray* NewArray(const TypeDesc* td, uint32_t size);
+    SpArray* NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
+    bool FillArray(SpArray* array, uint32_t data_offset);
+    void* GetArrayElem(SpArray* array, uint32_t index);
+    SpArray* NewSlice(SpArray* array, uint32_t index);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }
     Runtime* context() const { return const_cast<Runtime*>(this); }
@@ -120,8 +134,9 @@ class Runtime final : public BaseRuntime,
 
     static inline size_t offsetOfSp() { return offsetof(Runtime, sp_); }
     static inline size_t offsetOfRuntime() { return 0; /* Deprecated, Runtime is self */ }
-    static inline size_t offsetOfMemory() { return offsetof(Runtime, memory_); }
     static inline size_t offsetOfHpScope() { return offsetof(Runtime, hp_scope_); }
+
+    bool data_only() const { return data_only_; }
 
     uint32_t& sp() { return sp_; }
     uint32_t& hp_scope() { return hp_scope_; }
@@ -144,11 +159,9 @@ class Runtime final : public BaseRuntime,
     bool addStack(cell_t amount);
     bool getCellValue(cell_t address, cell_t* out);
     bool setCellValue(cell_t address, cell_t value);
-    bool heapAlloc(cell_t amount, cell_t* out);
-    cell_t* heapAllocEx(cell_t amount, cell_t* out);
+    bool heapAlloc(uint32_t amount, cell_t* out);
+    cell_t* heapAllocEx(uint32_t amount, cell_t* out);
     cell_t* acquireAddrRange(cell_t address, uint32_t bounds);
-    bool initArray(cell_t array_addr, cell_t dat_addr, cell_t iv_size, cell_t data_copy_size,
-                   cell_t data_fill_size, cell_t fill_value);
 
     int64_t* acquireInt64Addr(cell_t address) {
         cell_t* addr = acquireAddrRange(address, sizeof(int64_t));
@@ -157,11 +170,16 @@ class Runtime final : public BaseRuntime,
         return reinterpret_cast<int64_t*>(addr);
     }
 
+    Environment* env() const { return env_; }
+
   private:
     bool InitializeContext();
     bool InitializeGlobals();
 
+    SpArray* LocalToCompatArray(cell_t local_addr);
+
   private:
+    Environment* env_;
     std::vector<NativeEntry> natives_;
     std::unordered_map<uint32_t, uint32_t> native_map_;
     std::unique_ptr<sp_pubvar_t[]> pubvars_;
@@ -169,16 +187,17 @@ class Runtime final : public BaseRuntime,
     std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;
     std::vector<RefPtr<MethodInfo>> methods_;
     ke::FixedArray<uint32_t> global_addrs_;
+    ke::FixedArray<uint32_t> string_addrs_;
+    TypeCache types_;
 
     bool paused_ = false;
+    bool data_only_ = false;
     bool computed_code_hash_ = false;
     bool computed_data_hash_ = false;
     unsigned char code_hash_[16];
     unsigned char data_hash_[16];
 
     HeapImpl heap_;
-    uint8_t* memory_ = nullptr;
-    uint32_t data_size_;
     cell_t* m_pNullVec = nullptr;
     cell_t* m_pNullString = nullptr;
     uint32_t sp_base_ = 0;

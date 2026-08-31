@@ -34,14 +34,14 @@ class Heap64 {
     uint8_t* Allocate(uint32_t requested_size) {
         size_t aligned_size = ke::Align(requested_size, sizeof(uint32_t));
 
-        if (map_base_ + aligned_size > high_watermark_)
+        if (pos_ + aligned_size > high_watermark_)
             return SlowAllocate(aligned_size);
         return FastAllocate(aligned_size);
     }
 
     uint8_t* FastAllocate(uint32_t size) {
         assert(ke::IsAligned(size, sizeof(uint32_t)));
-        assert(map_base_ + size <= high_watermark_);
+        assert(pos_ + size <= high_watermark_);
 
         uint8_t* p = pos_;
         pos_ += size;

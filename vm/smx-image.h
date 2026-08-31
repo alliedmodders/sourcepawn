@@ -24,6 +24,7 @@
 #include <smx/smx-typeinfo.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_types.h>
+#include "binary-reader.h"
 #include "file-utils.h"
 #include "rtti.h"
 
@@ -83,6 +84,9 @@ class SmxImage final : public FileReader
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
     std::optional<uint32_t> GetDebugMethodRow(uint32_t pcode_offset) const;
     std::optional<uint32_t> GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const;
+
+    // Note: throws an exception on failure.
+    std::optional<std::string_view> ReadDataBlob(uint32_t offset) const;
 
     const smx_rtti_method* GetMethod(uint32_t method_index) const {
         if (!rtti_methods_ || method_index >= rtti_methods_->row_count)
@@ -207,11 +211,18 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
     const smx_rtti_table_header* rtti_globals() const { return rtti_globals_; }
+    const smx_rtti_table_header* rtti_stringpool() const { return rtti_stringpool_; }
+
+    BinaryReader GetDataReader(uint32_t offset) {
+        assert(IsValidDataOffset(offset));
+        return BinaryReader(data_.blob() + offset, data_.blob() + data_.length());
+    }
+    bool IsValidDataOffset(uint32_t offset) const { return offset < data_.length(); }
 
   protected:
-    bool error(const char* msg);
-    bool error(const std::string& msg);
-    bool errorf(const char* fmt, ...) KE_PRINTF_FUNCTION(2, 3);
+    bool error(const char* msg) const;
+    bool error(const std::string& msg) const;
+    bool errorf(const char* fmt, ...) const KE_PRINTF_FUNCTION(2, 3);
     bool validateName(size_t offset) const;
     bool validateSection(const Section* section) const;
     bool validateRttiHeader(const Section* section) const;
@@ -304,6 +315,7 @@ class SmxImage final : public FileReader
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
     const smx_rtti_table_header* rtti_globals_ = nullptr;
+    const smx_rtti_table_header* rtti_stringpool_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_method_lines_ = nullptr;
