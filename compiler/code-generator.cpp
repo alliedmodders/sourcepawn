@@ -1639,11 +1639,17 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
         } else if (arg->isReference()) {
-             if (val.ident == iVARIABLE && !val.type()->isComposite())
-                 EmitAddress(val.sym());
-             else if (val.ident == iUPVAR)
-                 EmitAddress(val);
-         }
+            switch (val.ident) {
+                case iVARIABLE:
+                    if (!val.type()->isComposite())
+                         EmitAddress(val.sym());
+                    break;
+                case iFIELD:
+                case iUPVAR:
+                    EmitAddress(val);
+                    break;
+            }
+        }
 
         // Always pass wide integers by reference, as a hack for backward
         // compatibility with natives and GetLocalParams.
