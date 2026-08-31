@@ -895,9 +895,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!ok)
         return false;
 
-    // For inner functions, enter the name into the enclosing function's local scope.
-    if (outer_sc.func() && name())
-        DefineSymbol(outer_sc, this, sLOCAL);
 
     SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {

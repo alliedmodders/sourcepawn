@@ -303,6 +303,7 @@ class Semantics final
     std::vector<VarDeclBase*> globals_to_init_;
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
+    tr::vector<FunctionDecl*> closures_;
     SemaContext* sc_ = nullptr;
     sp::Atom* this_atom_ = nullptr;
     int fun_expr_count_ = 0;

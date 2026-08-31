@@ -3185,7 +3185,7 @@ bool Semantics::CheckFunctionExpr(FunctionExpr* expr) {
     if (!CheckFunctionDecl(fun))
         return false;
 
-    fun->set_is_live();
+    closures_.emplace_back(fun);
 
     auto& v = expr->val();
     v.set_expr(fun->type());
@@ -3300,6 +3300,15 @@ void Semantics::DeduceLiveness() {
 
         seen.emplace(decl);
         work.emplace_back(decl);
+    }
+
+    // Also add all closures/inner functions that were checked.
+    for (const auto& decl : closures_) {
+        decl->set_is_live();
+        if (!seen.count(decl)) {
+            seen.emplace(decl);
+            work.emplace_back(decl);
+        }
     }
 
     // Traverse referrers to find the transitive set of live functions.
