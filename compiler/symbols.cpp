@@ -70,7 +70,7 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-void markusage(const value& val, int usage) {
+void markusage(const ExprVal& val, int usage) {
     if (val.ident == iVARIABLE) {
         markusage(val.sym(), usage);
     } else if (val.ident == iUPVAR) {

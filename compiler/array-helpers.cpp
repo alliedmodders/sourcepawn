@@ -56,7 +56,7 @@ class ArrayTypeResolver
     bool ResolveDimExprs();
     void ResolveRank(size_t rank, Expr* init);
     void SetRankSize(Expr* expr, int rank, int size);
-    bool ResolveDimExpr(Expr* expr, value* v);
+    bool ResolveDimExpr(Expr* expr, ExprVal* v);
 
   private:
     Semantics* sema_;
@@ -307,7 +307,7 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             continue;
         }
 
-        value v;
+        ExprVal v;
         if (!ResolveDimExpr(expr, &v))
             return false;
 
@@ -358,7 +358,7 @@ bool ArrayTypeResolver::ResolveDimExprs() {
     return true;
 }
 
-bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, value* v) {
+bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, ExprVal* v) {
     auto& sc = *sema_->context();
     if (!expr->Bind(sc))
         return false;

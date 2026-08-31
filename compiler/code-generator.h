@@ -136,9 +136,9 @@ class CodeGenerator final
 
     void EmitCall(const CallTarget& target, cell nargs, bool is_spread = false);
     void InvokeGetter(PropertyDecl* method);
-    void EmitRvalue(const value& lval);
-    void EmitStore(ParseNode* node, const value& lval);
-    void EmitAddress(const value& lval);
+    void EmitRvalue(const ExprVal& lval);
+    void EmitStore(ParseNode* node, const ExprVal& lval);
+    void EmitAddress(const ExprVal& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
     void EmitAddress(VarDeclBase* decl);
 
@@ -181,7 +181,7 @@ class CodeGenerator final
     // operations. Note that simple_address is ONLY intended to collapse two
     // stack values into one. It is not intended to compute an address
     // unconditionally.
-    value BindLvalue(Expr* expr, bool simple_address = false);
+    ExprVal BindLvalue(Expr* expr, bool simple_address = false);
 
   private:
     enum MemuseType {

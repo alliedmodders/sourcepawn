@@ -3433,7 +3433,7 @@ Expr* Semantics::CoerceNull(Expr* expr, Type* formal) {
     return expr;
 }
 
-static inline bool CanImplicitSliceArgument(const value& val, ArrayType* to) {
+static inline bool CanImplicitSliceArgument(const ExprVal& val, ArrayType* to) {
     if (to && to->is_flat())
         return false;
     if (val.type()->isFlatArray()) {

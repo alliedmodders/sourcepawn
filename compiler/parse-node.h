@@ -632,8 +632,8 @@ class Expr : public ParseNode
     // Return whether or not this Expr handles EMIT_DISCARD_RESULT.
     bool HandlesDiscardResult();
 
-    value& val() { return val_; }
-    const value& val() const { return val_; }
+    ExprVal& val() { return val_; }
+    const ExprVal& val() const { return val_; }
 
     // Returns whether this is an l-value (eg can appear on the left-hand
     // side of an assignment).
@@ -657,7 +657,7 @@ class Expr : public ParseNode
     }
 
   protected:
-    value val_ = {};
+    ExprVal val_ = {};
     ExprKind kind_ : 8;
 };
 

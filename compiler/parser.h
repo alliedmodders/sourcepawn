@@ -43,7 +43,7 @@ class Parser
     ParseTree* Parse();
 
   private:
-    typedef int (Parser::*HierFn)(value*);
+    typedef int (Parser::*HierFn)(ExprVal*);
     typedef Expr* (Parser::*NewHierFn)();
 
 

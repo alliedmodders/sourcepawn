@@ -35,8 +35,8 @@ class PropertyDecl;
 class UpvarDecl;
 class VarDeclBase;
 
-struct value {
-    value() : ident(iINVALID), type_(nullptr) {}
+struct ExprVal {
+    ExprVal() : ident(iINVALID), type_(nullptr) {}
 
     IdentifierKind ident : 6;
     QualType type_;
@@ -149,8 +149,8 @@ struct value {
         UpvarDecl* upvar_;
     };
 
-    static value ErrorValue() {
-        value v = {};
+    static ExprVal ErrorValue() {
+        ExprVal v = {};
         v.ident = iCONSTEXPR;
         return v;
     }

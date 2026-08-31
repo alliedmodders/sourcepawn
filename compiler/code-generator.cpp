@@ -1007,8 +1007,8 @@ CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* targ
     return false;
 }
 
-value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
-    value val = expr->val();
+ExprVal CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
+    ExprVal val = expr->val();
     switch (val.ident) {
         case iVARIABLE:
             break;
@@ -1047,7 +1047,7 @@ value CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
 
 void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
-    value val = BindLvalue(expr->expr(), true);
+    ExprVal val = BindLvalue(expr->expr(), true);
 
     Type* type = val.type();
     if (type->isReference())
@@ -1085,7 +1085,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
         __ emit(OP_LOAD_S, VarSlot(*temp_slot));
 }
 
-[[maybe_unused]] static inline int StackSlotsForLval(const value& v) {
+[[maybe_unused]] static inline int StackSlotsForLval(const ExprVal& v) {
     switch (v.ident) {
         case iVARIABLE:
             return 0;
@@ -1133,7 +1133,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
         return;
     }
 
-    value left_val;
+    ExprVal left_val;
     if (IsAssignOp(token)) {
         left_val = BindLvalue(left, !!oper);
 
@@ -1837,7 +1837,7 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     if (auto es = fun_->return_type()->asEnumStruct()) {
         __ load_hidden_arg(fun_);
-        value lval = BindLvalue(stmt->expr(), true);
+        ExprVal lval = BindLvalue(stmt->expr(), true);
         EmitRvalue(lval);
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_COPYOBJ, type_id);
@@ -1886,7 +1886,7 @@ void
 CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 {
     Expr* expr = stmt->expr();
-    value v = expr->val();
+    ExprVal v = expr->val();
 
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
@@ -1923,11 +1923,11 @@ void CodeGenerator::EmitRvalue(RvalueExpr* expr) {
 
 void CodeGenerator::EmitRvalueFromLvalue(Expr* expr) {
     assert(expr->lvalue());
-    value val = BindLvalue(expr);
+    ExprVal val = BindLvalue(expr);
     EmitRvalue(val);
 }
 
-void CodeGenerator::EmitRvalue(const value& lval) {
+void CodeGenerator::EmitRvalue(const ExprVal& lval) {
     switch (lval.ident) {
         case iARRAYELEM:
             assert(!lval.type()->isFlatArray());
@@ -2033,7 +2033,7 @@ void CodeGenerator::EmitRvalue(const value& lval) {
     }
 }
 
-void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
+void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
     switch (lval.ident) {
         case iARRAYELEM:
             if (lval.type()->isChar())
@@ -2131,7 +2131,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const value& lval) {
     }
 }
 
-void CodeGenerator::EmitAddress(const value& lval) {
+void CodeGenerator::EmitAddress(const ExprVal& lval) {
     switch (lval.ident) {
         case iVARIABLE:
             EmitAddress(lval.sym());
