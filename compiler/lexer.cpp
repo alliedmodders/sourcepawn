@@ -828,6 +828,11 @@ bool Lexer::FindNextToken() {
                     return false;
                 else if (!allow_end_of_file_)
                     return false;
+                if (more()) {
+                    report(227);
+                    advance();
+                    continue;
+                }
                 HandleEof();
                 continue;
 
