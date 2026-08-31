@@ -68,7 +68,9 @@ bool VirtMem64::Initialize() {
 #endif
 
     // Skip one page to avoid 0th page access, and align up to mimalloc's slice requirement.
-    size_t skip_size = ke::Align(page_size, kMimallocSliceSize);
+    uint8_t* start_addr = reinterpret_cast<uint8_t*>(
+        ke::Align(reinterpret_cast<uintptr_t>(map_base_ + page_size), kMimallocSliceSize));
+    size_t skip_size = start_addr - map_base_;
     assert(map_len_ >= skip_size);
 
     map_end_ = map_base_ + map_len_;
@@ -78,7 +80,7 @@ bool VirtMem64::Initialize() {
 
     size_t arena_size = map_len_ - skip_size;
     arena_size &= ~(kMimallocSliceSize - 1);
-    mi_manage_os_memory_ex(map_base_ + skip_size, arena_size, false, false, false, -1, false, nullptr);
+    mi_manage_os_memory_ex(start_addr, arena_size, false, false, false, -1, false, nullptr);
     return true;
 }
 

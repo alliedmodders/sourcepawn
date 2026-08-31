@@ -18,7 +18,9 @@
 
 #include <amtl/experimental/am-argparser.h>
 #include <sp_vm_api.h>
+#if defined(SP_JIT_V2)
 #include "v2/jit.h"
+#endif
 #include "v2/method-info.h"
 #include "v2/runtime.h"
 #include "vm/binary-reader.h"
