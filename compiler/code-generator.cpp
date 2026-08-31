@@ -2525,6 +2525,7 @@ void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
 }
 
 void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {
+    rtti_->add_enumstruct(*decl->type());
     for (const auto& fun : decl->methods())
         EmitFunctionDecl(fun);
 }

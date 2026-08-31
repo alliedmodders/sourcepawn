@@ -262,6 +262,7 @@ RttiBuilder::add_enumstruct(Type* type)
     classdef.flags = kClassType_EnumStruct;
     classdef.name = names_->add(*cc_.atoms(), type->declName());
     classdef.first_field = fields_->count();
+    classdef.first_method = methods_->count();
     classdefs_->add(classdef);
 
     // Pre-allocate storage in case of nested types.
@@ -362,6 +363,7 @@ RttiBuilder::add_struct(Type* type)
     classdef.flags = kClassType_Struct;
     classdef.name = names_->add(*cc_.atoms(), ps->name());
     classdef.first_field = fields_->count();
+    classdef.first_method = kNoTableIndex;
     classdefs_->add(classdef);
 
     // Pre-reserve space in case we recursively add structs.
