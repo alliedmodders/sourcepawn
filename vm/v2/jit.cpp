@@ -728,6 +728,42 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitCopyObj(src_reg, dest_reg, bytes);
                 break;
             }
+            case LL_NEWOBJ: {
+                auto td = reader.read<const TypeDesc*>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitNewObj(td, dest_reg);
+                break;
+            }
+            case LL_NEWCLOSURE: {
+                auto closure_td = reader.read<const TypeDesc*>();
+                auto method_id = reader.read<uint32_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                auto method = rt_->AcquireMethod(method_id);
+                EmitNewClosure(closure_td, method.get(), dest_reg);
+                break;
+            }
+            case LL_CALLEE: {
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitCallee(dest_reg);
+                break;
+            }
+            case LL_STOR_UPVAR_X32:
+            case LL_STOR_UPVAR_X64:
+            case LL_STOR_UPVAR_A: {
+                auto args = reader.read<UpvarArgs>();
+                args.slot = SpFunction::OffsetOfSlot(args.slot);
+                EmitStorUpvar(op, args);
+                break;
+            }
+            case LL_ADDR_UPVAR:
+            case LL_LOAD_UPVAR_X32:
+            case LL_LOAD_UPVAR_X64:
+            case LL_LOAD_UPVAR_A: {
+                auto args = reader.read<UpvarArgs>();
+                args.slot = SpFunction::OffsetOfSlot(args.slot);
+                EmitLoadUpvar(op, args);
+                break;
+            }
 
             default:
                 fprintf(stderr, "Unimplemented opcode: %s\n", GetLLOpName(op));

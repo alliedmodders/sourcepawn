@@ -1380,10 +1380,10 @@ bool Interpreter::run_internal() {
                 break;
             }
             case LL_NEWCLOSURE: {
+                auto closure_td = reader_.read<const TypeDesc*>();
                 uint32_t method_id = reader_.read<uint32_t>();
                 uint16_t dest = reader_.read<uint16_t>();
                 auto method = rt_->AcquireMethod(method_id);
-                const TypeDesc* closure_td = rt_->LoadClosureType(method_id);
                 auto fn = rt_->NewClosure(closure_td, method.get());
                 if (!fn)
                     return false;
@@ -1437,8 +1437,13 @@ bool Interpreter::run_internal() {
                 SpFunction* fn = heap_.ToPhysAddr<SpFunction*>(vregs_[args.closure_reg]);
                 cell_t* slot = reinterpret_cast<cell_t*>(fn->upvars() + args.slot);
                 cell_t val = vregs_[args.reg];
-                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(val))
+                if (auto new_item = heap_.ToPhysAddr<HeapItem*>(val)) {
+                    if (new_item->td->kind() == TypeKind::ArraySlice) {
+                        rt_->ReportErrorNumber(SP_ERROR_SLICE_ESCAPE);
+                        return false;
+                    }
                     new_item->AddRef();
+                }
                 if (auto old_item = heap_.ToPhysAddr<HeapItem*>(*slot))
                     old_item->Release();
                 *slot = val;

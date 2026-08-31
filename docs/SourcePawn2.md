@@ -160,11 +160,12 @@ Example of using classes in SourcePawn:
 ### Closures
 
 SourcePawn now has support for nested functions, anonymous functions, and closures.
+This feature was quite difficult to shim into the existing type system, so it comes
+with some subtleties.
 
 ### Typed Signatures
-This is a very nuanced change due to the difficult compatibility landscape of
-the SourcePawn type system. By default, all functions now have what is referred
-to as a "typed" signature. A typed signature can be declared with a new typedef syntax:
+By default, all functions now have what is referred to as a "typed" signature.
+A typed signature can be declared with a new typedef syntax:
 
     typedef Callback = (int) -> Action;
 
@@ -180,10 +181,10 @@ Typed signatures can be called indirectly. For example:
         return result;
     }
 
-Functions can be declared inside other functions, either anonymously or not.
-Inner functions must be declared with the new "typed signature" syntax. Note
-that in this new syntax, the return value comes after the argument list as
-an arrow. If omitted, the function returns void.
+Functions using the "typed" signature style can be declared inside other
+functions, either anonymously or not. Note that in this new syntax, the return
+value comes after the argument list as an arrow. If omitted, the function
+returns void.
 
     function void outer() {
         function inner1() -> int { return 5; }
@@ -208,6 +209,42 @@ variables, the implicit cast will fail at runtime (or compile-time, if
 detected). This is because natives do not have access to the garbage collection
 system, so it would be unsafe for a native to store an object with ephemeral
 lifetime.
+
+#### Classes
+
+SourcePawn now has support for classes. A class describes a heap allocated
+object, with syntax similar to enum structs. Unlike enum structs, an object is
+always a pointer, and is assigned as a pointer. Like closures and arrays they
+are garbage collected.
+
+An example class:
+
+    class Player {
+        private int index_;
+
+        Player(int index) {
+            this.index_ = index;
+        }
+
+        void Print(const char[] text) {
+            PrintToChat(index, text);
+        }
+
+        property int index {
+            get() { return this.index; }
+        }
+    }
+
+Class fields and methods are public by default, but can be made private with
+a new "private" keyword. There is no inheritance, so there is no "protected"
+keyword.
+
+Unlike methodmaps, classes may not have any native functions. In addition,
+values containing an object type may not be passed to natives, since natives
+do not understand garbage collection.
+
+Also unlike methodmaps, a class's constructor does not return the new object.
+The new object is allocated internally as "this".
 
 Implementation Changes
 ----------------------

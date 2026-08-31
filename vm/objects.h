@@ -78,6 +78,10 @@ struct SpFunction : public HeapItem {
         assert(td->kind() == TypeKind::Closure);
         return reinterpret_cast<uint8_t*>(this + 1);
     }
+
+    static inline uint32_t OffsetOfSlot(uint32_t slot) {
+        return sizeof(SpFunction) + slot;
+    }
 };
 
 } // namespace sp

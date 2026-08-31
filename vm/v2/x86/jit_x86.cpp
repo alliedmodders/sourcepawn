@@ -65,6 +65,10 @@ static constexpr int kNativeStackAllowance = (3 + 4) * sizeof(intptr_t);
 // hidden return pointer, |this|, and up to 4 method arguments.
 static constexpr int kHandleOffset = -16;
 
+// The caller passes the callee SpFunction on the native stack just above the
+// return address.
+static constexpr int kCalleeSlotOffset = 8;
+
 void Compiler::EmitPrologue(const FrameInfo& frame) {
     __ enterFrame(JitFrameType::Scripted, method_info_->frame_id());
 
@@ -128,8 +132,10 @@ void Compiler::EmitIndirectCallThunk(IndirectCallThunk* thunk) {
     // Enter the exit frame. This aligns the stack.
     __ enterExitFrame(ExitFrameType::Helper, 0);
 
+    // We reached here via a jmp (no return address pushed), unlike a call, so
+    // the stack is 4 bytes short of alignment. Account for it in the reserve.
     static const size_t kStackNeeded = 2 * sizeof(void*);
-    static const size_t kStackReserve = ke::Align(kStackNeeded, 16);
+    static const size_t kStackReserve = ke::Align(kStackNeeded, 16) + 4;
     __ subl(esp, kStackReserve);
 
     // Set arguments.
@@ -260,7 +266,7 @@ void Compiler::EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t des
 
     // Check for exception.
     __ cmpl(Operand(ExternalAddress(env_->addressOfExceptionCode())), 0);
-    __ j(not_zero, ExternalAddress(stubs_.return_reported_error));
+    JumpOnReportedError(not_zero);
 
     if (dest != 0xFFFF)
         __ movl(RegAddr(dest), eax);
@@ -309,6 +315,10 @@ void Compiler::EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
         __ movl(eax, RegAddr(arg_reg));
         __ movl(Operand(stk, i * sizeof(cell_t)), eax);
     }
+
+    // Store the callee object on the stack so upvars can be read/stored.
+    __ movl(eax, RegAddr(fn_reg));
+    __ movl(Operand(esp, 0), eax);
 
     auto& thunk = AddIndirectCallThunk(fn_reg);
     __ movl(edx, Operand(edx, MethodInfo::offsetOfCompiledFunction()));
@@ -678,6 +688,46 @@ void Compiler::EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_
     __ movl(Operand(esp, 8), reinterpret_cast<intptr_t>(td));
 #endif
     CallRtForHandle(PmfCast<void*>(&Runtime::NewBulkArray), dest_reg);
+}
+
+void Compiler::EmitNewObj(const TypeDesc* td, uint16_t dest_reg) {
+#if defined(_WIN32)
+    __ push(reinterpret_cast<intptr_t>(td));
+#else
+    __ movl(Operand(esp, 8), reinterpret_cast<intptr_t>(td));
+#endif
+    CallRtForHandle(PmfCast<void*>(&Runtime::NewObject), dest_reg);
+}
+
+void Compiler::EmitNewClosure(const TypeDesc* closure_td, MethodInfo* method, uint16_t dest_reg) {
+#if defined(_WIN32)
+    __ push(reinterpret_cast<intptr_t>(method));
+    __ push(reinterpret_cast<intptr_t>(closure_td));
+#else
+    __ movl(Operand(esp, 12), reinterpret_cast<intptr_t>(method));
+    __ movl(Operand(esp, 8), reinterpret_cast<intptr_t>(closure_td));
+#endif
+    CallRtForHandle(PmfCast<void*>(&Runtime::NewClosure), dest_reg);
+}
+
+void Compiler::EmitCallee(uint16_t dest_reg) {
+    __ movl(eax, Operand(ebp, kCalleeSlotOffset));
+    __ movl(RegAddr(dest_reg), eax);
+}
+
+void Compiler::EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(edx, RegAddr(src_reg));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(edx, Operand(edx, offsetof(SpFunction, method)));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(eax, Operand(edx, MethodInfo::offsetOfMethodIndex()));
+    __ shll(eax, 1);
+    __ orl(eax, 1);
+    __ movl(RegAddr(dest_reg), eax);
 }
 
 void Compiler::EmitIncRef(Register obj_reg) {
@@ -1357,6 +1407,56 @@ void Compiler::EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             __ lea(edx, Operand(edx, ecx, ScaleFour));
             __ movl(ecx, Operand(edx, 0));
             __ movl(Operand(edx, 0), eax);
+            EmitDecRef(ecx, {});
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitLoadUpvar(LLOp op, const UpvarArgs& args) {
+    __ movl(edx, RegAddr(args.closure_reg));
+
+    switch (op) {
+        case LL_ADDR_UPVAR:
+            __ lea(eax, Operand(edx, args.slot));
+            __ movl(RegAddr(args.reg), eax);
+            break;
+        case LL_LOAD_UPVAR_X32:
+            __ movl(eax, Operand(edx, args.slot));
+            __ movl(RegAddr(args.reg), eax);
+            break;
+        case LL_LOAD_UPVAR_X64:
+            __ movq(xmm0, Operand(edx, args.slot));
+            __ movq(RegAddr(args.reg), xmm0);
+            break;
+        case LL_LOAD_UPVAR_A:
+            __ movl(eax, Operand(edx, args.slot));
+            EmitIncRef(eax);
+            __ movl(RegAddr(args.reg), eax);
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void Compiler::EmitStorUpvar(LLOp op, const UpvarArgs& args) {
+    __ movl(edx, RegAddr(args.closure_reg));
+
+    switch (op) {
+        case LL_STOR_UPVAR_X32:
+            __ movl(eax, RegAddr(args.reg));
+            __ movl(Operand(edx, args.slot), eax);
+            break;
+        case LL_STOR_UPVAR_X64:
+            __ movq(xmm0, RegAddr(args.reg));
+            __ movq(Operand(edx, args.slot), xmm0);
+            break;
+        case LL_STOR_UPVAR_A:
+            __ movl(eax, RegAddr(args.reg));
+            EmitIncRefForArrayEscape(eax, ecx);
+            __ movl(ecx, Operand(edx, args.slot));
+            __ movl(Operand(edx, args.slot), eax);
             EmitDecRef(ecx, {});
             break;
         default:

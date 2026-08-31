@@ -366,4 +366,5 @@ static const char* errmsg_ex[] = {
     /*484*/ "too many RTTI table entries used\n",
     /*485*/ "class may only have one constructor\n",
     /*486*/ "constructors cannot have variadic arguments\n",
+    /*487*/ "stack-allocated arrays cannot be passed to dynamically sized arguments that are captured\n",
 };

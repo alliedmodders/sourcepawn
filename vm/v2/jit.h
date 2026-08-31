@@ -107,6 +107,9 @@ class CompilerBase
     virtual void EmitNewFixedArray(const TypeDesc* td, uint16_t dest_reg, uint32_t size) = 0;
     virtual void EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_reg,
                                   uint16_t dest_reg) = 0;
+    virtual void EmitNewObj(const TypeDesc* td, uint16_t dest_reg) = 0;
+    virtual void EmitNewClosure(const TypeDesc* closure_td, MethodInfo* method,
+                                uint16_t dest_reg) = 0;
     virtual void EmitAddRef(uint16_t reg) = 0;
     virtual void EmitRelease(uint16_t reg) = 0;
     virtual void EmitCmpI64(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) = 0;
@@ -129,6 +132,8 @@ class CompilerBase
     virtual void EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) = 0;
     virtual void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;
     virtual void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) = 0;
+    virtual void EmitLoadUpvar(LLOp op, const UpvarArgs& args) = 0;
+    virtual void EmitStorUpvar(LLOp op, const UpvarArgs& args) = 0;
     virtual void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) = 0;
     virtual void EmitSliceEs(uint16_t src_reg, uint16_t dest_reg, uint32_t cells) = 0;
     virtual void EmitSliceFlat(const SliceFlatArgs& op) = 0;
@@ -141,6 +146,7 @@ class CompilerBase
                                  const std::span<const SwitchCaseEntry>& cases) = 0;
     virtual void EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
                                  const std::span<const SwitchCaseEntry>& cases) = 0;
+    virtual void EmitCallee(uint16_t dest_reg) = 0;
 
     // Errors.
     struct DeallocThunk;

@@ -1,0 +1,1 @@
+(11) : error 487: stack-allocated arrays cannot be passed to dynamically sized arguments that are captured

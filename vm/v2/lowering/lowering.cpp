@@ -1358,7 +1358,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             // Allocate the SpClosure.
             VReg closure_reg = AllocateTemp(closure_td);
-            emit(LL_NEWCLOSURE, method_id, closure_reg);
+            emit(LL_NEWCLOSURE, closure_td, method_id, closure_reg);
 
             // Store each upvar into its slot. For flat arrays and enum structs,
             // we have to perform a deep copy.

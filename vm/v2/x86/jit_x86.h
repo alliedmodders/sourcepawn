@@ -54,6 +54,7 @@ class Compiler : public CompilerBase
                           const std::vector<uint16_t>& args) override;
     void EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
                           const std::vector<uint16_t>& args) override;
+    void EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitJump(size_t target_idx) override;
     void EmitJump(LLOp op, uint16_t src_reg, size_t target_idx) override;
     void EmitJumpCmp(LLOp op, uint16_t reg_a, uint16_t reg_b, size_t target_idx) override;
@@ -69,6 +70,8 @@ class Compiler : public CompilerBase
     void EmitNewFixedArray(const TypeDesc* td, uint16_t dest_reg, uint32_t size) override;
     void EmitNewBulkArray(uint8_t dims, const TypeDesc* td, uint16_t size_reg,
                           uint16_t dest_reg) override;
+    void EmitNewObj(const TypeDesc* td, uint16_t dest_reg) override;
+    void EmitNewClosure(const TypeDesc* closure_td, MethodInfo* method, uint16_t dest_reg) override;
     void EmitAddRef(uint16_t reg) override;
     void EmitRelease(uint16_t reg) override;
     void EmitCmpI64(LLOp op, uint16_t reg_a, uint16_t reg_b, uint16_t dest) override;
@@ -91,6 +94,8 @@ class Compiler : public CompilerBase
     void EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) override;
     void EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;
     void EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint16_t val_reg) override;
+    void EmitLoadUpvar(LLOp op, const UpvarArgs& args) override;
+    void EmitStorUpvar(LLOp op, const UpvarArgs& args) override;
     void EmitSlice(uint16_t base_reg, uint16_t index_reg, uint16_t dest_reg) override;
     void EmitSliceEs(uint16_t src_reg, uint16_t dest_reg, uint32_t cells) override;
     void EmitSliceFlat(const SliceFlatArgs& op) override;
@@ -103,6 +108,7 @@ class Compiler : public CompilerBase
                          const std::span<const SwitchCaseEntry>& cases) override;
     void EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
                          const std::span<const SwitchCaseEntry>& cases) override;
+    void EmitCallee(uint16_t dest_reg) override;
 
     void EmitDeallocThunk(DeallocThunk* thunk) override;
     void EmitBoundsErrorThunk(BoundsErrorThunk* thunk) override;

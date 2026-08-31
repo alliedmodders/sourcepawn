@@ -2258,6 +2258,20 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         ps.argv[argpos] = result;
         nargs++;
 
+        // Detect an edge case at compile-time to avoid a very confusing runtime
+        // error. If the argument of the callee is captured, and we're passing a
+        // stack array, the VM will throw a runtime error due to an escaping
+        // slice. Warn about this at compile time.
+        if (fun && argidx < fun->args().size()) {
+            auto formal_param = fun->args()[argidx];
+            if (auto* array = formal_param->type()->as<ArrayType>()) {
+                if (formal_param->is_captured() && !array->is_fixed()) {
+                    report(param, 487);
+                    return false;
+                }
+            }
+        }
+
         // Don't iterate past the varargs position.
         if (!ft->variadic() || argidx < ft->nargs())
             argidx++;
