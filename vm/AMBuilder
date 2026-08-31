@@ -46,7 +46,6 @@ module.sources += [
 
 # V2 implementation
 module.sources += [
-  'v2/builtins.cpp',
   'v2/control-flow.cpp',
   'v2/graph-builder.cpp',
   'v2/interpreter.cpp',
