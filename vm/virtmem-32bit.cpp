@@ -29,7 +29,7 @@
 #include "../utils/procmap.h"
 
 #include "environment.h"
-#include "heap-defaults.h"
+#include "heap.h"
 
 namespace sp {
 

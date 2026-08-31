@@ -14,8 +14,8 @@
 
 #include <memory>
 #include <algorithm>
-#include <mimalloc.h>
 
+#include <mimalloc.h>
 #include "environment.h"
 
 namespace sp {

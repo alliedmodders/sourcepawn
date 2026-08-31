@@ -19,6 +19,9 @@ if library.compiler.like('gcc'):
 elif library.compiler.like('msvc'):
     library.compiler.cflags += ['/w']
 
+if builder.options.debug == '1':
+    library.compiler.defines += ['MI_DEBUG_FULL=ON']
+
 library.sources += [
     'mimalloc/src/alloc.c',
     'mimalloc/src/alloc-aligned.c',

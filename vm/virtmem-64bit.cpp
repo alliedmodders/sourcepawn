@@ -11,7 +11,6 @@
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
 #include "virtmem-64bit.h"
-#include <mimalloc.h>
 
 #ifdef KE_POSIX
 #include <sys/mman.h>
@@ -26,7 +25,6 @@
 #include <amtl/am-platform.h>
 #include <mimalloc.h>
 #include "environment.h"
-#include "heap-defaults.h"
 #include "virtmem-constants.h"
 
 namespace sp {

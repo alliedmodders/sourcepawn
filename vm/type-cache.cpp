@@ -68,6 +68,9 @@ const TypeDesc* TypeCache::GetArray(const TypeDesc* elt) {
         return p->value;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::Array, elt);
+    if (elt->IsHeapItem())
+        td->set_finalizer(SpArray::NestedFinalizer);
+
     cache_.add(p, key, td);
     return td;
 }
@@ -80,6 +83,9 @@ const TypeDesc* TypeCache::GetFixedArray(const TypeDesc* elt, uint32_t size) {
         return p->value;
 
     TypeDesc* td = NewTypeDesc(pool_, elt, size);
+    if (elt->IsHeapItem())
+        td->set_finalizer(SpArray::NestedFinalizer);
+
     cache_.add(p, key, td);
     return td;
 }

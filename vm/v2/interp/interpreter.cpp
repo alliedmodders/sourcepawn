@@ -35,10 +35,10 @@
 #include "v2/interp/ll-op.h"
 #include "v2/interp/lowering.h"
 #include "v2/method-info.h"
-#include "v2/objects.h"
 #include "v2/pcode-reader.h"
 #include "v2/runtime-helpers.h"
 #include "v2/runtime.h"
+#include "objects.h"
 
 
 #define BINARY_OP_I32(op, oper) \
@@ -444,7 +444,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 auto slice = rt_->NewSlice(array, index);
                 if (!slice)
                     return false;
-                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice);
+                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice.release());
                 break;
             }
             case LL_IDXADDR_FLAT: {
@@ -500,7 +500,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 auto slice = rt_->NewFlatSlice(base, td, index);
                 if (!slice)
                     return false;
-                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice);
+                vregs_[dest_reg] = rt_->heap().ToLocalAddr(slice.release());
                 break;
             }
             case LL_STOR_ELEM_FLAT_I32:
@@ -995,7 +995,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 auto array = rt_->NewArray(td, size);
                 if (!array)
                     return false;
-                vregs_[dest] = rt_->heap().ToLocalAddr(array);
+                vregs_[dest] = rt_->heap().ToLocalAddr(array.release());
                 break;
             }
 
@@ -1006,7 +1006,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
                 auto array = rt_->NewArray(td, size);
                 if (!array)
                     return false;
-                vregs_[dest] = rt_->heap().ToLocalAddr(array);
+                vregs_[dest] = rt_->heap().ToLocalAddr(array.release());
                 break;
             }
             case LL_NEWBULKARRAY: {
@@ -1019,7 +1019,7 @@ bool Interpreter::run_internal(std::span<cell_t> args) {
 
                 if (!array)
                     return false;
-                vregs_[dest] = rt_->heap().ToLocalAddr(array);
+                vregs_[dest] = rt_->heap().ToLocalAddr(array.release());
                 break;
             }
             case LL_FILLARRAY: {

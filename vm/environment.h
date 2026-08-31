@@ -20,7 +20,6 @@
 #include <amtl/am-mutex.h>
 #include <sp_vm_api.h>
 #include "code-allocator.h"
-#include "heap-defaults.h"
 #include "heap.h"
 #include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
@@ -148,8 +147,8 @@ class Environment : public ISourcePawnEnvironment
     uint32_t sp_base() const { return sp_base_; }
     uint32_t sp_top() const { return sp_top_; }
     uint32_t* addressOfSp() { return &sp_; }
-    static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
     bool addStack(cell_t amount);
+    static inline size_t offsetOfSp() { return offsetof(Environment, sp_); }
 
     bool Invoke(v1::PluginRuntime* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result);
     bool Invoke(v2::Runtime* cx, const RefPtr<v2::MethodInfo>& method, cell_t* result);

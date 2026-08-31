@@ -21,13 +21,31 @@
 #include <stdint.h>
 
 #include <amtl/am-bits.h>
-
-#include "heap-defaults.h"
+#include <amtl/am-refcounting.h>
+#include "handle.h"
+#include "objects.h"
+#include "type-desc.h"
+#if defined(KE_64BIT)
+# include "virtmem-64bit.h"
+#elif defined(KE_32BIT)
+# include "virtmem-32bit.h"
+#else
+# error "KE_64BIT or KE_32BIT not defined"
+#endif
 
 struct mi_heap_s;
 typedef struct mi_heap_s mi_heap_t;
 
 namespace sp {
+
+#ifdef KE_64BIT
+using VirtMem = VirtMem64;
+#else
+using VirtMem = VirtMem32;
+#endif
+
+static constexpr uint32_t kDefaultStackSize = 1 * ke::kMB;
+static constexpr uint32_t kDefaultHeapChunkSize = 16 * ke::kMB;
 
 template <typename T>
 class RawHeapPtr;
@@ -67,8 +85,6 @@ class Heap {
         return reinterpret_cast<T*>(Allocate(sizeof(T)));
     }
 
-    uint8_t* Allocate(uint32_t requested_size);
-
     uint32_t ToLocalAddr(void* p) { return virt_mem_.ToLocalAddr(p); }
     template <typename T>
     T ToPhysAddr(uint32_t addr) { return virt_mem_.ToPhysAddr<T>(addr); }
@@ -102,7 +118,22 @@ class Heap {
     template <typename T>
     typename std::enable_if<std::is_array<T>::value, RawHeapPtr<T>>::type MakeRawPtr(size_t n);
 
+    template <typename T> Handle<T> New(const TypeDesc* td, uint32_t payload_bytes = 0) {
+        static_assert(std::is_base_of_v<HeapItem, T>, "Must be derived from HeapItem");
+        assert(td->IsArrayish());
+        assert(ke::IsUintAddSafe(static_cast<uint32_t>(sizeof(T)), payload_bytes));
+
+        auto obj = reinterpret_cast<HeapItem*>(AllocRaw(sizeof(T) + payload_bytes));
+        if (!obj)
+            return {};
+
+        obj->td = td;
+        obj->rc = 0;
+        return Handle<T>(reinterpret_cast<T*>(obj));
+    }
+
   private:
+    uint8_t* Allocate(uint32_t requested_size);
     uint8_t* SlowAllocate(uint32_t size);
 
     Chunk* NewChunk(size_t size);

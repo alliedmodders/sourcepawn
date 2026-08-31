@@ -25,6 +25,7 @@ module.sources += [
   'file-utils.cpp',
   'heap.cpp',
   'md5/md5.cpp',
+  'objects.cpp',
   'rtti.cpp',
   'smx-image.cpp',
   'stack-frames.cpp',

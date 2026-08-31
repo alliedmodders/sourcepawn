@@ -12,25 +12,41 @@
 //
 #pragma once
 
+#include <assert.h>
 #include <stdint.h>
+
+#include "type-desc.h"
 
 namespace sp {
 
-class TypeDesc;
-
-namespace v2 {
-
 struct HeapItem {
+    HeapItem(const TypeDesc* td)
+      : td(td),
+        rc(1)
+    {}
+
     const TypeDesc* td;
+    uintptr_t rc;
+
+    void AddRef() { rc++; }
+    void Release() {
+        assert(rc >= 1);
+        if (--rc == 0)
+            Destroy(this);
+    }
+
+  private:
+    static void Destroy(HeapItem* item);
 };
 
 struct SpArray : public HeapItem {
     uint32_t length;
     uint32_t data;
+
+    static void NestedFinalizer(HeapItem* obj);
 };
 
 struct SpObject : public HeapItem {
 };
 
-} // namespace v2
 } // namespace sp

@@ -41,8 +41,8 @@ using namespace SourcePawn;
 Runtime::Runtime(std::shared_ptr<SmxImage> image, bool data_only)
  : BaseRuntime(std::move(image)),
    env_(Environment::get()),
-   data_only_(data_only),
-   heap_(env_->virt_mem())
+   heap_(env_->virt_mem()),
+   data_only_(data_only)
 {
 
     std::lock_guard<ke::Mutex> lock(env_->lock());
@@ -50,6 +50,19 @@ Runtime::Runtime(std::shared_ptr<SmxImage> image, bool data_only)
 }
 
 Runtime::~Runtime() {
+    for (size_t i = 0; i < global_vars_.size(); i++) {
+        if (!global_vars_[i].td->IsHeapItem())
+            continue;
+        auto obj = heap_.ToPhysAddr<HeapItem*>(global_vars_[i].addr);
+        if (obj)
+            obj->Release();
+    }
+    for (size_t i = 0; i < string_addrs_.size(); i++) {
+        auto array = heap_.ToPhysAddr<SpArray*>(string_addrs_[i]);
+        if (array)
+            array->Release();
+    }
+
     // The watchdog thread takes the global JIT lock while it patches all
     // runtimes. It is not enough to ensure that the unlinking of the runtime is
     // protected; we cannot delete functions or code while the watchdog might be
@@ -119,7 +132,9 @@ bool Runtime::InitializeGlobals() {
     if (image_->rtti_globals())
         num_globals = image_->rtti_globals()->row_count;
 
-    global_addrs_ = ke::FixedArray<uint32_t>(num_globals);
+    uint32_t global_bytes = 0;
+
+    global_vars_ = ke::FixedArray<GlobalDesc>(num_globals);
     for (uint32_t i = 0; i < num_globals; i++) {
         auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), i);
         assert(global);
@@ -127,18 +142,33 @@ bool Runtime::InitializeGlobals() {
         auto td = LoadTypeFromId(global->type_id);
         if (!td)
             return false;
-        auto ptr = AllocateGlobal(td);
-        if (!ptr)
-            return false;
-        global_addrs_[i] = ptr;
+        global_vars_[i].td = td;
 
+        if (!ke::IsUint32AddSafe(global_bytes, td->slot_size())) {
+            ReportErrorNumber(SP_ERROR_OUT_OF_MEMORY);
+            return false;
+        }
+        global_bytes += td->slot_size();
+    }
+
+    global_buffer_ = heap_.MakeRawPtr<uint8_t[]>(global_bytes);
+    if (!global_buffer_) {
+        ReportErrorNumber(SP_ERROR_OUT_OF_MEMORY);
+        return false;
+    }
+
+    uint32_t next_global_addr = heap_.ToLocalAddr(global_buffer_.get());
+    for (uint32_t i = 0; i < num_globals; i++) {
+        global_vars_[i].addr = next_global_addr;
+        next_global_addr += global_vars_[i].td->slot_size();
+
+        auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), i);
         if ((global->flags & kRttiGlobal_VisibilityMask) == kRttiGlobal_Public) {
             PubvarEntry entry;
             entry.pubvar.name = image_->names() + global->name;
             entry.global_index = i;
-            entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(ptr);
-            entry.local_addr = ptr;
-            entry.td = td;
+            entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(global_vars_[i].addr);
+            entry.local_addr = global_vars_[i].addr;
             pubvars_.push_back(entry);
         }
     }
@@ -174,7 +204,7 @@ bool Runtime::InitializeGlobals() {
         memcpy(data, blob->data(), blob->size());
         *(data + blob->size()) = '\0';
 
-        string_addrs_[i] = heap_.ToLocalAddr(array);
+        string_addrs_[i] = heap_.ToLocalAddr(array.release());
     }
 
     /* Initialize the null references */
@@ -285,6 +315,7 @@ int Runtime::UpdateNativeBindingObject(uint32_t index, INativeCallback* callback
     // The native must either be unbound, or it must be ephemeral or optional.
     // Otherwise, we've already baked its address in at callsites and it's too
     // late to fix them.
+    // #include "ref.h"
     if (native->status == SP_NATIVE_BOUND &&
         !(native->flags & (SP_NTVFLAG_OPTIONAL | SP_NTVFLAG_EPHEMERAL))) {
         return SP_ERROR_PARAM;
@@ -339,7 +370,8 @@ void Runtime::ResolvePubvar(PubvarEntry& entry) {
     if (entry.resolved)
         return;
 
-    if (entry.td->IsNonFlatArray()) {
+    auto td = global_vars_[entry.global_index].td;
+    if (td->IsNonFlatArray()) {
         uint32_t array_local = *heap_.ToPhysAddr<cell_t*>(entry.local_addr);
         SpArray* array = heap_.ToPhysAddr<SpArray*>(array_local);
         entry.pubvar.offs = heap_.ToPhysAddr<cell_t*>(array->data);
@@ -707,24 +739,10 @@ void Runtime::leaveHeapScope() {
     hp_scope_ = node.prev_hp_scope;
 }
 
-bool Runtime::heapAlloc(uint32_t amount, cell_t* out) {
-    return heapAllocEx(amount, out) != nullptr;
-}
-
-cell_t* Runtime::heapAllocEx(uint32_t amount, cell_t* out) {
-    auto ptr = heap_.Allocate(amount);
-    if (!ptr) {
-        ReportErrorNumber(SP_ERROR_HEAPLOW);
-        return nullptr;
-    }
-
-    *out = heap_.ToLocalAddr(ptr);
-    return reinterpret_cast<cell_t*>(ptr);
-}
-
 
 bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t* local_addr,
                                 const cell_t* init) {
+    assert(false);
     if (length > INT_MAX || stride > INT_MAX) {
         ReportErrorNumber(SP_ERROR_ARRAY_TOO_BIG);
         return false;
@@ -733,23 +751,24 @@ bool Runtime::HeapAlloc2dArray(unsigned int length, unsigned int stride, cell_t*
     const TypeDesc* elt_td = GetArrayType(GetPrimitiveType(TypeKind::Any));
     const TypeDesc* td = GetArrayType(elt_td);
 
-    SpArray* array = NewArray(td, length);
+    Handle<SpArray> array = NewArray(td, length);
     if (!array)
         return false;
 
-    *local_addr = heap_.ToLocalAddr(array);
+    *local_addr = heap_.ToLocalAddr(array.release());
 
     cell_t* array_phys = heap_.ToPhysAddr<cell_t*>(array->data);
     for (unsigned int i = 0; i < length; i++) {
-        SpArray* elt = NewArray(elt_td, stride);
+        Handle<SpArray> elt = NewArray(elt_td, stride);
         if (!elt)
             return false;
-        array_phys[i] = heap_.ToLocalAddr(elt);
 
         if (init) {
             cell_t* elt_phys = heap_.ToPhysAddr<cell_t*>(elt->data);
             memcpy(elt_phys, &init[i * stride], stride * sizeof(cell_t));
         }
+
+        array_phys[i] = heap_.ToLocalAddr(elt.release());
     }
     return true;
 }
@@ -983,39 +1002,12 @@ const TypeDesc* Runtime::GetEnumStructType(const smx_rtti_classdef* classdef) {
     return env_->types()->GetEnumStruct(this, classdef);
 }
 
-uint32_t Runtime::AllocateGlobal(const TypeDesc* td) {
-    uint8_t* ptr = heap_.Allocate(td->slot_size());
-    if (!ptr)
-        return 0;
-
-    switch (td->kind()) {
-        case TypeKind::Bool:
-        case TypeKind::Int32:
-        case TypeKind::Int64:
-        case TypeKind::Float32:
-        case TypeKind::Char8:
-        case TypeKind::Any:
-        case TypeKind::TopFunction:
-        case TypeKind::Array:
-        case TypeKind::FlatArray:
-        case TypeKind::EnumStruct:
-        case TypeKind::FixedArray:
-            break;
-
-        default:
-            assert(false);
-            return 0;
-    }
-
-    return heap_.ToLocalAddr(ptr);
-}
-
 const TypeDesc* Runtime::GetTypeOfGlobal(uint16_t index) {
     auto global = image_->getRttiRow<smx_rtti_global>(image_->rtti_globals(), index);
     return LoadTypeFromId(global->type_id);
 }
 
-SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {
+Handle<SpArray> Runtime::NewArray(const TypeDesc* td, uint32_t size) {
     assert(td->kind() == TypeKind::Array ||
            (td->kind() == TypeKind::FixedArray && size == td->array_size()));
     uint32_t elt_size = td->array_elt()->element_size();
@@ -1025,55 +1017,31 @@ SpArray* Runtime::NewArray(const TypeDesc* td, uint32_t size) {
         return nullptr;
     }
 
-    SpArray* base = heap_.AllocTyped<SpArray>();
-    if (!base)
+    uint32_t data_size = size * elt_size;
+    if (data_size >= INT_MAX) {
+        env_->ReportError(SP_ERROR_INVALID_ARRAY_SIZE);
         return nullptr;
-    base->td = td;
-    base->length = size;
-    base->data = 0;
-
-    if (!size)
-        return base;
-
-    uint8_t* data = heap_.Allocate(size * elt_size);
-    if (!data)
-        return nullptr;
-
-    memset(data, 0, size * elt_size);
-    base->data = heap_.ToLocalAddr(data);
-
-    auto array_elt = td->array_elt();
-    switch (array_elt->kind()) {
-        case TypeKind::Bool:
-        case TypeKind::Int32:
-        case TypeKind::Int64:
-        case TypeKind::Float32:
-        case TypeKind::Char8:
-        case TypeKind::Any:
-        case TypeKind::TopFunction:
-        case TypeKind::Array:
-        case TypeKind::EnumStruct:
-            break;
-
-        case TypeKind::FixedArray: {
-            uint32_t* slots = reinterpret_cast<uint32_t*>(data);
-            for (uint32_t i = 0; i < size; i++) {
-                auto p = NewArray(array_elt, array_elt->array_size());
-                if (!p)
-                    return nullptr;
-                slots[i] = heap_.ToLocalAddr(p);
-            }
-            break;
-        }
-
-        default:
-            assert(false);
     }
 
+    auto base = heap_.New<SpArray>(td, size * elt_size);
+    if (!base) {
+        env_->ReportError(SP_ERROR_INVALID_ARRAY_SIZE);
+        return nullptr;
+    }
+    base->length = size;
+
+    if (size) {
+        base->data = heap_.ToLocalAddr(base.get()) + sizeof(SpArray);
+
+        auto data_ptr = heap_.ToPhysAddr<void*>(base->data);
+        memset(data_ptr, 0, data_size);
+    } else {
+        base->data = 0;
+    }
     return base;
 }
 
-SpArray* Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) {
+Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) {
     if (*sizes < 0) {
         ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
         return nullptr;
@@ -1098,12 +1066,14 @@ SpArray* Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) 
         auto child = NewBulkArray(inner, dims - 1, sizes + 1);
         if (!child)
             return nullptr;
-        parent_slots[i] = heap_.ToLocalAddr(child);
+        parent_slots[i] = heap_.ToLocalAddr(child.release());
     }
     return array;
 }
 
 bool Runtime::FillArray(SpArray* array, uint32_t data_offset) {
+    assert(!array->td->array_elt()->IsHeapItem());
+
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();
     assert(data_bytes);
@@ -1126,6 +1096,8 @@ bool Runtime::FillArray(SpArray* array, uint32_t data_offset) {
 
 void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset) {
     assert(td->IsFlatArray());
+    assert(!td->array_elt()->IsHeapItem());
+
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();
     assert(data_bytes);
@@ -1147,7 +1119,7 @@ void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {
     return data + (index * elt_size);
 }
 
-SpArray* Runtime::NewSlice(SpArray* array, uint32_t index) {
+Handle<SpArray> Runtime::NewSlice(SpArray* array, uint32_t index) {
     // We are only allowed to slice one-dimensional arrays.
     // :TODO: check this in verifier, not here.
     if (array->td->array_elt()->IsArrayish()) {
@@ -1161,23 +1133,22 @@ SpArray* Runtime::NewSlice(SpArray* array, uint32_t index) {
     if (td->kind() != TypeKind::ArraySlice)
         td = GetSliceType(td->array_elt());
 
-    auto slice = heap_.AllocTyped<SpArray>();
+    auto slice = heap_.New<SpArray>(td);
     if (!slice)
         return nullptr;
-    slice->td = td;
     slice->length = array->length - index;
     slice->data = heap_.ToLocalAddr(GetArrayElem(array, index));
     return slice;
 }
 
-SpArray* Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index) {
+Handle<SpArray> Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index) {
     assert(td->IsFlatArray());
     assert(index <= td->array_size());
+
     const TypeDesc* slice_td = GetSliceType(td->array_elt());
-    SpArray* slice = heap_.AllocTyped<SpArray>();
+    Handle<SpArray> slice = heap_.New<SpArray>(slice_td);
     if (!slice)
         return nullptr;
-    slice->td = slice_td;
     slice->length = td->array_size() - index;
     slice->data = local_addr + index * td->array_elt()->element_size();
     return slice;

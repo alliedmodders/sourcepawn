@@ -20,13 +20,16 @@
 #include <amtl/am-vector.h>
 #include <sp_vm_api.h>
 #include "base-runtime.h"
-#include "heap-defaults.h"
+#include "handle.h"
 #include "heap.h"
 #include "scripted-invoker.h"
 #include "smx-image.h"
 #include "type-cache.h"
 
 namespace sp {
+
+struct SpArray;
+
 namespace v2 {
 
 using namespace ke;
@@ -34,7 +37,6 @@ using namespace ke;
 static constexpr cell_t kNativePointerTag = 0x80000000;
 
 class MethodInfo;
-struct SpArray;
 
 struct NativeEntry : public sp_native_t {
     NativeEntry() : legacy_fn(nullptr) {}
@@ -112,7 +114,7 @@ class Runtime final : public BaseRuntime,
     ScriptedInvoker* GetScriptedInvoker(funcid_t func_id);
     ScriptedInvoker* GetFunctionByMethodIndex(uint32_t method_index);
     bool GetNativeIndex(uint32_t method_index, uint32_t* index) const;
-    uint32_t GetGlobalAddr(uint16_t index) const { return global_addrs_[index]; }
+    uint32_t GetGlobalAddr(uint16_t index) const { return global_vars_[index].addr; }
     const TypeDesc* GetTypeOfGlobal(uint16_t index);
     uint32_t GetStringAddr(uint16_t index) const { return string_addrs_[index]; }
     const TypeDesc* GetStringLitType(uint16_t index);
@@ -130,13 +132,13 @@ class Runtime final : public BaseRuntime,
     uint32_t AllocStringBlobFromData(uint32_t data_offset);
     uint32_t AllocateGlobal(const TypeDesc* td);
 
-    SpArray* NewArray(const TypeDesc* td, uint32_t size);
-    SpArray* NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
+    Handle<SpArray> NewArray(const TypeDesc* td, uint32_t size);
+    Handle<SpArray> NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes);
     bool FillArray(SpArray* array, uint32_t data_offset);
     void FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset);
     void* GetArrayElem(SpArray* array, uint32_t index);
-    SpArray* NewSlice(SpArray* array, uint32_t index);
-    SpArray* NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
+    Handle<SpArray> NewSlice(SpArray* array, uint32_t index);
+    Handle<SpArray> NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }
     Runtime* context() const { return const_cast<Runtime*>(this); }
@@ -163,9 +165,6 @@ class Runtime final : public BaseRuntime,
     bool enterHeapScope();
     void leaveHeapScope();
 
-    bool heapAlloc(uint32_t amount, cell_t* out);
-    cell_t* heapAllocEx(uint32_t amount, cell_t* out);
-
     Environment* env() const { return env_; }
 
   private:
@@ -176,13 +175,15 @@ class Runtime final : public BaseRuntime,
 
   private:
     Environment* env_;
+    // Must be declared before any RawHeapPtr members to ensure they are destroyed
+    // before the heap itself is destroyed.
+    Heap heap_;
     std::vector<NativeEntry> natives_;
     std::unordered_map<uint32_t, uint32_t> native_map_;
     struct PubvarEntry {
         sp_pubvar_t pubvar;
         uint32_t global_index;
         cell_t local_addr;
-        const TypeDesc* td;
         bool resolved = false;
     };
     void ResolvePubvar(PubvarEntry& entry);
@@ -190,7 +191,14 @@ class Runtime final : public BaseRuntime,
     std::vector<sp_public_t> publics_;
     std::vector<std::unique_ptr<ScriptedInvoker>> entrypoints_;
     std::vector<RefPtr<MethodInfo>> methods_;
-    ke::FixedArray<uint32_t> global_addrs_;
+
+    struct GlobalDesc {
+        const TypeDesc* td = nullptr;
+        uint32_t addr = 0;
+    };
+    RawHeapPtr<uint8_t[]> global_buffer_;
+    ke::FixedArray<GlobalDesc> global_vars_;
+
     ke::FixedArray<uint32_t> string_addrs_;
 
     bool paused_ = false;
@@ -200,7 +208,6 @@ class Runtime final : public BaseRuntime,
     unsigned char code_hash_[16];
     unsigned char data_hash_[16];
 
-    Heap heap_;
     cell_t* m_pNullVec = nullptr;
     cell_t* m_pNullString = nullptr;
     uint32_t hp_scope_ = 0;

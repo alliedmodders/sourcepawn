@@ -37,7 +37,11 @@ enum class TypeKind : uint8_t {
     EnumStruct,
 };
 
+struct HeapItem;
+
 class TypeDesc final {
+    friend class TypeCache;
+
   public:
     explicit TypeDesc(TypeKind kind)
       : kind_(kind),
@@ -181,6 +185,17 @@ class TypeDesc final {
         return ref;
     }
 
+    bool IsHeapItem() const {
+        switch (kind_) {
+            case TypeKind::ArraySlice:
+            case TypeKind::FixedArray:
+            case TypeKind::Array:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     bool HasClassdef() const {
         return kind_ == TypeKind::EnumStruct;
     }
@@ -197,9 +212,16 @@ class TypeDesc final {
         return clsdef.field_offsets;
     }
 
+    typedef void (*Finalizer)(HeapItem* item);
+    Finalizer finalizer() const { return finalizer_; }
+
+  private:
+    void set_finalizer(Finalizer finalizer) { finalizer_ = finalizer; }
+
   private:
     TypeKind kind_;
     bool can_global_cache_ = false;
+    Finalizer finalizer_ = nullptr;
     union {
         struct {
             const TypeDesc* elt;
