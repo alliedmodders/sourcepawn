@@ -341,6 +341,11 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
     if (!expr->Bind(sc) || !sema.CheckExpr(expr))
         return false;
 
+    if (!expr->val().type()->isInt() && !expr->val().type()->isBool()) {
+        report(135);
+        return false;
+    }
+
     // The preprocessor uses a bespoke constant evaluator, and I don't want to
     // touch the preprocessor, so it gets to keep this.
     return expr->EvalConst(val, type);
