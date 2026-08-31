@@ -185,11 +185,7 @@ bool CompilerBase::IsSupported() {
 
 bool CompilerBase::SupportsPlugin(PluginContext* cx) {
     const auto& code = cx->code();
-    if (code.version < SmxConsts::CODE_VERSION_FEATURE_MASK)
-        return false;
-
     uint32_t required_features =
-        SmxConsts::kCodeFeatureDirectArrays |
         SmxConsts::kCodeFeatureHeapScopes |
         SmxConsts::kCodeFeatureNullFunctions |
         SmxConsts::kCodeFeatureTypedOps;

@@ -603,11 +603,6 @@ MethodVerifier::verifyOp(OPCODE op) {
 
         case OP_INITARRAY_PRI:
         case OP_INITARRAY_ALT: {
-            if (!(code_features_ & SmxConsts::kCodeFeatureDirectArrays)) {
-                reportError(SP_ERROR_INVALID_INSTRUCTION);
-                return false;
-            }
-
             constexpr cell_t kMaxCells = INT_MAX / (2 * (int)sizeof(cell_t));
 
             cell_t addr = readCell();
