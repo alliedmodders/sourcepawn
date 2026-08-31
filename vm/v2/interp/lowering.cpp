@@ -33,7 +33,6 @@
 #include "v2/interp/lowering-assembler.h"
 #include "v2/method-info.h"
 #include "v2/opcodes.h"
-#include "v2/pcode-visitor.h"
 #include "v2/runtime.h"
 #include "utils/bitset.h"
 #include "utils/pool-allocator.h"
