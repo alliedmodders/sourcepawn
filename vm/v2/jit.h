@@ -29,6 +29,7 @@
 #include "type-desc.h"
 #include "v2/control-flow.h"
 #include "v2/lowering/ll-op.h"
+#include "v2/lowering/llcode.h"
 #include "v2/opcodes.h"
 
 namespace sp {
@@ -86,6 +87,7 @@ class CompilerBase
     virtual void EmitLoadConst64(uint16_t reg, int64_t val) = 0;
     virtual void EmitAddr(uint16_t src_reg, uint16_t dest_reg) = 0;
     virtual void EmitRetn(LLOp op, std::optional<uint16_t> reg) = 0;
+    virtual void EmitEpilogue() = 0;
     virtual void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
                                 const std::vector<uint16_t>& args, uint16_t spread_reg) = 0;
     virtual void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,
@@ -208,6 +210,7 @@ class CompilerBase
     }
 
     bool IsNextBlock(uint32_t block_index);
+    bool HasGcObjRegs() const { return !ll_->gcobj_regs().empty(); }
 
   protected:
     struct ErrorThunk;
@@ -300,6 +303,8 @@ class CompilerBase
         const uint8_t* cip;
     };
     std::vector<DeallocThunk> dealloc_thunks_;
+
+    Label epilogue_;
 
     // Debugging.
     Label debug_break_;

@@ -137,6 +137,11 @@ CompiledFunction* CompilerBase::Emit() {
             return nullptr;
     }
 
+    if (epilogue_.used()) {
+        __ bind(&epilogue_);
+        EmitEpilogue();
+    }
+
     debug_map.push_back({masm.pc(), "<epilogue>", 0});
 
     for (auto& call : call_thunks_) {

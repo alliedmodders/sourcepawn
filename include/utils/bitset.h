@@ -53,6 +53,14 @@ class BitSet
     words_[word] |= (uintptr_t(1) << pos_in_word(bit));
   }
 
+  bool empty() const {
+    for (uintptr_t word : words_) {
+      if (word)
+        return false;
+    }
+    return true;
+  }
+
   void unset(uintptr_t bit) {
     assert(!max_bits_  || bit <= *max_bits_);
     size_t word = word_for_bit(bit);

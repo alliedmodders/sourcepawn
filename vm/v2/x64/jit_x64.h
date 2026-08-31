@@ -49,6 +49,7 @@ class Compiler : public CompilerBase
     void EmitLoadConst64(uint16_t reg, int64_t val) override;
     void EmitAddr(uint16_t src_reg, uint16_t dest_reg) override;
     void EmitRetn(LLOp op, std::optional<uint16_t> reg) override;
+    void EmitEpilogue() override;
     void EmitNativeCall(uint32_t native_index, uint8_t nargs, uint16_t dest,
                         const std::vector<uint16_t>& args, uint16_t spread_reg) override;
     void EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t dest,

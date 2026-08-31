@@ -201,6 +201,20 @@ void Compiler::EmitRetn(LLOp op, std::optional<uint16_t> reg) {
     if (op == LL_RETN_A)
         EmitIncRefForArrayEscape(eax, ecx);
 
+    if (HasGcObjRegs()) {
+        __ jmp(&epilogue_);
+        return;
+    }
+
+    EmitEpilogue();
+}
+
+void Compiler::EmitEpilogue() {
+    ll_->gcobj_regs().for_each([this](uintptr_t reg) {
+        __ movl(edx, RegAddr(reg));
+        EmitDecRef(edx, eax);
+    });
+
     // Restore callee-saved registers.
     __ movl(stk, frm);
     __ lea(esp, Operand(ebp, -3 * sizeof(intptr_t)));

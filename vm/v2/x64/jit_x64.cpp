@@ -134,6 +134,20 @@ void Compiler::EmitRetn(LLOp op, std::optional<uint16_t> reg) {
     if (op == LL_RETN_A)
         EmitIncRefForArrayEscape(rax, rcx);
 
+    if (HasGcObjRegs()) {
+        __ jmp(&epilogue_);
+        return;
+    }
+
+    EmitEpilogue();
+}
+
+void Compiler::EmitEpilogue() {
+    ll_->gcobj_regs().for_each([this](uintptr_t reg) {
+        __ movl(rcx, RegAddr(reg));
+        EmitDecRef(rcx, rax);
+    });
+
     // Restore world's view of stk.
     __ movq(stk, frm);
     __ subq(stk, dat_reg);
