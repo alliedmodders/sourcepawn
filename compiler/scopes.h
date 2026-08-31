@@ -89,8 +89,6 @@ class SymbolScope final : public PoolObject
 
 Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found = nullptr);
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found = nullptr);
-Type* ResolveType(SymbolScope* scope, Atom* name, SymbolScope** found = nullptr);
-Type* ResolveType(SemaContext& sc, Atom* name, SymbolScope** found = nullptr);
 void AddScopedType(SemaContext& sc, Type* type);
 
 } // namespace cc

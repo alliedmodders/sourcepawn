@@ -57,12 +57,18 @@ static inline bool IsLocal(int kind) {
     return kind == sLOCAL || kind == sARGUMENT;
 }
 
+static constexpr int kResolveType = (1 << 0);
+static constexpr int kResolveIdent = (1 << 1);
+
 struct ResolvedSymbol {
     Decl* decl = nullptr;
     SymbolScope* scope = nullptr;
     FunctionDecl* enclosure = nullptr;
+    Type* type = nullptr;
 };
-bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* resolved);
+bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* resolved,
+                   int flags);
+Type* ResolveType(SemaContext& sc, Atom* name);
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass);
 bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int vclass);

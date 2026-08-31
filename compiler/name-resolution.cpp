@@ -192,14 +192,14 @@ bool EnumDecl::EnterTypes(SemaContext& sc) {
     if (label_) {
         type_ = ResolveType(sc, label_);
         if (!type_) {
-            type_ = types->defineEnumTag(label_->chars());
+            type_ = types->defineEnumTag(label_->chars(), this);
             AddScopedType(sc, type_);
         }
     }
     if (name_) {
         type_ = ResolveType(sc, name_);
         if (!type_) {
-            type_ = types->defineEnumTag(name_->chars());
+            type_ = types->defineEnumTag(name_->chars(), this);
             AddScopedType(sc, type_);
         }
     }
@@ -573,15 +573,8 @@ bool SymbolExpr::DoBind(SemaContext& sc, bool is_lval) {
         report(pos_, 230) << name_;
     }
 
-    if (auto type = ResolveType(sc, name_)) {
-        if (auto decl = type->decl()) {
-            decl_ = decl;
-            return true;
-        }
-    }
-
     ResolvedSymbol rs;
-    if (!ResolveSymbol(&sc, sc.scope(), name_, &rs)) {
+    if (!ResolveSymbol(&sc, sc.scope(), name_, &rs, kResolveIdent | kResolveType)) {
         report(pos_, 17) << name_;
         return false;
     }

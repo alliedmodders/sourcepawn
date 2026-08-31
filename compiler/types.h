@@ -89,6 +89,7 @@ enum class TypeKind : uint8_t {
 class EnumStructDecl;
 class ClassDecl;
 class Decl;
+class EnumDecl;
 class Expr;
 class FunctionType;
 class MethodmapDecl;
@@ -505,6 +506,10 @@ class Type : public PoolObject
         assert(kind_ == TypeKind::Function);
         funcenum_ptr_ = func;
     }
+    void setEnum(EnumDecl* decl) {
+        assert(kind_ == TypeKind::Enum);
+        enum_ptr_ = decl;
+    }
     void setObject() {
         assert(kind_ == TypeKind::Object);
     }
@@ -543,6 +548,7 @@ class Type : public PoolObject
         funcenum_t* funcenum_ptr_;
         MethodmapDecl* methodmap_ptr_;
         EnumStructDecl* enumstruct_ptr_;
+        EnumDecl* enum_ptr_;
         ClassDecl* class_ptr_;
         PstructDecl* pstruct_ptr_;
         BuiltinType builtin_type_;
@@ -621,7 +627,7 @@ class TypeManager
     Type* defineTypedef(const char* name, Type* other);
     Type* defineObject(const char* name);
     Type* defineMethodmap(Atom* name, MethodmapDecl* map);
-    Type* defineEnumTag(const char* name);
+    Type* defineEnumTag(const char* name, EnumDecl* decl);
     Type* defineEnumStruct(Atom* name, EnumStructDecl* decl);
     Type* defineClass(Atom* name, ClassDecl* decl);
     Type* defineTag(Atom* atom);

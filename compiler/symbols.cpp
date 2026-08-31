@@ -183,16 +183,55 @@ static inline bool IsUpvar(Decl* decl) {
     }
 }
 
-bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* rs) {
+static inline Type* FindType(SymbolScope* scope, Atom* name, int flags) {
+    auto type = scope->FindType(name);
+    if (!type)
+        return nullptr;
+    if ((flags & kResolveIdent) && !type->decl())
+        return nullptr;
+    return type;
+}
+
+static bool ResolveInScope(SymbolScope* scope, FunctionDecl* enclosure, Atom* name,
+                           ResolvedSymbol* rs, int flags)
+{
+    // Identifiers are preferred over types to match the semantics of the old
+    // algorithm where types existed above globals.
+    if (flags & kResolveIdent) {
+        if (auto decl = scope->Find(name)) {
+            if (enclosure) {
+                if (!IsUpvar(decl))
+                    return false;
+                rs->enclosure = enclosure;
+            }
+            rs->decl = decl;
+            rs->scope = scope;
+            return true;
+        }
+        if (!(flags & kResolveType))
+            return false;
+    }
+
+    if (flags & kResolveType) {
+        if (auto type = FindType(scope, name, flags)) {
+            rs->scope = scope;
+            rs->type = type;
+            rs->decl = type->decl();
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* rs, int flags)
+{
     SymbolScope* global = nullptr;
 
     SymbolScope* iter = scope;
     while (iter && !iter->IsGlobalOrFileStatic()) {
-        if (auto decl = iter->Find(name)) {
-            rs->decl = decl;
-            rs->scope = iter;
+        if (ResolveInScope(iter, nullptr, name, rs, flags))
             return true;
-        }
         iter = iter->parent();
     }
 
@@ -204,31 +243,23 @@ bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymb
         // Search enclosing scopes.
         auto scope_iter = sc_iter->scope();
         while (scope_iter && !scope_iter->IsGlobalOrFileStatic()) {
-            auto decl = scope_iter->Find(name);
-            if (decl && IsUpvar(decl)) {
-                rs->decl = decl;
-                rs->scope = scope_iter;
-                rs->enclosure = sc_iter->func();
+            if (ResolveInScope(scope_iter, sc_iter->func(), name, rs, flags))
                 return true;
-            }
             scope_iter = scope_iter->parent();
         }
         sc_iter = sc_iter->outer();
     }
 
     for (auto iter = global; iter; iter = iter->parent()) {
-        if (auto decl = iter->Find(name)) {
-            rs->decl = decl;
-            rs->scope = iter;
+        if (ResolveInScope(iter, nullptr, name, rs, flags))
             return true;
-        }
     }
     return false;
 }
 
 Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
     ResolvedSymbol rs;
-    if (!ResolveSymbol(nullptr, scope, name, &rs))
+    if (!ResolveSymbol(nullptr, scope, name, &rs, kResolveIdent))
         return nullptr;
     if (found)
         *found = rs.scope;
@@ -240,19 +271,11 @@ Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {
     return FindSymbol(sc.scope(), name, found);
 }
 
-Type* ResolveType(SymbolScope* scope, Atom* name, SymbolScope** found) {
-    for (auto iter = scope; iter; iter = iter->parent()) {
-        if (auto type = iter->FindType(name)) {
-            if (found)
-                *found = iter;
-            return type;
-        }
-    }
-    return CompileContext::get().types()->findBuiltin(name);
-}
-
-Type* ResolveType(SemaContext& sc, Atom* name, SymbolScope** found) {
-    return ResolveType(sc.scope(), name, found);
+Type* ResolveType(SemaContext& sc, Atom* name) {
+    ResolvedSymbol rs;
+    if (!ResolveSymbol(&sc, sc.scope(), name, &rs, kResolveType))
+        return CompileContext::get().types()->findBuiltin(name);
+    return rs.type;
 }
 
 void AddScopedType(SemaContext& sc, Type* type) {

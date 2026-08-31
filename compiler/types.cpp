@@ -156,6 +156,8 @@ Decl* Type::decl() const {
     switch (kind_) {
         case TypeKind::Object:
             return class_ptr_;
+        case TypeKind::Enum:
+            return enum_ptr_;
         case TypeKind::EnumStruct:
             return enumstruct_ptr_;
         case TypeKind::Methodmap:
@@ -327,8 +329,10 @@ Type* TypeManager::defineMethodmap(Atom* name, MethodmapDecl* map) {
     return type;
 }
 
-Type* TypeManager::defineEnumTag(const char* name) {
-    return new Type(cc_.atom(name), TypeKind::Enum);
+Type* TypeManager::defineEnumTag(const char* name, EnumDecl* decl) {
+    auto type = new Type(cc_.atom(name), TypeKind::Enum);
+    type->setEnum(decl);
+    return type;
 }
 
 Type* TypeManager::defineEnumStruct(Atom* name, EnumStructDecl* decl) {
