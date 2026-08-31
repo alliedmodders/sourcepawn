@@ -103,7 +103,9 @@ const TypeDesc* TypeCache::GetClosure(const TypeDesc* signature,
 
     std::span<const TypeDesc*> upvar_span(upvars_copy, upvar_types.size());
     std::span<uint32_t> offset_span(slot_offsets_copy, slot_offsets.size());
+
     TypeDesc* td = NewTypeDesc(pool_, signature, upvar_span, offset_span);
+    td->set_finalizer(SpFunction::NestedFinalizer);
 
     cache_.add(p, td);
     return td;
@@ -117,6 +119,7 @@ const TypeDesc* TypeCache::GetSlice(const TypeDesc* elt) {
         return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::ArraySlice, elt);
+
     cache_.add(p, td);
     return td;
 }

@@ -82,6 +82,8 @@ struct SpFunction : public HeapItem {
     static inline uint32_t OffsetOfSlot(uint32_t slot) {
         return sizeof(SpFunction) + slot;
     }
+
+    static void NestedFinalizer(HeapItem* obj);
 };
 
 } // namespace sp

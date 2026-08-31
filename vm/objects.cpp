@@ -61,4 +61,23 @@ void SpObject::NestedFinalizer(HeapItem* obj) {
     }
 }
 
+void SpFunction::NestedFinalizer(HeapItem* obj) {
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto fn = reinterpret_cast<SpFunction*>(obj);
+    auto td = fn->td;
+    auto upvar_types = td->upvar_types();
+
+    uint8_t* upvars = fn->upvars();
+    for (size_t i = 0; i < upvar_types.size(); i++) {
+        if (!upvar_types[i]->IsHeapItem())
+            continue;
+        uint32_t offset = td->upvar_slot_offset((uint32_t)i);
+        cell_t* slot = reinterpret_cast<cell_t*>(upvars + offset);
+        if (auto child = vm.ToPhysAddr<HeapItem*>(*slot))
+            child->Release();
+    }
+}
+
 } // namespace sp
