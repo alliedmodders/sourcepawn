@@ -21,10 +21,10 @@
 #include <sp_vm_api.h>
 #include <sp_vm_types.h>
 #include "compiled-function.h"
-#include "control-flow.h"
+#include "legacy/control-flow.h"
 #include "macro-assembler.h"
-#include "opcodes.h"
-#include "pcode-visitor.h"
+#include "legacy/opcodes.h"
+#include "legacy/pcode-visitor.h"
 
 namespace sp {
 

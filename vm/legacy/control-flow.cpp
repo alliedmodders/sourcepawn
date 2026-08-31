@@ -13,7 +13,7 @@
 
 #include "control-flow.h"
 #include <amtl/am-string.h>
-#include "opcodes.h"
+#include "legacy/opcodes.h"
 
 namespace sp {
 

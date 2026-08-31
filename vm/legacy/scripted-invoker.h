@@ -59,10 +59,10 @@ class ScriptedInvoker : public IPluginFunction
     int Execute(cell_t* result) override;
     void Cancel() override;
     IPluginContext* GetParentContext() override;
+    IPluginRuntime* GetParentRuntime() override;
     bool Invoke(cell_t* result) override;
     bool IsRunnable() override;
     funcid_t GetFunctionID() override;
-    IPluginRuntime* GetParentRuntime() override;
     const char* DebugName() override { return full_name_.get(); }
     bool Invoke(const sp::CallArgs& args, cell_t* rval = nullptr) override;
 

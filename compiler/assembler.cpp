@@ -49,7 +49,7 @@
 #include "symbols.h"
 #include "types.h"
 #include "vm/environment.h"
-#include "vm/plugin-runtime.h"
+#include "vm/base-runtime.h"
 
 namespace sp {
 namespace cc {

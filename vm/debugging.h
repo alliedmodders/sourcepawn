@@ -18,11 +18,14 @@
 #ifndef _include_sourcepawn_vm_debugging_h_
 #define _include_sourcepawn_vm_debugging_h_
 
-#include "plugin-runtime.h"
+namespace SourcePawn {
+class IErrorReport;
+typedef class IPluginRuntime IPluginContext;
+} // namepsace SourcePawn
 
 namespace sp {
 
-int InvokeDebugger(PluginContext* ctx, const IErrorReport* report);
+int InvokeDebugger(SourcePawn::IPluginContext* ctx, const SourcePawn::IErrorReport* report);
 
 } // namespace sp
 

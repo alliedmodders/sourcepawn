@@ -21,8 +21,8 @@
 #include <amtl/am-refcounting.h>
 #include <assert.h>
 #include <sp_vm_types.h>
-#include "pcode-reader.h"
-#include "pcode-visitor.h"
+#include "legacy/pcode-reader.h"
+#include "legacy/pcode-visitor.h"
 #include "stack-frames.h"
 
 namespace sp {

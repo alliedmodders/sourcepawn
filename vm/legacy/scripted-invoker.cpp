@@ -10,7 +10,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "scripted-invoker.h"
+#include "legacy/scripted-invoker.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -18,8 +18,8 @@
 #include <utility>
 
 #include "environment.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
+#include "legacy/method-info.h"
+#include "legacy/plugin-runtime.h"
 
 /********************
 * FUNCTION CALLING*

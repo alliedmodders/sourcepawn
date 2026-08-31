@@ -21,7 +21,7 @@
 #include <sp_vm_api.h>
 #include "base-runtime.h"
 #include "smx-image.h"
-#include "scripted-invoker.h"
+#include "legacy/scripted-invoker.h"
 
 namespace sp {
 

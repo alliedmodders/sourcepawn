@@ -34,7 +34,7 @@
 
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

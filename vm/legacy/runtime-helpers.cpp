@@ -14,10 +14,10 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
-#include "runtime-helpers.h"
+#include "legacy/runtime-helpers.h"
 
 #include "environment.h"
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

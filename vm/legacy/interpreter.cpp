@@ -25,11 +25,11 @@
 #include <amtl/am-float.h>
 #include "debugging.h"
 #include "environment.h"
-#include "interpreter.h"
-#include "method-info.h"
-#include "pcode-reader.h"
-#include "plugin-runtime.h"
-#include "runtime-helpers.h"
+#include "legacy/interpreter.h"
+#include "legacy/method-info.h"
+#include "legacy/pcode-reader.h"
+#include "legacy/plugin-runtime.h"
+#include "legacy/runtime-helpers.h"
 #include "watchdog_timer.h"
 
 namespace sp {

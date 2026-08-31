@@ -15,14 +15,15 @@
 // You should have received a copy of the GNU General Public License
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 //
-#include "jit.h"
+#include "legacy/jit.h"
 #include "debug-metadata.h"
 #include "environment.h"
 #include "linking.h"
-#include "method-info.h"
-#include "opcodes.h"
-#include "pcode-reader.h"
-#include "plugin-runtime.h"
+#include "legacy/method-info.h"
+#include "legacy/opcodes.h"
+#include "legacy/pcode-reader.h"
+#include "legacy/plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
 #include "watchdog_timer.h"
 #if defined(KE_ARCH_X86)

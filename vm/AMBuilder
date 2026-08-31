@@ -2,9 +2,6 @@
 import os
 
 module = binary.Module(builder, 'vm')
-module.compiler.cxxincludes += [
-    os.path.join(builder.currentSourcePath),
-]
 
 if module.compiler.like('clang'):
   module.compiler.cxxflags += [
@@ -19,25 +16,25 @@ if module.compiler.family == 'gcc':
 module.sources += [
   'api.cpp',
   'base-runtime.cpp',
-  'builtins.cpp',
+  'legacy/builtins.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',
-  'control-flow.cpp',
+  'legacy/control-flow.cpp',
   'compiled-function.cpp',
   'debugging.cpp',
   'debug-metadata.cpp',
   'environment.cpp',
   'file-utils.cpp',
-  'graph-builder.cpp',
-  'interpreter.cpp',
+  'legacy/graph-builder.cpp',
+  'legacy/interpreter.cpp',
   'md5/md5.cpp',
-  'method-info.cpp',
-  'method-verifier.cpp',
-  'opcodes.cpp',
-  'plugin-runtime.cpp',
+  'legacy/method-info.cpp',
+  'legacy/method-verifier.cpp',
+  'legacy/opcodes.cpp',
+  'legacy/plugin-runtime.cpp',
   'rtti.cpp',
-  'runtime-helpers.cpp',
-  'scripted-invoker.cpp',
+  'legacy/runtime-helpers.cpp',
+  'legacy/scripted-invoker.cpp',
   'smx-image.cpp',
   'stack-frames.cpp',
   'watchdog_timer.cpp',
@@ -45,7 +42,7 @@ module.sources += [
 
 if 'SP_HAS_JIT' in module.compiler.defines:
   module.sources += [
-    'jit.cpp',
+    'legacy/jit.cpp',
     'linking.cpp',
   ]
   if module.compiler.target.arch == 'x86':

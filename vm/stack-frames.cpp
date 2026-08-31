@@ -13,8 +13,8 @@
 #include "stack-frames.h"
 #include "compiled-function.h"
 #include "environment.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
+#include "legacy/method-info.h"
+#include "legacy/plugin-runtime.h"
 #if defined(KE_ARCH_X86)
 #    include "x86/frames-x86.h"
 #elif defined(KE_ARCH_X64)

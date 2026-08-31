@@ -24,8 +24,8 @@
 #include "debugging.h"
 #include "environment.h"
 #include "features-x64.h"
-#include "method-info.h"
-#include "runtime-helpers.h"
+#include "legacy/method-info.h"
+#include "legacy/runtime-helpers.h"
 
 #define __ masm.
 

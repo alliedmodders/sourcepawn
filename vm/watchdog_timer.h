@@ -24,8 +24,9 @@
 #include <thread>
 
 namespace SourcePawn {
+typedef class IPluginRuntime IPluginContext;
 class IErrorReport;
-}
+} // namespace SourcePawn
 
 namespace sp {
 
@@ -38,7 +39,8 @@ typedef bool (*WatchdogCallback)();
 class WatchdogTimer
 {
     // Allow line debugger callback to disable timeouts.
-    friend int InvokeDebugger(PluginContext* ctx, const SourcePawn::IErrorReport* report);
+    friend int InvokeDebugger(SourcePawn::IPluginContext* ctx,
+                              const SourcePawn::IErrorReport* report);
 
   public:
     WatchdogTimer(Environment* env);

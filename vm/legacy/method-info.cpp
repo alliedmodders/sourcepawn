@@ -10,11 +10,11 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "method-info.h"
+#include "legacy/method-info.h"
 #include "compiled-function.h"
 #include "environment.h"
 #include "graph-builder.h"
-#include "method-verifier.h"
+#include "legacy/method-verifier.h"
 
 namespace sp {
 

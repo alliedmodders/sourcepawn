@@ -13,8 +13,8 @@
 
 #include "graph-builder.h"
 #include <smx/smx-v1-opcodes.h>
-#include "opcodes.h"
-#include "plugin-runtime.h"
+#include "legacy/opcodes.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

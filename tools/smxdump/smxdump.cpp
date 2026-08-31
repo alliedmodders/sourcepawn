@@ -14,7 +14,7 @@
 #include <amtl/experimental/am-argparser.h>
 #include "vm/environment.h"
 #include "vm/smx-image.h"
-#include "vm/opcodes.h"
+#include "vm/legacy/opcodes.h"
 
 using namespace ke;
 using namespace ke::args;

@@ -12,19 +12,19 @@
 //
 #include "environment.h"
 #include "api.h"
+#include "legacy/method-info.h"
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "debug-metadata.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 #include "watchdog_timer.h"
 #if defined(SP_HAS_JIT)
-#    include "jit.h"
+#    include "legacy/jit.h"
 #endif
 #include <stdarg.h>
-#include "builtins.h"
+#include "legacy/builtins.h"
 #include "debugging.h"
-#include "interpreter.h"
+#include "legacy/interpreter.h"
 
 using namespace sp;
 using namespace SourcePawn;

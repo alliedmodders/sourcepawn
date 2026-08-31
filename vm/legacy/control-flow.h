@@ -22,7 +22,7 @@
 #include <amtl/am-inlinelist.h>
 #include <amtl/am-refcounting.h>
 #include "label.h"
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

@@ -16,9 +16,9 @@
 // along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #pragma once
 
-#include "jit.h"
+#include "legacy/jit.h"
 #include "constants-x64.h"
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

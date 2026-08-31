@@ -15,9 +15,9 @@
 
 #include <amtl/am-vector.h>
 #include "graph-builder.h"
-#include "method-verifier.h"
-#include "opcodes.h"
-#include "plugin-runtime.h"
+#include "legacy/method-verifier.h"
+#include "legacy/opcodes.h"
+#include "legacy/plugin-runtime.h"
 
 namespace sp {
 

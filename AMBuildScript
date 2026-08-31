@@ -361,9 +361,10 @@ class SourcePawn(object):
                 binary.compiler.defines += ['DARWIN']
 
         binary.compiler.includes += [
-            os.path.join(builder.currentSourcePath),
-            os.path.join(builder.currentSourcePath, 'include'),
-            os.path.join(builder.currentSourcePath, 'third_party'),
+            builder.sourcePath,
+            os.path.join(builder.sourcePath, 'include'),
+            os.path.join(builder.sourcePath, 'vm'),
+            os.path.join(builder.sourcePath, 'third_party'),
             self.amtl,
         ]
 
@@ -430,9 +431,6 @@ class SourcePawn(object):
 
         binary.sources = [
             'vm/shell/shell.cpp',
-        ]
-        binary.compiler.cxxincludes += [
-            os.path.join(builder.currentSourcePath, 'vm'),
         ]
 
         self.AddStaticLibraries(binary)

@@ -38,9 +38,9 @@
 #include "features-x86.h"
 #include "frames-x86.h"
 #include "linking.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
-#include "runtime-helpers.h"
+#include "legacy/method-info.h"
+#include "legacy/plugin-runtime.h"
+#include "legacy/runtime-helpers.h"
 #include "watchdog_timer.h"
 
 #define __ masm.

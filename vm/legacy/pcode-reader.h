@@ -18,9 +18,9 @@
 #include <smx/smx-v1-opcodes.h>
 #include <sp_vm_types.h>
 #include "control-flow.h"
-#include "opcodes.h"
-#include "plugin-runtime.h"
-#include "pcode-visitor.h"
+#include "legacy/opcodes.h"
+#include "legacy/plugin-runtime.h"
+#include "legacy/pcode-visitor.h"
 
 namespace sp {
 

@@ -10,7 +10,7 @@
 // You should have received a copy of the GNU General Public License along with
 // SourcePawn. If not, see http://www.gnu.org/licenses/.
 //
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -22,12 +22,13 @@
 
 #include <smx/smx-headers.h>
 #include <smx/smx-v1-opcodes.h>
-#include "builtins.h"
+#include "legacy/builtins.h"
 #include "compiled-function.h"
 #include "environment.h"
 #include "md5/md5.h"
-#include "method-info.h"
-#include "method-verifier.h"
+#include "legacy/method-info.h"
+#include "legacy/method-verifier.h"
+#include "legacy/plugin-runtime.h"
 #include "watchdog_timer.h"
 
 using namespace sp;

@@ -18,7 +18,7 @@
 
 namespace sp {
 
-int InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
+int InvokeDebugger(IPluginContext* ctx, const IErrorReport* report) {
     // Continue normal execution, if there is no listener registered.
     if (!Environment::get()->debugbreak())
         return SP_ERROR_NONE;
@@ -50,7 +50,7 @@ int InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
     sp_debug_break_info_t dbginfo;
     dbginfo.version = DEBUG_BREAK_INFO_VERSION;
     dbginfo.cip = cip;
-    dbginfo.frm = ctx->frm();
+    dbginfo.frm = 0;
 
     // Call debug callback.
     Environment::get()->debugbreak()(ctx, dbginfo, report);

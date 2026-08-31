@@ -12,8 +12,7 @@
 //
 #include "vm/environment.h"
 #include "vm/api.h"
-#include "vm/plugin-runtime.h"
-#include "vm/method-verifier.h"
+#include "vm/base-runtime.h"
 #include <amtl/experimental/am-argparser.h>
 #include <set>
 #include <deque>

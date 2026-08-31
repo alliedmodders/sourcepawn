@@ -20,7 +20,7 @@
 #include <amtl/am-mutex.h>
 #include <sp_vm_api.h>
 #include "code-allocator.h"
-#include "plugin-runtime.h"
+#include "legacy/plugin-runtime.h"
 #include "stack-frames.h"
 
 namespace sp {

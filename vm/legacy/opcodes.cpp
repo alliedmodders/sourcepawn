@@ -28,7 +28,7 @@
  *
  * Version: $Id$
  */
-#include "opcodes.h"
+#include "legacy/opcodes.h"
 
 using namespace sp;
 using namespace SourcePawn;

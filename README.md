@@ -28,8 +28,11 @@ Once you have your build environment set up, you can clone and build SourcePawn:
 
  * `git clone --recursive https://github.com/alliedmodders/sourcepawn`
  * `cd sourcepawn`
- * `python3 configure.py --out obj`
- * `ambuild obj`
+ * `python3 configure.py`
+ * `ambuild objdir`
+
+To run tests:
+ * `python tests/runtests.py objdir`
 
 
 Supported CPUs

@@ -21,10 +21,10 @@
 #include <sp_vm_api.h>
 #include <sp_vm_types.h>
 #include "compiled-function.h"
-#include "jit.h"
+#include "legacy/jit.h"
 #include "macro-assembler.h"
-#include "opcodes.h"
-#include "plugin-runtime.h"
+#include "legacy/opcodes.h"
+#include "legacy/plugin-runtime.h"
 
 using namespace SourcePawn;
 
