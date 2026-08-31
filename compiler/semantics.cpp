@@ -1343,6 +1343,8 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     out_val = inner->val();
 
     Type* from_type = out_val.type();
+    if (from_type == to_type)
+        return true;
 
     auto actual_array =  from_type->as<ArrayType>();
     if (actual_array) {
