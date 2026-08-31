@@ -700,7 +700,8 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             if (!v.type()->isInt() && !v.type()->isInt64())
                 report(expr, 450) << v.type() << rank->inner();
         } else {
-            matchtag(rank->inner(), v.type(), MATCHTAG_COERCE);
+            TypeChecker tc(expr, rank->inner(), v.type(), TypeChecker::Assignment);
+            tc.Coerce();
         }
 
         prev2 = prev1;
@@ -775,7 +776,8 @@ bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
                 continue;
             }
 
-            matchtag(type.type, v.type(), MATCHTAG_COERCE | MATCHTAG_ENUM_ASSN);
+            TypeChecker tc(expr, type.type, v.type(), TypeChecker::Assignment);
+            tc.Coerce();
         }
     }
 
