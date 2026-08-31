@@ -59,6 +59,7 @@ enum IdentifierKind {
 enum class BuiltinType : uint8_t {
     Bool,
     Char,
+    Int16,
     Int,
     Float,
     Null,
@@ -274,9 +275,11 @@ class Type : public PoolObject
     bool isBuiltin() const { return kind_ == TypeKind::Builtin; }
     bool isBuiltin(BuiltinType type) const { return isBuiltin() && builtin_type_ == type; }
     bool isInt() const { return isBuiltin(BuiltinType::Int); }
+    bool isInt16() const { return isBuiltin(BuiltinType::Int16); }
     bool isInt64() const { return isBuiltin(BuiltinType::Int64); }
     bool isIntPtr() const { return isBuiltin(BuiltinType::IntPtr); }
     bool isWideInt() const { return isInt64() || isIntPtr(); }
+    bool isIntN() const { return isInt() || isIntPtr() || isInt16(); }
     bool isNull() const { return isBuiltin(BuiltinType::Null); }
     bool isChar() const { return isBuiltin(BuiltinType::Char); }
     bool isAny() const { return isBuiltin(BuiltinType::Any); }
@@ -302,8 +305,6 @@ class Type : public PoolObject
     // True if a value representation can be > 1 cell.
     bool isComposite() const { return isArray() || isEnumStruct(); }
 
-    bool hasCellSize() const { return !isChar() && !isEnumStruct(); }
-
     bool isAllowedInNativeCall() const { return allowed_in_native_call_; }
     void forbidInNativeCall() { allowed_in_native_call_ = false; }
 
@@ -318,6 +319,8 @@ class Type : public PoolObject
             switch (builtin_type_) {
                 case BuiltinType::Char:
                     return {1};
+                case BuiltinType::Int16:
+                    return {2};
                 case BuiltinType::Bool:
                 case BuiltinType::Int:
                 case BuiltinType::IntPtr:
@@ -340,6 +343,26 @@ class Type : public PoolObject
         }
     }
 
+    int podLoadSize() const {
+        if (kind_ == TypeKind::Enum)
+            return 4;
+        if (kind_ != TypeKind::Builtin)
+            return -1;
+        switch (builtin_type_) {
+            case BuiltinType::Char:
+                return 1;
+            case BuiltinType::Int16:
+                return 2;
+            case BuiltinType::Int:
+            case BuiltinType::Float:
+            case BuiltinType::Any:
+            case BuiltinType::Bool:
+                return 4;
+            default:
+                return -1;
+        }
+    }
+
     uint32_t lit_size() const {
         return *maybe_lit_size();
     }
@@ -358,6 +381,7 @@ class Type : public PoolObject
         switch (builtin_type_) {
             case BuiltinType::Bool:
             case BuiltinType::Char:
+            case BuiltinType::Int16:
             case BuiltinType::Int:
                 return true;
         }
@@ -596,6 +620,7 @@ class TypeManager
     Type* type_int() const { return type_int_; }
     Type* type_int64() const { return type_int64_; }
     Type* type_intptr() const { return type_intptr_; }
+    Type* type_int16() const { return type_int16_; }
 
     Type* GetBuiltin(BuiltinType type) const { return builtin_types_[(int)type]; }
 
@@ -622,6 +647,7 @@ class TypeManager
     Type* type_string_ = nullptr;
     Type* type_int64_ = nullptr;
     Type* type_intptr_ = nullptr;
+    Type* type_int16_ = nullptr;
 
     struct ArrayCachePolicy {
         typedef ArrayType* Payload;

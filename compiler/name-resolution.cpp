@@ -472,7 +472,7 @@ ConstDecl::Bind(SemaContext& sc)
         return false;
     }
 
-    sc.sema()->CheckCoercion(pos_, type_.type, QualType(type), CvtContext::Assignment);
+    sc.sema()->CheckCoercion(expr_, type_.type, QualType(type), CvtContext::Assignment);
 
     already_bound_ = true;
     return true;

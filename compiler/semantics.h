@@ -151,7 +151,7 @@ class Semantics final
     CompileContext& cc() { return cc_; }
     bool CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
                        CvtContext why);
-    bool CheckCoercion(ParseNode* node, QualType formal, QualType actual,
+    bool CheckCoercion(Expr* node, QualType formal, QualType actual,
                        CvtContext why);
     Expr* TryConversion(Expr* expr, QualType formal, CvtContext why);
     SymbolScope* current_scope() const;
@@ -244,8 +244,12 @@ class Semantics final
     Expr* BuildConversion(Expr* from, ConversionKind ck, Type* to);
     Expr* BuildSimpleCast(Expr* from, BuiltinType type);
     Expr* CoerceNull(Expr* expr, Type* formal);
+    std::optional<ConversionKind> FindConstantConversion(Expr* source, Type* from_type,
+                                                         Type* to, CvtContext why);
+    bool CheckCoercionImpl(Expr* node, const token_pos_t& pos, QualType formal,
+                           QualType actual, CvtContext why, ConversionKind ck);
     void ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual);
-    void ReportConversionDiagnostic(ParseNode* node, QualType formal, QualType actual);
+    void ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual);
 
     struct ParamState {
         std::vector<Expr*> argv;

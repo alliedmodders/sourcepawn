@@ -381,6 +381,9 @@ std::string DumpTool::DumpType(FastRtti& rtti) {
             case cb::kFloat32:
                 type_inner = "float";
                 break;
+            case cb::kInt16:
+                type_inner = "int16";
+                break;
             case cb::kChar8:
                 type_inner = "char";
                 break;

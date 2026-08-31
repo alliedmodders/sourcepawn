@@ -317,10 +317,10 @@ class Assembler : public AssemblerBase
         writeInt32(imm);
     }
     void movw(const Operand& dest, Register src) {
-        emit1(0x89, src.code, dest);
+        emit2(0x66, 0x89, src.code, dest);
     }
     void movw(Register dest, const Operand& src) {
-        emit1(0x8b, dest.code, src);
+        emit2(0x66, 0x8b, dest.code, src);
     }
     void movb(const Operand& dest, Register src) {
         emit1(0x88, src.code, dest);
@@ -339,6 +339,12 @@ class Assembler : public AssemblerBase
     }
     void movzxw(Register dest, const Register src) {
         emit2(0x0f, 0xb7, dest.code, src.code);
+    }
+    void movsxw(Register dest, const Operand& src) {
+        emit2(0x0f, 0xbf, dest.code, src);
+    }
+    void movsxw(Register dest, const Register src) {
+        emit2(0x0f, 0xbf, dest.code, src.code);
     }
     void movaps(FloatRegister dest, const FloatRegister src) {
         emit2(0x0f, 0x28, dest.code, src.code);

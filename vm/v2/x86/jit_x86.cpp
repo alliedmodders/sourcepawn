@@ -467,6 +467,9 @@ void Compiler::EmitUnaryAlu(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
             __ movl(eax, 0);
             __ set(not_zero, r8_al);
             break;
+        case LL_CVT_I16:
+            __ movsxw(eax, eax);
+            break;
         default:
             assert(false);
     }
@@ -1010,6 +1013,10 @@ void Compiler::EmitLoadI(LLOp op, uint32_t src_reg, uint32_t dest_reg) {
             __ movzxb(eax, Operand(eax, 0));
             __ movl(RegAddr(dest_reg), eax);
             break;
+        case LL_LOAD_I_I16:
+            __ movsxw(eax, Operand(eax, 0));
+            __ movl(RegAddr(dest_reg), eax);
+            break;
         case LL_LOAD_I_I64:
             __ movq(xmm0, Operand(eax, 0));
             __ movq(RegAddr(dest_reg), xmm0);
@@ -1030,6 +1037,10 @@ void Compiler::EmitStorI(LLOp op, uint32_t addr_reg, uint32_t val_reg) {
         case LL_STOR_I_U8:
             __ movl(eax, RegAddr(val_reg));
             __ movb(Operand(edx, 0), eax);
+            break;
+        case LL_STOR_I_I16:
+            __ movl(eax, RegAddr(val_reg));
+            __ movw(Operand(edx, 0), eax);
             break;
         case LL_STOR_I_I64:
             __ movq(xmm0, RegAddr(val_reg));
@@ -1237,6 +1248,10 @@ void Compiler::EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) {
             __ movzxb(eax, Operand(frm, ecx, NoScale, base_offset));
             __ movl(RegAddr(args.dest_reg), eax);
             break;
+        case LL_LOAD_ELEM_FLAT_I16:
+            __ movsxw(eax, Operand(frm, ecx, ScaleTwo, base_offset));
+            __ movl(RegAddr(args.dest_reg), eax);
+            break;
         case LL_LOAD_ELEM_FLAT_I64:
             __ movq(xmm0, Operand(frm, ecx, ScaleEight, base_offset));
             __ movq(RegAddr(args.dest_reg), xmm0);
@@ -1264,6 +1279,10 @@ void Compiler::EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) {
             break;
         case LL_LOAD_ELEM_FLAT_I_U8:
             __ movzxb(eax, Operand(edx, ecx, NoScale));
+            __ movl(RegAddr(args.dest_reg), eax);
+            break;
+        case LL_LOAD_ELEM_FLAT_I_I16:
+            __ movsxw(eax, Operand(edx, ecx, ScaleTwo));
             __ movl(RegAddr(args.dest_reg), eax);
             break;
         case LL_LOAD_ELEM_FLAT_I_I64:
@@ -1295,6 +1314,10 @@ void Compiler::EmitStorElemFlat(LLOp op, const StorElemFlatArgs& args) {
             __ movl(eax, RegAddr(args.val_reg));
             __ movb(Operand(frm, ecx, NoScale, base_offset), eax);
             break;
+        case LL_STOR_ELEM_FLAT_I16:
+            __ movl(eax, RegAddr(args.val_reg));
+            __ movw(Operand(frm, ecx, ScaleTwo, base_offset), eax);
+            break;
         case LL_STOR_ELEM_FLAT_I64:
             __ movq(xmm0, RegAddr(args.val_reg));
             __ movq(Operand(frm, ecx, ScaleEight, base_offset), xmm0);
@@ -1323,6 +1346,10 @@ void Compiler::EmitStorElemFlatI(LLOp op, const StorElemFlatArgs& args) {
         case LL_STOR_ELEM_FLAT_I_U8:
             __ movl(eax, RegAddr(args.val_reg));
             __ movb(Operand(edx, ecx, NoScale), eax);
+            break;
+        case LL_STOR_ELEM_FLAT_I_I16:
+            __ movl(eax, RegAddr(args.val_reg));
+            __ movw(Operand(edx, ecx, ScaleTwo), eax);
             break;
         case LL_STOR_ELEM_FLAT_I_I64:
             __ movq(xmm0, RegAddr(args.val_reg));
@@ -1356,6 +1383,10 @@ void Compiler::EmitLoadElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
             break;
         case LL_LOAD_ELEM_U8:
             __ movzxb(eax, Operand(edx, ecx, NoScale));
+            __ movl(RegAddr(dest_reg), eax);
+            break;
+        case LL_LOAD_ELEM_I16:
+            __ movsxw(eax, Operand(edx, ecx, ScaleTwo));
             __ movl(RegAddr(dest_reg), eax);
             break;
         case LL_LOAD_ELEM_I64:
@@ -1396,6 +1427,10 @@ void Compiler::EmitStorElem(LLOp op, uint16_t base_reg, uint16_t index_reg, uint
         case LL_STOR_ELEM_U8:
             __ movl(eax, RegAddr(val_reg));
             __ movb(Operand(edx, ecx, NoScale), eax);
+            break;
+        case LL_STOR_ELEM_I16:
+            __ movl(eax, RegAddr(val_reg));
+            __ movw(Operand(edx, ecx, ScaleTwo), eax);
             break;
         case LL_STOR_ELEM_I64:
             __ movq(xmm0, RegAddr(val_reg));

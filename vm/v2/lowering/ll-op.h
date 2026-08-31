@@ -266,7 +266,16 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(ADDR_UPVAR, 160, "addr.upvar", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_UPVAR_X32, 161, "stor.upvar.x32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(STOR_UPVAR_X64, 162, "stor.upvar.x64", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(STOR_UPVAR_A, 163, "stor.upvar.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG})
+    FOR_EACH(STOR_UPVAR_A, 163, "stor.upvar.a", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_I_I16, 164, "load.i.i16", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_I_I16, 165, "stor.i.i16", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_I16, 166, "load.elem.i16", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_ELEM_I16, 167, "stor.elem.i16", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_ELEM_FLAT_I16, 168, "stor.elem.flat.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_FLAT_I16, 169, "load.elem.flat.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(LOAD_ELEM_FLAT_I_I16, 170, "load.elem.flat.i.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(STOR_ELEM_FLAT_I_I16, 171, "stor.elem.flat.i.i16", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(CVT_I16, 172, "cvt.i16", {LL_FMT_REG, LL_FMT_REG})
 
 enum LLOp : uint16_t {
 #define FOR_EACH_OPCODE(op, val, text, ...) LL_##op = val,

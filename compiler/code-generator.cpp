@@ -553,6 +553,8 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
             cell_t cv = item->val().constval();
             if (type->inner()->lit_size() == 1)
                 AddValue<int8_t>(&data, cv);
+            else if (type->inner()->lit_size() == 2)
+                AddValue<int16_t>(&data, cv);
             else if (type->inner()->lit_size() == 8)
                 AddValue<int64_t>(&data, cv);
             else
@@ -574,6 +576,8 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
         while (num_items < (uint32_t)type->size()) {
             if (type->inner()->lit_size() == 1)
                 AddValue<int8_t>(&data, next_value);
+            else if (type->inner()->lit_size() == 2)
+                AddValue<int16_t>(&data, next_value);
             else if (type->inner()->lit_size() == 8)
                 AddValue<int64_t>(&data, next_value);
             else
@@ -943,6 +947,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
     switch (expr->token()) {
         case '~':
             __ emit(OP_INVERT);
+            if (inner->val().type()->isInt16())
+                __ emit(OP_CVT_I16);
             break;
         case '!':
             if (inner->val().type()->isInt64() || inner->val().type()->isFloat())
@@ -951,6 +957,8 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
             break;
         case '-':
             __ emit(OP_NEG);
+            if (inner->val().type()->isInt16())
+                __ emit(OP_CVT_I16);
             break;
         default:
             assert(false);
@@ -1156,7 +1164,9 @@ void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* r
         effective = effective->inner();
 
     BuiltinType type = BuiltinType::Int;
-    if (effective->isInt64())
+    if (effective->isInt16())
+        type = BuiltinType::Int16;
+    else if (effective->isInt64())
         type = BuiltinType::Int64;
     else if (effective->isFloat())
         type = BuiltinType::Float;
@@ -1242,6 +1252,9 @@ void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
     } else {
         __ emit(GetInt32BinaryOp(oper_tok));
     }
+
+    if (type == BuiltinType::Int16 && !IsCompare(oper_tok))
+        __ emit(OP_CVT_I16);
 }
 
 void
@@ -1908,6 +1921,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
             assert(!lval.type()->isFlatArray());
             if (lval.type()->isChar())
                 __ emit(OP_LOAD_ELEM_U8);
+            else if (lval.type()->isInt16())
+                __ emit(OP_LOAD_ELEM_I16);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_ELEM_I64);
             else if (lval.type()->isIntPtr())
@@ -1928,6 +1943,8 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
                 break;
             if (lval.type()->isChar())
                 __ emit(OP_LOAD_I_U8);
+            else if (lval.type()->isInt16())
+                __ emit(OP_LOAD_I_I16);
             else if (lval.type()->isInt64())
                 __ emit(OP_LOAD_I_I64);
             else if (lval.type()->isIntPtr())
@@ -2024,6 +2041,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
         case iARRAYELEM:
             if (lval.type()->isChar())
                 __ emit(OP_STOR_ELEM_U8);
+            else if (lval.type()->isInt16())
+                __ emit(OP_STOR_ELEM_I16);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_ELEM_I64);
             else if (lval.type()->isIntPtr())
@@ -2039,6 +2058,8 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
         case iADDRESS:
             if (lval.type()->isChar())
                 __ emit(OP_STOR_I_U8);
+            else if (lval.type()->isInt16())
+                __ emit(OP_STOR_I_I16);
             else if (lval.type()->isInt64())
                 __ emit(OP_STOR_I_I64);
             else if (lval.type()->isIntPtr())
@@ -2556,11 +2577,15 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     }
 
     if (to_type->isInt64()) {
-        assert(from_type->isInt() || from_type->isAny() || from_type->isIntPtr());
+        assert(from_type->isIntN() || from_type->isAny());
         __ emit(OP_CVT_I64);
     } else if (to_type->isIntPtr()) {
         assert(from_type->isInt() || from_type->isAny() || from_type->isInt64());
         __ emit(OP_CVT_INTPTR);
+    } else if (to_type->isInt16()) {
+        // int16 is sign-extended on the stack, so no conversion needed.
+        // promotion to int64/intptr is handled via EmitCastExpr.
+        assert(from_type->isInt());
     } else if (to_type->isBool()) {
         if (from_type->isInt64())
             __ emit(OP_TEST);
@@ -2587,14 +2612,20 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
         if ((to->isInt() || to->isAny()) && from_type->isWideInt()) {
             __ emit(OP_CVT_I32);
         } else if (to->isInt64() &&
-                   (from_type->isInt() || from_type->isAny() || from_type->isIntPtr()))
+                   (from_type->isIntN() || from_type->isAny()))
         {
-            // -> int64: from int, any, or intptr.
+            // -> int64: from int, any, intptr, or int16.
             __ emit(OP_CVT_I64);
         } else if (to->isIntPtr() &&
                    (from_type->isInt() || from_type->isAny() || from_type->isInt64()))
         {
             __ emit(OP_CVT_INTPTR);
+        } else if (to->isInt16() &&
+                   (from_type->isInt() || from_type->isWideInt() || from_type->isAny()))
+        {
+            // -> int16: truncate any wider integer to the low 16 bits and
+            // sign-extend. Only reachable via an explicit view_as<int16>().
+            __ emit(OP_CVT_I16);
         }
     }
 }

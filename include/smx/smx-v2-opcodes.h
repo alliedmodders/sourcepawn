@@ -241,6 +241,11 @@ namespace v2 {
     FOR_EACH(STOR_I_INTPTR, 103, "stor.i.intptr", 1) \
     FOR_EACH(LOAD_ELEM_INTPTR, 104, "load.elem.intptr", 1) \
     FOR_EACH(STOR_ELEM_INTPTR, 105, "stor.elem.intptr", 1) \
+    FOR_EACH(LOAD_I_I16, 106, "load.i.i16", 1) \
+    FOR_EACH(STOR_I_I16, 107, "stor.i.i16", 1) \
+    FOR_EACH(LOAD_ELEM_I16, 108, "load.elem.i16", 1) \
+    FOR_EACH(STOR_ELEM_I16, 109, "stor.elem.i16", 1) \
+    FOR_EACH(CVT_I16, 110, "cvt.i16", 1) \
 
 
  enum OPCODE {

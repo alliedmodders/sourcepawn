@@ -244,6 +244,7 @@ namespace cb {
 
 // This section encodes raw types.
 static const uint8_t kBool = 0x01;
+static const uint8_t kInt16 = 0x05;
 static const uint8_t kInt32 = 0x06;
 static const uint8_t kInt64 = 0x07;
 static const uint8_t kIntPtr = 0x08;

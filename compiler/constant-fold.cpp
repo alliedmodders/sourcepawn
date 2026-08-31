@@ -125,6 +125,8 @@ bool CastExpr::FoldToConstant() {
     Type* from_type;
     if (!expr_->EvalConst(&val, &from_type))
         return false;
+    if (type()->isInt16())
+        val = (cell_t)(int16_t)val;
     val_.set_constval(val);
     val_.ident = iCONSTEXPR;
     val_.set_type(type());

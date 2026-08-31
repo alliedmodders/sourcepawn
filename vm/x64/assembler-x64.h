@@ -659,7 +659,7 @@ class Assembler : public AssemblerBase
 
     template <typename DestType>
     void movw(const DestType& dest, Register src) {
-        emit1(0x89, src, dest);
+        emit2(0x66, 0x89, src, dest);
     }
 
     template <typename DestType>
@@ -675,6 +675,11 @@ class Assembler : public AssemblerBase
     template <typename SrcType>
     void movzxb(Register dest, const SrcType& src) {
         emit2(0x0f, 0xb6, dest, src);
+    }
+
+    template <typename SrcType>
+    void movsxw(Register dest, const SrcType& src) {
+        emit2(0x0f, 0xbf, dest, src);
     }
 
     void addq(Register dest, Register src) {

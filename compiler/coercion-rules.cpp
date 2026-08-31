@@ -38,16 +38,29 @@ static ConversionKind FindBuiltinConversion(BuiltinType kind, Type* to, CvtConte
                 return ConversionKind::Trivial;
             if (to->isInt() && (IsReturnOrAssign(why) || why == CvtContext::Argument))
                 return ConversionKind::Trivial;
-            if (to->isEnum() || to->isMethodmap() || to->isChar() || to->isInt())
+            if (to->isInt16() && (IsReturnOrAssign(why) || why == CvtContext::Argument))
+                return ConversionKind::Trivial;
+            if (to->isEnum() || to->isMethodmap() || to->isChar() || to->isInt() || to->isInt16())
                 return ConversionKind::TagMismatch;
             break;
 
         case BuiltinType::Char:
-            if (to->isAny() || to->isInt())
+            if (to->isAny() || to->isInt() || to->isInt16())
                 return ConversionKind::Trivial;
             if (to->isBool() && (why == CvtContext::Return || why == CvtContext::Argument))
                 return ConversionKind::Trivial;
             if (to->isEnum() || to->isMethodmap() || to->isBool())
+                return ConversionKind::TagMismatch;
+            break;
+
+        case BuiltinType::Int16:
+            if (to->isAny() || to->isInt())
+                return ConversionKind::Trivial;
+            if (to->isBool() && (why == CvtContext::Return || why == CvtContext::Argument))
+                return ConversionKind::Trivial;
+            if (to->isFloat() || to->isInt64() || to->isIntPtr())
+                return ConversionKind::Numeric;
+            if (to->isEnum() || to->isMethodmap())
                 return ConversionKind::TagMismatch;
             break;
 

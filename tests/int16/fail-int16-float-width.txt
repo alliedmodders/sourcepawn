@@ -1,0 +1,3 @@
+error 460: cannot use view_as to cast type 'float' to type 'int16'
+error 460: cannot use view_as to cast type 'float' to type 'int64'
+error 460: cannot use view_as to cast type 'int16' to type 'float'

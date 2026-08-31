@@ -957,13 +957,20 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
 
     if (IsAssignOp(token)) {
         // Check that there is a valid conversion from the right-hand side to the left.
-        auto ck = FindConversion(assign_type, left_type, CvtContext::Assignment);
+        ConversionKind ck;
+        if (auto constant_ck = FindConstantConversion(state.right, assign_type, left_type,
+                                                      CvtContext::Assignment))
+        {
+            ck = *constant_ck;
+        } else {
+            ck = FindConversion(assign_type, left_type, CvtContext::Assignment);
+        }
         if (ck == ConversionKind::NeedsCast) {
             report(state.expr, 462) << assign_type << left_type;
             return false;
         }
         if (!HasImplicitConversion(ck)) {
-            ReportConversionDiagnostic(state.expr, left_type, assign_type);
+            ReportConversionDiagnostic(state.right, left_type, assign_type);
             return false;
         }
 
@@ -1000,8 +1007,18 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         char boolresult = FALSE;
         CheckCoercion(state.expr, left_val->type(), right_val->type(), CvtContext::Operator);
         val.ident = iCONSTEXPR;
-        val.set_constval(calc(left_val->constval(), op_token, right_val->constval(),
-                              &boolresult));
+        cell folded = calc(left_val->constval(), op_token, right_val->constval(),
+                           &boolresult);
+
+        // If a constant operation overflows, promote it to the next sized up
+        // integer.
+        if (val.type()->isInt16() &&
+            (folded < std::numeric_limits<int16_t>::min() ||
+             folded > std::numeric_limits<int16_t>::max()))
+        {
+            val.set_expr(types_->type_int());
+        }
+        val.set_constval(folded);
     }
 
     return true;
@@ -1308,15 +1325,25 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
 
 
 static inline bool IsValidIntWidthChange(Type* from, Type* to) {
-    if (from->isInt64() && to->isInt())
+    if (from->isWideInt()) {
+        return to->isInt() ||
+               to->isInt16() ||
+               to->isWideInt();
+    }
+    if (to->isWideInt()) {
+        return from->isInt() ||
+               from->isAny() ||
+               from->isInt16();
+    }
+    return false;
+}
+
+static inline bool CastNeedsRvalue(const ExprVal& out_val, Type* to_type) {
+    if (out_val.ident == iACCESSOR)
         return true;
-    if ((from->isInt() || from->isAny()) && to->isInt64())
+    if (out_val.type()->isWideInt() || to_type->isWideInt())
         return true;
-    if (from->isWideInt() && to->isInt())
-        return true;
-    if ((from->isInt() || from->isAny()) && to->isWideInt())
-        return true;
-    if (from->isWideInt() && to->isWideInt())
+    if (out_val.type()->podLoadSize() != to_type->podLoadSize())
         return true;
     return false;
 }
@@ -1412,15 +1439,22 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     if (actual_array)
         to_type = to_array_type;
 
-    if (out_val.ident == iACCESSOR) {
-        if (inner->lvalue())
-            expr->set_expr(new RvalueExpr(inner));
-        out_val.ident = iEXPRESSION;
-    } else if (out_val.type()->isWideInt() || to_type->isWideInt()) {
+    if (out_val.type()->isWideInt() || to_type->isWideInt()) {
         if (!IsValidIntWidthChange(out_val.type(), to_type)) {
             report(expr, 460) << out_val.type() << to_type;
             return false;
         }
+    }
+
+    if (to_type->isFloat() != out_val.type()->isFloat()) {
+        auto other_type = out_val.type()->isFloat() ? to_type : out_val.type();
+        if (other_type->podLoadSize() != 4) {
+            report(expr, 460) << out_val.type() << to_type;
+            return false;
+        }
+    }
+
+    if (CastNeedsRvalue(out_val, to_type)) {
         if (inner->lvalue())
             expr->set_expr(new RvalueExpr(inner));
         out_val.ident = iEXPRESSION;
@@ -2431,7 +2465,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
 
         if (!lvalue ||
             (val->ident == iARRAYELEM &&
-             (val->type()->isChar() || val->type()->isInt64())))
+             (val->type()->maybe_lit_size().value_or(4) != 4)))
         {
             report(param, 35) << visual_pos; // argument type mismatch
             return nullptr;

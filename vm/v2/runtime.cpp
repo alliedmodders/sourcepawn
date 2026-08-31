@@ -837,6 +837,8 @@ const TypeDesc* Runtime::LoadType(FastRtti& parser) {
             return GetPrimitiveType(TypeKind::Int32);
         case cb::kFloat32:
             return GetPrimitiveType(TypeKind::Float32);
+        case cb::kInt16:
+            return GetPrimitiveType(TypeKind::Int16);
         case cb::kChar8:
             return GetPrimitiveType(TypeKind::Char8);
         case cb::kAny:

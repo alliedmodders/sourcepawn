@@ -158,6 +158,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_LOAD_ELEM_I64:
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
+        case OP_LOAD_ELEM_I16:
         case OP_LOAD_ELEM_A: {
             if (!popInt32())
                 return false;
@@ -180,6 +181,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             }
             if (op == OP_LOAD_ELEM_U8)
                 return pushStack(cell_type());
+            if (op == OP_LOAD_ELEM_I16)
+                return pushStack(cell_type());
             return pushStack(elt);
         }
 
@@ -188,6 +191,7 @@ MethodVerifier::verifyOp(OPCODE op) {
         case OP_STOR_ELEM_I64:
         case OP_STOR_ELEM_INTPTR:
         case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_I16:
         case OP_STOR_ELEM_A: {
             const TypeDesc* val;
             if (!popStack(&val))
@@ -387,7 +391,14 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(cell_type());
         }
 
-
+        case OP_CVT_I16: {
+            const TypeDesc* td;
+            if (!popStack(&td))
+                return false;
+            if (!checkCell(td) && !td->IsInt64() && !td->IsIntPtr())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
 
         case OP_DUP:
             if (v->stack.empty())
@@ -512,6 +523,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(cell_type());
         }
 
+        case OP_LOAD_I_I16: {
+            const TypeDesc* addr;
+            if (!popStack(&addr))
+                return false;
+            if (!addr->IsReference() || !addr->ref_type()->IsInt16())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+
         case OP_STOR_I_U8: {
             const TypeDesc* val;
             if (!popStack(&val))
@@ -520,6 +540,18 @@ MethodVerifier::verifyOp(OPCODE op) {
             if (!popStack(&addr))
                 return false;
             if (!addr->IsReference())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return ValidateStore(addr->ref_type(), val);
+        }
+
+        case OP_STOR_I_I16: {
+            const TypeDesc* val;
+            if (!popStack(&val))
+                return false;
+            const TypeDesc* addr;
+            if (!popStack(&addr))
+                return false;
+            if (!addr->IsReference() || !addr->ref_type()->IsInt16())
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return ValidateStore(addr->ref_type(), val);
         }
@@ -1022,6 +1054,7 @@ static inline bool IsPodType(const TypeDesc* type) {
         case TypeKind::IntPtr:
         case TypeKind::Float32:
         case TypeKind::Char8:
+        case TypeKind::Int16:
         case TypeKind::Any:
             return true;
         default:
@@ -1200,6 +1233,7 @@ bool MethodVerifier::checkIntOrFloat(const TypeDesc* td) {
         case TypeKind::Int32:
         case TypeKind::Float32:
         case TypeKind::Char8:
+        case TypeKind::Int16:
         case TypeKind::Any:
             return true;
         default:

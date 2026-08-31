@@ -558,18 +558,24 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_LOAD_I_I16: {
+            LowerUnary(LL_LOAD_I_I16, cell_type_);
+            break;
+        }
+
         case OP_LOAD_ELEM_I32:
         case OP_LOAD_ELEM_F32:
         case OP_LOAD_ELEM_I64:
         case OP_LOAD_ELEM_INTPTR:
         case OP_LOAD_ELEM_U8:
+        case OP_LOAD_ELEM_I16:
         case OP_LOAD_ELEM_A: {
             ExprNode* index = popStack();
             ExprNode* base_node = popStack();
             const TypeDesc* base = base_node->type;
 
             const TypeDesc* elt = base->array_elt();
-            const TypeDesc* result_type = (op == OP_LOAD_ELEM_U8) ? cell_type_ : elt;
+            const TypeDesc* result_type = elt->element_size() < 4 ? cell_type_ : elt;
 
             LLOp llop = LL_NOP;
             if (base->IsFlatArray()) {
@@ -583,6 +589,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                                LL_LOAD_ELEM_FLAT_I64 : LL_LOAD_ELEM_FLAT_I32;
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_FLAT_U8; break;
+                    case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_FLAT_I16; break;
                     default: assert(false); break;
                 }
             } else {
@@ -595,6 +602,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                                LL_LOAD_ELEM_I64 : LL_LOAD_ELEM_I32;
                         break;
                     case OP_LOAD_ELEM_U8:  llop = LL_LOAD_ELEM_U8; break;
+                    case OP_LOAD_ELEM_I16: llop = LL_LOAD_ELEM_I16; break;
                     case OP_LOAD_ELEM_A:   llop = LL_LOAD_ELEM_A; break;
                     default: assert(false); break;
                 }
@@ -609,6 +617,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_I_I64:
         case OP_STOR_I_INTPTR:
         case OP_STOR_I_U8:
+        case OP_STOR_I_I16:
         case OP_STOR_I_A: {
             LLOp llop = LL_NOP;
             switch (op) {
@@ -619,6 +628,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                     llop = intptr_type_->IsWideInt() ? LL_STOR_I_I64 : LL_STOR_I_I32;
                     break;
                 case OP_STOR_I_U8:  llop = LL_STOR_I_U8; break;
+                case OP_STOR_I_I16: llop = LL_STOR_I_I16; break;
                 case OP_STOR_I_A:   llop = LL_STOR_I_A; break;
                 default: assert(false); break;
             }
@@ -642,6 +652,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         case OP_STOR_ELEM_I64:
         case OP_STOR_ELEM_INTPTR:
         case OP_STOR_ELEM_U8:
+        case OP_STOR_ELEM_I16:
         case OP_STOR_ELEM_A: {
             ExprNode* val = popStack();
             ExprNode* index = popStack();
@@ -664,6 +675,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                                LL_STOR_ELEM_FLAT_I64 : LL_STOR_ELEM_FLAT_I32;
                         break;
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_FLAT_U8; break;
+                    case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_FLAT_I16; break;
                     default: assert(false); break;
                 }
                 if (base_node->kind == ExprNode::kSlotOp &&
@@ -683,6 +695,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                         case LL_STOR_ELEM_FLAT_F32: iop = LL_STOR_ELEM_FLAT_I_F32; break;
                         case LL_STOR_ELEM_FLAT_I64: iop = LL_STOR_ELEM_FLAT_I_I64; break;
                         case LL_STOR_ELEM_FLAT_U8:  iop = LL_STOR_ELEM_FLAT_I_U8; break;
+                        case LL_STOR_ELEM_FLAT_I16: iop = LL_STOR_ELEM_FLAT_I_I16; break;
                         default: assert(false); break;
                     }
                     emit(iop, StorElemFlatArgs{
@@ -705,6 +718,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                                LL_STOR_ELEM_I64 : LL_STOR_ELEM_I32;
                         break;
                     case OP_STOR_ELEM_U8:  llop = LL_STOR_ELEM_U8; break;
+                    case OP_STOR_ELEM_I16: llop = LL_STOR_ELEM_I16; break;
                     case OP_STOR_ELEM_A:   llop = LL_STOR_ELEM_A; break;
                     default: assert(false); break;
                 }
@@ -961,6 +975,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 else
                     pushStack(val);
             }
+            break;
+        }
+
+        case OP_CVT_I16: {
+            ExprNode* val = popStack();
+            pushStack(CreateOpNode(cell_type_, LL_CVT_I16, val, nullptr));
             break;
         }
 
@@ -2118,6 +2138,7 @@ VReg MethodLowerer::EmitNode(ExprNode* node, VReg target_reg) {
                         case LL_LOAD_ELEM_FLAT_F32: iop = LL_LOAD_ELEM_FLAT_I_F32; break;
                         case LL_LOAD_ELEM_FLAT_I64: iop = LL_LOAD_ELEM_FLAT_I_I64; break;
                         case LL_LOAD_ELEM_FLAT_U8:  iop = LL_LOAD_ELEM_FLAT_I_U8; break;
+                        case LL_LOAD_ELEM_FLAT_I16: iop = LL_LOAD_ELEM_FLAT_I_I16; break;
                         default: assert(false); break;
                     }
                     emit(iop, LoadElemFlatArgs{
