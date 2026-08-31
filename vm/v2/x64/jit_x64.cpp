@@ -246,6 +246,56 @@ void Compiler::EmitScriptedCall(uint32_t method_index, uint8_t nargs, uint16_t d
         __ movl(RegAddr(dest), rax);
 }
 
+void Compiler::EmitIndirectCall(uint32_t fn_reg, uint8_t nargs, uint16_t dest,
+                                const std::vector<uint16_t>& args)
+{
+    __ movl(rdx, RegAddr(fn_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    // This could happen if a runtime has been unloaded, I guess.
+    __ movq(rdx, HeapAddr(rdx, offsetof(SpFunction, method)));
+    __ testq(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    for (uint8_t i = 0; i < nargs; i++) {
+        uint16_t arg_reg = args[i];
+        __ movl(rax, RegAddr(arg_reg));
+        __ movl(Operand(stk, i * sizeof(cell_t)), rax);
+    }
+
+    auto& thunk = AddIndirectCallThunk(fn_reg);
+    __ movq(rdx, Operand(rdx, MethodInfo::offsetOfCompiledFunction()));
+    __ testq(rdx, rdx);
+    __ j(zero, &thunk.label);
+
+    __ bind(&thunk.return_to);
+    __ movq(rax, Operand(rdx, CompiledFunction::offsetOfEntry()));
+    __ call(rax);
+    EmitCipMapping(op_cip_);
+
+    if (dest != 0xFFFF)
+        __ movl(RegAddr(dest), rax);
+}
+
+void Compiler::EmitIndirectCallThunk(IndirectCallThunk* thunk) {
+    // Grab SpFunction->method->method_index.
+    __ movl(rax, RegAddr(thunk->fn_reg));
+    __ movq(rax, HeapAddr(rax, offsetof(SpFunction, method)));
+
+    __ setupExitFrame(ExitFrameType::Helper, 0);
+    __ movq(ArgReg1, rax);
+    __ movq(ArgReg0, intptr_t(context_));
+    __ callWithABI(ExternalAddress((void*)IndirectCompileThunk));
+    __ leaveExitFrame();
+
+    __ testq(rax, rax);
+    JumpOnReportedError(zero);
+
+    __ movq(rdx, rax);
+    __ jmp(&thunk->return_to);
+}
+
 void Compiler::EmitJump(size_t target_idx) {
     if (IsBlockEmitted(target_idx)) {
         __ jmp32(&block_labels_[target_idx]);
@@ -685,14 +735,15 @@ void Compiler::EmitSdivI64(LLOp op, uint16_t lhs, uint16_t rhs, uint16_t dest) {
     __ movq(rax, RegAddr(lhs));
     __ movq(rcx, RegAddr(rhs));
 
-    __ testl(rcx, rcx);
+    __ testq(rcx, rcx);
     JumpOnError(zero, SP_ERROR_DIVIDE_BY_ZERO);
 
     // A more subtle case; -INT_MIN / -1 yields an overflow exception.
     Label ok;
-    __ cmpl(rcx, -1);
+    __ cmpq(rcx, -1);
     __ j(not_equal, &ok);
-    __ cmpl(rax, 0x80000000);
+    __ movq(r8, (intptr_t)0x8000000000000000ULL);
+    __ cmpq(rax, r8);
     JumpOnError(equal, SP_ERROR_INTEGER_OVERFLOW);
     __ bind(&ok);
 
@@ -1278,6 +1329,21 @@ void Compiler::EmitSwitchTable(uint16_t val_reg, uint32_t def_block, const std::
         __ emit_absolute_address(&block_addresses_[target]);
     }
     __ bind(&table);
+}
+
+void Compiler::EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(rdx, RegAddr(src_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movq(rdx, HeapAddr(rdx, offsetof(SpFunction, method)));
+    __ testq(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rax, Operand(rdx, MethodInfo::offsetOfMethodIndex()));
+    __ shll(rax, 1);
+    __ orl(rax, 1);
+    __ movl(RegAddr(dest_reg), rax);
 }
 
 void Compiler::EmitIncRefForArrayEscape(Register obj_reg, Register tmp_reg) {

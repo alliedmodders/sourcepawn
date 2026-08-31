@@ -164,7 +164,8 @@ CompiledFunction* CompilerBase::Emit() {
         EmitDeallocThunk(&thunk);
     }
 
-    // jumpOnError must not be called after this.
+    // Out-of-line paths can emit new error thunks, so we process error thunks
+    // last. JumpOnError must not be called after this.
     for (auto& thunk : error_thunks_) {
         __ bind(&thunk.label);
         EmitErrorThunk(&thunk);
@@ -495,6 +496,12 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
 
                 auto fn_addr = env_->virt_mem().ToLocalAddr(fn.get());
                 EmitLoadInternedObj(fn_addr, dest);
+                break;
+            }
+            case LL_GETFUNCID: {
+                uint16_t src_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitGetFuncId(src_reg, dest_reg);
                 break;
             }
             case LL_LOAD_I_U8:
