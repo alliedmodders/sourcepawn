@@ -57,6 +57,7 @@ class Expr;
 class LayoutFieldDecl;
 class MethodmapDecl;
 class MethodmapMethodDecl;
+class PropertyDecl;
 class SemaContext;
 class SymbolScope;
 struct StructInitField;
@@ -1706,6 +1707,12 @@ class LayoutDecl : public Decl
         return node->kind() == StmtKind::MethodmapDecl ||
                node->kind() == StmtKind::EnumStructDecl;
     }
+
+    PoolArray<PropertyDecl*>& properties() { return properties_; }
+    const PoolArray<PropertyDecl*>& properties() const { return properties_; }
+
+  protected:
+    PoolArray<PropertyDecl*> properties_;
 };
 
 class MemberFunctionDecl : public FunctionDecl
@@ -1828,7 +1835,6 @@ class MethodmapDecl : public LayoutDecl
     Decl* FindMember(Atom* name) const;
 
     PoolArray<MethodmapMethodDecl*>& methods() { return methods_; }
-    PoolArray<PropertyDecl*>& properties() { return properties_; }
     MethodmapDecl* parent() const { return parent_; }
     bool nullable() const { return nullable_; }
     bool is_bound() const { return is_bound_; }
@@ -1845,7 +1851,6 @@ class MethodmapDecl : public LayoutDecl
     bool nullable_ : 1;
     bool is_bound_ : 1;
     Atom* extends_;
-    PoolArray<PropertyDecl*> properties_;
     PoolArray<MethodmapMethodDecl*> methods_;
     MethodmapDecl* parent_ = nullptr;
     MethodmapMethodDecl* ctor_ = nullptr;
