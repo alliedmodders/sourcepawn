@@ -78,6 +78,8 @@ bool CompilerBase::Compile(Runtime* cx, RefPtr<MethodInfo> method) {
             return false;
 
         std::unique_ptr<LLCode> code = LowerMethod(graph, method.get());
+        if (!code)
+            return false;
         method->set_llcode(std::move(code));
     }
 

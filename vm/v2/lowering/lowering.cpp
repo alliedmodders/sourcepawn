@@ -188,7 +188,7 @@ class MethodLowerer
     }
 
     void emitVal(VReg val) {
-        assert(val.valid());
+        assert(vregs_overflowed_ || val.valid());
         masm_.emit<uint16_t>(val.index);
     }
 
@@ -326,7 +326,7 @@ class MethodLowerer
         return node;
     }
 
-    void InitializeRegisters();
+    bool InitializeRegisters();
 
     VReg OffsetToVReg(int32_t offset) const {
         auto it = offset_to_vreg_.find(offset);
@@ -374,6 +374,7 @@ class MethodLowerer
     uint32_t base_temp_reg_ = 0;
     uint32_t num_temp_regs_ = 0;
     uint32_t max_callee_args_ = 0;
+    bool vregs_overflowed_ = false;
     PoolAllocator pool_;
     std::unordered_map<int32_t, VReg> offset_to_vreg_;
     BitSet temp_regs_used_;
@@ -381,7 +382,8 @@ class MethodLowerer
 };
 
 std::unique_ptr<LLCode> MethodLowerer::Lower() {
-    InitializeRegisters();
+    if (!InitializeRegisters())
+        return nullptr;
     AutoClearBlockData<LoweringData> clear_block_data(graph_);
 
     // :TODO: the last block has the max ID.
@@ -419,7 +421,7 @@ std::unique_ptr<LLCode> MethodLowerer::Lower() {
 
     PatchJumps();
 
-    if (num_temp_regs_ >= UINT16_MAX) {
+    if (vregs_overflowed_ || num_temp_regs_ >= UINT16_MAX) {
         rt_->ReportErrorNumber(SP_ERROR_STACKLOW);
         return nullptr;
     }
@@ -443,7 +445,7 @@ std::unique_ptr<LLCode> MethodLowerer::Lower() {
                                     std::move(blocks));
 }
 
-void MethodLowerer::InitializeRegisters() {
+bool MethodLowerer::InitializeRegisters() {
     uint32_t current_reg = 0;
 
     const auto& arg_types = method_->arg_types();
@@ -487,8 +489,14 @@ void MethodLowerer::InitializeRegisters() {
         offset_to_vreg_[offset] = shadow_reg;
     }
 
+    if (current_reg >= UINT16_MAX) {
+        rt_->ReportErrorNumber(SP_ERROR_STACKLOW);
+        return false;
+    }
+
     base_temp_reg_ = current_reg;
     num_temp_regs_ = current_reg;
+    return true;
 }
 
 void MethodLowerer::LowerBlock() {
@@ -2313,6 +2321,11 @@ VReg MethodLowerer::AllocateTempCells(uint16_t cells, bool is_gcobj) {
                 return VReg(i, cells, true);
             }
         }
+    }
+
+    if (num_temp_regs_ + cells > UINT16_MAX) {
+        vregs_overflowed_ = true;
+        return VReg();
     }
 
     uint32_t reg = num_temp_regs_;

@@ -369,6 +369,7 @@ class Type : public PoolObject
             case BuiltinType::Bool:
                 return 4;
             case BuiltinType::Double:
+            case BuiltinType::Int64:
                 return 8;
             default:
                 return -1;

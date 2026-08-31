@@ -74,13 +74,27 @@ class ArrayTypeResolver
 static constexpr int kSizeUnknown = -1;
 static constexpr int kSizeIndeterminate = -2;
 
+// Large flat arrays can cause us to run out of local stack registers. The main
+// motivation of flat arrays is to optimize for small vectors, so this cap is
+// very generous. Once exceeded we fallback to fixed arrays which use a single
+// heap allocation.
+static constexpr int kMaxFlatArrayBytes = 4096;
+
 // Flat arrays store their elements inline without GC tracking, so they
 // can never contain heap items. Otherwise the runtime would miss those
 // references during finalization.
-static bool CanUseFlatArray(Type* element_type) {
+static bool CanUseFlatArray(Type* element_type, int array_size) {
     if (element_type->isHeapItem())
         return false;
-    return true;
+
+    int elt_size;
+    if (int pod_load_size = element_type->podLoadSize(); pod_load_size != -1)
+        elt_size = pod_load_size;
+    else if (element_type->isIntPtr())
+        elt_size = 8;
+    else
+        elt_size = 4;
+    return array_size * elt_size <= kMaxFlatArrayBytes;
 }
 
 ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, VarDeclBase* decl)
@@ -130,7 +144,7 @@ bool ArrayTypeResolver::Resolve() {
     // Always build a Type, so we don't have a null type lying around.
     auto types = CompileContext::get().types();
     if (computed_.size() == 1) {
-        if (computed_[0] > 0 && CanUseFlatArray(type_->type))
+        if (computed_[0] > 0 && CanUseFlatArray(type_->type, computed_[0]))
             type_->type = types->defineFlatArray(type_->type, computed_[0]);
         else
             type_->type = types->defineArray(type_->type, computed_[0]);

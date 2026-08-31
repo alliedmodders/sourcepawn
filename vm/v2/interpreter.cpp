@@ -101,6 +101,8 @@ bool Interpreter::Run(Runtime* cx, Handle<SpFunction> fn, uint32_t frm, cell_t* 
         if (!graph)
             return false;
         std::unique_ptr<LLCode> code = LowerMethod(graph, method);
+        if (!code)
+            return false;
         method->set_llcode(std::move(code));
     }
 
