@@ -93,6 +93,7 @@ class Parser
 
     Stmt* parse_compound();
     Stmt* parse_local_decl(int tokid, bool autozero);
+    Stmt* parse_let_decl(int vclass);
     Stmt* parse_if();
     Stmt* parse_for();
     Stmt* parse_switch();
@@ -131,7 +132,7 @@ class Parser
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
     int nextop(int* opidx, const int* list);
 
-    bool consume_line();
+    bool consume_line(bool consume_term = true);
 
   private:
     CompileContext& cc_;

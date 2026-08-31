@@ -117,6 +117,10 @@ Parser::Parse()
             case tSTRUCT:
                 decl = parse_pstruct();
                 break;
+            case tLET:
+                decl = parse_let_decl(sGLOBAL);
+                lexer_->need(tTERM);
+                break;
             case tCONST:
                 decl = parse_const(sGLOBAL);
                 break;
@@ -588,9 +592,7 @@ Parser::parse_pragma_unused()
     return new PragmaUnusedStmt(pos, names);
 }
 
-Stmt*
-Parser::parse_const(int vclass)
-{
+Stmt* Parser::parse_const(int vclass) {
     std::vector<Stmt*> stmts;
     do {
         auto pos = lexer_->pos();
@@ -624,6 +626,10 @@ Parser::parse_const(int vclass)
                 }
                 break;
             }
+            case tLET:
+                report(23);
+                rt = TypenameInfo{types_->type_int()};
+                break;
             default:
                 report(122);
                 break;
@@ -1331,8 +1337,18 @@ Parser::parse_stmt(bool allow_decl)
         case tOBJECT:
             lexer_->lexpush();
             // Fall-through.
-        case tDECL:
         case tSTATIC:
+            if (tok == tSTATIC && lexer_->match(tLET)) {
+                if (!allow_decl) {
+                    report(3);
+                    return nullptr;
+                }
+                auto stmt = parse_let_decl(sSTATIC);
+                lexer_->need(tTERM);
+                return stmt;
+            }
+            [[fallthrough]];
+        case tDECL:
         case tNEW: {
             if (tok == tNEW && lexer_->match(tSYMBOL)) {
                 if (lexer_->peek('(')) {
@@ -1346,6 +1362,15 @@ Parser::parse_stmt(bool allow_decl)
                 return nullptr;
             }
             auto stmt = parse_local_decl(tok, tok != tDECL);
+            lexer_->need(tTERM);
+            return stmt;
+        }
+        case tLET: {
+            if (!allow_decl) {
+                report(3);
+                return nullptr;
+            }
+            auto stmt = parse_let_decl(sLOCAL);
             lexer_->need(tTERM);
             return stmt;
         }
@@ -1490,6 +1515,33 @@ Parser::parse_local_decl(int tokid, bool autozero)
     return parse_var(&decl, params);
 }
 
+Stmt* Parser::parse_let_decl(int vclass) {
+    auto pos = lexer_->pos();
+
+    declinfo_t decl = {};
+    decl.type.is_new = true;
+    decl.type.is_auto = true;
+
+    if (!lexer_->needsymbol(&decl.name))
+        return nullptr;
+
+    if (!lexer_->match('=')) {
+        report(6);
+        consume_line();
+        return nullptr;
+    }
+
+    Expr* init = var_init(vclass);
+
+    if (lexer_->match(',')) {
+        report(472);
+        consume_line(false);
+    }
+
+    return new VarDecl(pos, decl.name, decl.type,
+                       vclass, false, vclass == sSTATIC, false, init);
+}
+
 Stmt*
 Parser::parse_if()
 {
@@ -1564,6 +1616,10 @@ Parser::parse_for()
                  */
                 // :TODO: test lexer_->need(tTERM) accepting newlines here
                 init = parse_local_decl(tok_id, true);
+                lexer_->need(';');
+                break;
+            case tLET:
+                init = parse_let_decl(sLOCAL);
                 lexer_->need(';');
                 break;
             case tSYMBOL: {
@@ -2066,14 +2122,18 @@ bool Parser::parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name,
 
 // Consumes a line, returns FALSE if EOF hit.
 bool
-Parser::consume_line()
+Parser::consume_line(bool consume_term)
 {
     // First check for EOF.
     if (lexer_->lex() == 0)
         return false;
     lexer_->lexpush();
 
-    while (!lexer_->match(tTERM)) {
+    while (true) {
+        if (!consume_term && lexer_->peek(tTERM))
+            break;
+        if (lexer_->match(tTERM))
+            break;
         // Check for EOF.
         if (lexer_->lex() == 0)
             return false;

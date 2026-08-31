@@ -228,6 +228,36 @@ bool Semantics::CheckStmt(Stmt* stmt) {
 bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     AutoErrorPos aep(decl->pos());
 
+    if (decl->type_info().is_auto) {
+        if (!CheckInferredVarDecl(decl))
+            return false;
+    } else {
+        if (!CheckTypedVarDecl(decl))
+            return false;
+        if (decl->type()->isPstruct())
+            return true;
+    }
+
+    auto vclass = decl->vclass();
+    auto init_rhs = decl->init_rhs();
+    if (decl->init() && init_rhs && vclass != sLOCAL && !decl->type()->isComposite()) {
+        if (!init_rhs->EvalConst(nullptr, nullptr)) {
+            if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
+                return true;
+
+            // Make a special exception for int64 lits.
+            if (!((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>()))
+                report(init_rhs->pos(), 8);
+        }
+    }
+
+    if (decl->init() && (vclass == sGLOBAL || vclass == sSTATIC))
+        globals_to_init_.emplace_back(decl);
+
+    return true;
+}
+
+bool Semantics::CheckTypedVarDecl(VarDeclBase* decl) {
     const auto& type = decl->type();
     bool is_const = decl->type_info().is_const;
 
@@ -241,8 +271,6 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (!decl->as<ArgDecl>() && is_const && !decl->init() && !decl->is_public())
         report(decl->pos(), 251);
 
-    auto vclass = decl->vclass();
-
     // CheckArrayDecl works on enum structs too.
     if (type->isArray() || type->isEnumStruct()) {
         if (!CheckArrayDeclaration(decl))
@@ -255,22 +283,67 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
         auto init = decl->init();
         if (init && !CheckRvalue(init))
             return false;
-
-        auto init_rhs = decl->init_rhs();
-        if (init && vclass != sLOCAL) {
-            if (!init_rhs->EvalConst(nullptr, nullptr)) {
-                if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
-                    return true;
-
-                // Make a special exception for int64 lits.
-                if (!((vclass == sGLOBAL || vclass == sSTATIC) && init_rhs->as<Number64Expr>()))
-                    report(init_rhs->pos(), 8);
-            }
-        }
     }
 
-    if (decl->init() && (vclass == sGLOBAL || vclass == sSTATIC))
-        globals_to_init_.emplace_back(decl);
+    return true;
+}
+
+static bool IsArrayLiteralExpr(Expr* expr) {
+    return expr->is(ExprKind::StringExpr) ||
+           expr->is(ExprKind::ArrayExpr) ||
+           expr->is(ExprKind::StructExpr);
+}
+
+bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
+    AutoErrorPos aep(decl->pos());
+
+    if (!decl->init()) {
+        report(decl->pos(), 6);
+        return false;
+    }
+
+    if (IsArrayLiteralExpr(decl->init_rhs())) {
+        report(decl->pos(), 20);
+        return false;
+    }
+
+    // Analyze the RHS to determine its type.
+    Expr* init_rhs = decl->init_rhs();
+    if (!CheckExpr(init_rhs)) {
+        // Use int as a dummy type to avoid crashes.
+        auto* ti = decl->mutable_type_info();
+        ti->type = types_->type_int();
+        ti->resolved = true;
+        ti->is_auto = false;
+        return false;
+    }
+
+    QualType rhs_type = init_rhs->val().type();
+
+    if (rhs_type->isVoid()) {
+        report(decl->pos(), 144);
+        return false;
+    }
+    if (rhs_type->isNull()) {
+        report(decl->pos(), 19);
+        return false;
+    }
+    if (IsArrayLiteralExpr(init_rhs)) {
+        report(decl->pos(), 20);
+        return false;
+    }
+
+    // Assign the inferred type.
+    auto* ti = decl->mutable_type_info();
+    ti->type = rhs_type.unqualified();
+    ti->resolved = true;
+    ti->is_auto = false;
+
+    // Make sure we don't double-eval the RHS in case that triggers weirdness.
+    BinaryExprState state(decl->init());
+    state.rhs_resolved = true;
+    if (!CheckBinaryExprImpl(state))
+        return false;
 
     return true;
 }
@@ -305,11 +378,7 @@ bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
             continue;
         auto arg = ps->fields()[i];
 
-#ifdef NDEBUG
-        if (arg->type()->as<ArrayType>() != nullptr) {
-#else
-        if (auto at = arg->type()->as<ArrayType>()) {
-#endif
+        if ([[maybe_unused]] auto at = arg->type()->as<ArrayType>()) {
             assert(at->inner()->isChar());
 
             auto expr = new StringExpr(decl->pos(), cc_.atom(""));
@@ -710,7 +779,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         return false;
 
     if (state.expr->token() == '=') {
-        if (!CheckRvalue(state.right, state.left->val().type()))
+        if (!state.rhs_resolved && !CheckRvalue(state.right, state.left->val().type()))
             return false;
     } else {
         if (!CheckRvalue(state.right))
@@ -1546,7 +1615,10 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
 
     auto map = base_type->asMethodmap();
     if (!map) {
-        report(expr, 104) << base_val.type();
+        if (base_val.type()->isFunctionLike())
+            report(expr, 104) << "function";
+        else
+            report(expr, 104) << base_val.type();
         return false;
     }
 

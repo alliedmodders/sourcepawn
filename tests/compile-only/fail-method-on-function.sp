@@ -1,4 +1,3 @@
-// force_old_parser: true
 // The error message changes based on parser.
 native CloseHandle(Handle:handle);
 

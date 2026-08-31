@@ -435,20 +435,22 @@ bool VarDeclBase::Bind(SemaContext& sc) {
     if (init_ && !as<ArgDecl>())
         init_rhs()->Bind(sc);
 
-    if (!sc.BindType(pos(), &type_))
-        return false;
+    if (!type_.is_auto) {
+        if (!sc.BindType(pos(), &type_))
+            return false;
+    }
 
     if (!type_.dim_exprs.empty()) {
         if (!ResolveArrayType(sc.sema(), this))
             return false;
     }
 
-    if (type()->isVoid())
+    if (!type_.is_auto && type()->isVoid())
         error(pos_, 144);
 
     bool def_ok = CheckNameRedefinition(sc, name_, pos_, vclass_);
 
-    if (type()->isPstruct()) {
+    if (!type_.is_auto && type()->isPstruct()) {
         type_.is_const = true;
     } else {
         if (type_.is_varargs)

@@ -201,8 +201,6 @@ class Test(object):
   ManifestKeys = set([
     'compiler',
     'defines',
-    'force_new_parser',
-    'force_old_parser',
     'returnCode',
     'type',
     'warnings_are_errors',
@@ -292,14 +290,6 @@ class Test(object):
   @property
   def warnings_are_errors(self):
     return self.checkManifests('warnings_are_errors') == 'true'
-
-  @property
-  def force_old_parser(self):
-    return self.checkManifests('force_old_parser') == 'true'
-
-  @property
-  def force_new_parser(self):
-    return self.checkManifests('force_new_parser') == 'true'
 
   @property
   def expectedReturnCode(self):

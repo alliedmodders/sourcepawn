@@ -600,6 +600,14 @@ uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, StringExpr* array) {
     return pos;
 }
 
+static bool CanEmitArrayCtor(Expr* ctor) {
+    if (!ctor)
+        return true;
+    return ctor->is(ExprKind::ArrayExpr) ||
+           ctor->is(ExprKind::StringExpr) ||
+           ctor->is(ExprKind::NewArrayExpr);
+}
+
 void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
     BinaryExpr* init = decl->init();
 
@@ -621,8 +629,12 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         if (array->is_flat()) {
             if (!init_rhs)
                 return;
-            __ emit(OP_ADDR_S, VarSlot(slot));
-            EmitArrayCtor(array, init_rhs, 0);
+            if (CanEmitArrayCtor(init_rhs)) {
+                __ emit(OP_ADDR_S, VarSlot(slot));
+                EmitArrayCtor(array, init_rhs, 0);
+            } else {
+                EmitExpr(init);
+            }
         } else if (array->is_fixed() || !init_rhs || init_rhs->as<NewArrayExpr>()) {
             EmitArrayCtor(array, init_rhs, 0);
             __ emit(OP_STOR_S, VarSlot(slot));

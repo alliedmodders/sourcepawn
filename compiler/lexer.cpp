@@ -1496,7 +1496,6 @@ IsUnimplementedKeyword(int token)
         case tINT64:
         case tINTERFACE:
         case tINTN:
-        case tLET:
         case tNAMESPACE:
         case tPACKAGE:
         case tPRIVATE:

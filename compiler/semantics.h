@@ -175,6 +175,8 @@ class Semantics final
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
     bool CheckVarDecl(VarDeclBase* decl);
+    bool CheckTypedVarDecl(VarDeclBase* decl);
+    bool CheckInferredVarDecl(VarDeclBase* decl);
     bool CheckConstDecl(VarDecl* decl);
     bool CheckPstructDecl(VarDeclBase* decl);
     bool CheckPstructArg(VarDeclBase* decl, PstructDecl* ps, StructInitFieldExpr* field,
@@ -249,6 +251,7 @@ class Semantics final
         BinaryExpr* expr;
         Expr* left;
         Expr* right;
+        bool rhs_resolved = false;
 
         BinaryExprState(BinaryExpr* expr)
           : expr(expr), left(expr->left()), right(expr->right())

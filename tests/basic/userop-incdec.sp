@@ -1,4 +1,3 @@
-// force_new_parser: true
 #include <shell>
 
 float gVal = 21.5;

@@ -176,7 +176,8 @@ struct typeinfo_t {
         reference(false),
         resolved(false),
         resolved_array(false),
-        is_varargs(false)
+        is_varargs(false),
+        is_auto(false)
     {}
 
     // Either null or an array of size |numdim|, pool-allocated.
@@ -194,10 +195,11 @@ struct typeinfo_t {
     bool resolved : 1;
     bool resolved_array : 1;
     bool is_varargs : 1;
+    bool is_auto : 1;       // Type to be inferred from initializer.
 
     TypenameInfo ToTypenameInfo() const;
 
-    bool bindable() const { return type_atom || type; }
+    bool bindable() const { return type_atom || type || is_auto; }
 
     void set_type(const TypenameInfo& rt) {
         if (rt.has_type()) {
@@ -357,6 +359,9 @@ class Type : public PoolObject
 
     bool isFunction() const {
         return kind_ == TypeKind::Function;
+    }
+    bool isFunctionLike() const {
+        return kind_ == TypeKind::Function || kind_ == TypeKind::FunctionSignature;
     }
     bool isCanonicalFunction() const {
         return isFunction() && !funcenum_ptr_;
