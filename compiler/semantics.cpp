@@ -3080,8 +3080,10 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
         expr = stmt->set_expr(new RvalueExpr(expr));
 
     const auto& v = expr->val();
-    if (tag_ok && !(v.type()->coercesToInt() || v.type()->isFloat()))
+    if (tag_ok && !(v.type()->coercesToInt() || v.type()->isFloat())) {
         report(450) << v.type() << types_->type_int();
+        tag_ok = false;
+    }
 
     ke::Maybe<FlowType> flow;
     auto update_flow = [&](FlowType other) -> void {
@@ -3099,13 +3101,24 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             if (!CheckRvalue(expr))
                 continue;
 
-            ExprVal* val = AnalyzeForConst(expr);
-            if (!val)
+            if (!tag_ok)
                 continue;
-            if (tag_ok)
-                CheckSwitchCaseType(expr, v.type(), val->type());
 
-            cell value = val->const_cell();
+            ConversionKind ck = FindConversion(expr->val().type(), v.type(),
+                                              CvtContext::Assignment);
+            if (!IsNopConversion(ck)) {
+                report(expr, 450) << v.type() << expr->val().type();
+                continue;
+            }
+            if (ck == ConversionKind::TagMismatch)
+                report(expr, 213) << v.type() << expr->val().type();
+
+            if (expr->val().ident != iCONSTEXPR) {
+                report(expr, 8);
+                continue;
+            }
+
+            cell value = expr->val().const_cell();
             if (!case_values.count(value))
                 case_values.emplace(value);
             else
