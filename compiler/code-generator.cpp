@@ -1803,8 +1803,7 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     if (auto es = fun_->return_type()->asEnumStruct()) {
         __ load_hidden_arg(fun_);
-        ExprVal lval = BindLvalue(stmt->expr(), true);
-        EmitRvalue(lval);
+        EmitExpr(stmt->expr());
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_COPYOBJ, type_id);
         __ emit(OP_RETV);
