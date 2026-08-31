@@ -1,4 +1,9 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python: 
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Copyright (c) 2026 AlliedModders LLC
+
 import os
 
 module = binary.Module(builder, 'compiler')
@@ -11,9 +16,9 @@ module.sources += [
   'coercion-rules.cpp',
   'compile-context.cpp',
   'code-generator.cpp',
+  'constant-fold.cpp',
   'data-queue.cpp',
   'errors.cpp',
-  'expressions.cpp',
   'lexer.cpp',
   'main.cpp',
   'name-resolution.cpp',
@@ -22,12 +27,11 @@ module.sources += [
   'pool-objects.cpp',
   'rtti-builder.cpp',
   'sci18n.cpp',
-  'sctracker.cpp',
   'semantics.cpp',
+  'semantics-types.cpp',
   'scopes.cpp',
   'source-file.cpp',
   'source-manager.cpp',
   'symbols.cpp',
-  'type-checker.cpp',
   'types.cpp',
 ]

@@ -1,11 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2004-2021 AlliedModers LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is licensed under the GNU
-// General Public License, version 3.0 (GPL). If a copy of the GPL was not
-// provided with this file, you can obtain it here:
-//   http://www.gnu.org/licenses/gpl.html
+// Copyright (c) 2004-2026 AlliedModders LLC
 //
 #include "rtti.h"
 #include <smx/smx-typeinfo.h>
@@ -28,13 +25,15 @@ bool FastRtti::ReadLocalSlotCount(uint16_t* out) {
     if (!GetNextByte(&b) || b != cb::kLocalSlots)
         return false;
 
+    return ReadUint16(out);
+}
+
+bool FastRtti::ReadUint16(uint16_t* out) {
     union u {
         uint16_t value;
         uint8_t bytes[2];
     } u;
-    if (!GetNextByte(&u.bytes[0]))
-        return false;
-    if (!GetNextByte(&u.bytes[1]))
+    if (!GetNextByte(&u.bytes[0]) || !GetNextByte(&u.bytes[1]))
         return false;
     *out = u.value;
     return true;
@@ -69,17 +68,22 @@ bool FastRtti::SkipNextType() {
             case cb::kBool:
             case cb::kInt32:
             case cb::kInt64:
+            case cb::kIntPtr:
             case cb::kFloat32:
+            case cb::kInt16:
+            case cb::kInt8:
             case cb::kChar8:
             case cb::kAny:
             case cb::kVoid:
+            case cb::kTopObject:
             case cb::kTopFunction:
                 return true;
 
+            case cb::kFlatArray:
             case cb::kFixedArray:
             {
                 uint32_t size;
-                if (!ReadCompactUint32(&size))
+                if (!ReadUint32_Leb128(&size))
                     return false;
                 continue;
             }
@@ -90,10 +94,11 @@ bool FastRtti::SkipNextType() {
             case cb::kEnum:
             case cb::kTypeset:
             case cb::kEnumStruct:
+            case cb::kClass:
             case cb::kFunctionPtr:
             {
                 uint32_t value;
-                if (!ReadCompactUint32(&value))
+                if (!ReadUint32_Leb128(&value))
                     return false;
                 return true;
             }
@@ -105,7 +110,7 @@ bool FastRtti::SkipNextType() {
     }
 }
 
-bool FastRtti::ReadCompactUint32(uint32_t* out) {
+bool FastRtti::ReadUint32_Leb128(uint32_t* out) {
     uint32_t value = 0;
     uint32_t shift = 0;
     for (;;) {
@@ -271,13 +276,19 @@ RttiParser::decode() {
         case cb::kBool:
         case cb::kInt32:
         case cb::kInt64:
+        case cb::kIntPtr:
         case cb::kFloat32:
+        case cb::kFloat64:
+        case cb::kInt16:
+        case cb::kInt8:
         case cb::kChar8:
         case cb::kAny:
+        case cb::kTopObject:
         case cb::kTopFunction:
             result = new Rtti(type);
             break;
 
+        case cb::kFlatArray:
         case cb::kFixedArray: {
             uint32_t size = decodeUint32();
             Rtti* inner = decode();
@@ -292,8 +303,9 @@ RttiParser::decode() {
         case cb::kEnum:
         case cb::kObsoleteTypedef:
         case cb::kTypeset:
-        case cb::kClassdef:
+        case cb::kClassDef:
         case cb::kEnumStruct:
+        case cb::kClass:
         case cb::kFunctionPtr: {
             uint32_t index = decodeUint32();
             result = new Rtti(type, index);
@@ -365,12 +377,18 @@ RttiParser::validate() {
         case cb::kBool:
         case cb::kInt32:
         case cb::kInt64:
+        case cb::kIntPtr:
         case cb::kFloat32:
+        case cb::kFloat64:
+        case cb::kInt16:
+        case cb::kInt8:
         case cb::kChar8:
         case cb::kAny:
+        case cb::kTopObject:
         case cb::kTopFunction:
             return true;
 
+        case cb::kFlatArray:
         case cb::kFixedArray: {
             // Skip the size.
             if (!tryDecodeUint32())
@@ -383,8 +401,9 @@ RttiParser::validate() {
         case cb::kEnum:
         case cb::kObsoleteTypedef:
         case cb::kTypeset:
-        case cb::kClassdef:
+        case cb::kClassDef:
         case cb::kEnumStruct:
+        case cb::kClass:
         case cb::kFunctionPtr:
             // Skip the index.
             return tryDecodeUint32();

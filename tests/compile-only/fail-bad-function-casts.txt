@@ -1,10 +1,10 @@
-(13) : error 450: no viable conversion from 'char[3]' to 'any[]'
-(14) : error 450: no viable conversion from 'any[3]' to 'char[]'
-(17) : error 100: function prototypes do not match
-(18) : error 100: function prototypes do not match
-(20) : error 100: function prototypes do not match
-(21) : error 100: function prototypes do not match
-(23) : error 100: function prototypes do not match
-(24) : error 100: function prototypes do not match
-(26) : error 100: function prototypes do not match
-(28) : error 100: function prototypes do not match
+(13) : error 473: no viable conversion from 'char[3]' (stack array) to 'any[]' (heap array)
+(14) : error 473: no viable conversion from 'any[3]' (stack array) to 'char[]' (heap array)
+(17) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(18) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(20) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(21) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(23) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(24) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'
+(26) : error 450: no viable conversion from 'function void(char[])' to 'function void(any[])'
+(28) : error 450: no viable conversion from 'function void(any[])' to 'function void(char[])'

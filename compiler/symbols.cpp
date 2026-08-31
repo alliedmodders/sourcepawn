@@ -1,24 +1,9 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-//  Pawn compiler - Recursive descend expresion parser
 //
-//  Copyright (c) ITB CompuPhase, 1997-2005
-//  Copyright (c) AlliedModders LLC 2021
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
-//
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
+// Copyright (c) 2021-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2005
 //
 #include "symbols.h"
 
@@ -28,12 +13,18 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sc.h"
+#include "scopes.h"
 #include "semantics.h"
 
 namespace sp {
 namespace cc {
 
 void markusage(Decl* decl, int usage) {
+    if (auto upvar = decl->as<UpvarDecl>()) {
+        markusage(upvar->var(), usage);
+        return;
+    }
+
     if (auto var = decl->as<VarDeclBase>()) {
         if (usage & uREAD)
             var->set_is_read();
@@ -65,6 +56,21 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
+void markusage(const ExprVal& val, int usage) {
+    if (val.ident == iVARIABLE) {
+        markusage(val.sym(), usage);
+    } else if (val.ident == iUPVAR) {
+        markusage(val.upvar(), usage);
+    } else if (val.ident == iACCESSOR) {
+        if (val.accessor()->getter())
+            markusage(val.accessor()->getter(), uREAD);
+        if ((usage & uWRITTEN) && val.accessor()->setter())
+            markusage(val.accessor()->setter(), uREAD);
+    } else if (val.ident == iFUNCTN) {
+        markusage(val.fun(), usage);
+    }
+}
+
 Decl* FindEnumStructField(Type* type, Atom* name) {
     auto decl = type->asEnumStruct();
     if (!decl)
@@ -81,29 +87,24 @@ Decl* FindEnumStructField(Type* type, Atom* name) {
     return nullptr;
 }
 
-bool check_operatortag(int opertok, Type* result_type, const char* opername) {
-    assert(opername != NULL && strlen(opername) > 0);
-    switch (opertok) {
-        case '!':
-        case '<':
-        case '>':
-        case tlEQ:
-        case tlNE:
-        case tlLE:
-        case tlGE:
-            if (!result_type->isBool()) {
-                report(63) << opername << "bool"; /* operator X requires a "bool:" result tag */
-                return false;
-            }
-            break;
-        case '~':
-            if (!result_type->isInt()) {
-                report(63) << opername << "int"; /* operator "~" requires a "_:" result tag */
-                return false;
-            }
-            break;
+Decl* FindClassField(Type* type, Atom* name) {
+    auto decl = type->asClass();
+    if (!decl)
+        return nullptr;
+
+    for (const auto& field : decl->fields()) {
+        if (field->name() == name)
+            return field;
     }
-    return true;
+    for (const auto& prop : decl->properties()) {
+        if (prop->name() == name)
+            return prop;
+    }
+    for (const auto& method : decl->methods()) {
+        if (method->decl_name() == name)
+            return method;
+    }
+    return nullptr;
 }
 
 enum class NewNameStatus {
@@ -150,19 +151,125 @@ CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, int v
     return true;
 }
 
-Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
-    for (auto iter = scope; iter; iter = iter->parent()) {
-        if (auto decl = iter->Find(name)) {
-            if (found)
-                *found = iter;
-            return decl;
+bool CheckTypeNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos) {
+    if (!ResolveType(sc, name))
+        return true;
+    report(pos, 432) << name;
+    return false;
+}
+
+static inline bool IsUpvar(Decl* decl) {
+    switch (decl->kind()) {
+        case StmtKind::VarDecl:
+        case StmtKind::ArgDecl:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static inline Type* FindType(SymbolScope* scope, Atom* name, int flags) {
+    auto type = scope->FindType(name);
+    if (!type)
+        return nullptr;
+    if ((flags & kResolveIdent) && !type->decl())
+        return nullptr;
+    return type;
+}
+
+static bool ResolveInScope(SymbolScope* scope, FunctionDecl* enclosure, Atom* name,
+                           ResolvedSymbol* rs, int flags)
+{
+    // Identifiers are preferred over types to match the semantics of the old
+    // algorithm where types existed above globals.
+    if (flags & kResolveIdent) {
+        if (auto decl = scope->Find(name)) {
+            if (enclosure) {
+                if (!IsUpvar(decl))
+                    return false;
+                rs->enclosure = enclosure;
+            }
+            rs->decl = decl;
+            rs->scope = scope;
+            return true;
+        }
+        if (!(flags & kResolveType))
+            return false;
+    }
+
+    if (flags & kResolveType) {
+        if (auto type = FindType(scope, name, flags)) {
+            rs->scope = scope;
+            rs->type = type;
+            rs->decl = type->decl();
+            return true;
         }
     }
-    return nullptr;
+
+    return false;
+}
+
+bool ResolveSymbol(SemaContext* sc, SymbolScope* scope, Atom* name, ResolvedSymbol* rs, int flags)
+{
+    SymbolScope* global = nullptr;
+
+    SymbolScope* iter = scope;
+    while (iter && !iter->IsGlobalOrFileStatic()) {
+        if (ResolveInScope(iter, nullptr, name, rs, flags))
+            return true;
+        iter = iter->parent();
+    }
+
+    // Save the global scope, we'll come back to it later.
+    global = iter;
+
+    auto sc_iter = sc ? sc->outer() : nullptr;
+    while (sc_iter && sc_iter->func()) {
+        // Search enclosing scopes.
+        auto scope_iter = sc_iter->scope();
+        while (scope_iter && !scope_iter->IsGlobalOrFileStatic()) {
+            if (ResolveInScope(scope_iter, sc_iter->func(), name, rs, flags))
+                return true;
+            scope_iter = scope_iter->parent();
+        }
+        sc_iter = sc_iter->outer();
+    }
+
+    for (auto iter = global; iter; iter = iter->parent()) {
+        if (ResolveInScope(iter, nullptr, name, rs, flags))
+            return true;
+    }
+    return false;
+}
+
+Decl* FindSymbol(SymbolScope* scope, Atom* name, SymbolScope** found) {
+    ResolvedSymbol rs;
+    if (!ResolveSymbol(nullptr, scope, name, &rs, kResolveIdent))
+        return nullptr;
+    if (found)
+        *found = rs.scope;
+    assert(!rs.enclosure);
+    return rs.decl;
 }
 
 Decl* FindSymbol(SemaContext& sc, Atom* name, SymbolScope** found) {
     return FindSymbol(sc.scope(), name, found);
+}
+
+Type* ResolveType(SemaContext& sc, Atom* name) {
+    ResolvedSymbol rs;
+    if (!ResolveSymbol(&sc, sc.scope(), name, &rs, kResolveType))
+        return CompileContext::get().types()->findBuiltin(name);
+    return rs.type;
+}
+
+void AddScopedType(SemaContext& sc, Type* type) {
+    auto scope = sc.ScopeForAdd();
+    if (scope->kind() == sFILE_STATIC) {
+        assert(scope->parent()->kind() == sGLOBAL);
+        scope = scope->parent();
+    }
+    scope->AddType(type->declName(), type);
 }
 
 void DefineSymbol(SemaContext& sc, Decl* decl, int vclass) {

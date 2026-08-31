@@ -1,0 +1,2 @@
+error 462: implicit conversion of 'int64' to 'intptr' can lose data
+error 178: value 5000000000 is outside the guaranteed range [-2147483648, 2147483647] of intptr

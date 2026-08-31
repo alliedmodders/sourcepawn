@@ -1,19 +1,9 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-// This file is part of SourcePawn.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// SourcePawn is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (c) 2026 AlliedModders LLC
 //
-// SourcePawn is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef _include_sourcepawn_jit_frames_x64_h_
 #define _include_sourcepawn_jit_frames_x64_h_
 
@@ -23,9 +13,6 @@
 namespace sp {
 
 using namespace SourcePawn;
-
-class PluginRuntime;
-typedef PluginRuntime PluginContext;
 
 // We create x64 stack frames like:
 //   [return address]
@@ -46,6 +33,16 @@ struct FrameLayout {
 
     static inline FrameLayout* FromFp(intptr_t* fp) {
         return reinterpret_cast<FrameLayout*>(fp + kOffsetFromFp);
+    }
+};
+
+struct JitScriptedFrameLayout {
+    void* saved_frm;
+    FrameLayout layout;
+
+    static JitScriptedFrameLayout* FromLayout(FrameLayout* layout) {
+        return reinterpret_cast<JitScriptedFrameLayout*>(
+            reinterpret_cast<uint8_t*>(layout) - sizeof(void*));
     }
 };
 

@@ -1,0 +1,46 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+library = Root.StaticLibrary(builder, 'mimalloc')
+
+library.compiler.includes += [
+    os.path.join(builder.currentSourcePath, 'mimalloc', 'include'),
+    os.path.join(builder.currentSourcePath, 'mimalloc', 'src'),
+]
+
+# We need MI_STATIC_LIB defined so that it compiles and links correctly as a static library.
+library.compiler.defines += [
+    'MI_STATIC_LIB',
+]
+
+# Suppress compiler warnings from third-party code to ensure warnings-as-errors does not break the build
+if library.compiler.like('gcc'):
+    library.compiler.cflags += ['-w']
+elif library.compiler.like('msvc'):
+    library.compiler.cflags += ['/w']
+
+if builder.options.debug == '1':
+    library.compiler.defines += ['MI_DEBUG_FULL=ON']
+
+library.sources += [
+    'mimalloc/src/alloc.c',
+    'mimalloc/src/alloc-aligned.c',
+    'mimalloc/src/alloc-posix.c',
+    'mimalloc/src/arena.c',
+    'mimalloc/src/arena-meta.c',
+    'mimalloc/src/bitmap.c',
+    'mimalloc/src/heap.c',
+    'mimalloc/src/init.c',
+    'mimalloc/src/libc.c',
+    'mimalloc/src/options.c',
+    'mimalloc/src/os.c',
+    'mimalloc/src/page.c',
+    'mimalloc/src/page-map.c',
+    'mimalloc/src/random.c',
+    'mimalloc/src/stats.c',
+    'mimalloc/src/theap.c',
+    'mimalloc/src/threadlocal.c',
+    'mimalloc/src/prim/prim.c',
+]
+
+rvalue = builder.Add(library).binary

@@ -1,0 +1,2 @@
+(8) : error 083: enum struct field "item" cannot be a heap item (objects, arrays of objects, or function references)
+(9) : error 083: enum struct field "items" cannot be a heap item (objects, arrays of objects, or function references)

@@ -9,6 +9,9 @@ enum struct TestStruct {
 
 native void printnum(int n);
 native void printnum64(int64 n);
+#if defined __sourcepawn2
+native void printnumptr(intptr n);
+#endif
 native void writenum(int n);
 native void printfloat(float n);
 native void writefloat(float n);
@@ -21,6 +24,8 @@ native void unbound_native();
 native int donothing();
 native int64 add_int64(int64 a, int64 b);
 native void donothing_varargs(...);
+
+native int sys_intptr_size();
 
 // dumb version of printf(), only supports %f, %d, %s.
 native void printf(const char[] fmt, any:...);
@@ -66,3 +71,9 @@ native void assert_eq(any a1, any a2);
 
 native void print_test_struct(TestStruct x);
 native TestStruct add_test_structs(TestStruct a, TestStruct b);
+
+native int test_local_to_array_ptr(const char[] str, int index);
+
+// Dumps the contents of a pstruct in declaration order.
+native void dump_pstruct(const char[] name);
+

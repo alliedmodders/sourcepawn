@@ -1,30 +1,12 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-//  Pawn compiler - Recursive descend expresion parser
 //
-//  Copyright (c) ITB CompuPhase, 1997-2005
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
-//
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
-//
-//  Version: $Id$
+// Copyright (c) 2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2005
 
-#include "expressions.h"
 #include "parse-node.h"
 #include "sc.h"
-#include "sctracker.h"
 #include "stl/stl-deque.h"
 
 namespace sp {
@@ -43,7 +25,7 @@ class Parser
     ParseTree* Parse();
 
   private:
-    typedef int (Parser::*HierFn)(value*);
+    typedef int (Parser::*HierFn)(ExprVal*);
     typedef Expr* (Parser::*NewHierFn)();
 
 
@@ -58,18 +40,17 @@ class Parser
     Decl* parse_typedef();
     Decl* parse_typeset();
     Decl* parse_enumstruct();
+    Decl* parse_class();
     Decl* parse_methodmap();
-    MethodmapMethodDecl* parse_methodmap_method(MethodmapDecl* map);
-    MethodmapPropertyDecl* parse_methodmap_property(MethodmapDecl* map);
-    bool parse_methodmap_property_accessor(MethodmapDecl* map, Atom* name, const typeinfo_t& type,
-                                           MemberFunctionDecl** out_getter,
-                                           MemberFunctionDecl** out_setter);
+    MemberFunctionDecl* parse_layout_method(LayoutDecl* parent);
+    PropertyDecl* parse_layout_property(LayoutDecl* parent);
+    bool parse_property_accessor(LayoutDecl* parent, Atom* name, const typeinfo_t& type,
+                                 MemberFunctionDecl** out_getter,
+                                 MemberFunctionDecl** out_setter);
 
     struct VarParams {
         int vclass;
-        bool is_public = false;
-        bool is_static = false;
-        bool is_stock = false;
+        VarDeclFlags flags = VARDECL_DEFAULT;
         bool autozero = true;
         bool is_arg = false;
         bool struct_init = false;
@@ -93,6 +74,7 @@ class Parser
 
     Stmt* parse_compound();
     Stmt* parse_local_decl(int tokid, bool autozero);
+    Stmt* parse_let_decl(int vclass);
     Stmt* parse_if();
     Stmt* parse_for();
     Stmt* parse_switch();
@@ -101,6 +83,8 @@ class Parser
     TypedefInfo* parse_function_type();
 
     bool parse_function(FunctionDecl* info, int tokid, bool has_this);
+    Expr* parse_function_expr();
+    bool parse_function_impl(FunctionDecl* fun);
     void parse_args(FunctionDecl* info, std::vector<ArgDecl*>* args);
 
     // Wrapper around hier14() that allows comma expressions without a wrapping
@@ -131,7 +115,7 @@ class Parser
     CallExpr* parse_call(const token_pos_t& pos, int tok, Expr* target);
     int nextop(int* opidx, const int* list);
 
-    bool consume_line();
+    bool consume_line(bool consume_term = true);
 
   private:
     CompileContext& cc_;
@@ -144,6 +128,18 @@ class Parser
     tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
+    Atom* class_atom_ = nullptr;
+    Atom* property_atom_ = nullptr;
+    Atom* float_atom_ = nullptr;
+    Atom* bool_atom_ = nullptr;
+    Atom* float_tag_atom_ = nullptr;
+    Atom* string_tag_atom_ = nullptr;
+    Atom* underscore_atom_ = nullptr;
+    Atom* any_atom_ = nullptr;
+    Atom* intptr_atom_ = nullptr;
+    Atom* int8_atom_ = nullptr;
+    Atom* int16_atom_ = nullptr;
+    Atom* int64_atom_ = nullptr;
 };
 
 } // namespace cc

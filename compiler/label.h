@@ -1,20 +1,9 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2012-2014 David Anderson
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn.
+// Copyright (c) 2012-2026 AlliedModders LLC
 //
-// SourcePawn is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free
-// Software Foundation, either version 3 of the License, or (at your option)
-// any later version.
-// 
-// SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
 #ifndef _include_spcomp2_label_h_
 #define _include_spcomp2_label_h_
 
@@ -94,12 +83,19 @@ class Label
   void bind(uint32_t offset) {
     assert(!bound());
     status_ = (offset << 1) | kBound;
-    assert(this->offset() == offset);
+    assert(static_cast<uint32_t>(this->offset()) == offset);
   }
 
   void reset() {
     assert(!used() || bound());
     status_ = 0;
+  }
+
+  Label& operator =(const Label& other) = default;
+  Label& operator =(Label&& other) {
+      status_ = other.status_;
+      other.status_ = 0;
+      return *this;
   }
 
  protected:

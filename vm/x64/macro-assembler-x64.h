@@ -1,14 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #ifndef _include_sourcepawn_macro_assembler_x64_h__
 #define _include_sourcepawn_macro_assembler_x64_h__
@@ -16,11 +10,12 @@
 #include <amtl/am-bits.h>
 #include "assembler-x64.h"
 #include "assembler.h"
-#include "constants-x64.h"
 #include "environment.h"
 #include "stack-frames.h"
 
 namespace sp {
+
+static const Register env_reg = r13;
 
 // Extra words are type and function id.
 static const intptr_t kExtraWordsInSpFrame = 2;
@@ -66,6 +61,11 @@ class MacroAssembler : public Assembler
     // Returns the number of items added to the stack.
     size_t enterExitFrame(ExitFrameType type, uintptr_t payload);
     void leaveExitFrame();
+
+    // New version for the v2 JIT, which simplifies ABI requirements.
+    // The stack is always aligned and always contains shadow space.
+    // enterFrame() should not be used in new code.
+    void setupExitFrame(ExitFrameType type, uintptr_t payload);
 
     void assertStackAligned();
     void alignStack();

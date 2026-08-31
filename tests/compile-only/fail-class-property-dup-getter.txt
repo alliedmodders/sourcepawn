@@ -1,0 +1,1 @@
+(4) : error 126: getter for X already exists

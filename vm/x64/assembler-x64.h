@@ -1,14 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #ifndef _include_sourcepawn_vm_assembler_x64_h__
 #define _include_sourcepawn_vm_assembler_x64_h__
@@ -81,70 +75,70 @@ struct FloatRegister {
     }
 };
 
-const Register rax = {0};
-const Register rcx = {1};
-const Register rdx = {2};
-const Register rbx = {3};
-const Register rsp = {4};
-const Register rbp = {5};
-const Register rsi = {6};
-const Register rdi = {7};
-const Register r8 = {8};
-const Register r9 = {9};
-const Register r10 = {10};
-const Register r11 = {11};
-const Register r12 = {12};
-const Register r13 = {13};
-const Register r14 = {14};
-const Register r15 = {15};
+constexpr Register rax = {0};
+constexpr Register rcx = {1};
+constexpr Register rdx = {2};
+constexpr Register rbx = {3};
+constexpr Register rsp = {4};
+constexpr Register rbp = {5};
+constexpr Register rsi = {6};
+constexpr Register rdi = {7};
+constexpr Register r8 = {8};
+constexpr Register r9 = {9};
+constexpr Register r10 = {10};
+constexpr Register r11 = {11};
+constexpr Register r12 = {12};
+constexpr Register r13 = {13};
+constexpr Register r14 = {14};
+constexpr Register r15 = {15};
 
-const Register r8_al = {0};
-const Register r8_cl = {1};
-const Register r8_dl = {2};
-const Register r8_bl = {3};
-const Register r8_ah = {4};
-const Register r8_ch = {5};
-const Register r8_dh = {6};
-const Register r8_bh = {7};
+constexpr Register r8_al = {0};
+constexpr Register r8_cl = {1};
+constexpr Register r8_dl = {2};
+constexpr Register r8_bl = {3};
+constexpr Register r8_ah = {4};
+constexpr Register r8_ch = {5};
+constexpr Register r8_dh = {6};
+constexpr Register r8_bh = {7};
 
 struct RIP {};
 constexpr RIP rip{};
 
-const FloatRegister xmm0 = {0};
-const FloatRegister xmm1 = {1};
-const FloatRegister xmm2 = {2};
-const FloatRegister xmm3 = {3};
-const FloatRegister xmm4 = {4};
-const FloatRegister xmm5 = {5};
-const FloatRegister xmm6 = {6};
-const FloatRegister xmm7 = {7};
-const FloatRegister xmm8 = {8};
-const FloatRegister xmm9 = {9};
-const FloatRegister xmm10 = {10};
-const FloatRegister xmm11 = {11};
-const FloatRegister xmm12 = {12};
-const FloatRegister xmm13 = {13};
-const FloatRegister xmm14 = {14};
-const FloatRegister xmm15 = {15};
+constexpr FloatRegister xmm0 = {0};
+constexpr FloatRegister xmm1 = {1};
+constexpr FloatRegister xmm2 = {2};
+constexpr FloatRegister xmm3 = {3};
+constexpr FloatRegister xmm4 = {4};
+constexpr FloatRegister xmm5 = {5};
+constexpr FloatRegister xmm6 = {6};
+constexpr FloatRegister xmm7 = {7};
+constexpr FloatRegister xmm8 = {8};
+constexpr FloatRegister xmm9 = {9};
+constexpr FloatRegister xmm10 = {10};
+constexpr FloatRegister xmm11 = {11};
+constexpr FloatRegister xmm12 = {12};
+constexpr FloatRegister xmm13 = {13};
+constexpr FloatRegister xmm14 = {14};
+constexpr FloatRegister xmm15 = {15};
 
 #if defined(KE_WINDOWS)
-static const Register ArgReg0 = rcx;
-static const Register ArgReg1 = rdx;
-static const Register ArgReg2 = r8;
-static const Register ArgReg3 = r9;
+static constexpr Register ArgReg0 = rcx;
+static constexpr Register ArgReg1 = rdx;
+static constexpr Register ArgReg2 = r8;
+static constexpr Register ArgReg3 = r9;
 #else
-static const Register ArgReg0 = rdi;
-static const Register ArgReg1 = rsi;
-static const Register ArgReg2 = rdx;
-static const Register ArgReg3 = rcx;
-static const Register ArgReg4 = r8;
-static const Register ArgReg5 = r9;
+static constexpr Register ArgReg0 = rdi;
+static constexpr Register ArgReg1 = rsi;
+static constexpr Register ArgReg2 = rdx;
+static constexpr Register ArgReg3 = rcx;
+static constexpr Register ArgReg4 = r8;
+static constexpr Register ArgReg5 = r9;
 #endif
 
 // Trash registers that are not arguments on any platform.
-static const Register ClobberReg0 = rax;
-static const Register ClobberReg1 = r10;
-static const Register ClobberReg2 = r11;
+static constexpr Register ClobberReg0 = rax;
+static constexpr Register ClobberReg1 = r10;
+static constexpr Register ClobberReg2 = r11;
 
 enum ConditionCode {
     overflow,
@@ -427,7 +421,7 @@ class Assembler : public AssemblerBase
 
             uint32_t data_index;
             if (src_pc >= 0) {
-                assert(src_pc <= code_size());
+                assert(static_cast<size_t>(src_pc) <= code_size());
 
                 uint8_t* base = buffer() + src_pc - 6;
                 assert(*base == 0xff);
@@ -517,11 +511,22 @@ class Assembler : public AssemblerBase
     void rep_movsb() {
         emit2(0xf3, 0xa4);
     }
+    void movsd() {
+        emit1(0xa5);
+    }
     void rep_movsd() {
         emit2(0xf3, 0xa5);
     }
+    void rep_movsq() {
+        emit1(0xf3);
+        emit2(0x48, 0xa5);
+    }
     void rep_stosd() {
         emit2(0xf3, 0xab);
+    }
+    void rep_stosq() {
+        emit1(0xf3);
+        emit2(0x48, 0xab);
     }
     void breakpoint() {
         emit1(0xcc);
@@ -590,7 +595,7 @@ class Assembler : public AssemblerBase
 
         intptr_t rip = pc();
         if (src->bound()) {
-            assert(src->offset() < pc());
+            assert(static_cast<uint32_t>(src->offset()) < pc());
 
             intptr_t delta = rip - intptr_t(src->offset());
             assert(delta >= INT_MIN && delta <= INT_MAX);
@@ -648,7 +653,7 @@ class Assembler : public AssemblerBase
 
     template <typename DestType>
     void movw(const DestType& dest, Register src) {
-        emit1(0x89, src, dest);
+        emit2(0x66, 0x89, src, dest);
     }
 
     template <typename DestType>
@@ -660,12 +665,27 @@ class Assembler : public AssemblerBase
     void movsxd(Register dest, const T& src) {
         emit1_64(0x63, dest, src);
     }
-    void movzxb(Register dest, const Register src) {
+
+    template <typename SrcType>
+    void movzxb(Register dest, const SrcType& src) {
         emit2(0x0f, 0xb6, dest, src);
+    }
+
+    template <typename SrcType>
+    void movsxb(Register dest, const SrcType& src) {
+        emit2(0x0f, 0xbe, dest, src);
+    }
+
+    template <typename SrcType>
+    void movsxw(Register dest, const SrcType& src) {
+        emit2(0x0f, 0xbf, dest, src);
     }
 
     void addq(Register dest, Register src) {
         emit1_64(0x01, src, dest);
+    }
+    void addq(Register dest, const Operand& src) {
+        emit1_64(0x03, dest, src);
     }
     template <typename T>
     void addq(const T& rm, int32_t imm) {
@@ -675,12 +695,26 @@ class Assembler : public AssemblerBase
     void addl(const T& rm, int32_t imm) {
         alu_imm_32(0, imm, rm);
     }
-    void addl(Register dest, Register src) {
+    template <typename DestType>
+    void addl(const DestType& dest, Register src) {
         emit1(0x01, src, dest);
+    }
+    void addl(Register dest, const Operand& src) {
+        emit1(0x03, dest, src);
+    }
+
+    void incq(const Operand& dest) {
+        emit1_64(0xff, 0, dest);
+    }
+    void decq(const Operand& dest) {
+        emit1_64(0xff, 1, dest);
     }
 
     void subq(Register dest, Register src) {
         emit1_64(0x29, src, dest);
+    }
+    void subq(Register dest, const Operand& src) {
+        emit1_64(0x2b, dest, src);
     }
     template <typename T>
     void subq(const T& rm, int32_t imm) {
@@ -692,9 +726,15 @@ class Assembler : public AssemblerBase
     void subl(Register dest, Register src) {
         emit1(0x29, src, dest);
     }
+    void subl(Register dest, const Operand& src) {
+        emit1(0x2b, dest, src);
+    }
 
     void andq(Register dest, Register src) {
         emit1_64(0x21, src, dest);
+    }
+    void andq(Register dest, const Operand& src) {
+        emit1_64(0x23, dest, src);
     }
     template <typename T>
     void andq(const T& rm, int32_t imm) {
@@ -720,6 +760,9 @@ class Assembler : public AssemblerBase
         emit1_64(0xf7, 0, left);
         writeInt32(imm);
     }
+    void testb(Register op1, Register op2) {
+        emit1(0x84, op2, op1);
+    }
 
     template <typename T>
     void cmpq(const T& left, int32_t imm) {
@@ -729,7 +772,6 @@ class Assembler : public AssemblerBase
     void cmpq(const T& left, Register right) {
         emit1_64(0x39, right, left);
     }
-    template <typename T>
     void cmpq(Register left, const Operand& right) {
         emit1_64(0x3b, left, right);
     }
@@ -749,17 +791,32 @@ class Assembler : public AssemblerBase
     void xorq(const T& left, Register right) {
         emit1_64(0x31, right, left);
     }
+    void xorq(Register left, const Operand& right) {
+        emit1_64(0x33, left, right);
+    }
 
     template <typename T>
     void xorl(const T& left, Register right) {
         emit1(0x31, right, left);
     }
+    void xorl(Register dest, const Operand& src) {
+        emit1(0x33, dest, src);
+    }
 
     void orq(Register dest, Register src) {
         emit1_64(0x09, src, dest);
     }
+    void orq(Register dest, const Operand& src) {
+        emit1_64(0x0b, dest, src);
+    }
     void orl(Register dest, Register src) {
         emit1(0x09, src, dest);
+    }
+    void orl(Register dest, const Operand& src) {
+        emit1(0x0b, dest, src);
+    }
+    void orl(Register dest, int32_t imm) {
+        alu_imm_32(1, imm, dest);
     }
 
     void notq(Register srcdest) {
@@ -817,11 +874,16 @@ class Assembler : public AssemblerBase
     void andl(Register dest, Register src) {
         emit1(0x21, src, dest);
     }
+    void andl(Register dest, const Operand& src) {
+        emit1(0x23, dest, src);
+    }
 
-    void imulq(Register dest, Register src) {
+    template <typename SrcType>
+    void imulq(Register dest, const SrcType& src) {
         emit2_64(0x0f, 0xaf, dest, src);
     }
-    void imull(Register dest, Register src) {
+    template <typename SrcType>
+    void imull(Register dest, const SrcType& src) {
         emit2(0x0f, 0xaf, dest, src);
     }
     void imull(Register dest, Register src, int32_t imm) {
@@ -856,11 +918,17 @@ class Assembler : public AssemblerBase
     }
 
     template <typename SrcType>
-    void movd(Register dest, const SrcType& src) {
-        emit3_sse(0x66, 0x0f, 0x7e, dest, src);
-    }
-    void movd(FloatRegister dest, Register src) {
+    void movd(FloatRegister dest, const SrcType& src) {
         emit3_sse(0x66, 0x0f, 0x6e, dest, src);
+    }
+    template <typename DestType>
+    void movd(const DestType& dest, FloatRegister src) {
+        emit3_sse(0x66, 0x0f, 0x7e, src, dest);
+    }
+
+    template <typename SrcType>
+    void movss(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf3, 0x0f, 0x10, dest, src);
     }
 
     void addss(FloatRegister dest, FloatRegister src) {
@@ -877,6 +945,9 @@ class Assembler : public AssemblerBase
     }
     void xorps(FloatRegister dest, FloatRegister src) {
         emit2(0x0f, 0x57, src, dest);
+    }
+    void xorpd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0x66, 0x0f, 0x57, src, dest);
     }
 
     template <typename LeftType>
@@ -903,6 +974,62 @@ class Assembler : public AssemblerBase
     void roundss_ceil(FloatRegister dest, const Operand& src) {
         emit4_sse(0x66, 0x0f, 0x3a, 0x0a, dest, src);
         *pos_++ = 0x2;
+    }
+
+    template <typename SrcType>
+    void movsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x10, dest, src);
+    }
+    template <typename DestType>
+    void movsd(const DestType& dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x11, src, dest);
+    }
+    void addsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x58, dest, src);
+    }
+    template <typename SrcType>
+    void addsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x58, dest, src);
+    }
+    void subsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x5c, dest, src);
+    }
+    template <typename SrcType>
+    void subsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5c, dest, src);
+    }
+    void mulsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x59, dest, src);
+    }
+    template <typename SrcType>
+    void mulsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x59, dest, src);
+    }
+    void divsd(FloatRegister dest, FloatRegister src) {
+        emit3_sse(0xf2, 0x0f, 0x5e, dest, src);
+    }
+    template <typename SrcType>
+    void divsd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5e, dest, src);
+    }
+    template <typename LeftType>
+    void ucomisd(const LeftType& left, FloatRegister right) {
+        emit3_sse(0x66, 0x0f, 0x2e, right, left);
+    }
+    template <typename SrcType>
+    void cvtsi2sd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x2a, dest, src);
+    }
+    void cvtsd2si(Register dest, const Operand& src) {
+        emit3_sse(0xf2, 0x0f, 0x2d, dest, src);
+    }
+    template <typename SrcType>
+    void cvtss2sd(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf3, 0x0f, 0x5a, dest, src);
+    }
+    template <typename SrcType>
+    void cvtsd2ss(FloatRegister dest, const SrcType& src) {
+        emit3_sse(0xf2, 0x0f, 0x5a, dest, src);
     }
 
   protected:

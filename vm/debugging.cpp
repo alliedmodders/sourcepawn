@@ -1,14 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2016-2018 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2016-2026 AlliedModders LLC
 //
 #include "debugging.h"
 #include <amtl/am-raii.h>
@@ -18,7 +12,9 @@
 
 namespace sp {
 
-int InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
+using namespace SourcePawn;
+
+int InvokeDebugger(IPluginContext* ctx, const IErrorReport* report) {
     // Continue normal execution, if there is no listener registered.
     if (!Environment::get()->debugbreak())
         return SP_ERROR_NONE;
@@ -50,7 +46,7 @@ int InvokeDebugger(PluginContext* ctx, const IErrorReport* report) {
     sp_debug_break_info_t dbginfo;
     dbginfo.version = DEBUG_BREAK_INFO_VERSION;
     dbginfo.cip = cip;
-    dbginfo.frm = ctx->frm();
+    dbginfo.frm = 0;
 
     // Call debug callback.
     Environment::get()->debugbreak()(ctx, dbginfo, report);

@@ -1,17 +1,10 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
-//
-#ifndef _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
-#define _INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_
+#pragma once
 
 #include <memory>
 
@@ -48,7 +41,7 @@ static const ucell_t kInvalidCip = 0xffffffff;
 class CompiledFunction
 {
   public:
-    CompiledFunction(const LinkedCode& code, cell_t pcode_offs, FixedArray<LoopEdge>* edges,
+    CompiledFunction(const LinkedCode& code, FixedArray<LoopEdge>* edges,
                      FixedArray<CipMapEntry>* cip_map);
     ~CompiledFunction();
 
@@ -56,8 +49,8 @@ class CompiledFunction
     void* GetEntryAddress() const {
         return code_.entry;
     }
-    cell_t GetCodeOffset() const {
-        return code_offset_;
+    size_t GetCodeSize() const {
+        return code_.code_size();
     }
     uint32_t NumLoopEdges() const {
         return edges_->size();
@@ -68,14 +61,15 @@ class CompiledFunction
 
     ucell_t FindCipByPc(void* pc);
 
+    static size_t offsetOfEntry() {
+        return offsetof(CompiledFunction, code_) + offsetof(LinkedCode, entry);
+    }
+
   private:
     LinkedCode code_;
-    cell_t code_offset_;
     std::unique_ptr<FixedArray<LoopEdge>> edges_;
     std::unique_ptr<FixedArray<CipMapEntry>> cip_map_;
     bool cip_map_sorted_;
 };
 
 } // namespace sp
-
-#endif //_INCLUDE_SOURCEPAWN_JIT2_FUNCTION_H_

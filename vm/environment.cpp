@@ -1,30 +1,36 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #include "environment.h"
+
+#include <stdarg.h>
+
+#include <algorithm>
+
+#include <amtl/am-raii.h>
 #include "api.h"
 #include "code-stubs.h"
 #include "compiled-function.h"
 #include "debug-metadata.h"
-#include "method-info.h"
-#include "plugin-runtime.h"
-#include "watchdog_timer.h"
-#if defined(SP_HAS_JIT)
-#    include "jit.h"
-#endif
-#include <stdarg.h>
-#include "builtins.h"
 #include "debugging.h"
-#include "interpreter.h"
+#include "legacy/builtins.h"
+#include "legacy/interpreter.h"
+#if defined(SP_JIT_V1)
+#    include "legacy/jit.h"
+#endif
+#include "legacy/method-info.h"
+#include "legacy/plugin-runtime.h"
+#include "platform.h"
+#include "v2/interpreter.h"
+#if defined(SP_JIT_V2)
+#    include "v2/jit.h"
+#endif
+#include "v2/method-info.h"
+#include "v2/runtime.h"
+#include "watchdog_timer.h"
 
 using namespace sp;
 using namespace SourcePawn;
@@ -41,9 +47,10 @@ Environment::Environment()
    profiler_(nullptr),
    profiling_enabled_(false),
    code_stubs_(nullptr),
-   top_(nullptr)
+   top_(nullptr),
+   heap_(virt_mem_)
 {
-    jit_enabled_ = IsJitAvailable();
+    jit_allowed_ = true;
 }
 
 Environment::~Environment() {
@@ -73,8 +80,34 @@ Environment::get() {
 bool
 Environment::Initialize() {
     watchdog_timer_ = std::make_unique<WatchdogTimer>(this);
-    builtins_ = std::make_unique<BuiltinNatives>();
+    builtins_ = std::make_unique<v1::BuiltinNatives>();
     code_alloc_ = std::make_unique<CodeAllocator>();
+
+    if (!virt_mem_.Initialize())
+        return false;
+
+    if (!heap_.Initialize())
+        return false;
+
+    stack_ = heap_.MakeRawPtr<uint8_t[]>(kDefaultStackSize);
+    if (!stack_)
+        return false;
+
+    sp_base_ = heap_.ToLocalAddr(stack_.get());
+    sp_top_ = sp_base_ + kDefaultStackSize;
+    sp_ = sp_base_;
+
+    intptr_t base = GetThreadStackLimit();
+    if (!base)
+        return false;
+
+    intptr_t page = GetPageSize();
+    if (!page)
+        return false;
+
+    // The JIT's stack limit should leave enough headroom for error reporting.
+    static constexpr intptr_t kErrorReportHeadroom = 64 * 1024;
+    thread_stack_limit_ = base + std::max(page, kErrorReportHeadroom);
 
     if (!builtins_->Initialize())
         return false;
@@ -88,20 +121,24 @@ Environment::Shutdown() {
     builtins_ = nullptr;
     code_stubs_ = nullptr;
     code_alloc_ = nullptr;
+    stack_.reset();
+    sp_base_ = 0;
+    sp_top_ = 0;
+    sp_ = 0;
 
     assert(sEnvironment == this);
     sEnvironment = nullptr;
 }
 
 bool Environment::SetJitEnabled(bool enabled) {
-    jit_enabled_ = enabled && IsJitAvailable();
-    return jit_enabled_ == enabled;
+    jit_allowed_ = enabled;
+    return jit_allowed_ == enabled;
 }
 
 bool
 Environment::EnableDebugBreak() {
     // Can't change this after any plugins are loaded.
-    if (!runtimes_.empty())
+    if (!v1_runtimes_.empty() || !v2_runtimes_.empty())
         return false;
 
     debug_break_enabled_ = true;
@@ -163,6 +200,9 @@ static const char* sErrorMsgTable[] = {
     "Custom error",
     "Fatal error",
     "Invalid array size",
+    "Null object reference",
+    "Malformed type information",
+    "Slices cannot be returned or assigned outside of functions",
 };
 
 const char*
@@ -192,7 +232,7 @@ Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symb
     //   Lets GDB show JIT frames when debugging, with source info.
     //   Requires generating full ELF + DWARF objects in memory.
 
-#if defined(KE_LINUX) && defined(SP_HAS_JIT)
+#if defined(KE_LINUX)
     if (!perf_jit_file_ && (debug_metadata_flags_ & JIT_DEBUG_PERF_BASIC) != 0) {
         perf_jit_file_ =
             std::make_unique<PerfJitFile>((debug_metadata_flags_ & JIT_DEBUG_DELETE_ON_EXIT) != 0);
@@ -214,15 +254,27 @@ Environment::WriteDebugMetadata(void* address, uint64_t length, const char* symb
 }
 
 void
-Environment::RegisterRuntime(PluginRuntime* rt) {
+Environment::RegisterRuntime(v1::PluginRuntime* rt) {
     mutex_.AssertCurrentThreadOwns();
-    runtimes_.append(rt);
+    v1_runtimes_.append(rt);
 }
 
 void
-Environment::DeregisterRuntime(PluginRuntime* rt) {
+Environment::DeregisterRuntime(v1::PluginRuntime* rt) {
     mutex_.AssertCurrentThreadOwns();
-    runtimes_.remove(rt);
+    v1_runtimes_.remove(rt);
+}
+
+void
+Environment::RegisterRuntime(v2::Runtime* rt) {
+    mutex_.AssertCurrentThreadOwns();
+    v2_runtimes_.append(rt);
+}
+
+void
+Environment::DeregisterRuntime(v2::Runtime* rt) {
+    mutex_.AssertCurrentThreadOwns();
+    v2_runtimes_.remove(rt);
 }
 
 static inline void
@@ -236,18 +288,26 @@ SwapLoopEdge(uint8_t* code, LoopEdge& e) {
 void
 Environment::PatchAllJumpsForTimeout() {
     mutex_.AssertCurrentThreadOwns();
-    for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end();
-         iter++) {
-        PluginRuntime* rt = *iter;
-
-        const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-        for (size_t i = 0; i < methods.size(); i++) {
-            CompiledFunction* fun = methods[i]->jit();
+    for (auto rt : v1_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
 
             uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
+            for (size_t j = 0; j < fun->NumLoopEdges(); j++)
+                SwapLoopEdge(base, fun->GetLoopEdge(j));
+        }
+    }
+    for (auto rt : v2_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            if (!method)
+                continue;
+            CompiledFunction* fun = method->jit();
+            if (!fun)
+                continue;
 
+            uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
             for (size_t j = 0; j < fun->NumLoopEdges(); j++)
                 SwapLoopEdge(base, fun->GetLoopEdge(j));
         }
@@ -257,53 +317,49 @@ Environment::PatchAllJumpsForTimeout() {
 void
 Environment::UnpatchAllJumpsFromTimeout() {
     mutex_.AssertCurrentThreadOwns();
-    for (ke::InlineList<PluginRuntime>::iterator iter = runtimes_.begin(); iter != runtimes_.end();
-         iter++) {
-        PluginRuntime* rt = *iter;
-
-        const std::vector<RefPtr<MethodInfo>>& methods = rt->AllMethods();
-        for (size_t i = 0; i < methods.size(); i++) {
-            CompiledFunction* fun = methods[i]->jit();
+    for (auto rt : v1_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            CompiledFunction* fun = method->jit();
             if (!fun)
                 continue;
 
             uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
+            for (size_t j = 0; j < fun->NumLoopEdges(); j++)
+                SwapLoopEdge(base, fun->GetLoopEdge(j));
+        }
+    }
+    for (auto rt : v2_runtimes_) {
+        for (const auto& method : rt->AllMethods()) {
+            if (!method)
+                continue;
+            CompiledFunction* fun = method->jit();
+            if (!fun)
+                continue;
 
+            uint8_t* base = reinterpret_cast<uint8_t*>(fun->GetEntryAddress());
             for (size_t j = 0; j < fun->NumLoopEdges(); j++)
                 SwapLoopEdge(base, fun->GetLoopEdge(j));
         }
     }
 }
 
-bool
-Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t* result) {
-#if defined(SP_HAS_JIT)
-    if (jit_enabled_) {
-        if (!code_stubs_) {
-            code_stubs_ = std::make_unique<CodeStubs>(this);
-
-            // We delay initializing this to here to avoid executing any generated code if the embedder
-            // doesn't want the JIT enabled. The debug metadata flags must be set before this point.
-            if (!code_stubs_->Initialize()) {
-                code_stubs_ = nullptr;
-                return false;
-            }
-        }
-
-        if (CompilerBase::SupportsPlugin(cx) && !method->jit()) {
+bool Environment::Invoke(v1::PluginContext* cx, const RefPtr<v1::MethodInfo>& method, cell_t* result) {
+#if defined(SP_JIT_V1)
+    if (jit_allowed_) {
+        if (v1::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
             int err = SP_ERROR_NONE;
-            if (!CompilerBase::Compile(cx, method, &err)) {
+            if (!v1::CompilerBase::Compile(cx, method, &err)) {
                 cx->ReportErrorNumber(err);
                 return false;
             }
         }
 
         if (CompiledFunction* fn = method->jit()) {
-            JitInvokeFrame ivkframe(cx, fn->GetCodeOffset());
+            JitInvokeFrame ivkframe(cx);
 
             assert(top_ && top_->cx() == cx);
 
-            InvokeStubFn invoke = code_stubs_->InvokeStub();
+            InvokeStubV1Fn invoke = code_stubs_->InvokeStubV1();
             invoke(cx, fn->GetEntryAddress(), result);
 
             return exception_code_ == SP_ERROR_NONE;
@@ -313,13 +369,112 @@ Environment::Invoke(PluginContext* cx, const RefPtr<MethodInfo>& method, cell_t*
 
     // The JIT performs its own validation. Handle the interpreter here.
     {
-        if (!method->Validate()) {
-            cx->ReportErrorNumber(method->validationError());
+        if (!method->Validate())
             return false;
+    }
+
+    return v1::Interpreter::Run(cx, method, result);
+}
+
+bool Environment::Invoke(v2::Runtime* cx, Handle<SpFunction> fn, uint32_t frm, cell_t* result) {
+    auto* method = fn->method;
+#if defined(SP_JIT_V2)
+    if (jit_allowed_ && v2::CompilerBase::IsSupported()) {
+        if (v2::CompilerBase::SupportsPlugin(cx) && !method->jit()) {
+            if (!v2::CompilerBase::Compile(cx, method))
+                return false;
+        }
+
+        if (CompiledFunction* jit_fn = method->jit()) {
+            JitInvokeFrame ivkframe(cx);
+
+            assert(top_ && top_->cx() == cx);
+
+            ke::SaveRestore<uint32_t> save_sp(sp_, std::move(frm));
+
+            InvokeStubV2Fn invoke = code_stubs_->InvokeStubV2();
+            invoke(cx, jit_fn->GetEntryAddress(), result);
+
+            return exception_code_ == SP_ERROR_NONE;
+        }
+    }
+#endif
+
+    // The JIT performs its own validation. Handle the interpreter here.
+    {
+        if (!method->Validate())
+            return false;
+    }
+
+    return v2::Interpreter::Run(cx, std::move(fn), frm, result);
+}
+
+static BaseRuntime* LoadImage(std::shared_ptr<SmxImage> image, const char* file,
+                                    bool data_only)
+{
+    if (!image->validate())
+        return nullptr;
+
+    std::unique_ptr<BaseRuntime> pRuntime;
+    if (image->hdr()->version < SmxConsts::SP_VERSION_2) {
+        pRuntime = std::make_unique<sp::v1::PluginRuntime>(image);
+    } else {
+        pRuntime = std::make_unique<sp::v2::Runtime>(image, data_only);
+    }
+
+    ExceptionHandler eh(Environment::get());
+    if (!pRuntime->Initialize()) {
+        if (!eh.HasException())
+            Environment::get()->ReportError(SP_ERROR_OUT_OF_MEMORY);
+
+        eh.Rethrow();
+        return nullptr;
+    }
+
+    assert(!eh.HasException());
+
+    size_t len = strlen(file);
+    for (size_t i = len - 1; i < len; i--) {
+        if (file[i] == '/'
+#if defined WIN32
+            || file[i] == '\\'
+#endif
+        ) {
+            pRuntime->SetNames(file, &file[i + 1]);
+            break;
         }
     }
 
-    return Interpreter::Run(cx, method, result);
+    if (*pRuntime->Name() == '\0')
+        pRuntime->SetNames(file, file);
+
+    if (!data_only && !pRuntime->CallGlobalCtor())
+        return nullptr;
+
+    return pRuntime.release();
+}
+
+BaseRuntime*
+Environment::LoadBinaryFromFile(const char* file, bool data_only) {
+    FILE* fp = fopen(file, "rb");
+    if (!fp) {
+        ReportError(SP_ERROR_NOT_FOUND, "could not open file");
+        return nullptr;
+    }
+
+    auto image = std::make_shared<SmxImage>(fp);
+    return LoadImage(std::move(image), file, data_only);
+}
+
+BaseRuntime*
+Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
+                                  void (*dtor)(uint8_t*), bool data_only) {
+    std::shared_ptr<SmxImage> image;
+    if (dtor)
+        image = std::make_shared<SmxImage>(addr, size, dtor);
+    else
+        image = std::make_shared<SmxImage>(addr, size);
+    return LoadImage(std::move(image), file, data_only);
 }
 
 void
@@ -334,12 +489,12 @@ Environment::ReportError(int code) {
     }
 }
 
-ErrorReport::ErrorReport(int code, const char* message, PluginContext* cx,
-                         SourcePawn::IPluginFunction* pf)
- : code_(code)
- , message_(message)
- , context_(cx)
- , blame_(pf) {
+ErrorReport::ErrorReport(int code, const char* message, BaseRuntime* cx, IPluginFunction* pf)
+ : code_(code),
+   message_(message),
+   context_(cx),
+   blame_(pf)
+{
 }
 
 const char*
@@ -424,10 +579,20 @@ Environment::BlamePluginErrorVA(SourcePawn::IPluginFunction* pf, const char* fmt
 
 void
 Environment::DispatchReport(const ErrorReport& report) {
-    FrameIterator iter;
-
     // If this fires, someone forgot to propagate an error.
     assert(!hasPendingException());
+
+    // If we're inside a JIT invoke but have no valid exit frame, we can't walk
+    // the stack. This happens when a runtime helper (e.g. NewSlice, NewArray)
+    // reports an error. Save the exception state and let the JIT's
+    // deferred_error stub dispatch later with a proper exit frame.
+    if (!exit_fp_ && top_ && top_->AsJitInvokeFrame()) {
+        exception_code_ = report.Code();
+        UTIL_Format(exception_message_, sizeof(exception_message_), "%s", report.Message());
+        return;
+    }
+
+    FrameIterator iter;
 
     // Save the exception state.
     if (eh_top_) {
@@ -440,6 +605,19 @@ Environment::DispatchReport(const ErrorReport& report) {
         debugger_->ReportError(report, iter);
 
     // See if the plugin is being debugged
+    if (top_)
+        InvokeDebugger(top_->cx(), &report);
+}
+
+void Environment::DispatchDeferredReport() {
+    assert(hasPendingException());
+
+    FrameIterator iter;
+    ErrorReport report(exception_code_, exception_message_,
+                       top_ ? top_->cx() : nullptr, nullptr);
+
+    if (debugger_)
+        debugger_->ReportError(report, iter);
     if (top_)
         InvokeDebugger(top_->cx(), &report);
 }
@@ -484,46 +662,36 @@ int Environment::GetPendingExceptionCode(const ExceptionHandler* handler) {
     return exception_code_;
 }
 
-bool
-Environment::hasPendingException() const {
+bool Environment::hasPendingException() const {
     return exception_code_ != SP_ERROR_NONE;
 }
 
-void
-Environment::clearPendingException() {
+void Environment::clearPendingException() {
     exception_code_ = SP_ERROR_NONE;
 }
 
-int
-Environment::getPendingExceptionCode() const {
+void Environment::ClearPendingException(ExceptionHandler* handler) {
+    assert(handler == eh_top_);
+    clearPendingException();
+}
+
+int Environment::getPendingExceptionCode() const {
     return exception_code_;
 }
 
-void
-Environment::enterInvoke(InvokeFrame* frame) {
+void Environment::enterInvoke(InvokeFrame* frame) {
     if (!top_)
         frame_id_++;
     top_ = frame;
 }
 
-void
-Environment::leaveJitInvoke(JitInvokeFrame* frame) {
+void Environment::leaveJitInvoke(JitInvokeFrame* frame) {
     assert(frame == top_);
     exit_fp_ = frame->prev_exit_fp();
 }
 
-void
-Environment::leaveInvoke() {
+void Environment::leaveInvoke() {
     top_ = top_->prev();
-}
-
-bool
-Environment::IsJitAvailable() {
-#if defined(SP_HAS_JIT)
-    return CompilerBase::IsSupported();
-#else
-    return false;
-#endif
 }
 
 void* Environment::AllocatePageMemory(size_t size) {
@@ -566,22 +734,20 @@ int Environment::SetDebugBreakHandler(SPVM_DEBUGBREAK handler) {
 #endif
 
 const char* Environment::GetEngineName() {
-    const char* info = "";
-#if !defined(SP_HAS_JIT)
-    info = ", interp-x86";
-#else
-    if (!IsJitEnabled()) {
-        info = ", interp-x86";
-    } else {
-#    if defined(KE_ARCH_X86)
-        info = ", jit-x86";
-#    else
-        info = ", unknown";
-#    endif
-    }
+    const char* v2_mode = "v2-interp-" SP_ARCH_STR;
+#if defined(SP_JIT_V2)
+    if (jit_allowed_ && v2::CompilerBase::IsSupported())
+        v2_mode = "v2-jit-" SP_ARCH_STR;
 #endif
 
-    ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s%s", SOURCEPAWN_VERSION, info);
+    const char* v1_mode = "v1-interp-" SP_ARCH_STR;
+#if defined(SP_JIT_V1)
+    if (jit_allowed_ && v1::CompilerBase::IsSupported())
+        v1_mode = "v1-jit-" SP_ARCH_STR;
+#endif
+
+    ke::SafeSprintf(engine_name_, sizeof(engine_name_), "%s (%s, %s)",
+                    SOURCEPAWN_VERSION, v2_mode, v1_mode);
     return engine_name_;
 }
 
@@ -593,64 +759,39 @@ void Environment::SetProfilingTool(IProfilingTool* tool) {
     SetProfiler(tool);
 }
 
-static PluginRuntime* LoadImage(std::unique_ptr<SmxImage> image, const char* file, char* error, size_t maxlength) {
-    if (!image->validate()) {
-        const char* errorMessage = image->errorMessage();
-        if (!errorMessage)
-            errorMessage = "binary parse error";
-        UTIL_Format(error, maxlength, "%s", errorMessage);
-        return nullptr;
+bool Environment::addStack(uint32_t amount) {
+    assert(ke::IsAligned(amount, sizeof(cell_t)));
+
+    if (amount > sp_top_ - sp_) {
+        ReportError(SP_ERROR_STACKLOW);
+        return false;
     }
 
-    PluginRuntime* pRuntime = new PluginRuntime(image.release());
-    if (!pRuntime->Initialize()) {
-        delete pRuntime;
+    sp_ += amount;
+    return true;
+}
 
-        UTIL_Format(error, maxlength, "out of memory");
-        return nullptr;
+bool Environment::dropStack(uint32_t amount) {
+    assert(ke::IsAligned(amount, sizeof(cell_t)));
+
+    if (amount > sp_ - sp_base_) {
+        ReportError(SP_ERROR_STACKMIN);
+        return false;
     }
 
-    size_t len = strlen(file);
-    for (size_t i = len - 1; i < len; i--) {
-        if (file[i] == '/'
-#if defined WIN32
-            || file[i] == '\\'
-#endif
-        ) {
-            pRuntime->SetNames(file, &file[i + 1]);
-            break;
+    sp_ -= amount;
+    return true;
+}
+
+CodeStubs* Environment::EnsureStubs() {
+    if (!jit_allowed_)
+        return nullptr;
+    if (!code_stubs_) {
+        code_stubs_ = std::make_unique<CodeStubs>(this);
+        if (!code_stubs_->Initialize()) {
+            code_stubs_ = nullptr;
+            jit_allowed_ = false;
         }
     }
-
-    if (*pRuntime->Name() == '\0')
-        pRuntime->SetNames(file, file);
-
-    return pRuntime;
-}
-
-PluginRuntime* Environment::LoadBinaryFromFile(const char* file, char* error, size_t maxlength) {
-    FILE* fp = fopen(file, "rb");
-
-    if (!fp) {
-        UTIL_Format(error, maxlength, "file not found");
-        return nullptr;
-    }
-
-    std::unique_ptr<SmxImage> image(new SmxImage(fp));
-    fclose(fp);
-
-    return LoadImage(std::move(image), file, error, maxlength);
-}
-
-PluginRuntime* Environment::LoadBinaryFromMemory(const char* file, uint8_t* addr, size_t size,
-                                                 void (*dtor)(uint8_t*), char* error, size_t maxlength)
-{
-    std::unique_ptr<SmxImage> image;
-
-    if (dtor)
-        image = std::make_unique<SmxImage>(addr, size, dtor);
-    else
-        image = std::make_unique<SmxImage>(addr, size);
-
-    return LoadImage(std::move(image), file, error, maxlength);
+    return code_stubs_.get();
 }

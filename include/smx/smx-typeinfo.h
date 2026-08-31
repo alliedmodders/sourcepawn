@@ -1,29 +1,8 @@
-// vim: set sts=2 ts=8 sw=2 tw=99 et:
-// =============================================================================
-// SourcePawn
-// Copyright (C) 2004-2018 AlliedModders LLC.  All rights RESERVED.
-// =============================================================================
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// This program is free software; you can redistribute it and/or modify it under
-// the terms of the GNU General Public License, version 3.0, as published by the
-// Free Software Foundation.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This program is distributed in the hope that it will be useful, but WITHOUT
-// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
-// details.
-//
-// You should have received a copy of the GNU General Public License along with
-// this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-// As a special exception, AlliedModders LLC gives you permission to link the
-// code of this program (as well as its derivative works) to "Half-Life 2," the
-// "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
-// by the Valve Corporation.  You must obey the GNU General Public License in
-// all respects for all other code used.  Additionally, AlliedModders LLC grants
-// this exception to all derivative works.  AlliedModders LLC defines further
-// exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
-// or <http://www.sourcemod.net/license.php>.
+// Copyright (c) 2004-2026 AlliedModders LLC
 
 #ifndef _include_sourcepawn_smx_typeinfo_h
 #define _include_sourcepawn_smx_typeinfo_h
@@ -64,6 +43,31 @@ struct smx_rtti_table_header {
 // than this value.
 static const uint32_t kNoTableIndex = 0x7fffffff;
 
+// Some opcodes reference difference tables, so we need a selector bit in the
+// immediate encoding.
+static constexpr uint32_t kTableId_SelectorBits = 8;
+static constexpr uint32_t kMaxTableSelector = (1 << kTableId_SelectorBits) - 1;
+static constexpr uint32_t kTableId_IndexShift = kTableId_SelectorBits;
+static constexpr uint32_t kTableId_IndexBits = 24;
+static constexpr uint32_t kMaxTableIndex = (1 << kTableId_IndexBits) - 1;
+
+// List of table identifiers.
+static constexpr uint32_t kTableId_RttiField = 0x00;
+static constexpr uint32_t kTableId_RttiMethod = 0x01;
+static constexpr uint32_t kTableId_RttiClassDef = 0x02;
+
+static inline uint32_t GetTableIdSelector(uint32_t table_id) {
+    return table_id & ((1 << kTableId_SelectorBits) - 1);
+}
+static inline uint32_t GetTableIdIndex(uint32_t table_id) {
+    return (table_id >> kTableId_IndexShift) & ((1 << kTableId_IndexBits) - 1);
+}
+static inline uint32_t MakeTableId(uint32_t selector, uint32_t index) {
+    assert(selector < kMaxTableSelector);
+    assert(index <= kMaxTableIndex);
+    return (index << kTableId_IndexShift) | selector;
+}
+
 // The rtti.enums table has the following row structure:
 struct smx_rtti_enum {
     // Index into the names table.
@@ -74,6 +78,16 @@ struct smx_rtti_enum {
     uint32_t reserved1;
     uint32_t reserved2;
 };
+
+// The first bits of smx_rtti_method::flags (as determined by the mask below)
+// contain one of the following visibility values.
+static constexpr uint32_t kRttiMethodVisibilityMask = 0x3;
+static constexpr uint32_t kRttiMethodVisibility_Private = 0x0;
+static constexpr uint32_t kRttiMethodVisibility_Public = 0x1;
+static constexpr uint32_t kRttiMethod_Native = 0x4;
+static constexpr uint32_t kRttiMethod_Closure = 0x8;
+static constexpr uint32_t kRttiMethod_HasUpvars = 0x10;
+static constexpr uint32_t kRttiMethod_Ctor = 0x20;
 
 // The rtti.methods table has the following row structure:
 struct smx_rtti_method {
@@ -96,16 +110,25 @@ struct smx_rtti_method {
 
     // Local variable signatures, or 0 if no locals.
     uint32_t locals;
+
+    // See kRttiMethodFlags.
+    uint32_t flags;
 };
 
-// The rtti.natives table has the following row structure. The rows must be
-// identical to the native table mapping.
-struct smx_rtti_native {
+static constexpr uint32_t kRttiGlobal_VisibilityMask = 0x3;
+static constexpr uint32_t kRttiGlobal_Private = 0x0;
+static constexpr uint32_t kRttiGlobal_Public = 0x1;
+
+// The rtti.globals table has the following row structure.
+struct smx_rtti_global {
     // Index into the name table.
     uint32_t name;
 
-    // Method signature; see smx_rtti_method::signature.
-    uint32_t signature;
+    // Type signature.
+    uint32_t type_id;
+
+    // See kRttiGlobal constants.
+    uint32_t flags;
 };
 
 // The rtti.typesets table has the following row structure:
@@ -119,35 +142,14 @@ struct smx_rtti_typeset {
     uint32_t signature;
 };
 
-// The rtti.enumstructs table has the following row structure:
-struct smx_rtti_enumstruct {
-    // Index into the name table.
-    uint32_t name;
-
-    // First row in the rtti.es_fields table. Rows up to the next
-    // enumstruct's first row, or the end of the enumstruct table, are
-    // owned by this entry.
-    uint32_t first_field;
-
-    // Size of the enum struct in cells.
-    uint32_t size;
-};
-
-// The rtti.es_fields table has the following row structure:
-struct smx_rtti_es_field {
-    // Index into the name table.
-    uint32_t name;
-
-    // Type id.
-    uint32_t type_id;
-
-    // Offset from the base address, in bytes.
-    uint32_t offset;
-};
+static const uint32_t kClassType_Struct = 0x0;
+static const uint32_t kClassType_EnumStruct = 0x1;
+static const uint32_t kClassType_Class = 0x2;
+static const uint32_t kClassType_Mask = 0x7;
 
 // The rtti.classdef table has the following row structure:
 struct smx_rtti_classdef {
-    // Bits 0-1 indicate the definition type.
+    // Bits 0-2 indicate the definition type (kClassType_*).
     uint32_t flags;
 
     // Index into the name table.
@@ -157,11 +159,9 @@ struct smx_rtti_classdef {
     // row, or the end of the fields table, are owned by this classdef.
     uint32_t first_field;
 
-    // Unused, currently 0.
-    uint32_t reserved0;
-    uint32_t reserved1;
-    uint32_t reserved2;
-    uint32_t reserved3;
+    // First row in the rtti.methods table. Rows up to the next classdef's first
+    // row, or the end of the methods table, are owned by this classdef.
+    uint32_t first_method;
 };
 
 // The rtti.fields table has the following row structure:
@@ -176,7 +176,18 @@ struct smx_rtti_field {
     uint32_t type_id;
 };
 
-static const uint32_t kClassDefType_Struct = 0x0;
+// The rtti.stringpool table has the following row structure:
+struct smx_rtti_string {
+    // Offset into the data section, containing a compact encoded uint32 byte
+    // length, followed by that many bytes.
+    //
+    // The compact encoding is:
+    //     0b0??????? - 7 bits (1 byte)
+    //     0b10?????? ???????? - 14 bits (2 bytes)
+    //     0b110????? ???????? ???????? ???????? - 29 bits (4 bytes)
+    //     0b111????? - Invalid
+    uint32_t offset;
+};
 
 // A type identifier is a 32-bit value encoding a type. It is encoded as
 // follows:
@@ -212,23 +223,31 @@ namespace cb {
 
 // This section encodes raw types.
 static const uint8_t kBool = 0x01;
+static const uint8_t kInt16 = 0x05;
 static const uint8_t kInt32 = 0x06;
 static const uint8_t kInt64 = 0x07;
+static const uint8_t kIntPtr = 0x08;
+static const uint8_t kInt8 = 0x09;
 static const uint8_t kFloat32 = 0x0c;
+static const uint8_t kFloat64 = 0x0d;
 static const uint8_t kChar8 = 0x0e;
 static const uint8_t kAny = 0x10;
 static const uint8_t kTopFunction = 0x11;
+static const uint8_t kTopObject = 0x12;
 
 // This section encodes multi-byte raw types.
 
-// kFixedArray is followed by:
+// kFixedArray or kFlatArray are followed by:
 //    Size          uint32
 //    Type          <type>
 //
 // kArray is followed by:
 //    Type          <type>
+//
+// For a kFlatArray, the inner type cannot be another kFlatArray.
 static const uint8_t kFixedArray = 0x30;
 static const uint8_t kArray = 0x31;
+static const uint8_t kFlatArray = 0x34;
 
 // kFunction is always followed by the same encoding as in
 // smx_rtti_method::signature.
@@ -241,12 +260,16 @@ static const uint8_t kFunctionPtr = 0x33;
 static const uint8_t kEnum = 0x42;       // rtti.enums
 static const uint8_t kObsoleteTypedef = 0x43;
 static const uint8_t kTypeset = 0x44;    // rtti.typesets
-static const uint8_t kClassdef = 0x45;   // rtti.classdefs
-static const uint8_t kEnumStruct = 0x46; // rtti.enumstructs
+static const uint8_t kClassDef = 0x45;   // rtti.classdefs
+static const uint8_t kEnumStruct = 0x46; // rtti.classdefs (rtti.enumstructs in v1)
+static const uint8_t kClass = 0x47;      // rtti.classdefs (heap-allocated class)
 
 // Followed by a fixed-length int16 encoding the number of locals, then that
 // many encoded types.
 static const uint8_t kLocalSlots = 0x60;
+// For closure method locals blobs, followed by uint16 count + encoded
+// upvar slot types. Appears before kLocalSlots in the locals blob.
+static const uint8_t kClosureSlots = 0x61;
 
 // This section encodes special indicator bytes that can appear within multi-
 // byte types.
@@ -291,6 +314,21 @@ struct smx_rtti_debug_method {
     //   (1) The next method's first_local value, or
     //   (2) The end of the .locals table if this is the last method.
     uint32_t first_local;
+
+    // Index into .dbg.lines of the first line in this method.
+    uint32_t first_line;
+
+    // The source line number where this method begins in the source file.
+    uint32_t line_start;
+};
+
+// The ".dbg.lines" table rows are of the following type:
+struct smx_rtti_debug_line {
+    // Byte offset relative to the start of the method's pcode (pcode_start).
+    uint16_t addr;
+
+    // Line number relative to the method's start line (line_start).
+    uint16_t line;
 };
 
 // The ".dbg.locals" and ".dbg.globals" table rows are of the following type:

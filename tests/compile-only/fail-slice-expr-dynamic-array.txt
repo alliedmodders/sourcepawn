@@ -1,0 +1,1 @@
+(5) : error 161: brackets after variable name indicate a fixed-size array, but a dynamic size was given - did you mean to use 'new char[size]' syntax?

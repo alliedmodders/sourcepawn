@@ -1,22 +1,10 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) ITB CompuPhase, 1997-2006
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
 namespace sp {
@@ -54,8 +42,9 @@ enum TokenKind {
     tELLIPS,         /* ... */
     tDBLDOT,         /* .. */
     tDBLCOLON,       /* :: */
+    tARROW,          /* -> */
     /* value of last multi-character operator */
-    tMIDDLE = tDBLCOLON,
+    tMIDDLE = tARROW,
     /* reserved words (statements) */
     tACQUIRE,
     tAS,
@@ -115,6 +104,7 @@ enum TokenKind {
     tREADONLY,
     tRETURN,
     tSEALED,
+    tSHARED,
     tSIZEOF,
     tSTATIC,
     tSTATIC_ASSERT,
@@ -167,6 +157,7 @@ enum TokenKind {
     tNUMBER,   /* integer number */
     tNUMBER64,
     tRATIONAL, /* rational number */
+    tDOUBLE_LITERAL, /* double-precision floating literal (e.g. 3.14d) */
     tSYMBOL,
     tLABEL,
     tSTRING,

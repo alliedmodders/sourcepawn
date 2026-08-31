@@ -1,0 +1,2 @@
+Exception thrown: Array index out-of-bounds (index 10, limit 5)
+  [0] jit-leak-on-exception.sp::main, line 8

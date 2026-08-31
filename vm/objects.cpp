@@ -1,0 +1,77 @@
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2006-2026 AlliedModders LLC
+//
+#include "objects.h"
+
+#include <mimalloc.h>
+#include "environment.h"
+#include "heap.h"
+
+namespace sp {
+
+void HeapItem::Destroy(HeapItem* item) {
+    assert(item->rc == 0);
+
+    if (auto finalizer = item->td->finalizer())
+        finalizer(item);
+    mi_free(item);
+}
+
+void SpArray::NestedFinalizer(HeapItem* obj) {
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto array = reinterpret_cast<SpArray*>(obj);
+    if (!array->data)
+        return;
+
+    auto data = vm.ToPhysAddr<cell_t*>(array->data);
+    for (uint32_t i = 0; i < array->length; i++) {
+        if (!data[i])
+            continue;
+        auto child = vm.ToPhysAddr<HeapItem*>(data[i]);
+        child->Release();
+    }
+}
+
+void SpObject::NestedFinalizer(HeapItem* obj) {
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto td = obj->td;
+    auto offsets = td->heap_item_offsets();
+
+    uint8_t* payload = reinterpret_cast<uint8_t*>(obj);
+    for (size_t i = 0; i < offsets.size(); i++) {
+        cell_t* field_ptr = reinterpret_cast<cell_t*>(payload + offsets[i]);
+        cell_t value = *field_ptr;
+        if (!value)
+            continue;
+        auto child = vm.ToPhysAddr<HeapItem*>(value);
+        child->Release();
+    }
+}
+
+void SpFunction::NestedFinalizer(HeapItem* obj) {
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto fn = reinterpret_cast<SpFunction*>(obj);
+    auto td = fn->td;
+    auto upvar_types = td->upvar_types();
+
+    uint8_t* upvars = fn->upvars();
+    for (size_t i = 0; i < upvar_types.size(); i++) {
+        if (!upvar_types[i]->IsHeapItem())
+            continue;
+        uint32_t offset = td->upvar_slot_offset((uint32_t)i);
+        cell_t* slot = reinterpret_cast<cell_t*>(upvars + offset);
+        if (auto child = vm.ToPhysAddr<HeapItem*>(*slot))
+            child->Release();
+    }
+}
+
+} // namespace sp

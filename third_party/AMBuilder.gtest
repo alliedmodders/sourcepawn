@@ -1,0 +1,18 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+binary = Root.StaticLibrary(builder, 'gtest')
+
+binary.compiler.includes += [
+    os.path.join(builder.currentSourcePath, 'gtest', 'googletest'),
+    os.path.join(builder.currentSourcePath, 'gtest', 'googletest', 'include'),
+]
+
+binary.sources += [
+    'gtest/googletest/src/gtest-all.cc',
+]
+
+if binary.compiler.like('gcc'):
+    binary.compiler.cflags += ['-Wno-unused-result']
+
+rvalue = builder.Add(binary).binary

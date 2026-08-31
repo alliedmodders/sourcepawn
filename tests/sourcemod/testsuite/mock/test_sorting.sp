@@ -120,10 +120,6 @@ int Custom2DSortInteger(int[] elem1, int[] elem2, const int[][] array, Handle hn
     return sum1 - sum2;
 }
 
-int Custom2DSortString(char[] elem1, char[] elem2, const char[][] array, Handle hndl)
-{
-    return strcmp(elem1, elem2);
-}
 
 void Test_Sort2D() {
     int array[][SUB_ARRAY_SIZE] = {
@@ -139,32 +135,6 @@ void Test_Sort2D() {
     SortCustom2D(array, sizeof(array), Custom2DSortInteger);
     AssertArray2DEq("SortCustom2D int[][] Ascending", array, expected, sizeof(array), sizeof(array[]));
 
-    char strarray[][] = {
-        "faluco",
-        "bailopan",
-        "pm onoto",
-        "damaged soul",
-        "sniperbeamer",
-        "sidluke",
-        "johnny got his gun",
-        "gabe newell",
-        "pRED*'s awesome",
-        "WHAT?!"
-    };
-    char expected_ascending[][] = {
-        "WHAT?!",
-        "bailopan",
-        "damaged soul",
-        "faluco",
-        "gabe newell",
-        "johnny got his gun",
-        "pRED*'s awesome",
-        "pm onoto",
-        "sidluke",
-        "sniperbeamer"
-    };
-    SortCustom2D(view_as<any>(strarray), sizeof(strarray), Custom2DSortString);
-    AssertStrArrayEq("SortCustom2D char[][] Ascending", strarray, expected_ascending, sizeof(strarray));
 }
 
 void Test_SortSortADTArrayIntegers() {

@@ -1,0 +1,1 @@
+(2) : error 023: 'const' cannot be used with 'let'

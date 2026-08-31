@@ -20,7 +20,6 @@ public void OnPluginStart()
 	{
 		case Bar1: whatever = Foo2;
 		case 3: whatever = Foo3;
-		case 7.4: whatever = Foo1;
 		case Foo3: whatever = Foo3;
 	}
 }

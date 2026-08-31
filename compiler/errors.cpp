@@ -1,23 +1,10 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) ITB CompuPhase, 1997-2006
-//  Copyright (c) 2023 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2023-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #include <assert.h>
 #ifdef _WIN32
 #    include <io.h>
@@ -238,8 +225,11 @@ void ReportManager::ReportError(ErrorReport&& report) {
         cc_.set_must_abort();
 
     // Count messages per line, reset if not the same line.
-    if (lastline_ != error_list_.back().lineno || error_list_.back().fileno != lastfile_)
+    if (lastline_ != static_cast<int>(error_list_.back().lineno) ||
+        static_cast<int>(error_list_.back().fileno) != lastfile_)
+    {
         errors_on_line_ = 0;
+    }
 
     lastline_ = error_list_.back().lineno;
     lastfile_ = error_list_.back().fileno;
@@ -358,21 +348,60 @@ void break_on_error(int number)
 }
 #endif
 
+static std::string ToString(QualType type);
+static std::string ToString(Type* type);
+
+static std::string ToString(Type* type) {
+    if (!type)
+        return "unknown";
+    if (auto sig = type->as<FunctionType>()) {
+        std::string str = "function ";
+        str += ToString(sig->return_type());
+        str += "(";
+        for (unsigned int i = 0; i < sig->nargs(); i++) {
+            if (i > 0)
+                str += ", ";
+            str += ToString(sig->arg_type(i));
+        }
+        if (sig->variadic()) {
+            if (sig->nargs() > 0)
+                str += ", ";
+            str += "...";
+        }
+        str += ")";
+        return str;
+    }
+    if (type->isFunction()) {
+        if (auto func = type->asFunction()) {
+            if (!func->anonymous)
+                return func->name->chars();
+            if (func->entries.size() == 1)
+                return ToString(func->entries[0]);
+        }
+        return type->kindName();
+    }
+    return type->prettyName();
+}
+
+static std::string ToString(QualType type) {
+    std::string str;
+    if (type.is_const())
+        str += "const ";
+    str += ToString(*type);
+    return str;
+}
+
 MessageBuilder&
 MessageBuilder::operator <<(Type* type)
 {
-    args_.emplace_back(type->prettyName());
+    args_.emplace_back(ToString(type));
     return *this;
 }
 
 MessageBuilder&
 MessageBuilder::operator <<(QualType type)
 {
-    std::string message;
-    if (type.is_const())
-        message += "const ";
-    message += type->prettyName();
-    args_.emplace_back(message);
+    args_.emplace_back(ToString(type));
     return *this;
 }
 

@@ -1,0 +1,1 @@
+error 462: implicit conversion of 'intptr' to 'int' can lose data

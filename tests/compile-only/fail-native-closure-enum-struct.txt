@@ -1,0 +1,1 @@
+(4) : error 083: enum struct field "cb" cannot be a heap item (objects, arrays of objects, or function references)

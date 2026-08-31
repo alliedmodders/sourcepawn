@@ -1,33 +1,8 @@
-/**
- * vim: set ts=4 sw=4 tw=99 noet:
- * =============================================================================
- * SourcePawn
- * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
- * =============================================================================
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License, version 3.0, as published by the
- * Free Software Foundation.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * As a special exception, AlliedModders LLC gives you permission to link the
- * code of this program (as well as its derivative works) to "Half-Life 2," the
- * "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
- * by the Valve Corporation.  You must obey the GNU General Public License in
- * all respects for all other code used.  Additionally, AlliedModders LLC grants
- * this exception to all derivative works.  AlliedModders LLC defines further
- * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
- * or <http://www.sourcemod.net/license.php>.
- *
- * Version: $Id$
- */
+// vim: set ts=4 sw=4 tw=99 noet:
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2004-2026 AlliedModders LLC
 
 #ifndef _INCLUDE_SOURCEPAWN_VM_TYPES_H
 #define _INCLUDE_SOURCEPAWN_VM_TYPES_H
@@ -46,10 +21,10 @@ typedef uint32_t funcid_t; /**< Function index code */
 #include "sp_typeutil.h"
 
 namespace sp {
-static constexpr uint32_t kApiVersion = 3;
+static constexpr uint32_t kApiVersion = 4;
 
 // Minimum version that is backward compatible.
-static constexpr uint32_t kApiMinVersion = 2;
+static constexpr uint32_t kApiMinVersion = 4;
 } // namespace sp
 
 #define SP_MAX_EXEC_PARAMS 32 /**< Maximum number of parameters in a function signature */
@@ -102,7 +77,10 @@ static constexpr uint32_t kApiMinVersion = 2;
 #define SP_ERROR_USER 31                /**< Custom message */
 #define SP_ERROR_FATAL 32               /**< Custom fatal message */
 #define SP_ERROR_INVALID_ARRAY_SIZE 33  /**< Invalid arrary size */
-#define SP_MAX_ERROR_CODES 34
+#define SP_ERROR_NULL_DEREF 34          /**< Null object reference */
+#define SP_ERROR_RTTI 35                /**< Malformed type information */
+#define SP_ERROR_SLICE_ESCAPE 36        /**< Slices cannot be returned or assigned outside of functions */
+#define SP_MAX_ERROR_CODES 37
 //Hey you! Update the string table if you add to the end of me! */
 
 /**********************************************

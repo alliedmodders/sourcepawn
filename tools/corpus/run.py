@@ -1,5 +1,6 @@
 # vim: set ts=4 sw=4 tw=99 et:
 import argparse
+import difflib
 import multiprocessing as mp
 import os
 try:
@@ -17,6 +18,7 @@ import threading
 DIAGNOSE_DELETE = 0
 DIAGNOSE_SKIP = 1
 DIAGNOSE_QUIT = 2
+DIAGNOSE_UPDATE = 3
 
 # Tool for interacting with a .sp corpus to find behavorial differences between
 # compiler versions.
@@ -52,6 +54,10 @@ def main():
                         help = "Number of test worker slices (for CI).")
     parser.add_argument("--slice", default = 0, type = int,
                         help = "Which slice of tests to run, starting at 1.")
+    parser.add_argument("--save-warnings", type = str, default = None,
+                        help = "Directory (relative to corpus root) to save warnings to")
+    parser.add_argument("--check-warnings", type = str, default = None,
+                        help = "Directory (relative to corpus root) to check warnings against")
 
     args = parser.parse_args()
 
@@ -105,6 +111,7 @@ class Runner(object):
         self.log_ = sys.stderr
         self.failed_ = 0
         self.should_quit_ = False
+        self.bar_ = None
 
         self.includes_ = [os.path.join(self.args_.corpus, 'include')]
         self.includes_.extend(args.include)
@@ -136,6 +143,7 @@ class Runner(object):
         progressbar.streams.wrap_stderr()
         bar = progressbar.ProgressBar(max_value = len(self.files_), redirect_stdout = True)
         bar.update(0)
+        self.bar_ = bar
 
         if self.args_.j <= 1:
             self.run_st(bar)
@@ -225,7 +233,8 @@ class Runner(object):
             ok = False
             output = None
             try:
-                subprocess.check_output(argv, stderr = subprocess.STDOUT, timeout = 10)
+                output = subprocess.check_output(argv, stderr = subprocess.STDOUT, timeout = 10)
+                output = output.decode('utf-8', errors = 'ignore')
                 ok = True
             except KeyboardInterrupt:
                 raise
@@ -283,7 +292,8 @@ class Runner(object):
                     self.log_.write("\n")
 
             if self.args_.diagnose:
-                rv = diagnose_error(os.path.join(self.args_.corpus, path), output)
+                with ProgressBarPause(self.bar_):
+                    rv = diagnose_error(os.path.join(self.args_.corpus, path), output)
                 if rv == DIAGNOSE_DELETE:
                     remove = True
                 elif rv == DIAGNOSE_QUIT:
@@ -310,8 +320,140 @@ class Runner(object):
             elif self.args_.retry_bad:
                 del self.skip_map_[path.lower()]
 
+            if path.endswith('.sp'):
+                warnings = self.parse_warnings(output)
+                if self.args_.save_warnings:
+                    self.save_warnings(path, warnings)
+                if self.args_.check_warnings:
+                    self.check_warnings(path, warnings, argv)
+
         if remove:
             self.skip_map_[path.lower()] = path
+
+    def parse_warnings(self, output):
+        warnings_list = []
+        if not output:
+            return []
+        for line in output.splitlines():
+            m = re.match(r'^(.+)\((\d+)\) : warning (\d+): (.*)$', line)
+            if m:
+                file_path, line_num_str, warn_num_str, msg = m.groups()
+                if not os.path.isabs(file_path) and not file_path.startswith(self.args_.corpus):
+                    file_path = os.path.join(self.args_.corpus, file_path)
+                try:
+                    rel_path = os.path.relpath(file_path, self.args_.corpus)
+                except ValueError:
+                    rel_path = file_path
+                rel_path = rel_path.replace('\\', '/')
+                line_num = int(line_num_str)
+                warn_num = int(warn_num_str)
+                warnings_list.append((rel_path, line_num, warn_num, msg))
+        
+        warnings_list.sort()
+        warnings = ["{}({}) : warning {}: {}".format(w[0], w[1], w[2], w[3]) for w in warnings_list]
+        return warnings
+
+    def save_warnings(self, path, warnings, warnings_sub_dir = None):
+        if warnings_sub_dir is None:
+            warnings_sub_dir = self.args_.save_warnings
+        warnings_dir = os.path.join(self.args_.corpus, warnings_sub_dir)
+        warnings_file = os.path.join(warnings_dir, path + '.txt')
+        if warnings:
+            os.makedirs(os.path.dirname(warnings_file), exist_ok = True)
+            with open(warnings_file, 'wt', encoding='utf-8') as fp:
+                for warn in warnings:
+                    fp.write(warn + '\n')
+        else:
+            if os.path.exists(warnings_file):
+                try:
+                    os.remove(warnings_file)
+                except OSError:
+                    pass
+
+    def check_warnings(self, path, warnings, argv):
+        warnings_dir = os.path.join(self.args_.corpus, self.args_.check_warnings)
+        warnings_file = os.path.join(warnings_dir, path + '.txt')
+        expected_warnings = []
+        if os.path.exists(warnings_file):
+            with open(warnings_file, 'rt', encoding='utf-8') as fp:
+                raw_expected = [line.strip() for line in fp.readlines() if line.strip()]
+            expected_warnings = self.parse_warnings('\n'.join(raw_expected))
+
+        if warnings != expected_warnings:
+            diff = list(difflib.unified_diff(
+                expected_warnings,
+                warnings,
+                fromfile = 'expected',
+                tofile = 'actual',
+                lineterm = ''
+            ))
+            if self.args_.diagnose:
+                with ProgressBarPause(self.bar_):
+                    rv = diagnose_warnings(path, diff, argv)
+                if rv == DIAGNOSE_UPDATE:
+                    self.save_warnings(path, warnings, self.args_.check_warnings)
+                elif rv == DIAGNOSE_QUIT:
+                    self.should_quit_ = True
+                if self.args_.fail_fast:
+                    self.should_quit_ = True
+            else:
+                self.failed_ += 1
+                self.log_.write("    " + ' '.join(argv) + "\n")
+                self.log_.write("warnings mismatch: " + path + "\n")
+                for diff_line in diff:
+                    self.log_.write("    " + diff_line + "\n")
+
+def diagnose_warnings(path, diff_lines, argv):
+    print("Warnings mismatch in {}:".format(path))
+    print("  " + ' '.join(argv))
+    print("")
+    for line in diff_lines:
+        print("  " + line)
+    print("")
+    while True:
+        sys.stdout.write("(U)pdate expected, (S)kip, or (Q)uit? ")
+        try:
+            progressbar.streams.flush()
+        except:
+            pass
+        sys.stdout.flush()
+        line = sys.stdin.readline()
+        line = line.strip()
+        if line == 'U' or line == 'u':
+            return DIAGNOSE_UPDATE
+        elif line == 'S' or line == 's':
+            return DIAGNOSE_SKIP
+        elif line == 'Q' or line == 'q':
+            return DIAGNOSE_QUIT
+
+class ProgressBarPause(object):
+    def __init__(self, bar):
+        self.bar = bar
+        self.original_fd = None
+
+    def __enter__(self):
+        if self.bar:
+            try:
+                self.bar.clear()
+            except:
+                pass
+            sys.stderr.write('\r' + ' ' * 120 + '\r')
+            sys.stderr.flush()
+            self.original_fd = self.bar.fd
+            import io
+            self.bar.fd = io.StringIO()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.bar and self.original_fd is not None:
+            self.bar.fd = self.original_fd
+            try:
+                self.bar.update(force=True)
+            except:
+                try:
+                    self.bar.update()
+                except:
+                    pass
 
 def diagnose_error(path, output):
     print("Error compiling {}:".format(path))
@@ -336,7 +478,11 @@ def diagnose_error(path, output):
 
     while True:
         sys.stdout.write("(D)elete, (S)kip, or (Q)uit? ")
-        progressbar.streams.flush()
+        try:
+            progressbar.streams.flush()
+        except:
+            pass
+        sys.stdout.flush()
         line = sys.stdin.readline()
         line = line.strip()
         if line == 'D' or line == 'd':

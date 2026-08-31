@@ -1,0 +1,1 @@
+(2) : error 006: 'let' declaration requires an initializer

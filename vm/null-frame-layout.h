@@ -1,25 +1,15 @@
 // vim: set ts=8 sts=2 sw=2 tw=99 et:
 //
-// This file is part of SourcePawn.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// SourcePawn is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+// Copyright (c) 2026 AlliedModders LLC
 //
-// SourcePawn is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with SourcePawn.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef _include_sourcepawn_jit_null_frames_h_
 #define _include_sourcepawn_jit_null_frames_h_
 
 #include <amtl/am-platform.h>
 #include <sp_vm_types.h>
-#if defined(SP_HAS_JIT)
+#if defined(SP_JIT_V1) || defined(SP_JIT_V2)
 #    error "Wrong architecture!"
 #endif
 

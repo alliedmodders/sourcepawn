@@ -1,24 +1,10 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
-/*  Pawn compiler - File input, preprocessing and lexical analysis functions
- *
- *  Copyright (c) ITB CompuPhase, 1997-2006
- *
- *  This software is provided "as-is", without any express or implied warranty.
- *  In no event will the authors be held liable for any damages arising from
- *  the use of this software.
- *
- *  Permission is granted to anyone to use this software for any purpose,
- *  including commercial applications, and to alter it and redistribute it
- *  freely, subject to the following restrictions:
- *
- *  1.  The origin of this software must not be misrepresented; you must not
- *      claim that you wrote the original software. If you use this software in
- *      a product, an acknowledgment in the product documentation would be
- *      appreciated but is not required.
- *  2.  Altered source versions must be plainly marked as such, and must not be
- *      misrepresented as being the original software.
- *  3.  This notice may not be removed or altered from any source distribution.
- */
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
+//
 #include <assert.h>
 #include <ctype.h>
 #include <limits.h>
@@ -27,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <bit>
 #include <filesystem>
 #include <string>
 #include <unordered_set>
@@ -53,7 +40,6 @@
 #include "parser.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sctracker.h"
 #include "semantics.h"
 #include "source-manager.h"
 #include "symbols.h"
@@ -291,10 +277,14 @@ void Lexer::lex_float(full_token_t* tok, double whole) {
         fnum *= fmult;
     }
 
-    /* floating point */
-    float value = (float)fnum;
-    tok->numeric_value = FloatCellUnion(value).cell;
-    tok->id = tRATIONAL;
+    if (match_char('d')) {
+        tok->atom = cc_.atom(std::to_string(std::bit_cast<uint64_t>(fnum)));
+        tok->id = tDOUBLE_LITERAL;
+    } else {
+        float value = (float)fnum;
+        tok->numeric_value = FloatCellUnion(value).cell;
+        tok->id = tRATIONAL;
+    }
 }
 
 int Lexer::preproc_expr(cell* val, Type** type) {
@@ -823,11 +813,16 @@ bool Lexer::FindNextToken() {
                     return false;
                 else if (!allow_end_of_file_)
                     return false;
+                if (more()) {
+                    report(227);
+                    advance();
+                    continue;
+                }
                 HandleEof();
                 continue;
 
             default:
-                if (is_line_start && c < ' ') {
+                if ((uint8_t)c >= 0x80 || (is_line_start && c < ' ')) {
                     // Preserve old behavior where garbage characters at the
                     // start of the line were ignored. Except warn about it
                     // now.
@@ -1147,6 +1142,10 @@ void Lexer::multilinestring_single(std::string* data, int quote_count) {
         if (c == '\\') {
             if (MaybeHandleLineContinuation())
                 continue;
+            if (state_.pos + 1 >= state_.end) {
+                data->push_back('\\');
+                break;
+            }
         }
         if (IsNewline(c))
             break;
@@ -1209,6 +1208,10 @@ void Lexer::packedstring(full_token_t* tok, char term) {
                     advance();
                 }
                 continue;
+            }
+            if (state_.pos + 1 >= state_.end) {
+                data.push_back('\\');
+                break;
             }
         }
         if (IsNewline(c))
@@ -1300,6 +1303,7 @@ const char* sc_tokens[] = {"*=",
                            "...",
                            "..",
                            "::",
+                           "->",
                            "acquire",
                            "as",
                            "assert",
@@ -1358,6 +1362,7 @@ const char* sc_tokens[] = {"*=",
                            "readonly",
                            "return",
                            "sealed",
+                           "shared",
                            "sizeof",
                            "static",
                            "static_assert",
@@ -1406,6 +1411,7 @@ const char* sc_tokens[] = {"*=",
                            "-integer value-",
                            "-number value-",
                            "-float value-",
+                           "-double value-",
                            "-identifier-",
                            "-label-",
                            "-string-",
@@ -1483,7 +1489,6 @@ IsUnimplementedKeyword(int token)
         case tAS:
         case tCATCH:
         case tCAST_TO:
-        case tDOUBLE:
         case tEXPLICIT:
         case tFINALLY:
         case tFOREACH:
@@ -1496,10 +1501,8 @@ IsUnimplementedKeyword(int token)
         case tINT64:
         case tINTERFACE:
         case tINTN:
-        case tLET:
         case tNAMESPACE:
         case tPACKAGE:
-        case tPRIVATE:
         case tPROTECTED:
         case tREADONLY:
         case tSEALED:
@@ -1572,6 +1575,7 @@ int Lexer::lex() {
     if (using_injected_tokens_) {
         if (!injected_token_stream_.empty())
             return LexInjectedToken();
+        current_token()->id = 0;
         return 0;
     }
 
@@ -1712,6 +1716,8 @@ void Lexer::LexIntoToken(full_token_t* tok) {
                 tok->id = taSUB;
             else if (match_char('-'))
                 tok->id = tDEC;
+            else if (match_char('>'))
+                tok->id = tARROW;
             else
                 tok->id = '-';
             return;
@@ -2003,7 +2009,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     char first_char = advance();
     assert(alpha(first_char) || first_char == '#');
 
-    bool maybe_keyword = (first_char != PUBLIC_CHAR) && allow_keywords_;
+    bool maybe_keyword = allow_keywords_;
     while (true) {
         char c = peek();
         if (IsDigit(c)) {
@@ -2019,10 +2025,6 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
     }
 
     size_t len = char_stream() - token_start;
-    if (len == 1 && first_char == PUBLIC_CHAR) {
-        tok->id = PUBLIC_CHAR;
-        return;
-    }
 
     // Handle preprocessor keywords (ugh).
     Atom* atom = cc_.atom((const char *)token_start, len);
@@ -2069,7 +2071,7 @@ void Lexer::LexSymbol(full_token_t* tok, Atom* atom) {
         } else if (allow_tags_) {
             tok->id = tLABEL;
             advance();
-        } else if (cc_.types()->find(atom)) {
+        } else if (cc_.types()->findBuiltin(atom)) {
             // This looks like a tag override (a tag with this name exists), but
             // tags are not allowed right now, so it is probably an error.
             report(220);
@@ -2317,6 +2319,9 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         is_codepoint = &tmp_codepoint;
     *is_codepoint = false;
 
+    if (!more())
+        return -1;
+
     if (!match_char(ctrlchar_)) { /* no escape character */
         cell raw = peek_unsigned();
         if ((flags & kLitcharUtf8) && !(flags & kLitcharSkipping)) {
@@ -2338,6 +2343,9 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
         advance();
         return raw;
     }
+
+    if (!more())
+        return -1;
 
     if (match_char(ctrlchar_))
         return ctrlchar_;
@@ -2450,7 +2458,7 @@ cell Lexer::litchar(int flags, bool* is_codepoint) {
 int
 alpha(char c)
 {
-    return (isalpha(c) || c == '_' || c == PUBLIC_CHAR);
+    return (isalpha(c) || c == '_');
 }
 
 /*  alphanum

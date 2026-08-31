@@ -1,0 +1,1 @@
+fail-preproc-float-literal.sp(6) : error 488: floating-point literal is not allowed in preprocessor expression

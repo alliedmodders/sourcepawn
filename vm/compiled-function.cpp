@@ -1,14 +1,8 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #include "compiled-function.h"
 #include <amtl/am-platform.h>
@@ -16,10 +10,9 @@
 
 using namespace sp;
 
-CompiledFunction::CompiledFunction(const LinkedCode& code, cell_t pcode_offs,
+CompiledFunction::CompiledFunction(const LinkedCode& code,
                                    FixedArray<LoopEdge>* edges, FixedArray<CipMapEntry>* cipmap)
  : code_(code)
- , code_offset_(pcode_offs)
  , edges_(edges)
  , cip_map_(cipmap)
  , cip_map_sorted_(false) {
@@ -50,8 +43,7 @@ cip_map_entry_cmp(const void* a1, const void* aEntry) {
     return pcoffs > entry->pcoffs;
 }
 
-ucell_t
-CompiledFunction::FindCipByPc(void* pc) {
+ucell_t CompiledFunction::FindCipByPc(void* pc) {
     if (uintptr_t(pc) < uintptr_t(code_.entry))
         return kInvalidCip;
 
@@ -67,11 +59,8 @@ CompiledFunction::FindCipByPc(void* pc) {
     void* ptr = bsearch((void*)(uintptr_t)pcoffs, cip_map_->buffer(), cip_map_->size(),
                         sizeof(CipMapEntry), cip_map_entry_cmp);
     assert(ptr);
-
-    if (!ptr) {
-        // Shouldn't happen, but fail gracefully.
+    if (!ptr)
         return kInvalidCip;
-    }
 
-    return code_offset_ + reinterpret_cast<CipMapEntry*>(ptr)->cipoffs;
+    return reinterpret_cast<CipMapEntry*>(ptr)->cipoffs;
 }

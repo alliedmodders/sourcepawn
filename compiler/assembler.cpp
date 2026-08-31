@@ -1,24 +1,10 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
-/*  Pawn compiler - Binary code generation (the "assembler")
- *
- *  Copyright (c) ITB CompuPhase, 1997-2006
- *
- *  This software is provided "as-is", without any express or implied warranty.
- *  In no event will the authors be held liable for any damages arising from
- *  the use of this software.
- *
- *  Permission is granted to anyone to use this software for any purpose,
- *  including commercial applications, and to alter it and redistribute it
- *  freely, subject to the following restrictions:
- *
- *  1.  The origin of this software must not be misrepresented; you must not
- *      claim that you wrote the original software. If you use this software in
- *      a product, an acknowledgment in the product documentation would be
- *      appreciated but is not required.
- *  2.  Altered source versions must be plainly marked as such, and must not be
- *      misrepresented as being the original software.
- *  3.  This notice may not be removed or altered from any source distribution.
- */
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
+//
 #include <assert.h>
 #include <ctype.h>
 #include <stddef.h> /* for macro offsetof() */
@@ -32,7 +18,7 @@
 
 #include <amtl/am-hashmap.h>
 #include <amtl/am-string.h>
-#include <smx/smx-v1-opcodes.h>
+#include <smx/smx-v2-opcodes.h>
 #include <smx/smx-v1.h>
 #include <sp_vm_api.h>
 #include <zlib/zlib.h>
@@ -45,11 +31,10 @@
 #include "rtti-builder.h"
 #include "sc.h"
 #include "scopes.h"
-#include "sctracker.h"
 #include "symbols.h"
 #include "types.h"
 #include "vm/environment.h"
-#include "vm/plugin-runtime.h"
+#include "vm/base-runtime.h"
 
 namespace sp {
 namespace cc {
@@ -73,13 +58,14 @@ VerifyBinary(const char* file, void* buffer, size_t size)
     if (!env)
         FailedValidation("could not initialize environment");
 
-    char msgbuf[255];
-    std::unique_ptr<PluginRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
-                                                                nullptr, msgbuf, sizeof(msgbuf)));
-    if (!rt)
-        FailedValidation(msgbuf);
-
     ExceptionHandler eh(env.get());
+    std::unique_ptr<sp::BaseRuntime> rt(env->LoadBinaryFromMemory(file, (uint8_t*)buffer, size,
+                                                                 nullptr, true /* data_only */));
+    if (!rt) {
+        const char* message = eh.HasException() ? eh.Message() : "unknown error";
+        FailedValidation(message);
+    }
+
     if (!rt->PerformFullValidation()) {
         const char* message = eh.HasException() ? eh.Message() : "unknown error";
         FailedValidation(message);
@@ -115,30 +101,6 @@ assemble(CompileContext& cc, CodeGenerator& cg, const char* binfname, int compre
 
     // Buffer compression logic.
     sp_file_hdr_t* header = (sp_file_hdr_t*)buffer.bytes();
-
-    if (compression_level) {
-        size_t region_size = header->imagesize - header->dataoffs;
-        size_t zbuf_max = compressBound(region_size);
-        std::unique_ptr<Bytef[]> zbuf = std::make_unique<Bytef[]>(zbuf_max);
-
-        uLong new_disksize = zbuf_max;
-        int err = compress2(zbuf.get(), &new_disksize, (Bytef*)(buffer.bytes() + header->dataoffs),
-                            region_size, compression_level);
-        if (err == Z_OK) {
-            header->disksize = new_disksize + header->dataoffs;
-            header->compression = SmxConsts::FILE_COMPRESSION_GZ;
-
-            ByteBuffer new_buffer;
-            new_buffer.writeBytes(buffer.bytes(), header->dataoffs);
-            new_buffer.writeBytes(zbuf.get(), new_disksize);
-
-            return splat_to_binary(cc, binfname, new_buffer.bytes(), new_buffer.size());
-        }
-
-        printf("Unable to compress, error %d\n", err);
-        printf("Falling back to no compression.\n");
-    }
-
     header->disksize = 0;
     header->compression = SmxConsts::FILE_COMPRESSION_NONE;
 

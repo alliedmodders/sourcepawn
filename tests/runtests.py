@@ -2,6 +2,7 @@
 import argparse
 import ast
 import datetime
+import difflib
 import os
 import platform
 import re
@@ -10,6 +11,8 @@ import sys
 
 import testutil
 from testutil import manifest_get
+
+OLDSPCOMP_GOLDEN_FILE = 'oldspcomp-golden.txt'
 
 def main():
   parser = argparse.ArgumentParser()
@@ -33,7 +36,15 @@ def main():
                       help='Save compiled binaries for tests with output. String must be a suffix.')
   parser.add_argument('--filter', default=None, type=str,
                       help='Filter for tests with a particular name.')
+  parser.add_argument('--no-jit', default=False, action='store_true',
+                      help='Disable JIT testing.')
+  parser.add_argument('--fail-fast', default=False, action='store_true',
+                      help='Stop and end the test plan after one error.')
+  parser.add_argument('--no-binary', default=False, action='store_true',
+                      help='Skip tests that are precompiled .smx binary files.')
   args = parser.parse_args()
+  if args.coverage:
+    args.coverage = os.path.abspath(args.coverage)
 
   plan = TestPlan(args)
   plan.find_compilers()
@@ -98,26 +109,61 @@ class TestPlan(object):
       env = None
       if self.args.coverage:
         env = self.env_.copy()
-        env['LLVM_PROFILE_FILE'] = '{0}/spshell-%9m'.format(self.args.coverage)
+        env['LLVM_PROFILE_FILE'] = 'spshell-%9m.profraw'
 
       rc, stdout, stderr = testutil.exec_argv([path, '--version'])
-      if rc == 0 and 'JIT' in stdout:
+      if rc == 0 and '-jit' in stdout and not self.args.no_jit:
         self.shells.append({
           'path': path,
-          'args': [],
+          'args': ['--leak-check'],
           'name': 'default-' + arch,
           'env': env,
           })
 
       self.shells.append({
         'path': path,
-        'args': ['--disable-jit'],
+        'args': ['--disable-jit', '--leak-check'],
         'name': 'interpreter-' + arch,
         'env': env,
       })
 
   def find_compilers(self):
     self.find_spcomp()
+    self.find_oldspcomp()
+
+  def find_oldspcomp(self):
+    search_in = os.path.join(self.args.objdir, 'oldspcomp')
+    found = self.find_executables_in(search_in, 'oldspcomp')
+    if not len(found):
+      return
+
+    golden_path = os.path.join(os.path.split(os.path.abspath(__file__))[0],
+                               OLDSPCOMP_GOLDEN_FILE)
+    golden = testutil.load_golden_tests(golden_path)
+
+    for arch, path in found:
+      env = None
+      if self.args.coverage:
+        env = self.env_.copy()
+        env['LLVM_PROFILE_FILE'] = 'oldspcomp-%9m.profraw'
+
+      spcomp = {
+        'path': os.path.abspath(path),
+        'arch': arch,
+        'name': 'oldspcomp',
+        'args': [],
+        'env': env,
+      }
+
+      if self.args.spcomp_args:
+        spcomp['args'].extend(self.args.spcomp_args)
+
+      self.modes.append({
+        'name': 'legacy',
+        'spcomp': spcomp,
+        'args': [],
+        'golden': golden,
+      })
 
   def find_spcomp(self):
     search_in = os.path.join(self.args.objdir, 'spcomp')
@@ -127,7 +173,7 @@ class TestPlan(object):
       env = None
       if self.args.coverage:
         env = self.env_.copy()
-        env['LLVM_PROFILE_FILE'] = '{0}/spcomp-%9m'.format(self.args.coverage)
+        env['LLVM_PROFILE_FILE'] = 'spcomp-%9m.profraw'
 
       spcomp = {
         'path': os.path.abspath(path),
@@ -164,7 +210,7 @@ class TestPlan(object):
     if os.path.exists(manifest_path):
       manifest = testutil.parse_manifest(manifest_path, local_folder, manifest)
       folder_type = manifest_get(manifest, 'folder', 'type')
-      if folder_type is not None and folder_type != 'tests':
+      if folder_type is not None and folder_type == 'benchmark':
         return
       if manifest_get(manifest, 'folder', 'skip') == 'true':
         return
@@ -174,7 +220,7 @@ class TestPlan(object):
       path = os.path.join(self.tests_path, local_path)
       if os.path.isdir(path):
         self.find_tests_impl(local_path, manifest)
-      elif path.endswith('.sp') or path.endswith('.smx'):
+      elif path.endswith('.sp') or (path.endswith('.smx') and not self.args.no_binary):
         test = Test(**{
           'path': os.path.abspath(path),
           'manifest': manifest,
@@ -192,8 +238,6 @@ class Test(object):
   ManifestKeys = set([
     'compiler',
     'defines',
-    'force_new_parser',
-    'force_old_parser',
     'returnCode',
     'type',
     'warnings_are_errors',
@@ -206,6 +250,7 @@ class Test(object):
     self.smx_path = None
     self.stdout_file = None
     self.stderr_file = None
+    self.txtout_file = None
     self.original_source = self.path
 
   def prepare(self):
@@ -222,6 +267,7 @@ class Test(object):
       self.smx_path += '.smx'
 
     base_path, _ = os.path.splitext(self.path)
+    smx_expected_base = base_path
 
     if self.path.endswith('.smx'):
       # Check if this is a versioned prebuilt.
@@ -232,10 +278,20 @@ class Test(object):
 
     self.read_local_manifest()
 
-    if os.path.exists(base_path + '.out'):
+    if os.path.exists(smx_expected_base + '.out'):
+      self.stdout_file = smx_expected_base + '.out'
+    elif os.path.exists(base_path + '.out'):
       self.stdout_file = base_path + '.out'
-    if os.path.exists(base_path + '.err'):
+    elif os.path.exists(smx_expected_base + '.smx.out'):
+      self.stdout_file = smx_expected_base + '.smx.out'
+
+    if os.path.exists(smx_expected_base + '.err'):
+      self.stderr_file = smx_expected_base + '.err'
+    elif os.path.exists(base_path + '.err'):
       self.stderr_file = base_path + '.err'
+    elif os.path.exists(smx_expected_base + '.smx.err'):
+      self.stderr_file = smx_expected_base + '.smx.err'
+
     if os.path.exists(base_path + '.txt'):
       self.txtout_file = base_path + '.txt'
 
@@ -277,17 +333,13 @@ class Test(object):
     return self.checkManifests('warnings_are_errors') == 'true'
 
   @property
-  def force_old_parser(self):
-    return self.checkManifests('force_old_parser') == 'true'
-
-  @property
-  def force_new_parser(self):
-    return self.checkManifests('force_new_parser') == 'true'
-
-  @property
   def expectedReturnCode(self):
     if 'returnCode' in self.local_manifest_:
       return int(self.local_manifest_['returnCode'])
+    # A bare .err file (no .out, no .sp manifest) implies the test expects
+    # an error: exit code 1.
+    if self.stderr_file is not None and self.stdout_file is None:
+      return 1
     return 0
   
   @property
@@ -320,7 +372,7 @@ class Test(object):
     if self.original_source.endswith('.smx'):
       return
 
-    with open(self.original_source, 'rt', encoding='utf-8') as fp:
+    with open(self.original_source, 'rt', encoding='utf-8', errors='replace') as fp:
       for line in fp:
         if not self.process_manifest_line(line):
           break
@@ -369,6 +421,8 @@ class TestRunner(object):
     with testutil.TempFolder() as temp_folder:
       with testutil.ChangeFolder(temp_folder):
         self.run_impl()
+        if self.plan.args.coverage:
+          testutil.merge_profiles(temp_folder, self.plan.args.coverage)
 
     if len(self.failures_):
       self.print_failures()
@@ -380,7 +434,8 @@ class TestRunner(object):
   def run_impl(self):
     try:
       for mode in self.plan.modes:
-        self.run_mode(mode)
+        if not self.run_mode(mode):
+          break
     except KeyboardInterrupt as e:
       pass
 
@@ -396,13 +451,18 @@ class TestRunner(object):
       test.prepare()
       if not test.should_run(mode):
         continue
+      if mode.get('golden') is not None and test.unique_name not in mode['golden']:
+        continue
       if not self.run_test(mode, test):
         self.failures_.add(test)
+        if self.plan.args.fail_fast:
+          return False
+    return True
 
   def should_compile_only(self, test):
     if test.path.endswith('.smx'):
       return False
-    if test.type == 'compiler-output' or test.type == 'compile-only':
+    if test.type in ('compiler-output', 'compile-only', 'no-crash'):
       return True
     return self.plan.args.compile_only
 
@@ -504,6 +564,11 @@ class TestRunner(object):
     return True
 
   def compile_ok(self, mode, test, rc, stdout, stderr):
+    if test.type == 'no-crash':
+      if rc is not None and rc < 0:
+        self.out("FAIL: Compiler crashed (signal {0}).".format(-rc))
+        return False
+      return True
     if test.type != 'compiler-output':
       return rc == 0
 
@@ -527,7 +592,7 @@ class TestRunner(object):
 
     if test_prefix == 'ok':
       return True
-    return self.compare_spcomp_output(test, stdout)
+    return self.compare_spcomp_output(test, stdout + stderr)
 
   def do_exec(self, argv, env = None):
     if self.plan.show_cli:
@@ -554,32 +619,21 @@ class TestRunner(object):
       if not len(actual_lines[-1]):
         actual_lines.pop()
 
-    line_number = 0
-    while True:
-      if line_number >= len(actual_lines) and line_number < len(expected_lines):
-        self.out("FAIL: Output from {0} contains unexpected data.".format(pipe_name))
-        break
-      if line_number < len(actual_lines) and line_number >= len(expected_lines):
-        self.out("FAIL: Output from {0} is missing expected lines.".format(pipe_name))
-        break
-      if line_number >= len(actual_lines) and line_number >= len(expected_lines):
-        break
-
-      if expected_lines[line_number] != actual_lines[line_number]:
-        self.out("FAIL: Line {0} from {1} does not match the expected output.".format(
-          line_number + 1, pipe_name))
-        break
-      line_number += 1
-
-    if line_number >= len(actual_lines) and line_number >= len(expected_lines):
+    if expected_lines == actual_lines:
       return True
 
-    self.out("Expected {0}:".format(pipe_name))
-    for index, line in enumerate(expected_lines):
-      self.out(" Line {0:2}: {1}".format(index + 1, line.rstrip()))
-    self.out("Actual {0}:".format(pipe_name))
-    for index, line in enumerate(actual_lines):
-      self.out(" Line {0:2}: {1}".format(index + 1, line.rstrip()))
+    self.out("FAIL: Output from {0} did not match the expected output.".format(pipe_name))
+
+    width = 40
+    self.out("{0:<{width}}   {1}".format("Expected " + pipe_name, "Actual " + pipe_name, width=width))
+    self.out("-" * (width * 2 + 3))
+
+    for i in range(max(len(expected_lines), len(actual_lines))):
+      exp = expected_lines[i].rstrip() if i < len(expected_lines) else ""
+      act = actual_lines[i].rstrip() if i < len(actual_lines) else ""
+      marker = " " if exp == act else "!"
+      self.out("{0:<{width}} {1} {2}".format(exp[:width], marker, act[:width], width=width))
+
     return False
 
   def compare_spcomp_output(self, test, actual_stdout):

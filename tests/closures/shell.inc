@@ -1,0 +1,72 @@
+// vim: set ts=2 sw=2 tw=99 et:
+#include <float>
+#include <handles>
+
+enum struct TestStruct {
+    int x;
+    int y;
+}
+
+native void printnum(int n);
+native void printnum64(int64 n);
+native void printnumptr(intptr n);
+native void writenum(int n);
+native void printfloat(float n);
+native void writefloat(float n);
+native void printnums(any:...); // note: int only, no int64
+native void printnums64(...); // note: int64 only
+native void print(const char[] str);
+native void dump_stack_trace();
+native void report_error();
+native void unbound_native();
+native int donothing();
+native int64 add_int64(int64 a, int64 b);
+native void donothing_varargs(...);
+
+// dumb version of printf(), only supports %f, %d, %s.
+native void printf(const char[] fmt, any:...);
+
+// Return arg, but through a dynamically generated native.
+native int dynamic_native(int arg);
+
+// Read array[x][y] and store in |out|. If compiled with < 1.12, return false.
+native bool access_2d_array(int[][] array, int x, int y, int& out);
+
+typedef InvokeCallback = function void ();
+// Invoke |fn| up to |count| times, returning false immediately on failure.
+native bool invoke(InvokeCallback fn, int count);
+// Invoke |fn|, |count| times, returning the number of successful invocations.
+native int execute(InvokeCallback fn, int count);
+
+#define SM_PARAM_COPYBACK (1 << 0)
+#define SM_PARAM_STRING_UTF8 (1 << 0)
+#define SM_PARAM_STRING_COPY (1 << 1)
+#define SM_PARAM_STRING_BINARY (1 << 2)
+
+// Invoke |fn| with the given buffer and sz/cp flags.
+typedef StringCallback = function void (char[] buffer, int length);
+native int call_with_string(StringCallback fn, char[] buffer, int length, int sz_flags,
+                            int cp_flags);
+
+typedef ArrayCallback = function void (const int[] array, int length);
+native int call_with_array(ArrayCallback fn, const int[] array, int length);
+
+typedef Array2dCallback = function void (const int[][] array, int length, int stride);
+
+// Create a 2D array from the given "flat" array, length and stride.
+native void copy_2d_array_to_callback(const int[] flat_array, int length, int stride,
+                                      Array2dCallback callback);
+
+typedef NullVectorCallback = function void (const float[] vec);
+native void call_with_null_vector(NullVectorCallback fn);
+
+typedef NullStringCallback = function void (const char[] str);
+native void call_with_null_string(NullStringCallback fn);
+
+native void assert_eq(any a1, any a2);
+
+native void print_test_struct(TestStruct x);
+native TestStruct add_test_structs(TestStruct a, TestStruct b);
+
+native int test_local_to_array_ptr(const char[] str, int index);
+

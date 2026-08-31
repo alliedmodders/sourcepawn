@@ -1,1 +1,1 @@
-(3) : error 450: no viable conversion from 'void' to 'any'
+(3) : error 466: void result cannot be used in an expression

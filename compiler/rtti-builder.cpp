@@ -1,25 +1,13 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders LLC 2026
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2026 AlliedModders LLC
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #include "rtti-builder.h"
 
 #include "code-generator.h"
+#include "utils/compact-encoding.h"
 
 namespace sp {
 namespace cc {
@@ -30,17 +18,19 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
 {
     types_ = cc_.types();
     typeid_cache_.init(128);
-    data_ = new SmxBlobSection<void>("rtti.data");
+    string_cache_.init(128);
+    rtti_data_ = new SmxBlobSection<void>("rtti.data");
+    pstruct_globals_ = new SmxListSection<smx_pstruct_global>("pstruct_glb");
+    pstruct_values_ = new SmxListSection<smx_pstruct_value>("pstruct_glb.values");
     methods_ = new SmxRttiTable<smx_rtti_method>("rtti.methods");
-    natives_ = new SmxRttiTable<smx_rtti_native>("rtti.natives");
     enums_ = new SmxRttiTable<smx_rtti_enum>("rtti.enums");
     typesets_ = new SmxRttiTable<smx_rtti_typeset>("rtti.typesets");
     classdefs_ = new SmxRttiTable<smx_rtti_classdef>("rtti.classdefs");
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
-    enumstructs_ = new SmxRttiTable<smx_rtti_enumstruct>("rtti.enumstructs");
-    es_fields_ = new SmxRttiTable<smx_rtti_es_field>("rtti.enumstruct_fields");
+    stringpool_ = new SmxRttiTable<smx_rtti_string>("rtti.stringpool");
+    globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
-    dbg_lines_ = new SmxDebugLineSection(".dbg.lines");
+    dbg_lines_ = new SmxRttiTable<smx_rtti_debug_line>(".dbg.method_lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
     dbg_methods_ = new SmxRttiTable<smx_rtti_debug_method>(".dbg.methods");
     dbg_globals_ = new SmxRttiTable<smx_rtti_debug_var>(".dbg.globals");
@@ -57,17 +47,18 @@ RttiBuilder::finish(SmxBuilder& builder)
     build_debuginfo();
 
     const ByteBuffer& buffer = type_pool_.buffer();
-    data_->add(buffer.bytes(), buffer.size());
+    rtti_data_->add(buffer.bytes(), buffer.size());
 
-    builder.add(data_);
+    builder.add(rtti_data_);
     builder.add(methods_);
-    builder.add(natives_);
     builder.addIfNotEmpty(enums_);
     builder.addIfNotEmpty(typesets_);
     builder.addIfNotEmpty(classdefs_);
     builder.addIfNotEmpty(fields_);
-    builder.addIfNotEmpty(enumstructs_);
-    builder.addIfNotEmpty(es_fields_);
+    builder.addIfNotEmpty(stringpool_);
+    builder.addIfNotEmpty(globals_);
+    builder.addIfNotEmpty(pstruct_globals_);
+    builder.addIfNotEmpty(pstruct_values_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -91,14 +82,10 @@ RttiBuilder::build_debuginfo()
               [](const sp_fdbg_file_t& a, const sp_fdbg_file_t& b) -> bool {
                 return a.addr < b.addr;
               });
-    std::sort(dbg_lines_->list().begin(), dbg_lines_->list().end(),
-              [](const sp_fdbg_line_t& a, const sp_fdbg_line_t& b) -> bool {
-                return a.addr < b.addr;
-              });
 
     // Finish up debug header statistics.
     dbg_info_->header().num_files = dbg_files_->count();
-    dbg_info_->header().num_lines = dbg_lines_->count();
+    dbg_info_->header().num_lines = 0;
     dbg_info_->header().num_syms = 0;
     dbg_info_->header().num_arrays = 0;
 }
@@ -117,20 +104,8 @@ void RttiBuilder::AddDebugFile(ucell codeidx, const char* file) {
     last_file_name_ = file;
 }
 
-void RttiBuilder::AddDebugLine(ucell addr, cell line) {
-    // Lines are zero-indexed for some reason.
-    if (line > 0)
-        line--;
-
-    if (!dbg_lines_->list().empty()) {
-        auto& last = dbg_lines_->list().back();
-        if (last.addr == addr) {
-            last.line = line;
-            return;
-        }
-    }
-
-    sp_fdbg_line_t& entry = dbg_lines_->add();
+void RttiBuilder::AddDebugLine(uint16_t addr, uint16_t line) {
+    smx_rtti_debug_line& entry = dbg_lines_->add();
     entry.addr = addr;
     entry.line = line;
 }
@@ -138,8 +113,18 @@ void RttiBuilder::AddDebugLine(ucell addr, cell line) {
 void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_start, uint32_t code_end) {
     std::optional<cell> addr;
     if (auto var = decl->as<VarDeclBase>()) {
-        if (auto cv = var->as<ConstDecl>())
-            addr.emplace(cv->const_val());
+        if (var->is_shared())
+            return;
+        if (var->type()->isPstruct())
+            return;
+        if (auto cv = var->as<ConstDecl>()) {
+            // :TODO: support wide types
+            const ExprVal& val = cv->value();
+            if (!val.type()->isWideType())
+                addr.emplace(val.const_cell());
+            else
+                addr.emplace(0);
+        }
         else
             addr.emplace(var->addr());
     } else {
@@ -179,53 +164,84 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
     var->type_id = type_id;
 }
 
-smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun) {
+smx_rtti_debug_method RttiBuilder::add_method(FunctionDecl* fun, uint32_t pcode_start) {
     assert(fun->is_live());
 
     uint32_t index = methods_->count();
+    if (index > kMaxTableIndex)
+        report(fun, 484);
+
     smx_rtti_method& method = methods_->add();
-    method.name = names_->add(fun->name());
-    method.pcode_start = fun->cg()->label.offset();
+
+    auto mf = fun->as<MemberFunctionDecl>();
+    if (mf && mf->is_ctor() && mf->parent()->as<ClassDecl>())
+        method.name = names_->add(*cc_.atoms(), ".ctor");
+    else
+        method.name = names_->add(fun->name());
+    method.pcode_start = pcode_start;
     method.pcode_end = 0;
     method.signature = encode_signature(fun->canonical());
 
     smx_rtti_debug_method debug;
     debug.method_index = index;
     debug.first_local = dbg_locals_->count();
+    debug.first_line = dbg_lines_->count();
+    debug.line_start = fun->pos().line;
     return debug;
 }
 
+static inline void AppendUint16(std::vector<uint8_t>* out, uint16_t value) {
+    out->push_back(static_cast<uint8_t>(value & 0xff));
+    out->push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+}
+
 void RttiBuilder::finish_method(FunctionDecl* fun, const smx_rtti_debug_method& entry,
-                                LocalSlotSignature&& locals)
+                                LocalSlotSignature&& locals, uint32_t pcode_end)
 {
-    assert(fun->cg()->pcode_end > fun->cg()->label.offset());
-
     auto& method = methods_->at(entry.method_index);
-    method.pcode_end = fun->cg()->pcode_end;
+    method.pcode_end = pcode_end;
 
-    if (locals.count) {
-        union {
-            int16_t value;
-            uint8_t bytes[2];
-        } u;
-        u.value = locals.count;
-        locals.types[0] = cb::kLocalSlots;
-        locals.types[1] = u.bytes[0];
-        locals.types[2] = u.bytes[1];
-        method.locals = type_pool_.add(locals.types);
+    if (locals.count || fun->NumUpvars()) {
+        std::vector<uint8_t> blob;
+
+        // For closures, upvar slots precede local slots.
+        if (fun->NumUpvars()) {
+            blob.push_back(cb::kClosureSlots);
+
+            AppendUint16(&blob, (uint16_t)fun->NumUpvars());
+
+            for (size_t i = 0; i < fun->NumUpvars(); i++) {
+                auto upvar = fun->GetUpvar(i);
+                encode_type_into(blob, upvar->type()->normalize());
+            }
+        }
+
+        blob.push_back(cb::kLocalSlots);
+        AppendUint16(&blob, locals.count);
+        blob.insert(blob.end(), locals.types.begin(), locals.types.end());
+
+        method.locals = type_pool_.add(blob);
     } else {
         method.locals = 0;
     }
 
-    // Only add a method table entry if we actually had locals.
-    if (entry.first_local != dbg_locals_->count())
-        dbg_methods_->add(entry);
-}
+    method.flags = 0;
+    if (auto mf = fun->as<MemberFunctionDecl>()) {
+        if (mf->parent()->as<ClassDecl>() && mf->is_ctor())
+            method.flags |= kRttiMethod_Ctor;
+    }
+    if (fun->is_public())
+        method.flags |= kRttiMethodVisibility_Public;
+    else if (fun->is_native())
+        method.flags |= kRttiMethod_Native;
+    if (fun->signature()->conv() == FunctionType::Closure)
+        method.flags |= kRttiMethod_Closure;
+    if (fun->NumUpvars())
+        method.flags |= kRttiMethod_HasUpvars;
 
-void RttiBuilder::add_native(FunctionDecl* fun) {
-    smx_rtti_native& native = natives_->add();
-    native.name = names_->add(fun->name());
-    native.signature = encode_signature(fun);
+    // Only add a method table entry if we actually had locals or lines.
+    if (entry.first_local != dbg_locals_->count() || entry.first_line != dbg_lines_->count())
+        dbg_methods_->add(entry);
 }
 
 uint32_t
@@ -236,34 +252,96 @@ RttiBuilder::add_enumstruct(Type* type)
         return p->value;
 
     auto es_decl = type->asEnumStruct();
-    uint32_t es_index = enumstructs_->count();
+    uint32_t es_index = classdefs_->count();
+    if (es_index > kMaxTableIndex)
+        report(es_decl, 484);
+
     typeid_cache_.add(p, type, es_index);
 
-    smx_rtti_enumstruct es = {};
-    es.name = names_->add(*cc_.atoms(), type->declName());
-    es.first_field = es_fields_->count();
-    es.size = es_decl->array_size();
-    enumstructs_->add(es);
+    smx_rtti_classdef classdef;
+    memset(&classdef, 0, sizeof(classdef));
+    classdef.flags = kClassType_EnumStruct;
+    classdef.name = names_->add(*cc_.atoms(), type->declName());
+    classdef.first_field = fields_->count();
+    classdef.first_method = methods_->count();
+    classdefs_->add(classdef);
 
     // Pre-allocate storage in case of nested types.
     const auto& enumlist = es_decl->fields();
-    for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++)
-        es_fields_->add() = smx_rtti_es_field{};
+    for (size_t i = 0; i < enumlist.size(); i++)
+        fields_->add();
 
     // Add all fields.
     size_t index = 0;
     for (auto iter = enumlist.begin(); iter != enumlist.end(); iter++) {
         auto field = (*iter);
 
-        smx_rtti_es_field info;
+        smx_rtti_field info;
+        info.flags = 0;
         info.name = names_->add(field->name());
         info.type_id = to_typeid(field->type());
-        info.offset = field->offset();
-        es_fields_->at(es.first_field + index) = info;
+        uint32_t field_idx = classdef.first_field + index;
+        fields_->at(field_idx) = info;
+
+        if (field_idx > kMaxTableIndex) {
+            report(es_decl, 484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
         index++;
     }
 
     return es_index;
+}
+
+uint32_t RttiBuilder::add_class(Type* type) {
+    assert(type->isClass());
+
+    TypeIdCache::Insert p = typeid_cache_.findForAdd(type);
+    if (p.found())
+        return p->value;
+
+    auto cls_decl = type->asClass();
+    uint32_t cls_index = classdefs_->count();
+    if (cls_index > kMaxTableIndex)
+        report(cls_decl, 484);
+
+    typeid_cache_.add(p, type, cls_index);
+
+    smx_rtti_classdef classdef;
+    memset(&classdef, 0, sizeof(classdef));
+    classdef.flags = kClassType_Class;
+    classdef.name = names_->add(*cc_.atoms(), type->declName());
+    classdef.first_field = fields_->count();
+    classdef.first_method = methods_->count();
+    classdefs_->add(classdef);
+
+    // Pre-allocate storage in case of nested types.
+    const auto& field_list = cls_decl->fields();
+    for (size_t i = 0; i < field_list.size(); i++)
+        fields_->add();
+
+    // Add all fields.
+    size_t index = 0;
+    for (auto iter = field_list.begin(); iter != field_list.end(); iter++) {
+        auto field = (*iter);
+
+        smx_rtti_field info;
+        info.flags = 0;
+        info.name = names_->add(field->name());
+        info.type_id = to_typeid(field->type());
+        uint32_t field_idx = classdef.first_field + index;
+        fields_->at(field_idx) = info;
+
+        if (field_idx > kMaxTableIndex) {
+            report(field, 484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
+        index++;
+    }
+
+    return cls_index;
 }
 
 uint32_t
@@ -273,16 +351,20 @@ RttiBuilder::add_struct(Type* type)
     if (p.found())
         return p->value;
 
-    uint32_t struct_index = classdefs_->count();
-    typeid_cache_.add(p, type, struct_index);
-
     auto ps = type->asPstruct();
+
+    uint32_t struct_index = classdefs_->count();
+    if (struct_index > kMaxTableIndex)
+        report(ps, 484);
+
+    typeid_cache_.add(p, type, struct_index);
 
     smx_rtti_classdef classdef;
     memset(&classdef, 0, sizeof(classdef));
-    classdef.flags = kClassDefType_Struct;
+    classdef.flags = kClassType_Struct;
     classdef.name = names_->add(*cc_.atoms(), ps->name());
     classdef.first_field = fields_->count();
+    classdef.first_method = kNoTableIndex;
     classdefs_->add(classdef);
 
     // Pre-reserve space in case we recursively add structs.
@@ -296,9 +378,91 @@ RttiBuilder::add_struct(Type* type)
         field.flags = 0;
         field.name = names_->add(arg->name());
         field.type_id = to_typeid(arg->type());
-        fields_->at(classdef.first_field + i) = field;
+        uint32_t field_idx = classdef.first_field + i;
+        fields_->at(field_idx) = field;
+
+        if (field_idx > kMaxTableIndex) {
+            report(arg, 484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[arg] = MakeTableId(kTableId_RttiField, field_idx);
     }
     return struct_index;
+}
+
+uint32_t RttiBuilder::AddGlobal(VarDeclBase* decl, Atom* name) {
+    uint32_t index = globals_->count();
+    smx_rtti_global& global = globals_->add();
+    global.name = name ? names_->add(*cc_.atoms(), name) : 0;
+    global.type_id = to_typeid(decl->type());
+    global.flags = 0;
+
+    if (decl->is_public())
+        global.flags = kRttiGlobal_Public;
+
+    return index;
+}
+
+uint32_t RttiBuilder::AddPstructGlobal(VarDeclBase* decl,
+                                       const std::vector<PstructFieldEntry>& values)
+{
+    uint32_t index = pstruct_globals_->count();
+
+    smx_pstruct_global& global = pstruct_globals_->add();
+    global.name = names_->add(*cc_.atoms(), decl->name());
+    global.first_value = pstruct_values_->count();
+
+    for (const auto& value : values) {
+        smx_pstruct_value& row = pstruct_values_->add();
+        row.field_name = names_->add(*cc_.atoms(), value.name);
+        row.type_id = value.type_id;
+        row.fill_data = value.value;
+    }
+
+    return index;
+}
+
+uint16_t RttiBuilder::AddString(Atom* atom, DataQueue* data) {
+    StringCache::Insert p = string_cache_.findForAdd(atom);
+    if (p.found())
+        return p->value;
+
+    if (stringpool_->count() >= UINT16_MAX) {
+        report(469);
+        return 0;
+    }
+
+    uint32_t offset = data->dat_address();
+
+    std::string blob;
+    if (!EncodeCompactUint32(&blob, (uint32_t)atom->length())) {
+        report(470);
+        return 0;
+    }
+    blob.append(atom->chars(), atom->length());
+
+    data->Add(blob.data(), blob.length());
+
+    uint16_t index = (uint16_t)stringpool_->count();
+    smx_rtti_string& entry = stringpool_->add();
+    entry.offset = offset;
+
+    string_cache_.add(p, atom, index);
+    return index;
+}
+
+std::optional<uint32_t> RttiBuilder::FindStringDataOffset(Atom* atom) {
+    StringCache::Result p = string_cache_.find(atom);
+    if (!p.found())
+        return {};
+
+    auto index = p->value;
+    return {stringpool_->at(index).offset};
+}
+
+void RttiBuilder::UpdateGlobalName(uint32_t index, Atom* name) {
+    auto& global = globals_->at(index);
+    global.name = names_->add(*cc_.atoms(), name);
 }
 
 uint32_t RttiBuilder::to_typeid(QualType type) {
@@ -320,33 +484,8 @@ uint32_t RttiBuilder::to_typeid(QualType type) {
 uint32_t RttiBuilder::encode_signature(FunctionDecl* fun) {
     assert(fun == fun->canonical());
 
-    std::vector<uint8_t> bytes{cb::kFunction};
-
-    uint32_t argc = fun->args().size();
-    if (argc > UCHAR_MAX)
-        report(45);
-
-    Type* hidden_arg = nullptr;
-    Type* return_type = fun->return_type();
-    if (fun->needs_hidden_arg()) {
-        hidden_arg = return_type;
-        return_type = types_->type_void();
-        argc++;
-    }
-
-    bytes.push_back((uint8_t)argc);
-    if (fun->IsVariadic())
-        bytes.push_back(cb::kLegacyVariadic);
-
-    encode_type_into(bytes, return_type);
-
-    if (hidden_arg && fun->is_native())
-        encode_type_into(bytes, hidden_arg);
-    for (const auto& arg : fun->args())
-        encode_type_into(bytes, arg->type());
-    if (hidden_arg && !fun->is_native())
-        encode_type_into(bytes, hidden_arg);
-
+    std::vector<uint8_t> bytes;
+    encode_signature_into(bytes, fun->signature());
     return type_pool_.add(bytes);
 }
 
@@ -393,7 +532,7 @@ RttiBuilder::add_typeset(Type* type, funcenum_t* fe)
 void
 RttiBuilder::encode_struct_into(std::vector<uint8_t>& bytes, Type* type)
 {
-    bytes.push_back(cb::kClassdef);
+    bytes.push_back(cb::kClassDef);
     CompactEncodeUint32(bytes, add_struct(type));
 }
 
@@ -411,36 +550,54 @@ RttiBuilder::encode_enumstruct_into(std::vector<uint8_t>& bytes, Type* type)
     CompactEncodeUint32(bytes, add_enumstruct(type));
 }
 
+void RttiBuilder::encode_class_into(std::vector<uint8_t>& bytes, Type* type) {
+    bytes.push_back(cb::kClass);
+    CompactEncodeUint32(bytes, add_class(type));
+}
+
 uint8_t RttiBuilder::TypeToRttiBytecode(Type* type) {
     if (type->isBool())
         return cb::kBool;
     if (type->isAny())
         return cb::kAny;
+    if (type->isObject() && !type->asClass())
+        return cb::kTopObject;
     if (type->isChar())
         return cb::kChar8;
+    if (type->isInt8())
+        return cb::kInt8;
+    if (type->isInt16())
+        return cb::kInt16;
     if (type->isFloat())
         return cb::kFloat32;
+    if (type->isDouble())
+        return cb::kFloat64;
     if (type->isInt())
         return cb::kInt32;
     if (type->isInt64())
         return cb::kInt64;
+    if (type->isIntPtr())
+        return cb::kIntPtr;
     if (type->isVoid())
         return cb::kVoid;
     return 0;
 }
 
-void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type) {
-    encode_type_into(bytes, QualType(type));
+void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, Type* type, bool force_by_ref) {
+    encode_type_into(bytes, QualType(type), force_by_ref);
 }
 
-void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
+void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt, bool force_by_ref) {
     if (qt.is_const())
         bytes.emplace_back(cb::kConst);
 
     Type* type = *qt;
     if (auto array = type->as<ArrayType>()) {
         for (;;) {
-            if (array->size()) {
+            if (array->is_flat()) {
+                bytes.emplace_back(cb::kFlatArray);
+                CompactEncodeUint32(bytes, array->size());
+            } else if (array->size()) {
                 bytes.emplace_back(cb::kFixedArray);
                 CompactEncodeUint32(bytes, array->size());
             } else {
@@ -451,13 +608,19 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
             array = array->inner()->to<ArrayType>();
         }
         type = array->inner();
-    } else if (type->isReference()) {
+    } else if (type->isReference() || force_by_ref) {
         bytes.emplace_back(cb::kByRef);
-        type = type->inner();
+        if (type->isReference())
+            type = type->inner();
     }
 
     if (uint8_t b = TypeToRttiBytecode(type)) {
         bytes.push_back(b);
+        return;
+    }
+
+    if (type->isClass()) {
+        encode_class_into(bytes, type);
         return;
     }
 
@@ -472,7 +635,22 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
         if (funcenum_t* fe = type->toFunction())
             encode_funcenum_into(bytes, type, fe);
         else
-            bytes.push_back(cb::kTopFunction);
+            bytes.push_back(cb::kInt32);
+        return;
+    }
+
+    if (auto ft = type->as<FunctionType>()) {
+        if (ft->conv() == FunctionType::Convention::Legacy) {
+            bytes.push_back(cb::kInt32);
+            return;
+        }
+
+        std::vector<uint8_t> signature;
+        encode_signature_into(signature, ft);
+        uint32_t index = type_pool_.add(signature);
+
+        bytes.push_back(cb::kFunctionPtr);
+        CompactEncodeUint32(bytes, index);
         return;
     }
 
@@ -489,36 +667,67 @@ void RttiBuilder::encode_type_into(std::vector<uint8_t>& bytes, QualType qt) {
 void
 RttiBuilder::encode_funcenum_into(std::vector<uint8_t>& bytes, Type* type, funcenum_t* fe)
 {
-    if (fe->entries.size() == 1) {
-        std::vector<uint8_t> signature;
-        encode_signature_into(signature, fe->entries.back());
-        uint32_t index = type_pool_.add(signature);
-
-        bytes.push_back(cb::kFunctionPtr);
-        CompactEncodeUint32(bytes, index);
-    } else {
-        uint32_t index = add_typeset(type, fe);
-        bytes.push_back(cb::kTypeset);
-        CompactEncodeUint32(bytes, index);
-    }
+    uint32_t index = add_typeset(type, fe);
+    bytes.push_back(cb::kTypeset);
+    CompactEncodeUint32(bytes, index);
 }
 
 void RttiBuilder::encode_signature_into(std::vector<uint8_t>& bytes, FunctionType* ft) {
+    uint32_t argc = ft->nargs();
+
+    QualType return_type = ft->return_type();
+    QualType hidden_arg;
+    if (ft->needs_hidden_arg()) {
+        hidden_arg = return_type;
+        return_type = types_->type_void();
+        argc++;
+    }
+
+    if (argc > UCHAR_MAX)
+        report(45);
+
     bytes.push_back(cb::kFunction);
-    bytes.push_back((uint8_t)ft->nargs());
+    bytes.push_back((uint8_t)argc);
 
     if (ft->variadic())
         bytes.push_back(cb::kLegacyVariadic);
 
-    encode_type_into(bytes, ft->return_type());
+    encode_type_into(bytes, return_type);
 
-    for (size_t i = 0; i < ft->nargs(); i++)
-        encode_type_into(bytes, ft->arg_type(i));
+    if (hidden_arg)
+        encode_type_into(bytes, hidden_arg, hidden_arg->isWideType());
+    for (size_t i = 0; i < ft->nargs(); i++) {
+        QualType type = ft->arg_type(i);
+        encode_type_into(bytes, type, type->isWideType());
+    }
 }
 
 int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {
     encode_type_into(locals->types, type);
     return locals->count++;
+}
+
+void RttiBuilder::ensure_type_added(Decl* decl) {
+    if (auto es = decl->as<EnumStructDecl>())
+        add_enumstruct(*es->type());
+    else if (auto ps = decl->as<PstructDecl>())
+        add_struct(*ps->type());
+    else if (auto cls = decl->as<ClassDecl>())
+        add_class(*cls->type());
+    else
+        assert(false);
+}
+
+uint32_t RttiBuilder::AddFieldRef(LayoutFieldDecl* decl) {
+    auto iter = field_id_map_.find(decl);
+    if (iter != field_id_map_.end())
+        return iter->second;
+
+    ensure_type_added(decl->parent());
+
+    iter = field_id_map_.find(decl);
+    assert(iter != field_id_map_.end());
+    return iter->second;
 }
 
 } // namespace cc

@@ -31,6 +31,7 @@ namespace smxdasm
         public const byte kBool = 0x01;
         public const byte kInt32 = 0x06;
         public const byte kFloat32 = 0x0c;
+        public const byte kInt8 = 0x09;
         public const byte kChar8 = 0x0e;
         public const byte kAny = 0x10;
         public const byte kTopFunction = 0x11;
@@ -185,6 +186,7 @@ namespace smxdasm
                     case cb.kBool: return "bool";
                     case cb.kInt32: return "int";
                     case cb.kFloat32: return "float";
+                    case cb.kInt8: return "int8";
                     case cb.kChar8: return "char";
                     case cb.kAny: return "any";
                     case cb.kTopFunction: return "Function";

@@ -1,11 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2004-2015 AlliedModers LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is licensed under the GNU
-// General Public License, version 3.0 (GPL). If a copy of the GPL was not
-// provided with this file, you can obtain it here:
-//   http://www.gnu.org/licenses/gpl.html
+// Copyright (c) 2004-2026 AlliedModders LLC
 //
 #ifndef _include_sourcepawn_smx_parser_h_
 #define _include_sourcepawn_smx_parser_h_
@@ -13,8 +10,11 @@
 #include <stdio.h>
 #include <memory>
 
+#include <memory>
+#include <optional>
 #include <string_view>
 #include <unordered_map>
+#include <variant>
 
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
@@ -22,7 +22,9 @@
 #include <smx/smx-legacy-debuginfo.h>
 #include <smx/smx-typeinfo.h>
 #include <smx/smx-v1.h>
+#include <smx/smx-v2.h>
 #include <sp_vm_types.h>
+#include "binary-reader.h"
 #include "file-utils.h"
 #include "rtti.h"
 
@@ -30,7 +32,9 @@ namespace sp {
 
 using namespace debug;
 
-class SmxImage final : public FileReader
+class SmxImage final :
+    public FileReader,
+    public std::enable_shared_from_this<SmxImage>
 {
   public:
     SmxImage(FILE* fp);
@@ -54,10 +58,6 @@ class SmxImage final : public FileReader
     const sp_file_hdr_t* hdr() const { return hdr_; }
     const char* names() const { return names_; }
 
-    const char* errorMessage() const {
-        return error_.c_str();
-    }
-
   public:
     Code DescribeCode() const;
     Data DescribeData() const;
@@ -75,17 +75,54 @@ class SmxImage final : public FileReader
     const char* LookupFile(uint32_t code_offset) const;
     const char* LookupFunction(uint32_t code_offset) const;
     bool LookupLine(uint32_t code_offset, uint32_t* line) const;
-    bool LookupFunctionAddress(const char* function, const char* file,
-                               ucell_t* addr) const;
-    bool LookupLineAddress(const uint32_t line, const char* file, ucell_t* addr) const;
+    bool LookupLineV2(uint32_t code_offset, uint32_t* line) const;
+    bool IsLineBoundary(uint32_t addr) const;
     size_t NumFiles() const;
     const char* GetFileName(size_t index) const;
     size_t NumFunctions() const;
     const char* GetFunctionName(size_t index, const char** filename) const;
     bool HasRtti() const;
+    std::optional<uint32_t> FindRttiMethod(const char* name) const;
     const smx_rtti_method* GetMethodRttiByOffset(uint32_t pcode_offset) const;
+    std::optional<uint32_t> GetDebugMethodRow(uint32_t pcode_offset) const;
+    std::optional<uint32_t> GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const;
+
+    // Note: throws an exception on failure.
+    std::optional<std::string_view> ReadDataBlob(uint32_t offset) const;
+
+    const smx_rtti_method* GetMethod(uint32_t method_index) const {
+        if (!rtti_methods_ || method_index >= rtti_methods_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_method>(rtti_methods_, method_index);
+    }
+    uint32_t GetIndexOfMethod(const smx_rtti_method* method) const {
+        assert(rtti_methods_);
+        return method - getRttiRow<smx_rtti_method>(rtti_methods_, 0);
+    }
+    const smx_rtti_classdef* getClassdef(uint32_t index) const {
+        if (!rtti_classdefs_ || index >= rtti_classdefs_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_classdef>(rtti_classdefs_, index);
+    }
+    const smx_rtti_field* getField(uint32_t index) const {
+        if (!rtti_fields_ || index >= rtti_fields_->row_count)
+            return nullptr;
+        return getRttiRow<smx_rtti_field>(rtti_fields_, index);
+    }
+    uint32_t getClassdefFieldsEnd(uint32_t i) const;
+    uint32_t getClassdefMethodsEnd(uint32_t i) const;
+    const smx_rtti_classdef* FindClassdefForField(uint32_t field_index) const;
+    const smx_rtti_classdef* FindClassdefForMethod(uint32_t method_index) const;
+
+    struct FieldLookup {
+        uint32_t field_index;
+        const smx_rtti_classdef* classdef;
+        const smx_rtti_field* field;
+    };
+    std::optional<FieldLookup> ResolveFieldRef(uint32_t table_id) const;
 
     FastRtti GetTypeParser(uint32_t offset);
+    FastRtti GetTypeIdParser(uint32_t type_id);
 
   private:
     SmxImage();
@@ -96,6 +133,7 @@ class SmxImage final : public FileReader
         uint32_t size;
     };
     const Section* findSection(const char* name) const;
+    bool IsVoidSignature(uint32_t offset) const;
 
   public:
     template <typename T>
@@ -198,12 +236,40 @@ class SmxImage final : public FileReader
     }
     const smx_rtti_table_header* rtti_methods() const { return rtti_methods_; }
     const smx_rtti_table_header* rtti_enums() const { return rtti_enums_; }
+    const smx_rtti_table_header* rtti_globals() const { return rtti_globals_; }
+    const smx_rtti_table_header* rtti_stringpool() const { return rtti_stringpool_; }
+    const smx_rtti_table_header* rtti_classdefs() const { return rtti_classdefs_; }
+    const smx_rtti_table_header* rtti_fields() const { return rtti_fields_; }
+
+    // This API is a workaround to pstructs not being moved over to enum structs
+    // yet, which requires enum structs to be able to hold HeapItems. We expose
+    // this hack to keep SourceMod working.
+    const smx_pstruct_global* pstruct_globals() const { return pstruct_globals_; }
+    uint32_t pstruct_global_count() const {
+        return pstruct_globals_ ? pstruct_global_count_ : 0;
+    }
+    const smx_pstruct_value* pstruct_value(uint32_t index) const {
+        return index < pstruct_value_count_ ? pstruct_values_ + index : nullptr;
+    }
+    const smx_pstruct_value* pstruct_values() const { return pstruct_values_; }
+
+    const smx_pstruct_global* FindPstructGlobal(const char* name) const;
+    uint32_t GetPstructFieldCount(const smx_pstruct_global* entry) const;
+    const smx_pstruct_value* GetPstructValue(const smx_pstruct_global* entry,
+                                             const char* field) const;
+    int GetPstructValue(const smx_pstruct_global* entry, const char* field,
+                        std::variant<std::string, cell_t>* out);
+
+    BinaryReader GetDataReader(uint32_t offset) {
+        assert(IsValidDataOffset(offset));
+        return BinaryReader(data_.blob() + offset, data_.blob() + data_.length());
+    }
+    bool IsValidDataOffset(uint32_t offset) const { return offset < data_.length(); }
 
   protected:
-    bool error(const char* msg) {
-        error_ = msg;
-        return false;
-    }
+    bool error(const char* msg) const;
+    bool error(const std::string& msg) const;
+    bool errorf(const char* fmt, ...) const KE_PRINTF_FUNCTION(2, 3);
     bool validateName(size_t offset) const;
     bool validateSection(const Section* section) const;
     bool validateRttiHeader(const Section* section) const;
@@ -215,13 +281,14 @@ class SmxImage final : public FileReader
     bool validateRtti();
     bool validateRttiClassdefs();
     bool validateRttiEnums();
-    bool validateRttiEnumStructs();
-    bool validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index);
     bool validateRttiField(uint32_t index);
     bool validateRttiMethods();
     bool validateRttiNatives();
     bool validateRttiTypedefs();
     bool validateRttiTypesets();
+    bool validateRttiGlobals();
+    bool validatePstructGlobals();
+    bool validatePstructValues();
     bool validateDebugInfo();
     bool validateDebugVariables(const smx_rtti_table_header* rtti_table);
     bool validateDebugMethods();
@@ -261,7 +328,6 @@ class SmxImage final : public FileReader
 
   private:
     sp_file_hdr_t* hdr_ = nullptr;
-    std::string error_;
     const char* header_strings_ = nullptr;
     std::vector<Section> sections_;
 
@@ -289,15 +355,19 @@ class SmxImage final : public FileReader
     std::unique_ptr<const RttiData> rtti_data_ = nullptr;
     const smx_rtti_table_header* rtti_classdefs_ = nullptr;
     const smx_rtti_table_header* rtti_enums_ = nullptr;
-    const smx_rtti_table_header* rtti_enumstructs_ = nullptr;
-    const smx_rtti_table_header* rtti_enumstruct_fields_ = nullptr;
     const smx_rtti_table_header* rtti_fields_ = nullptr;
     const smx_rtti_table_header* rtti_methods_ = nullptr;
-    const smx_rtti_table_header* rtti_natives_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
     const smx_rtti_table_header* rtti_typesets_ = nullptr;
+    const smx_rtti_table_header* rtti_globals_ = nullptr;
+    const smx_rtti_table_header* rtti_stringpool_ = nullptr;
+    const smx_pstruct_global* pstruct_globals_ = nullptr;
+    uint32_t pstruct_global_count_ = 0;
+    const smx_pstruct_value* pstruct_values_ = nullptr;
+    uint32_t pstruct_value_count_ = 0;
     const smx_rtti_table_header* rtti_dbg_globals_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_methods_ = nullptr;
+    const smx_rtti_table_header* rtti_dbg_method_lines_ = nullptr;
     const smx_rtti_table_header* rtti_dbg_locals_ = nullptr;
 };
 

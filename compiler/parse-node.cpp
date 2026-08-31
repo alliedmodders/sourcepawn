@@ -1,45 +1,37 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) 2021 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2021-2026 AlliedModders LLC
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #include "parse-node.h"
 
 #include <errno.h>
 #include <stdlib.h>
 
+#include <unordered_map>
+
+#include "compile-context.h"
 #include "errors.h"
 
 namespace sp {
 namespace cc {
 
 VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
-                         const typeinfo_t& type, int vclass, bool is_public, bool is_static,
-                         bool is_stock, Expr* initializer)
- : Decl(kind, pos, name),
-   type_(type),
-   vclass_(vclass),
-   is_public_(is_public),
-   is_static_(is_static),
-   is_stock_(is_stock),
-   autozero_(true),
-   is_read_(false),
-   is_written_(false),
-   already_bound_(false)
+                         const typeinfo_t& type, int vclass, VarDeclFlags flags, Expr* initializer)
+  : Decl(kind, pos, name),
+    type_(type),
+    vclass_(vclass),
+    is_public_((flags & VARDECL_PUBLIC) == VARDECL_PUBLIC),
+    is_static_((flags & VARDECL_STATIC) == VARDECL_STATIC),
+    is_stock_((flags & VARDECL_STOCK) == VARDECL_STOCK),
+    autozero_(true),
+    is_read_(false),
+    is_written_(false),
+    implicit_dynamic_array_(false),
+    is_shared_((flags & VARDECL_SHARED) == VARDECL_SHARED),
+    already_bound_(false),
+    is_emitted_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)
@@ -70,7 +62,11 @@ ParseNode::error(const token_pos_t& pos, int number)
 void
 Expr::FlattenLogical(int token, std::vector<Expr*>* out)
 {
-    out->push_back(this);
+    if (kind_ == ExprKind::LogicalExpr) {
+        to<LogicalExpr>()->FlattenLogical(token, out);
+    } else {
+        out->push_back(this);
+    }
 }
 
 void
@@ -80,7 +76,7 @@ LogicalExpr::FlattenLogical(int token, std::vector<Expr*>* out)
         left_->FlattenLogical(token, out);
         right_->FlattenLogical(token, out);
     } else {
-        Expr::FlattenLogical(token, out);
+        out->push_back(this);
     }
 }
 
@@ -120,8 +116,13 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
     is_callback_(false),
     returns_value_(false),
     is_live_(false),
+    is_global_ctor_(false),
     maybe_used_(false)
 {
+}
+
+void FunctionDecl::update_return_type(Type* type) {
+    signature_ = CompileContext::get().types()->UpdateReturnType(signature_, QualType(type));
 }
 
 int FunctionDecl::FindNamedArg(Atom* name) const {
@@ -178,9 +179,54 @@ auto FunctionDecl::cg() -> CGInfo* {
     return cg_;
 }
 
-FloatExpr::FloatExpr(CompileContext& cc, const token_pos_t& pos, cell value)
-  : TaggedValueExpr(pos, cc.types()->type_float(), value)
-{
+void FunctionDecl::AddSharedVar(VarDeclBase* var) {
+    if (var->is_captured())
+        return;
+
+    shared_var_list_.push_back(var);
+    var->set_is_captured();
+}
+
+UpvarDecl* FunctionDecl::AddUpvar(const token_pos_t& pos, FunctionDecl* owner, VarDeclBase* var) {
+    if (auto iter = upvar_decls_.find(var); iter != upvar_decls_.end())
+        return iter->second;
+
+    auto upvar_decl = new UpvarDecl(pos, var, owner);
+    upvar_decls_.emplace(var, upvar_decl);
+
+    if (!var->is_shared()) {
+        uint16_t index = static_cast<uint16_t>(upvars_.size());
+        upvar_decl->set_upvar_index(index);
+        upvars_.push_back(upvar_decl);
+
+        // If a non-shared upvar crosses any intermediate closures, we need to propagate it
+        // through each intermediate frame, otherwise there is no way to get the value.
+        for (FunctionDecl* iter = outer_; iter != nullptr && iter != owner; iter = iter->outer_)
+            iter->AddUpvar(pos, owner, var);
+    }
+
+    var->set_is_captured();
+    return upvar_decl;
+}
+
+LayoutFieldDecl* FunctionDecl::GetSharedVarField(VarDeclBase* var) {
+    auto iter = shared_vars_.find(var);
+    assert(iter != shared_vars_.end());
+    return iter->second;
+}
+
+UpvarDecl* FunctionDecl::FindUpvarDecl(VarDeclBase* var) const {
+    if (auto iter = upvar_decls_.find(var); iter != upvar_decls_.end())
+        return iter->second;
+    return nullptr;
+}
+
+FunctionType* CallExpr::callee_type() {
+    if (auto p = std::get_if<FunctionType*>(&resolved_target_))
+        return *p;
+    if (auto p = std::get_if<FunctionDecl*>(&resolved_target_))
+        return (*p)->signature();
+    return nullptr;
 }
 
 MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
@@ -191,7 +237,18 @@ MethodmapDecl* MethodmapDecl::LookupMethodmap(Decl* decl) {
     return nullptr;
 }
 
-Decl* MethodmapDecl::FindMember(Atom* name) const {
+Decl* LayoutDecl::FindMember(Atom* name) {
+    switch (kind()) {
+        case StmtKind::MethodmapDecl:
+            return to<MethodmapDecl>()->FindMember(name);
+        case StmtKind::ClassDecl:
+            return to<ClassDecl>()->FindMember(name);
+        default:
+            return nullptr;
+    }
+}
+
+Decl* MethodmapDecl::FindMember(Atom* name) {
     for (const auto& prop : properties_) {
         if (prop->name() == name)
             return prop;
@@ -205,30 +262,71 @@ Decl* MethodmapDecl::FindMember(Atom* name) const {
     return nullptr;
 }
 
-Type* MethodmapPropertyDecl::property_type() const {
+Decl* ClassDecl::FindMember(Atom* name) {
+    for (const auto& prop : properties_) {
+        if (prop->name() == name)
+            return prop;
+    }
+    for (const auto& method : methods_) {
+        if (method->decl_name() == name)
+            return method;
+    }
+    return nullptr;
+}
+
+Type* PropertyDecl::property_type() const {
     auto types = CompileContext::get().types();
 
     if (getter_)
         return getter_->type_info().type;
-    if (setter_->args().size() != 2)
+    if (!setter_ || setter_->args().size() != 2)
         return types->type_void();
     ArgDecl* valp = setter_->args()[1];
     return *valp->type();
 }
 
-cell Decl::ConstVal() {
-    if (auto cv = as<ConstDecl>())
-        return cv->const_val();
-    else if (auto efd = as<EnumFieldDecl>())
-        return efd->const_val();
+ExprVal Decl::ConstVal() {
+    if (auto cv = as<ConstDecl>()) {
+        return cv->value();
+    } else if (auto efd = as<EnumFieldDecl>()) {
+        ExprVal v;
+        v.set_constval(efd->type(), efd->const_val());
+        return v;
+    }
 
     assert(false);
-    return 0;
+    return ExprVal::ErrorValue();
 }
 
-QualType Decl::type() const {
-    assert(false);
-    return QualType(nullptr);
+QualType Decl::type() {
+    switch (kind()) {
+        case StmtKind::VarDecl:
+        case StmtKind::ArgDecl:
+        case StmtKind::ConstDecl:
+            return to<VarDeclBase>()->type();
+        case StmtKind::EnumFieldDecl:
+            return to<EnumFieldDecl>()->type();
+        case StmtKind::EnumDecl:
+            return to<EnumDecl>()->type();
+        case StmtKind::FunctionDecl:
+        case StmtKind::MemberFunctionDecl:
+            return to<FunctionDecl>()->type();
+        case StmtKind::ClassDecl:
+            return to<ClassDecl>()->type();
+        case StmtKind::LayoutFieldDecl:
+            return to<LayoutFieldDecl>()->type();
+        case StmtKind::EnumStructDecl:
+            return to<EnumStructDecl>()->type();
+        case StmtKind::PropertyDecl:
+            return to<PropertyDecl>()->type();
+        case StmtKind::MethodmapDecl:
+            return to<MethodmapDecl>()->type();
+        case StmtKind::UpvarDecl:
+            return to<UpvarDecl>()->type();
+        default:
+            assert(false);
+            return QualType(nullptr);
+    }
 }
 
 bool Decl::is_const() {
@@ -248,34 +346,20 @@ char Decl::vclass() {
     return 0;
 }
 
+PstructDecl::PstructDecl(const token_pos_t& pos, Atom* name, const std::vector<LayoutFieldDecl*>& fields)
+  : Decl(StmtKind::PstructDecl, pos, name),
+    fields_(fields)
+{
+    for (auto field : fields_)
+        field->set_parent(this);
+}
+
 LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
     for (const auto& field : fields_) {
         if (field->name() == name)
             return field;
     }
     return nullptr;
-}
-
-std::optional<int64_t> Number64Expr::ToInt64(Expr* expr) {
-    auto e = expr->as<Number64Expr>();
-    if (!e)
-        return {};
-    return e->ToInt64();
-}
-
-std::optional<int64_t> Number64Expr::ToInt64() {
-    if (value_)
-        return value_;
-
-    char* endptr;
-    int64_t value = strtoll(atom_->chars(), &endptr, 10);
-    if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
-        return {};
-
-    assert(!*endptr);
-
-    value_ = {value};
-    return value_;
 }
 
 SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
@@ -285,6 +369,10 @@ SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
 {
     val_.ident = iEXPRESSION;
     val_.set_type(to);
+}
+
+ExprVal::ExprVal(VarDeclBase* decl) {
+    set_variable(decl, decl->type());
 }
 
 } // namespace cc

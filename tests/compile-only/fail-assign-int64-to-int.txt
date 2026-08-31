@@ -1,2 +1,2 @@
-(6) : error 454: implicit truncation converting from int64 to int
+(6) : error 462: implicit conversion of 'int64' to 'int' can lose data
 (7) : error 450: no viable conversion from 'int64' to 'float'

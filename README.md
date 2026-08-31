@@ -28,15 +28,18 @@ Once you have your build environment set up, you can clone and build SourcePawn:
 
  * `git clone --recursive https://github.com/alliedmodders/sourcepawn`
  * `cd sourcepawn`
- * `python3 configure.py --out obj`
- * `ambuild obj`
+ * `python3 configure.py`
+ * `ambuild objdir`
+
+To run tests:
+ * `python tests/runtests.py objdir`
 
 
 Supported CPUs
 --------------
 
 SourcePawn "should" run on any architecture. It has been tested on ARMv7, ARMv8, x86, and x86\_64.
-However, only x86 and x86_64 support a just-in-time (JIT) compiler. Other architectures fallback to an
+However, only x86 and x86\_64 support a just-in-time (JIT) compiler. Other architectures fallback to an
 interpreter (albeit, a very simple and efficient one).
 
 When emitting binaries, SourcePawn does not take platform endianness into account. Thus, a `.smx`
@@ -65,13 +68,9 @@ Overview
 --------
 
 The SourcePawn source tree is divided into the following folders:
- - `compiler` - The legacy compiler, currently used in SourceMod.
- - `vm` - The virtual machine and just-in-time compiler.
- - `exp` - Experimental projects.
-  - `compiler` - The v2 compiler for SourcePawn 1.7.
-   - `docgen` - The documentation generator and web frontend.
-   - `tools`
-    - `docparse` - Parse files into JSON that can be consumed by documentation generators.
+ - `compiler` - The V2 compiler.
+ - `legacy-compiler` - The V1 compiler.
+ - `vm` - The virtual machine and JIT suite.
 
 History
 -------
@@ -213,14 +212,50 @@ This release contains a number of language changes.
 
 ### SourcePawn 1.13
 
-SourcePawn 1.13 is currently in development.
+SourcePawn 1.13 was released on July X, 2026.
 
- - A new `int64` primitive type is available for 64-bit arithmetic. Plugins
-   using int64 will require a newer SourcePawn VM to run.
+ - A new `int64` primitive type is available for 64-bit arithmetic.
  - The `float` type is now intrinsically supported, and `float.inc` is no
    longer required for basic float support.
  - Operator overload support has been removed due to lack of use.
  - An x64 JIT backend has been added. It is used on x64 processors supporting
    SSE 4.1 and higher, for plugins compiled on spcomp 1.13 or higher.
  - The x86 JIT will now only run on processors supporting SSE2 and higher.
- - The .pubvars and .publics sections of SMX files are no longer sorted.
+ - The ABI of the C++ interfaces has been cleaned up, removing many obsolete
+   and deprecated functions. Embeddings are now encouraged to statically link
+   rather than use the virtual interfaces through dlopen/LoadLibrary.
+
+### SourcePawn 2.0
+
+SourcePawn 2.0 is currently in development.
+
+This release is an overhaul of the language and its implementation. For a full
+writeup, see docs/SourcePawn2.md.
+
+On the language itself:
+ - Arrays can now be returned, allocated, and re-assigned without deep copies.
+ - Global arrays can now be reassigned or reallocated.
+ - Array references can be null.
+ - Functions can be nested, and capture variables.
+ - Class declarations with heap allocated objects are now supported.
+ - `intptr`, `int8`, `int16`, and `double` types have been added.
+ - Type checking is much more rigorous, as is binary verification.
+ - Primitive reference-counted memory management is now available.
+
+A new virtual machine and bytecode has been added to address a number of
+shortcomings and maintenance issues. The V2 VM is used for all new binaries.
+The legacy VM is still used for older binaries.
+
+ - The bytecode is now purely stack based. The two-register scheme of the
+   legacy VM resulted in needless instructions and a great deal of internal
+   complexity.
+ - The bytecode is fully integrated into RTTI, removing the need for many
+   ancillary tables, like .publics, .pubvars, and .natives.
+ - The interpreter and JIT now use a "lowered" bytecode format that is
+   fully typed and register based, for faster execution.
+ - The interpreter now uses a switch loop for faster execution.
+ - Instructions are encoded with 8 bit alignment instead of 32, making the code
+   stream much smaller.
+
+Finally, the project has been fully relicensed to BSD 3-clause to resolve
+ambiguities.

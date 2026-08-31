@@ -1,0 +1,1 @@
+error 473: no viable conversion from 'int[10]' (stack array) to 'int[]' (heap array)

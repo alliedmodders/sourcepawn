@@ -1,10 +1,12 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Copyright (c) 2026 AlliedModders LLC
+
 import os
 
 module = binary.Module(builder, 'vm')
-module.compiler.cxxincludes += [
-    os.path.join(builder.currentSourcePath),
-]
 
 if module.compiler.like('clang'):
   module.compiler.cxxflags += [
@@ -19,46 +21,95 @@ if module.compiler.family == 'gcc':
 module.sources += [
   'api.cpp',
   'base-runtime.cpp',
-  'builtins.cpp',
   'code-allocator.cpp',
   'code-stubs.cpp',
-  'control-flow.cpp',
   'compiled-function.cpp',
   'debugging.cpp',
   'debug-metadata.cpp',
   'environment.cpp',
   'file-utils.cpp',
-  'graph-builder.cpp',
-  'interpreter.cpp',
+  'heap.cpp',
   'md5/md5.cpp',
-  'method-info.cpp',
-  'method-verifier.cpp',
-  'opcodes.cpp',
-  'plugin-runtime.cpp',
+  'objects.cpp',
   'rtti.cpp',
-  'runtime-helpers.cpp',
-  'scripted-invoker.cpp',
   'smx-image.cpp',
   'stack-frames.cpp',
+  'type-cache.cpp',
   'watchdog_timer.cpp',
 ]
 
-if 'SP_HAS_JIT' in module.compiler.defines:
+if module.compiler.target.platform == 'mac':
+    module.sources += ['platform-macos.cpp']
+elif module.compiler.target.platform == 'windows':
+    module.sources += ['platform-windows.cpp']
+
+if module.compiler.target.platform != 'windows':
+    module.sources += ['platform-posix.cpp']
+
+if '64' in module.compiler.target.arch:
+  module.sources += ['virtmem-64bit.cpp']
+else:
+  module.sources += ['virtmem-32bit.cpp']
+
+# V1 implementation
+module.sources += [
+  'legacy/builtins.cpp',
+  'legacy/control-flow.cpp',
+  'legacy/graph-builder.cpp',
+  'legacy/interpreter.cpp',
+  'legacy/method-info.cpp',
+  'legacy/method-verifier.cpp',
+  'legacy/opcodes.cpp',
+  'legacy/plugin-runtime.cpp',
+  'legacy/runtime-helpers.cpp',
+  'legacy/scripted-invoker.cpp',
+]
+
+# V2 implementation
+module.sources += [
+  'v2/control-flow.cpp',
+  'v2/graph-builder.cpp',
+  'v2/interpreter.cpp',
+  'v2/lowering/lowering.cpp',
+  'v2/lowering/ll-op.cpp',
+  'v2/method-info.cpp',
+  'v2/method-verifier.cpp',
+  'v2/opcodes.cpp',
+  'v2/runtime.cpp',
+  'v2/runtime-helpers.cpp',
+  'v2/scripted-invoker.cpp',
+]
+
+if 'SP_JIT_V1' in module.compiler.defines:
   module.sources += [
-    'jit.cpp',
+    'legacy/jit.cpp',
     'linking.cpp',
   ]
   if module.compiler.target.arch == 'x86':
     module.sources += [
-      'x86/code-stubs-x86.cpp',
+      'legacy/x86/code-stubs-x86.cpp',
+      'legacy/x86/jit_x86.cpp',
       'x86/features-x86.cpp',
-      'x86/jit_x86.cpp',
     ]
   elif module.compiler.target.arch == 'x86_64':
     module.sources += [
+      'legacy/x64/code-stubs-x64.cpp',
+      'legacy/x64/jit_x64.cpp',
       'x64/assembler-x64.cpp',
-      'x64/code-stubs-x64.cpp',
       'x64/features-x64.cpp',
       'x64/macro-assembler-x64.cpp',
-      'x64/jit_x64.cpp',
+    ]
+if 'SP_JIT_V2' in module.compiler.defines:
+  module.sources += [
+    'v2/jit.cpp',
+  ]
+  if module.compiler.target.arch == 'x86':
+    module.sources += [
+      'v2/x86/code-stubs-x86.cpp',
+      'v2/x86/jit_x86.cpp',
+    ]
+  elif module.compiler.target.arch == 'x86_64':
+    module.sources += [
+      'v2/x64/code-stubs-x64.cpp',
+      'v2/x64/jit_x64.cpp',
     ]

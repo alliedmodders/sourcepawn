@@ -1,20 +1,16 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2026 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2026 AlliedModders LLC
 //
 #pragma once
 
 #include <memory>
 #include <string>
+
 #include <amtl/am-refcounting.h>
+#include <amtl/am-inlinelist.h>
 #include <sp_vm_api.h>
 #include "base-method-info.h"
 #include "smx-image.h"
@@ -23,10 +19,17 @@ namespace sp {
 
 class Environment;
 
+namespace v2 {
+class Runtime;
+} // namespace v2
+
+struct ARRAY_HANDLE;
+typedef ARRAY_HANDLE* ARRAY_PTR;
+
 class BaseRuntime : public SourcePawn::IPluginRuntime
 {
   public:
-    explicit BaseRuntime(SmxImage* image);
+    explicit BaseRuntime(std::shared_ptr<SmxImage> image);
     virtual ~BaseRuntime();
 
     SmxImage* image() const { return image_.get(); }
@@ -38,6 +41,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     const Data& data() const { return data_; }
 
     virtual ke::RefPtr<BaseMethodInfo> GetMethodFromFrameId(uint32_t frame_id) const = 0;
+    virtual v2::Runtime* AsV2() { return nullptr; }
     virtual bool Initialize() = 0;
 
     const char* Name() const { return name_.c_str(); }
@@ -46,6 +50,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
         full_name_ = full;
         name_ = shortname;
     }
+
     BaseRuntime* GetBaseContext() { return this; }
 
     virtual void InstallBuiltinNatives() = 0;
@@ -59,6 +64,8 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     virtual int FindPublicByName(const char* name, uint32_t* index) = 0;
     virtual int GetPublicByIndex(uint32_t index, sp_public_t** publicptr) = 0;
     virtual uint32_t GetPublicsNum() = 0;
+    virtual bool PerformFullValidation() = 0;
+    virtual bool CallGlobalCtor() { return true; }
 
     /**
      * @brief Returns the local parameter stack, starting from the
@@ -67,6 +74,8 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
      * Local parameters are the parameters passed to the function
      * from which a native was called (and thus this can only be
      * called inside a native).
+     *
+     * Note: this is only supported in v1 runtimes.
      *
      * @return        Parameter stack.
      */
@@ -88,6 +97,36 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     void DestroyFrameIterator(SourcePawn::IFrameIterator* it) override;
     bool IsPaused() override;
 
+    // Convert a parameter address to an ARRAY_PTR handle.
+    //
+    // @param base      Array base.
+    // @param out       Array pointer handle.
+    virtual int ParamToArrayPtr(cell_t base, ARRAY_PTR* out) = 0;
+
+    // Return the data vector for an array.
+    //
+    // For character arrays, the pointer should be casted to a uint8_t* or char*.
+    // For int64 arrays, the pointer should be casted to an int64_t* or uint64_t*.
+    // For all other types, the pointer should be casted to a cell_t*.
+    //
+    // If UsesDirectArrays() is false, note that |data[i]| will not yield an
+    // interior array pointer if the array has interior arrays. Instead, the
+    // formula is:
+    //
+    //      array_base + (i * sizeof(cell_t)) + data[i]
+    //
+    // @param handle    Array pointer handle.
+    // @param size      Optional pointer to store size of the array. If zero,
+    //                  and the return pointer is not null, then the array
+    //                  length is not supported.
+    // @return          Pointer to the data vector for the array, or null if
+    //                  the array has no data vector (zero length).
+    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
+
+    // Convert an internal address representing a heap-allocated array to an
+    // ARRAY_PTR.
+    virtual int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) = 0;
+
     const char* GetFilename() override { return full_name_.c_str(); }
     virtual BaseRuntime* GetBaseRuntime() override { return this; }
     SourcePawn::IPluginRuntime* GetRuntime() override { return this; }
@@ -98,7 +137,7 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
 
   protected:
     Environment* env_;
-    std::unique_ptr<sp::SmxImage> image_;
+    std::shared_ptr<sp::SmxImage> image_;
     std::string name_;
     std::string full_name_;
     Code code_;

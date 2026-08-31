@@ -1,0 +1,4 @@
+error 179: value 70000 is outside the range [-32768, 32767] of int16
+error 179: value -70000 is outside the range [-32768, 32767] of int16
+error 179: value 32768 is outside the range [-32768, 32767] of int16
+error 179: value 70000 is outside the range [-32768, 32767] of int16

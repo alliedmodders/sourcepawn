@@ -1,0 +1,1 @@
+(6) : error 048: type 'function[2]' cannot be passed through natives or varargs

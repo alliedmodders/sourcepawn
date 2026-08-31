@@ -1,24 +1,9 @@
 /* vim: set sts=4 ts=8 sw=4 tw=99 et: */
-//  Pawn compiler
 //
-//  Copyright (c) ITB CompuPhase, 1997-2006
-//  Copyright (c) 2013 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
-//
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
+// Copyright (c) 2013-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
 //
 #include <assert.h>
 #include <ctype.h>
@@ -75,11 +60,9 @@
 
 #include "builtin-generator.h"
 #include "errors.h"
-#include "expressions.h"
 #include "lexer.h"
 #include "sc.h"
 #include "sci18n.h"
-#include "sctracker.h"
 #define VERSION_INT 0x0302
 
 using namespace ke;
@@ -177,12 +160,25 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
         if (!tree || !errors.ok())
             goto cleanup;
 
+        if (options->syntax_only) {
+            if (options->print_ast) {
+                AstPrinter printer(stdout);
+                printer.Print(tree);
+            }
+            ok = true;
+            goto cleanup;
+        }
+
         errors.Reset();
 
         {
             SemaContext sc(&sema);
             sema.set_context(&sc);
 
+            if (!tree->stmts()->EnterTypes(sc) || !errors.ok())
+                goto cleanup;
+
+            errors.Reset();
             if (!tree->stmts()->EnterNames(sc) || !errors.ok())
                 goto cleanup;
 
@@ -216,14 +212,15 @@ cleanup:
     cc.set_shutting_down();
     cc.reports()->DumpErrorReport(true);
 
+    bool skip_cg = options->syntax_only || options->sema_only;
+
     CodeGenerator cg(cc, tree);
-    if (tree && compile_ok)
+    if (tree && compile_ok && !skip_cg)
         compile_ok = cg.Generate();
 
     // Write the binary file.
-    if (!options->syntax_only && compile_ok) {
+    if (compile_ok && !skip_cg)
         compile_ok &= assemble(cc, cg, cc.outfname().c_str(), options->compression);
-    }
 
     errnum += cc.reports()->NumErrorMessages();
     cc.reports()->DumpErrorReport(true);
@@ -240,12 +237,8 @@ cleanup:
 
     if (compile_ok && cc.errfname().empty()) {
         if (options->verbosity >= 1 && compile_ok) {
-            printf("Code size:         %" PRIu32 " bytes\n", cg.code_size());
-            printf("Data size:         %" PRIu32 " bytes\n", cg.data_size());
-            printf("Stack/heap size:   %8ld bytes\n", (long)cg.DynamicMemorySize());
-            printf("Total requirements:%8ld bytes\n", (long)cg.code_size() +
-                                                             (long)cg.data_size() +
-                                                             (long)cg.DynamicMemorySize());
+            printf("Code size: %" PRIu32 " bytes\n", cg.code_size());
+            printf("Data size: %" PRIu32 " bytes\n", cg.data_size());
         }
         if (opt_show_stats.value()) {
             size_t allocated, reserved, bookkeeping;
@@ -366,7 +359,7 @@ static void setconfig(const char* root) {
 void setcaption() {
     printf("SourcePawn Compiler %s\n", SM_VERSION_STRING);
     printf("Copyright (c) 1997-2006 ITB CompuPhase\n");
-    printf("Copyright (c) 2004-2024 AlliedModders LLC\n\n");
+    printf("Copyright (c) 2004-2026 AlliedModders LLC\n\n");
 }
 
 } // namespace cc

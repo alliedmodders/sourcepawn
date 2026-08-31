@@ -1,20 +1,9 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2021 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn.
+// Copyright (c) 2021-2026 AlliedModders LLC
 //
-// SourcePawn is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free
-// Software Foundation, either version 3 of the License, or (at your option)
-// any later version.
-//
-// SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
 #include <forward_list>
@@ -132,6 +121,11 @@ template <typename Key,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 using PoolMap = std::unordered_map<Key, T, Hash, KeyEqual, StlPoolAllocator<std::pair<const Key, T>>>;
+
+template <typename Key,
+          typename Hash = std::hash<Key>,
+          typename KeyEqual = std::equal_to<Key>>
+using PoolSet = std::unordered_set<Key, Hash, KeyEqual, StlPoolAllocator<Key>>;
 
 template <typename T>
 using PoolForwardList = std::forward_list<T, StlPoolAllocator<T>>;

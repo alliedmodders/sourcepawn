@@ -38,3 +38,7 @@ obj-*/
 *.pyc
 
 .gdb_history
+
+/spcomp
+/shell
+/smxdump

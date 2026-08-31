@@ -1,11 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2004-2015 AlliedModers LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is licensed under the GNU
-// General Public License, version 3.0 (GPL). If a copy of the GPL was not
-// provided with this file, you can obtain it here:
-//   http://www.gnu.org/licenses/gpl.html
+// Copyright (c) 2004-2026 AlliedModders LLC
 //
 #include <utility>
 
@@ -13,6 +10,7 @@
 #include <zlib/zlib.h>
 #include "environment.h"
 #include "smx-image.h"
+#include "utils/compact-encoding.h"
 
 using namespace ke;
 using namespace sp;
@@ -29,6 +27,24 @@ SmxImage::SmxImage(uint8_t* addr, size_t length, void (*dtor)(uint8_t*))
  : FileReader(addr, length, dtor) {
 }
 
+bool SmxImage::error(const char* msg) const {
+    Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg);
+    return false;
+}
+
+bool SmxImage::error(const std::string& msg) const {
+    Environment::get()->ReportError(SP_ERROR_FILE_FORMAT, msg.c_str());
+    return false;
+}
+
+bool SmxImage::errorf(const char* fmt, ...) const {
+    va_list ap;
+    va_start(ap, fmt);
+    Environment::get()->ReportErrorVA(SP_ERROR_FILE_FORMAT, fmt, ap);
+    va_end(ap);
+    return false;
+}
+
 // Validating SMX v1 scripts is fairly expensive. We reserve real validation
 // for v2.
 bool
@@ -41,10 +57,11 @@ SmxImage::validate() {
         return error("bad header");
 
     switch (hdr_->version) {
-        case SmxConsts::SP1_VERSION_1_0:
-        case SmxConsts::SP1_VERSION_1_1:
-        case SmxConsts::SP1_VERSION_1_7:
-        case SmxConsts::SP1_VERSION_1_13:
+        case SmxConsts::SP_VERSION_1_0:
+        case SmxConsts::SP_VERSION_1_1:
+        case SmxConsts::SP_VERSION_1_7:
+        case SmxConsts::SP_VERSION_1_13:
+        case SmxConsts::SP_VERSION_2:
             break;
         default:
             return error("unsupported version");
@@ -52,6 +69,9 @@ SmxImage::validate() {
 
     switch (hdr_->compression) {
         case SmxConsts::FILE_COMPRESSION_GZ: {
+            if (hdr_->version >= SmxConsts::SP_VERSION_2)
+                return error("v2 code does not support compression");
+
             // We don't support junk in binaries, check that disksize matches the actual file size.
             // (this is to avoid a known crash in inflate() if told that data is bigger than it is)
             if (hdr_->disksize > length_)
@@ -265,14 +285,18 @@ SmxImage::validateCode() {
         SmxConsts::kCodeFeatureHeapScopes |
         SmxConsts::kCodeFeatureNullFunctions |
         SmxConsts::kCodeFeatureTypedOps;
-
-    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
-        if ((features & supported_features) != supported_features)
-            return error("invalid feature set");
-    }
-
     if (features & ~supported_features)
         return error("unsupported feature set; code is too new");
+
+    if (code->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK) {
+        uint32_t required_features =
+            SmxConsts::kCodeFeatureDirectArrays |
+            SmxConsts::kCodeFeatureHeapScopes |
+            SmxConsts::kCodeFeatureNullFunctions |
+            SmxConsts::kCodeFeatureTypedOps;
+        if ((features & required_features) != required_features)
+            return error("invalid feature set");
+    }
 
     const uint8_t* blob = reinterpret_cast<const uint8_t*>(code) + code->code;
     code_ = Blob<sp_file_code_t>(section, code, blob, code->codesize, features);
@@ -284,6 +308,10 @@ SmxImage::validatePublics() {
     const Section* section = findSection(".publics");
     if (!section)
         return true;
+
+    if (hdr_->version >= SmxConsts::SP_VERSION_2)
+        return error("publics table no longer implemented");
+
     if (!validateSection(section))
         return error("invalid .publics section");
     if ((section->size % sizeof(sp_file_publics_t)) != 0)
@@ -366,18 +394,15 @@ SmxImage::validateRtti() {
 
     const char* mandatory_tables[] = {
         "rtti.methods",
-        "rtti.natives",
     };
     for (size_t i = 0; i < sizeof(mandatory_tables) / sizeof(mandatory_tables[0]); i++) {
         const char* table_name = mandatory_tables[i];
         const Section* section = findSection(table_name);
         if (!section) {
-            error_ = StringPrintf("missing %s section", table_name);
-            return false;
+            return errorf("missing %s section", table_name);
         }
         if (!validateRttiHeader(section)) {
-            error_ = StringPrintf("could not validate %s section", table_name);
-            return false;
+            return errorf("could not validate %s section", table_name);
         }
     }
 
@@ -385,13 +410,9 @@ SmxImage::validateRtti() {
     if (!validateRttiMethods())
         return false;
 
-    rtti_natives_ = findRttiSection("rtti.natives");
-    if (!validateRttiNatives())
-        return false;
-
     const char* optional_tables[] = {
         "rtti.classdefs", "rtti.enums",    "rtti.enumstructs", "rtti.enumstruct_fields",
-        "rtti.fields",    "rtti.typedefs", "rtti.typesets",
+        "rtti.fields",    "rtti.typedefs", "rtti.typesets", "rtti.globals",
     };
     for (size_t i = 0; i < sizeof(optional_tables) / sizeof(optional_tables[0]); i++) {
         const char* table_name = optional_tables[i];
@@ -399,18 +420,12 @@ SmxImage::validateRtti() {
         if (!section)
             continue;
         if (!validateRttiHeader(section)) {
-            error_ = StringPrintf("could not validate %s section", table_name);
-            return false;
+            return errorf("could not validate %s section", table_name);
         }
     }
 
     rtti_enums_ = findRttiSection("rtti.enums");
     if (rtti_enums_ && !validateRttiEnums())
-        return false;
-
-    rtti_enumstruct_fields_ = findRttiSection("rtti.enumstruct_fields");
-    rtti_enumstructs_ = findRttiSection("rtti.enumstructs");
-    if (rtti_enumstructs_ && !validateRttiEnumStructs())
         return false;
 
     rtti_fields_ = findRttiSection("rtti.fields");
@@ -420,6 +435,15 @@ SmxImage::validateRtti() {
 
     rtti_typesets_ = findRttiSection("rtti.typesets");
     if (rtti_typesets_ && !validateRttiTypesets())
+        return false;
+
+    rtti_globals_ = findRttiSection("rtti.globals");
+    if (rtti_globals_ && !validateRttiGlobals())
+        return false;
+
+    rtti_stringpool_ = findRttiSection("rtti.stringpool");
+
+    if (!validatePstructValues() || !validatePstructGlobals())
         return false;
 
     return true;
@@ -435,68 +459,20 @@ SmxImage::validateRttiEnums() {
     return true;
 }
 
-bool
-SmxImage::validateRttiEnumStructs() {
-    if (!rtti_enumstruct_fields_)
-        return error("rtti.enumstruct_fields section missing");
-
-    for (uint32_t i = 0; i < rtti_enumstructs_->row_count; i++) {
-        const smx_rtti_enumstruct* enumstruct =
-            getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i);
-        if (!validateName(enumstruct->name))
-            return error("invalid enum struct name");
-
-        // Calculate how many fields this enumstruct has.
-        uint32_t stopat = rtti_enumstruct_fields_->row_count;
-        if (i != rtti_enumstructs_->row_count - 1) {
-            const smx_rtti_enumstruct* next_enumstruct =
-                getRttiRow<smx_rtti_enumstruct>(rtti_enumstructs_, i + 1);
-            stopat = next_enumstruct->first_field;
-        }
-        if (enumstruct->first_field >= stopat)
-            return error("invalid enum struct fields boundary");
-
-        for (uint32_t j = enumstruct->first_field; j < stopat; j++) {
-            if (!validateRttiEnumStructField(enumstruct, j))
-                return false;
-        }
-    }
-    return true;
-}
-
-bool
-SmxImage::validateRttiEnumStructField(const smx_rtti_enumstruct* enumstruct, uint32_t index) {
-    if (index >= rtti_enumstruct_fields_->row_count)
-        return error("invalid enum struct field index");
-
-    const smx_rtti_es_field* field = getRttiRow<smx_rtti_es_field>(rtti_enumstruct_fields_, index);
-    if (!validateName(field->name))
-        return error("invalid enum struct field name");
-    if (field->offset >= enumstruct->size * 4)
-        return error("invalid enum struct field offset");
-    if (!rtti_data_->validateType(field->type_id))
-        return error("invalid enum struct field type");
-    return true;
-}
-
-bool
-SmxImage::validateRttiClassdefs() {
+bool SmxImage::validateRttiClassdefs() {
     if (!rtti_fields_)
         return error("rtti.fields section missing");
 
     for (uint32_t i = 0; i < rtti_classdefs_->row_count; i++) {
-        const smx_rtti_classdef* classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i);
+        const smx_rtti_classdef* classdef = getClassdef(i);
+        if (!classdef)
+            return error("invalid classdef");
         // TODO: Validate flags.
         if (!validateName(classdef->name))
             return error("invalid classdef name");
 
         // Calculate how many fields this class has.
-        uint32_t stopat = rtti_fields_->row_count;
-        if (i != rtti_classdefs_->row_count - 1) {
-            const smx_rtti_classdef* next_classdef =
-                getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
-            stopat = next_classdef->first_field;
-        }
+        uint32_t stopat = getClassdefFieldsEnd(i);
         if (classdef->first_field >= stopat)
             return error("invalid classdef fields boundary");
 
@@ -508,13 +484,75 @@ SmxImage::validateRttiClassdefs() {
     return true;
 }
 
+uint32_t SmxImage::getClassdefFieldsEnd(uint32_t i) const {
+    if (i == rtti_classdefs_->row_count - 1)
+        return rtti_fields_->row_count;
+    const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
+    return next_classdef->first_field;
+}
+
+uint32_t SmxImage::getClassdefMethodsEnd(uint32_t i) const {
+    if (i == rtti_classdefs_->row_count - 1)
+        return rtti_methods_->row_count;
+    const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
+    return next_classdef->first_method;
+}
+
+const smx_rtti_classdef* SmxImage::FindClassdefForField(uint32_t field_index) const {
+    if (!rtti_classdefs_ || !rtti_classdefs_->row_count)
+        return nullptr;
+
+    uint32_t lo = 0, hi = rtti_classdefs_->row_count - 1;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo + 1) / 2;
+        if (getClassdef(mid)->first_field <= field_index)
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    const auto* cd = getClassdef(lo);
+    if (field_index >= cd->first_field && field_index < getClassdefFieldsEnd(lo))
+        return cd;
+    return nullptr;
+}
+
+const smx_rtti_classdef* SmxImage::FindClassdefForMethod(uint32_t method_index) const {
+    if (!rtti_classdefs_ || !rtti_classdefs_->row_count)
+        return nullptr;
+
+    uint32_t lo = 0, hi = rtti_classdefs_->row_count - 1;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo + 1) / 2;
+        if (getClassdef(mid)->first_method <= method_index)
+            lo = mid;
+        else
+            hi = mid - 1;
+    }
+    const auto* cd = getClassdef(lo);
+    if (method_index >= cd->first_method && method_index < getClassdefMethodsEnd(lo))
+        return cd;
+    return nullptr;
+}
+
+auto SmxImage::ResolveFieldRef(uint32_t table_id) const -> std::optional<FieldLookup> {
+    if (GetTableIdSelector(table_id) != kTableId_RttiField)
+        return {};
+    uint32_t field_index = GetTableIdIndex(table_id);
+    auto field = getField(field_index);
+    if (!field)
+        return {};
+    auto classdef = FindClassdefForField(field_index);
+    if (!classdef)
+        return {};
+    return FieldLookup{field_index, classdef, field};
+}
+
 bool
 SmxImage::validateRttiField(uint32_t index) {
-    if (index >= rtti_fields_->row_count)
-        return error("invalid classdef field index");
-
     // TODO: Validate flags.
-    const smx_rtti_field* field = getRttiRow<smx_rtti_field>(rtti_fields_, index);
+    const smx_rtti_field* field = getField(index);
+    if (!field)
+        return error("invalid classdef field index");
     if (!validateName(field->name))
         return error("invalid classdef field name");
     if (!rtti_data_->validateType(field->type_id))
@@ -524,6 +562,21 @@ SmxImage::validateRttiField(uint32_t index) {
 
 bool
 SmxImage::validateRttiMethods() {
+    if (rtti_methods_->row_size >= 20) {
+        if (code_->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK)
+            return error("invalid method row size");
+    } else {
+        if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK)
+            return error("invalid method row size");
+    }
+    if (rtti_methods_->row_size >= 24) {
+        if (hdr_->version < SmxConsts::SP_VERSION_2)
+            return error("invalid method row size");
+    } else {
+        if (hdr_->version >= SmxConsts::SP_VERSION_2)
+            return error("invalid method row size");
+    }
+
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
         const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
         if (!validateName(method->name))
@@ -537,32 +590,177 @@ SmxImage::validateRttiMethods() {
         if (method->pcode_end > code_.header()->size)
             return error("invalid method code end");
         if (rtti_methods_->row_size >= 20) {
-            if (code_->codeversion < SmxConsts::CODE_VERSION_TYPED_STACK)
-                return error("invalid method row size");
-            if (!rtti_data_->validateLocalSlots(method->locals))
-                return error("invalid local signature");
-        } else {
-            if (code_->codeversion >= SmxConsts::CODE_VERSION_TYPED_STACK)
-                return error("invalid method row size");
+            if (hdr_->version >= SmxConsts::SP_VERSION_2) {
+                // Lazy validation.
+                if (method->locals >= rtti_data_->size())
+                    return error("invalid local signature offset");
+            } else {
+                if (!rtti_data_->validateLocalSlots(method->locals))
+                    return error("invalid local signature");
+            }
+        }
+        if (rtti_methods_->row_size >= 24) {
+            uint32_t supported_flags = kRttiMethodVisibilityMask |
+                                       kRttiMethod_Native |
+                                       kRttiMethod_Closure |
+                                       kRttiMethod_HasUpvars |
+                                       kRttiMethod_Ctor;
+            uint32_t unknown_flags = method->flags & ~supported_flags;
+            if (unknown_flags)
+                return error("invalid method flags");
+            uint8_t visibility = method->flags & kRttiMethodVisibilityMask;
+            if (visibility != kRttiMethodVisibility_Private &&
+                visibility != kRttiMethodVisibility_Public)
+            {
+                return error("invalid method visibility");
+            }
+            if (method->flags & kRttiMethod_Native) {
+                if (visibility)
+                    return error("invalid native method flags");
+                if (method->pcode_start != 0 || method->pcode_end != 0 || method->locals != 0)
+                    return error("invalid native method attributes");
+            }
         }
     }
     return true;
 }
 
-bool
-SmxImage::validateRttiNatives() {
-    for (uint32_t i = 0; i < rtti_natives_->row_count; i++) {
-        const smx_rtti_native* native = getRttiRow<smx_rtti_native>(rtti_natives_, i);
-        if (!validateName(native->name))
-            return error("invalid native name");
-        if (!rtti_data_->validateFunctionOffset(native->signature))
-            return error("invalid native type offset");
+bool SmxImage::validateRttiGlobals() {
+    for (uint32_t i = 0; i < rtti_globals_->row_count; i++) {
+        const smx_rtti_global* global = getRttiRow<smx_rtti_global>(rtti_globals_, i);
+        if (!validateName(global->name))
+            return error("invalid global name");
+        if (!rtti_data_->validateType(global->type_id))
+            return error("invalid type id");
+        uint32_t supported_flags = kRttiGlobal_VisibilityMask;
+        uint32_t unknown_flags = global->flags & ~supported_flags;
+        if (unknown_flags)
+            return error("invalid global flags");
+        uint8_t visibility = global ->flags & kRttiGlobal_VisibilityMask;
+        if (visibility != kRttiGlobal_Private && visibility != kRttiGlobal_Public)
+            return error("invalid global visibility");
     }
     return true;
 }
 
-bool
-SmxImage::validateRttiTypesets() {
+bool SmxImage::validatePstructGlobals() {
+    const Section* section = findSection("pstruct_glb");
+    if (!section)
+        return true;
+    if (!validateSection(section))
+        return error("invalid pstruct_glb section");
+    if (section->size % sizeof(smx_pstruct_global) != 0)
+        return error("invalid pstruct_glb section size");
+    pstruct_globals_ =
+        reinterpret_cast<const smx_pstruct_global*>(buffer() + section->dataoffs);
+    pstruct_global_count_ = (uint32_t)(section->size / sizeof(smx_pstruct_global));
+
+    for (uint32_t i = 0; i < pstruct_global_count_; i++) {
+        const smx_pstruct_global* entry = pstruct_globals_ + i;
+        if (!validateName(entry->name))
+            return error("invalid pstruct global name");
+        if (entry->first_value > pstruct_value_count_)
+            return error("invalid pstruct global value range");
+        if (i > 0 && entry->first_value < pstruct_globals_[i - 1].first_value)
+            return error("pstruct globals out of order");
+    }
+    return true;
+}
+
+bool SmxImage::validatePstructValues() {
+    const Section* section = findSection("pstruct_glb.values");
+    if (!section)
+        return true;
+    if (!validateSection(section))
+        return error("invalid pstruct_glb.values section");
+    if (section->size % sizeof(smx_pstruct_value) != 0)
+        return error("invalid pstruct_glb.values section size");
+    pstruct_values_ =
+        reinterpret_cast<const smx_pstruct_value*>(buffer() + section->dataoffs);
+    pstruct_value_count_ = (uint32_t)(section->size / sizeof(smx_pstruct_value));
+
+    for (uint32_t i = 0; i < pstruct_value_count_; i++) {
+        const smx_pstruct_value* value = pstruct_values_ + i;
+        if (!validateName(value->field_name))
+            return error("invalid pstruct value name");
+    }
+    return true;
+}
+
+const smx_pstruct_global* SmxImage::FindPstructGlobal(const char* name) const {
+    if (!pstruct_globals_)
+        return nullptr;
+    for (uint32_t i = 0; i < pstruct_global_count_; i++) {
+        if (strcmp(names_ + pstruct_globals_[i].name, name) == 0)
+            return &pstruct_globals_[i];
+    }
+    return nullptr;
+}
+
+uint32_t SmxImage::GetPstructFieldCount(const smx_pstruct_global* entry) const {
+    assert(pstruct_globals_);
+    assert(entry >= pstruct_globals_);
+    assert(entry < pstruct_globals_ + pstruct_global_count_);
+
+    uint32_t index = uint32_t(entry - pstruct_globals_);
+    uint32_t end = pstruct_value_count_;
+    if (index + 1 < pstruct_global_count_ && pstruct_globals_[index + 1].first_value < end)
+        end = pstruct_globals_[index + 1].first_value;
+    if (entry->first_value >= end)
+        return 0;
+    return end - entry->first_value;
+}
+
+const smx_pstruct_value* SmxImage::GetPstructValue(const smx_pstruct_global* entry,
+                                                   const char* field) const
+{
+    uint32_t count = GetPstructFieldCount(entry);
+    for (uint32_t i = 0; i < count; i++) {
+        auto candidate = pstruct_value(entry->first_value + i);
+        if (candidate && strcmp(names_ + candidate->field_name, field) == 0)
+            return candidate;
+    }
+    return nullptr;
+}
+
+int SmxImage::GetPstructValue(const smx_pstruct_global* entry, const char* field,
+                              std::variant<std::string, cell_t>* out)
+{
+    const smx_pstruct_value* value = GetPstructValue(entry, field);
+    if (!value)
+        return SP_ERROR_NOT_FOUND;
+
+    FastRtti rtti = GetTypeIdParser(value->type_id);
+    uint8_t b;
+    if (!rtti.GetNextByte(&b))
+        return SP_ERROR_RTTI;
+    if (b == cb::kConst && !rtti.GetNextByte(&b))
+        return SP_ERROR_RTTI;
+
+    switch (b) {
+        case cb::kArray: {
+            if (!rtti.GetNextByte(&b) || b != cb::kChar8)
+                return SP_ERROR_RTTI;
+
+            auto blob = ReadDataBlob(value->fill_data);
+            if (!blob)
+                return SP_ERROR_RTTI;
+
+            out->emplace<std::string>(blob->data(), blob->size());
+            return SP_ERROR_NONE;
+        }
+        case cb::kBool:
+        case cb::kInt32:
+        case cb::kAny:
+        case cb::kEnum:
+            out->emplace<cell_t>(static_cast<cell_t>(value->fill_data));
+            return SP_ERROR_NONE;
+        default:
+            return SP_ERROR_RTTI;
+    }
+}
+
+bool SmxImage::validateRttiTypesets() {
     for (uint32_t i = 0; i < rtti_typesets_->row_count; i++) {
         const smx_rtti_typeset* typesetType = getRttiRow<smx_rtti_typeset>(rtti_typesets_, i);
         if (!validateName(typesetType->name))
@@ -573,8 +771,7 @@ SmxImage::validateRttiTypesets() {
     return true;
 }
 
-bool
-SmxImage::validateDebugInfo() {
+bool SmxImage::validateDebugInfo() {
     const Section* dbginfo = findSection(".dbg.info");
     if (!dbginfo)
         return true;
@@ -612,16 +809,18 @@ SmxImage::validateDebugInfo() {
         List<sp_fdbg_file_t>(reinterpret_cast<const sp_fdbg_file_t*>(buffer() + files->dataoffs),
                              debug_info_->num_files);
 
-    const Section* lines = findSection(".dbg.lines");
-    if (!lines)
-        return error("no debug lines table");
-    if (!validateSection(lines))
-        return error("invalid debug lines table");
-    if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
-        return error("invalid debug lines table size");
-    debug_lines_ =
-        List<sp_fdbg_line_t>(reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
-                             debug_info_->num_lines);
+    if (hdr_->version != SmxConsts::SP_VERSION_2) {
+        const Section* lines = findSection(".dbg.lines");
+        if (!lines)
+            return error("no debug lines table");
+        if (!validateSection(lines))
+            return error("invalid debug lines table");
+        if (lines->size < sizeof(sp_fdbg_line_t) * debug_info_->num_lines)
+            return error("invalid debug lines table size");
+        debug_lines_ =
+            List<sp_fdbg_line_t>(reinterpret_cast<const sp_fdbg_line_t*>(buffer() + lines->dataoffs),
+                                 debug_info_->num_lines);
+    }
 
     debug_symbols_section_ = findSection(".dbg.symbols");
     if (debug_symbols_section_) {
@@ -650,6 +849,13 @@ SmxImage::validateDebugInfo() {
             if (!validateRttiHeader(methods))
                 return error("invalid debug methods table");
             rtti_dbg_methods_ = toRttiTable(methods);
+
+            if (const Section* method_lines = findSection(".dbg.method_lines")) {
+                if (!validateRttiHeader(method_lines))
+                    return error("invalid debug method lines table");
+                rtti_dbg_method_lines_ = toRttiTable(method_lines);
+            }
+
             if (Environment::get()->IsDebugBreakEnabled() && !validateDebugMethods())
                 return false;
         }
@@ -657,7 +863,7 @@ SmxImage::validateDebugInfo() {
 
     if (debug_symbols_section_) {
         // See the note about unpacked debug sections in smx-headers.h.
-        if (hdr_->version == SmxConsts::SP1_VERSION_1_0 && !findSection(".dbg.natives")) {
+        if (hdr_->version == SmxConsts::SP_VERSION_1_0 && !findSection(".dbg.natives")) {
             debug_syms_unpacked_ = reinterpret_cast<const sp_u_fdbg_symbol_t*>(
                 buffer() + debug_symbols_section_->dataoffs);
         } else {
@@ -731,8 +937,10 @@ SmxImage::validateDebugMethods() {
             getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, i);
         if (debug_method->method_index >= rtti_methods_->row_count)
             return error("invalid debug method index");
-        if (rtti_dbg_locals_ && debug_method->first_local >= rtti_dbg_locals_->row_count)
+        if (rtti_dbg_locals_ && debug_method->first_local > rtti_dbg_locals_->row_count)
             return error("invalid first local index");
+        if (rtti_dbg_method_lines_ && debug_method->first_line > rtti_dbg_method_lines_->row_count)
+            return error("invalid first line index");
     }
     return true;
 }
@@ -776,6 +984,24 @@ SmxImage::DescribeData() const -> Data {
     data.bytes = data_.blob();
     data.length = data_.length();
     return data;
+}
+
+std::optional<std::string_view> SmxImage::ReadDataBlob(uint32_t offset) const {
+    if (offset >= data_.length()) {
+        error("invalid data offset");
+        return {};
+    }
+
+    const uint8_t* cursor = data_.blob() + offset;
+    const uint8_t* end = data_.blob() + data_.length();
+
+    auto len = DecodeCompact(cursor, end);
+    if (!len || *len > static_cast<uint32_t>(end - cursor)) {
+        error("invalid length for data blob");
+        return {};
+    }
+
+    return {std::string_view(reinterpret_cast<const char*>(cursor), *len)};
 }
 
 size_t
@@ -876,8 +1102,7 @@ SmxImage::ImageSize() const {
     return length_;
 }
 
-const char*
-SmxImage::LookupFile(uint32_t addr) const {
+const char* SmxImage::LookupFile(uint32_t addr) const {
     int high = debug_files_.length();
     int low = -1;
 
@@ -945,9 +1170,20 @@ SmxImage::LookupFunction(uint32_t code_offset) const {
     return nullptr;
 }
 
-bool
-SmxImage::HasRtti() const {
+bool SmxImage::HasRtti() const {
     return rtti_data_ != nullptr;
+}
+
+std::optional<uint32_t> SmxImage::FindRttiMethod(const char* name) const {
+    if (!rtti_methods_)
+        return {};
+
+    for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
+        const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+        if (strcmp(names_ + method->name, name) == 0)
+            return i;
+    }
+    return {};
 }
 
 const smx_rtti_method*
@@ -956,15 +1192,84 @@ SmxImage::GetMethodRttiByOffset(uint32_t pcode_offset) const {
         return nullptr;
 
     for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
-        const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
+        auto method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
         if (method->pcode_start <= pcode_offset && method->pcode_end > pcode_offset)
             return method;
     }
     return nullptr;
 }
 
-bool
-SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
+std::optional<uint32_t> SmxImage::GetDebugMethodRow(uint32_t pcode_offset) const {
+    if (!rtti_dbg_methods_)
+        return {};
+
+    int low = 0;
+    int high = (int)rtti_dbg_methods_->row_count - 1;
+    while (low <= high) {
+        int mid = (low + high) / 2;
+        const smx_rtti_debug_method* dm = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, mid);
+        const smx_rtti_method* m = getRttiRow<smx_rtti_method>(rtti_methods_, dm->method_index);
+
+        if (pcode_offset >= m->pcode_start && pcode_offset < m->pcode_end)
+            return {uint32_t(mid)};
+
+        if (pcode_offset < m->pcode_start)
+            high = mid - 1;
+        else
+            low = mid + 1;
+    }
+    return {};
+}
+
+std::optional<uint32_t> SmxImage::GetDebugMethodLineRow(uint32_t dbg_method_row, uint32_t rel_addr) const {
+    if (!rtti_dbg_method_lines_)
+        return {};
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, dbg_method_row);
+    uint32_t stopat = rtti_dbg_method_lines_->row_count;
+    if (dbg_method_row + 1 < rtti_dbg_methods_->row_count)
+        stopat = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, dbg_method_row + 1)->first_line;
+
+    int low = (int)dbg_method->first_line - 1;
+    int high = (int)stopat;
+
+    while (high - low > 1) {
+        int mid = (low + high) / 2;
+        auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, mid);
+        if (row->addr <= rel_addr)
+            low = mid;
+        else
+            high = mid;
+    }
+
+    if (low < (int)dbg_method->first_line)
+        return {};
+    return (uint32_t)low;
+}
+
+bool SmxImage::LookupLineV2(uint32_t addr, uint32_t* line) const {
+    auto dbg_method_row = GetDebugMethodRow(addr);
+    if (!dbg_method_row)
+        return false;
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, *dbg_method_row);
+    auto method = getRttiRow<smx_rtti_method>(rtti_methods_, dbg_method->method_index);
+
+    auto line_row = GetDebugMethodLineRow(*dbg_method_row, addr - method->pcode_start);
+    if (!line_row)
+        return false;
+
+    auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, *line_row);
+    *line = dbg_method->line_start + row->line;
+    return true;
+}
+
+bool SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
+    if (rtti_dbg_method_lines_)
+        return LookupLineV2(addr, line);
+    if (!debug_lines_.exists())
+        return false;
+
     int high = debug_lines_.length();
     int low = -1;
 
@@ -982,6 +1287,25 @@ SmxImage::LookupLine(uint32_t addr, uint32_t* line) const {
     // Lines are zero-indexed for some reason.
     *line = debug_lines_[low].line + 1;
     return true;
+}
+
+bool SmxImage::IsLineBoundary(uint32_t addr) const {
+    if (!rtti_dbg_method_lines_)
+        return false;
+
+    auto dbg_method_row = GetDebugMethodRow(addr);
+    if (!dbg_method_row)
+        return false;
+
+    auto dbg_method = getRttiRow<smx_rtti_debug_method>(rtti_dbg_methods_, *dbg_method_row);
+    auto method = getRttiRow<smx_rtti_method>(rtti_methods_, dbg_method->method_index);
+
+    auto line_row = GetDebugMethodLineRow(*dbg_method_row, addr - method->pcode_start);
+    if (!line_row)
+        return false;
+
+    auto row = getRttiRow<smx_rtti_debug_line>(rtti_dbg_method_lines_, *line_row);
+    return row->addr == (addr - method->pcode_start);
 }
 
 size_t
@@ -1113,108 +1437,14 @@ SmxImage::getFunctionAddress(const SymbolType* syms, const char* function, ucell
     return false;
 }
 
-bool
-SmxImage::LookupFunctionAddress(const char* function, const char* file, ucell_t* funcaddr) const {
-    *funcaddr = 0;
-    if (rtti_methods_) {
-        for (uint32_t i = 0; i < rtti_methods_->row_count; i++) {
-            const smx_rtti_method* method = getRttiRow<smx_rtti_method>(rtti_methods_, i);
-            const char* name = names_ + method->name;
-            if (strcmp(name, function) != 0)
-                continue;
-
-            *funcaddr = method->pcode_start;
-            // verify that this function is defined in the appropriate file
-            const char* tgtfile = LookupFile(*funcaddr);
-            if (tgtfile != nullptr && !strcmp(file, tgtfile))
-                break;
-        }
-    } else {
-        for (;;) {
-            // find (next) matching function
-            uint32_t index = 0;
-            if (debug_syms_) {
-                getFunctionAddress<sp_fdbg_symbol_t, sp_fdbg_arraydim_t>(debug_syms_, function,
-                                                                         funcaddr, index);
-            } else {
-                getFunctionAddress<sp_u_fdbg_symbol_t, sp_u_fdbg_arraydim_t>(
-                    debug_syms_unpacked_, function, funcaddr, index);
-            }
-
-            if (index >= debug_info_->num_syms)
-                return false;
-
-            // verify that this function is defined in the appropriate file
-            const char* tgtfile = LookupFile(*funcaddr);
-            if (tgtfile != nullptr && strcmp(file, tgtfile) == 0)
-                break;
-            index++;
-            assert(index < debug_info_->num_syms);
-        }
-    }
-
-    // now find the first line in the function where we can "break" on
-    uint32_t index = 0;
-    for (; index < debug_info_->num_lines && debug_lines_[index].addr < *funcaddr; index++)
-        continue;
-
-    if (index >= debug_info_->num_lines)
-        return false;
-
-    *funcaddr = debug_lines_[index].addr;
-    return true;
-}
-
-bool
-SmxImage::LookupLineAddress(const uint32_t line, const char* filename, uint32_t* addr) const {
-    // Find a suitable "breakpoint address" close to the indicated line (and in
-    // the specified file). The address is moved up to the next "breakable" line
-    // if no "breakpoint" is available on the specified line. You can use function
-    // LookupLine() to find out at which precise line the breakpoint was set.
-
-    // The filename comparison is strict (case sensitive and path sensitive).
-    *addr = 0;
-
-    uint32_t bottomaddr, topaddr;
-    uint32_t file;
-    uint32_t index = 0;
-    for (file = 0; file < debug_info_->num_files; file++) {
-        // find the (next) matching instance of the file
-        if (debug_files_[file].name >= debug_names_section_->size ||
-            strcmp(debug_names_ + debug_files_[file].name, filename) != 0) {
-            continue;
-        }
-
-        // get address range for the current file
-        bottomaddr = debug_files_[file].addr;
-        topaddr = (file + 1 < debug_info_->num_files) ? debug_files_[file + 1].addr : (uint32_t)-1;
-
-        // go to the starting address in the line table
-        while (index < debug_info_->num_lines && debug_lines_[index].addr < bottomaddr)
-            index++;
-
-        // browse until the line is found or until the top address is exceeded
-        while (index < debug_info_->num_lines && debug_lines_[index].line < line &&
-               debug_lines_[index].addr < topaddr) {
-            index++;
-        }
-
-        if (index >= debug_info_->num_lines)
-            return false;
-        if (debug_lines_[index].line >= line)
-            break;
-
-        // if not found (and the line table is not yet exceeded) try the next
-        // instance of the same file (a file may appear twice in the file table)
-    }
-    if (file >= debug_info_->num_files)
-        return false;
-
-    assert(index < debug_info_->num_lines);
-    *addr = debug_lines_[index].addr;
-    return true;
-}
-
 FastRtti SmxImage::GetTypeParser(uint32_t offset) {
     return FastRtti(rtti_data_->blob(), rtti_data_->size(), offset);
+}
+
+FastRtti SmxImage::GetTypeIdParser(uint32_t type_id) {
+    uint8_t kind = type_id & kMaxTypeIdKind;
+    uint32_t payload = (type_id >> 4) & kMaxTypeIdPayload;
+    if (kind == kTypeId_Inline)
+        return FastRtti(type_id);
+    return FastRtti(rtti_data_->blob(), rtti_data_->size(), payload);
 }

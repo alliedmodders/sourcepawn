@@ -1,0 +1,1 @@
+(2) : error 150: setter must take exactly one extra argument with type int

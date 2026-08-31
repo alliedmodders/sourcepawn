@@ -1,0 +1,92 @@
+// vim: set sts=4 ts=8 sw=4 tw=99 et:
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2006-2026 AlliedModders LLC
+//
+#include "legacy/method-info.h"
+#include "compiled-function.h"
+#include "environment.h"
+#include "graph-builder.h"
+#include "legacy/method-verifier.h"
+
+namespace sp::v1 {
+
+MethodInfo::MethodInfo(PluginRuntime* rt, uint32_t codeOffset)
+ : rt_(rt),
+   pcode_offset_(codeOffset),
+   checked_(false),
+   validation_error_(SP_ERROR_NONE),
+   max_stack_(0)
+{}
+
+MethodInfo::~MethodInfo()
+{}
+
+void
+MethodInfo::setCompiledFunction(CompiledFunction* fun) {
+    assert(!jit_);
+
+    // Grab the lock before linking code in, since the watchdog timer will look
+    // at this on another thread.
+    std::lock_guard<ke::Mutex> lock(Environment::get()->lock());
+    jit_.reset(fun);
+}
+
+void
+MethodInfo::InternalValidate() {
+    checked_ = true;
+
+    MethodVerifier verifier(rt_, pcode_offset_);
+    graph_ = verifier.verify();
+    if (!graph_) {
+        validation_error_ = verifier.error();
+        return;
+    }
+    max_stack_ = verifier.max_stack();
+    local_sizes_ = std::move(verifier.local_sizes());
+    BuildLocalOffsetTable();
+}
+
+void MethodInfo::BuildLocalOffsetTable() {
+    local_offsets_ =
+        ke::FixedArray<cell_t>(local_sizes_.size());
+
+    cell_t offset = 0;
+    for (size_t i = 0; i < local_sizes_.size(); i++) {
+        offset -= local_sizes_[i];
+        local_offsets_[i] = offset;
+    }
+}
+
+cell_t MethodInfo::StackOffset(cell_t slot) {
+    if (rt_->code().version < SmxConsts::CODE_VERSION_TYPED_STACK)
+        return slot;
+
+    if (slot < 0)
+        return (-slot - 1 + 3) * sizeof(cell_t);
+
+    return local_offsets_.at(slot);
+}
+
+cell_t MethodInfo::StackSizeForLocalSlots() {
+    if (local_offsets_.empty())
+        return 0;
+    return local_offsets_.back();
+}
+
+uint32_t MethodInfo::TranslateInterpCip(const uint8_t* cip) const {
+    auto& code = rt_->code();
+    assert(cip >= code.bytes && cip < code.bytes + code.length);
+    return (uint32_t)(cip - code.bytes);
+}
+
+const char* MethodInfo::GetName() const {
+    return rt_->image()->LookupFunction(pcode_offset_);
+}
+
+const char* MethodInfo::GetFilePath() const {
+    return rt_->image()->LookupFile(pcode_offset_);
+}
+
+} // namespace sp::v1

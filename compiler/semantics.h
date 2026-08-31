@@ -1,32 +1,22 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders LLC 2021
-//  Copyright (c) ITB CompuPhase, 1997-2006
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2021-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
+#include "coercion-rules.h"
 #include "compile-context.h"
 #include "sc.h"
 #include "scopes.h"
 #include "parse-node.h"
+#include "errors.h"
 
 namespace sp {
 namespace cc {
@@ -46,8 +36,10 @@ class SemaContext
         cc_.set_sema(this);
         scope_ = cc_.globals();
     }
+
     SemaContext(SemaContext& parent, FunctionDecl* func)
       : cc_(parent.cc_),
+        outer_(&parent),
         sema_(parent.sema()),
         scope_(parent.scope_),
         func_(func),
@@ -55,6 +47,10 @@ class SemaContext
     {
         cc_prev_sc_ = cc_.sema();
         cc_.set_sema(this);
+        if (parent.func() != nullptr) {
+            while (scope_ && !scope_->IsGlobalOrFileStatic())
+                scope_ = scope_->parent();
+        }
     }
 
     ~SemaContext() {
@@ -85,6 +81,9 @@ class SemaContext
 
     FunctionDecl* func() const { return func_; }
     Semantics* sema() const { return sema_; }
+    SemaContext* outer() const { return outer_; }
+
+    std::vector<VarDeclBase*>& shared_locals() { return shared_locals_; }
 
     SymbolScope* ScopeForAdd();
 
@@ -103,6 +102,7 @@ class SemaContext
 
   private:
     CompileContext& cc_;
+    SemaContext* outer_ = nullptr;
     Semantics* sema_ = nullptr;
     SymbolScope* scope_ = nullptr;
     AutoCreateScope* scope_creator_ = nullptr;
@@ -117,6 +117,7 @@ class SemaContext
     bool preprocessing_ = false;
     SemaContext* cc_prev_sc_ = nullptr;
     std::unordered_set<SymbolScope*> static_scopes_;
+    std::vector<VarDeclBase*> shared_locals_;
 };
 
 class Semantics final
@@ -135,54 +136,69 @@ class Semantics final
     bool Analyze(ParseTree* tree);
 
     CompileContext& cc() { return cc_; }
+    bool CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
+                       CvtContext why);
+    bool CheckCoercion(Expr* node, QualType formal, QualType actual,
+                       CvtContext why);
+    Expr* TryConversion(Expr* expr, QualType formal, CvtContext why);
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }
 
-  private:
-    enum StmtFlags {
-        STMT_DEFAULT = 0x0,
-        STMT_OWNS_HEAP = 0x1
-    };
+    int next_fun_expr_count() { return fun_expr_count_++; }
+    int next_shared_class_count() { return shared_class_count_++; }
 
-    bool CheckStmt(Stmt* stmt, StmtFlags = STMT_DEFAULT);
+  private:
+
+    void GenerateInitFunctions(ParseTree* tree);
+    FunctionDecl* GenerateInitFunction(const std::vector<VarDeclBase*>& vars, uint32_t suffix);
+
+    bool CheckStmt(Stmt* stmt);
     bool CheckStmtList(StmtList* list);
     bool CheckBlockStmt(BlockStmt* stmt);
     bool CheckChangeScopeNode(ChangeScopeNode* node);
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
+    bool CheckEnumStructVarDecl(VarDeclBase* decl);
+    bool ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init);
+    bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
     void CheckFunctionReturnUsage(FunctionDecl* info);
     bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
     bool CheckSwitchStmt(SwitchStmt* stmt);
+    void CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual);
     bool CheckForStmt(ForStmt* stmt);
     bool CheckDoWhileStmt(DoWhileStmt* stmt);
     bool CheckBreakStmt(BreakStmt* stmt);
     bool CheckContinueStmt(ContinueStmt* stmt);
-    bool CheckExitStmt(ExitStmt* stmt);
     bool CheckDeleteStmt(DeleteStmt* stmt);
-    bool CheckAssertStmt(AssertStmt* stmt);
     bool CheckStaticAssertStmt(StaticAssertStmt* stmt);
     bool CheckReturnStmt(ReturnStmt* stmt);
     bool CheckCompoundReturnStmt(ReturnStmt* stmt);
     bool CheckNativeCompoundReturn(FunctionDecl* info);
+    void ReportInvalidNativeArgument(ParseNode* node, Type* type);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
     bool CheckVarDecl(VarDeclBase* decl);
+    bool CheckTypedVarDecl(VarDeclBase* decl);
+    bool CheckInferredVarDecl(VarDeclBase* decl);
     bool CheckConstDecl(VarDecl* decl);
     bool CheckPstructDecl(VarDeclBase* decl);
     bool CheckPstructArg(VarDeclBase* decl, PstructDecl* ps, StructInitFieldExpr* field,
                          std::vector<bool>* visited);
 
     // Expressions.
-    bool CheckExpr(Expr* expr);
+    enum ExprFlags {
+        EXPR_DEFAULT = 0,
+        EXPR_DISCARD_RESULT = (1 << 0),
+    };
+
+    bool CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
     bool CheckNewArrayExpr(NewArrayExpr* expr);
-    bool CheckArrayExpr(ArrayExpr* expr);
-    bool CheckStringExpr(StringExpr* expr);
-    bool CheckTaggedValueExpr(TaggedValueExpr* expr);
-    bool CheckNumber64Expr(Number64Expr* expr);
+    bool CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
+    bool CheckStringExpr(StringExpr* expr, Type* target = nullptr);
     bool CheckNullExpr(NullExpr* expr);
     bool CheckThisExpr(ThisExpr* expr);
     bool CheckCommaExpr(CommaExpr* expr);
@@ -191,8 +207,8 @@ class Semantics final
     bool CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
     bool CheckSizeofExpr(SizeofExpr* expr);
     bool CheckCastExpr(CastExpr* expr);
-    bool CheckIncDecExpr(IncDecExpr* expr);
-    bool CheckTernaryExpr(TernaryExpr* expr);
+    bool CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
+    bool CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
     bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
     bool CheckLogicalExpr(LogicalExpr* expr);
     bool CheckBinaryExpr(BinaryExpr* expr);
@@ -200,12 +216,25 @@ class Semantics final
     bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
     bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
     bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
-                                        bool from_call);
-    bool CheckRvalue(Expr* expr);
-    bool CheckRvalue(const token_pos_t& pos, const value& val);
+                                         bool from_call);
+    bool CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
+                                   bool from_call);
+    bool CheckFunctionExpr(FunctionExpr* expr);
+
+    bool CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = EXPR_DEFAULT);
+    bool CheckRvalueAccess(Expr* expr);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
+    Expr* BuildConversion(Expr* from, const Conversion& cv);
+    Expr* BuildConversion(Expr* from, ConversionKind ck, Type* to);
     Expr* BuildSimpleCast(Expr* from, BuiltinType type);
+    Expr* CoerceNull(Expr* expr, Type* formal);
+    std::optional<ConversionKind> FindConstantConversion(Expr* source, Type* from_type,
+                                                         Type* to, CvtContext why);
+    bool CheckCoercionImpl(Expr* node, const token_pos_t& pos, QualType formal,
+                           QualType actual, CvtContext why, ConversionKind ck);
+    void ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual);
+    void ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual);
 
     struct ParamState {
         std::vector<Expr*> argv;
@@ -213,16 +242,16 @@ class Semantics final
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
     bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    Expr* CheckArgument(CallExpr* call, ArgDecl* arg, Expr* expr,
+    Expr* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
                         ParamState* ps, unsigned int argpos);
     bool CheckWrappedExpr(Expr* outer, Expr* inner);
-    FunctionDecl* BindNewTarget(Expr* target);
-    FunctionDecl* BindCallTarget(CallExpr* call, Expr* target);
-
-    void NeedsHeapAlloc(Expr* expr);
-    void AssignHeapOwnership(ParseNode* node);
+    using CallCtor = std::pair<FunctionDecl*, Type*>;
+    std::optional<CallCtor> BindNewTarget(Expr* target);
+    CallTarget BindCallTarget(CallExpr* call, Expr* target);
+    SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
     Expr* AnalyzeForTest(Expr* expr);
+    ExprVal* AnalyzeForConst(Expr* expr);
 
     void DeduceLiveness();
     void DeduceMaybeUsed();
@@ -238,14 +267,37 @@ class Semantics final
     bool IsIncluded(Decl* expr);
     bool IsIncludedStock(VarDeclBase* expr);
 
+    struct BinaryExprState {
+        BinaryExpr* expr;
+        Expr* left;
+        Expr* right;
+        bool rhs_resolved = false;
+
+        BinaryExprState(BinaryExpr* expr)
+          : expr(expr), left(expr->left()), right(expr->right())
+        {}
+    };
+    bool CheckBinaryExprImpl(BinaryExprState& state);
+    bool CheckAssignmentLHS(BinaryExprState& state);
+
+    struct BinaryOperator {
+        Conversion left;
+        Conversion right;
+    };
+    std::optional<BinaryOperator> FindBinaryOperator(int token, Type* left_type, Type* right_type);
+    std::optional<BinaryOperator> FindEqualityOperator(Type* left_type, Type* right_type);
+
   private:
     CompileContext& cc_;
     TypeManager* types_ = nullptr;
+    std::vector<VarDeclBase*> globals_to_init_;
     tr::unordered_set<SymbolScope*> static_scopes_;
     tr::vector<FunctionDecl*> maybe_used_;
+    tr::vector<FunctionDecl*> closures_;
     SemaContext* sc_ = nullptr;
-    bool pending_heap_allocation_ = false;
     sp::Atom* this_atom_ = nullptr;
+    int fun_expr_count_ = 0;
+    int shared_class_count_ = 0;
 };
 
 class AutoEnterScope final
@@ -287,10 +339,10 @@ void ReportFunctionReturnError(FunctionDecl* decl);
 bool TestSymbols(SymbolScope* root, int testconst);
 void check_void_decl(const typeinfo_t* type, int variable);
 void check_void_decl(const declinfo_t* decl, int variable);
-bool check_operatortag(int opertok, Type* result_type, const char* opername);
 int argcompare(ArgDecl* a1, ArgDecl* a2);
-void fill_arg_defvalue(CompileContext& cc, ArgDecl* decl);
 bool IsLegacyEnumType(SymbolScope* scope, Type* type);
+bool IsValidIndexType(Type* type);
+bool HasTagOnInheritanceChain(Type* type, Type* other);
 
 } // namespace cc
 } // namespace sp

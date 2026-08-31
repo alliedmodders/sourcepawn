@@ -1,29 +1,8 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// =============================================================================
-// SourcePawn
-// Copyright (C) 2004-2014 AlliedModders LLC.  All rights reserved.
-// =============================================================================
 //
-// This program is free software; you can redistribute it and/or modify it under
-// the terms of the GNU General Public License, version 3.0, as published by the
-// Free Software Foundation.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This program is distributed in the hope that it will be useful, but WITHOUT
-// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
-// details.
-//
-// You should have received a copy of the GNU General Public License along with
-// this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-// As a special exception, AlliedModders LLC gives you permission to link the
-// code of this program (as well as its derivative works) to "Half-Life 2," the
-// "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
-// by the Valve Corporation.  You must obey the GNU General Public License in
-// all respects for all other code used.  Additionally, AlliedModders LLC grants
-// this exception to all derivative works.  AlliedModders LLC defines further
-// exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
-// or <http://www.sourcemod.net/license.php>.
+// Copyright (c) 2004-2026 AlliedModders LLC
 
 #ifndef _INCLUDE_SPFILE_HEADERS_v1_opcodes_H
 #define _INCLUDE_SPFILE_HEADERS_v1_opcodes_H
@@ -32,8 +11,9 @@
 #include <stdint.h>
 
 namespace sp {
+namespace v1 {
 
-#define OPCODE_LIST(FOR_EACH) \
+#define OPCODE_LIST_V1(FOR_EACH) \
     FOR_EACH(NONE, 0, "none", 1) \
     FOR_EACH(LOAD_PRI, 1, "load.pri", 2) \
     FOR_EACH(LOAD_ALT, 2, "load.alt", 2) \
@@ -226,10 +206,9 @@ namespace sp {
     FOR_EACH(SMOD_ALT_I64, 216, "smod.alt.i64", 2) \
     FOR_EACH(STOR_S_PRI_I64, 217, "stor.s.pri.i64", 2) \
 
-
 enum OPCODE {
 #define FOR_EACH_OPCODE(op, val, text, cells) OP_##op = val,
-    OPCODE_LIST(FOR_EACH_OPCODE)
+    OPCODE_LIST_V1(FOR_EACH_OPCODE)
 #undef FOR_EACH_OPCODE
 
     // These opcodes are internal to the compiler and not part of the ABI. They
@@ -256,7 +235,7 @@ enum OPCODE {
     OPCODES_LAST
 };
 
-#define OPCODES_TOTAL (ucell_t) OPCODES_LAST
+} // namespace v1
 
 } // namespace sp
 

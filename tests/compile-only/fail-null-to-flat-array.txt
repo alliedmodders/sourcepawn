@@ -1,0 +1,2 @@
+(2) : error 148: cannot convert null to non-nullable type "int"
+(3) : error 148: cannot convert null to non-nullable type "char"

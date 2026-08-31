@@ -1,31 +1,9 @@
-/**
- * vim: set ts=8 sts=4 sw=4 tw=99 et:
- * =============================================================================
- * SourcePawn JIT SDK
- * Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
- * =============================================================================
- *
- * This program is free software; you can redistribute it and/or modify it under
- * the terms of the GNU General Public License, version 3.0, as published by the
- * Free Software Foundation.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
- * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
- * details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- * As a special exception, AlliedModders LLC gives you permission to link the
- * code of this program (as well as its derivative works) to "Half-Life 2," the
- * "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
- * by the Valve Corporation.  You must obey the GNU General Public License in
- * all respects for all other code used.  Additionally, AlliedModders LLC grants
- * this exception to all derivative works.  AlliedModders LLC defines further
- * exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
- * or <http://www.sourcemod.net/license.php>.
- */
+// vim: set ts=8 sts=4 sw=4 tw=99 et:
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2004-2026 AlliedModders LLC
+//
 #ifndef _include_sourcepawn_assembler_x86_h__
 #define _include_sourcepawn_assembler_x86_h__
 
@@ -46,10 +24,10 @@ struct Register {
 
     int code;
 
-    bool operator==(const Register& other) const {
+    constexpr bool operator==(const Register& other) const {
         return code == other.code;
     }
-    bool operator!=(const Register& other) const {
+    constexpr bool operator!=(const Register& other) const {
         return code != other.code;
     }
 };
@@ -64,10 +42,10 @@ struct FpuRegister {
 
     int code;
 
-    bool operator==(const FpuRegister& other) const {
+    constexpr bool operator==(const FpuRegister& other) const {
         return code == other.code;
     }
-    bool operator!=(const FpuRegister& other) const {
+    constexpr bool operator!=(const FpuRegister& other) const {
         return code != other.code;
     }
 };
@@ -81,49 +59,49 @@ struct FloatRegister {
 
     int code;
 
-    bool operator==(const FloatRegister& other) const {
+    constexpr bool operator==(const FloatRegister& other) const {
         return code == other.code;
     }
-    bool operator!=(const FloatRegister& other) const {
+    constexpr bool operator!=(const FloatRegister& other) const {
         return code != other.code;
     }
 };
 
-const Register eax = {0};
-const Register ecx = {1};
-const Register edx = {2};
-const Register ebx = {3};
-const Register esp = {4};
-const Register ebp = {5};
-const Register esi = {6};
-const Register edi = {7};
+constexpr Register eax = {0};
+constexpr Register ecx = {1};
+constexpr Register edx = {2};
+constexpr Register ebx = {3};
+constexpr Register esp = {4};
+constexpr Register ebp = {5};
+constexpr Register esi = {6};
+constexpr Register edi = {7};
 
-const Register r8_al = {0};
-const Register r8_cl = {1};
-const Register r8_dl = {2};
-const Register r8_bl = {3};
-const Register r8_ah = {4};
-const Register r8_ch = {5};
-const Register r8_dh = {6};
-const Register r8_bh = {7};
+constexpr Register r8_al = {0};
+constexpr Register r8_cl = {1};
+constexpr Register r8_dl = {2};
+constexpr Register r8_bl = {3};
+constexpr Register r8_ah = {4};
+constexpr Register r8_ch = {5};
+constexpr Register r8_dh = {6};
+constexpr Register r8_bh = {7};
 
-const FpuRegister st0 = {0};
-const FpuRegister st1 = {1};
-const FpuRegister st2 = {2};
-const FpuRegister st3 = {3};
-const FpuRegister st4 = {4};
-const FpuRegister st5 = {5};
-const FpuRegister st6 = {6};
-const FpuRegister st7 = {7};
+constexpr FpuRegister st0 = {0};
+constexpr FpuRegister st1 = {1};
+constexpr FpuRegister st2 = {2};
+constexpr FpuRegister st3 = {3};
+constexpr FpuRegister st4 = {4};
+constexpr FpuRegister st5 = {5};
+constexpr FpuRegister st6 = {6};
+constexpr FpuRegister st7 = {7};
 
-const FloatRegister xmm0 = {0};
-const FloatRegister xmm1 = {1};
-const FloatRegister xmm2 = {2};
-const FloatRegister xmm3 = {3};
-const FloatRegister xmm4 = {4};
-const FloatRegister xmm5 = {5};
-const FloatRegister xmm6 = {6};
-const FloatRegister xmm7 = {7};
+constexpr FloatRegister xmm0 = {0};
+constexpr FloatRegister xmm1 = {1};
+constexpr FloatRegister xmm2 = {2};
+constexpr FloatRegister xmm3 = {3};
+constexpr FloatRegister xmm4 = {4};
+constexpr FloatRegister xmm5 = {5};
+constexpr FloatRegister xmm6 = {6};
+constexpr FloatRegister xmm7 = {7};
 
 static const uint8_t kModeDisp0 = 0;
 static const uint8_t kModeDisp8 = 1;
@@ -317,10 +295,10 @@ class Assembler : public AssemblerBase
         writeInt32(imm);
     }
     void movw(const Operand& dest, Register src) {
-        emit1(0x89, src.code, dest);
+        emit2(0x66, 0x89, src.code, dest);
     }
     void movw(Register dest, const Operand& src) {
-        emit1(0x8b, dest.code, src);
+        emit2(0x66, 0x8b, dest.code, src);
     }
     void movb(const Operand& dest, Register src) {
         emit1(0x88, src.code, dest);
@@ -339,6 +317,18 @@ class Assembler : public AssemblerBase
     }
     void movzxw(Register dest, const Register src) {
         emit2(0x0f, 0xb7, dest.code, src.code);
+    }
+    void movsxw(Register dest, const Operand& src) {
+        emit2(0x0f, 0xbf, dest.code, src);
+    }
+    void movsxw(Register dest, const Register src) {
+        emit2(0x0f, 0xbf, dest.code, src.code);
+    }
+    void movsxb(Register dest, const Operand& src) {
+        emit2(0x0f, 0xbe, dest.code, src);
+    }
+    void movsxb(Register dest, const Register src) {
+        emit2(0x0f, 0xbe, dest.code, src.code);
     }
     void movaps(FloatRegister dest, const FloatRegister src) {
         emit2(0x0f, 0x28, dest.code, src.code);
@@ -361,11 +351,17 @@ class Assembler : public AssemblerBase
     void paddq(FloatRegister dest, const Operand& src) {
         emit3(0x66, 0x0f, 0xd4, dest.code, src);
     }
+    void pxor(FloatRegister dest, FloatRegister src) {
+        emit3(0x66, 0x0f, 0xef, dest.code, Operand(src));
+    }
     void psubq(FloatRegister dest, FloatRegister src) {
         emit3(0x66, 0x0f, 0xfb, dest.code, Operand(src));
     }
     void psubq(FloatRegister dest, const Operand& src) {
         emit3(0x66, 0x0f, 0xfb, dest.code, src);
+    }
+    void pcmpeqd(FloatRegister dest, FloatRegister src) {
+        emit3(0x66, 0x0f, 0x76, dest.code, Operand(src));
     }
 
     void lea(Register dest, const Operand& src) {
@@ -474,6 +470,14 @@ class Assembler : public AssemblerBase
     void orl(Register dest, const Operand& src) {
         emit1(0x0b, dest.code, src);
     }
+    void orl(Register dest, int32_t imm32) {
+        if (dest == eax) {
+            emit1(0x0d);
+            writeInt32(imm32);
+        } else {
+            alu_imm(1, imm32, Operand(dest));
+        }
+    }
     void xorl(Register dest, Register src) {
         emit1(0x31, src.code, dest.code);
     }
@@ -521,6 +525,13 @@ class Assembler : public AssemblerBase
         alu_imm(2, imm, dest);
     }
 
+    void incl(const Operand& dest) {
+        emit1(0xff, 0, dest);
+    }
+    void decl(const Operand& dest) {
+        emit1(0xff, 1, dest);
+    }
+
     void imull(Register dest, const Operand& src) {
         emit2(0x0f, 0xaf, dest.code, src);
     }
@@ -559,6 +570,9 @@ class Assembler : public AssemblerBase
     void testb(Register left, int8_t imm) {
         emit1(0xf6, 0, Operand(left));
         *pos_++ = imm;
+    }
+    void testb(Register op1, Register op2) {
+        emit1(0x84, op2.code, op1.code);
     }
     void set(ConditionCode cc, const Operand& dest) {
         emit2(0x0f, 0x90 + uint8_t(cc), 0, dest);
@@ -684,6 +698,9 @@ class Assembler : public AssemblerBase
     void fstp32(const Operand& dest) {
         emit1(0xd9, 3, dest);
     }
+    void fstp64(const Operand& dest) {
+        emit1(0xdd, 3, dest);
+    }
     void fstp(FpuRegister src) {
         emit2(0xdd, 0xd8 + src.code);
     }
@@ -745,6 +762,12 @@ class Assembler : public AssemblerBase
             emit2(0x0f, 0x80 + uint8_t(cc));
             emitJumpTarget(dest);
         }
+    }
+    void j(ConditionCode cc, ExternalAddress address) {
+        assert(sizeof(address) == sizeof(int32_t));
+        emit2(0x0f, 0x80 + uint8_t(cc));
+        writeInt32(address.value());
+        external_refs_.push_back(pc());
     }
     void call(Label* dest) {
         emit1(0xe8);
@@ -920,6 +943,10 @@ class Assembler : public AssemblerBase
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x7e, dest.code, src.code);
     }
+    void movd(const Operand& dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0x66, 0x0f, 0x7e, src.code, dest);
+    }
     void movd(Register dest, const Operand& src) {
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x7e, dest.code, src);
@@ -927,6 +954,69 @@ class Assembler : public AssemblerBase
     void movd(FloatRegister dest, Register src) {
         assert(FeaturesX86::Get().sse2);
         emit3(0x66, 0x0f, 0x6e, dest.code, src.code);
+    }
+    void movd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0x66, 0x0f, 0x6e, dest.code, src);
+    }
+
+    void movsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x10, dest.code, src);
+    }
+    void movsd(const Operand& dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x11, src.code, dest);
+    }
+    void addsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x58, dest.code, src);
+    }
+    void subsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5c, dest.code, src);
+    }
+    void mulsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x59, dest.code, src);
+    }
+    void divsd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5e, dest.code, src);
+    }
+    void ucomisd(FloatRegister left, FloatRegister right) {
+        emit3(0x66, 0x0f, 0x2e, right.code, left.code);
+    }
+    void ucomisd(const Operand& left, FloatRegister right) {
+        emit3(0x66, 0x0f, 0x2e, right.code, left);
+    }
+    void cvtsi2sd(FloatRegister dest, Register src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2a, dest.code, src.code);
+    }
+    void cvtsi2sd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2a, dest.code, src);
+    }
+    void cvtsd2si(Register dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2d, dest.code, src.code);
+    }
+    void cvtsd2si(Register dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x2d, dest.code, src);
+    }
+    void cvtss2sd(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf3, 0x0f, 0x5a, dest.code, src);
+    }
+    void cvtss2sd(FloatRegister dest, FloatRegister src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf3, 0x0f, 0x5a, dest.code, src.code);
+    }
+    void cvtsd2ss(FloatRegister dest, const Operand& src) {
+        assert(FeaturesX86::Get().sse2);
+        emit3(0xf2, 0x0f, 0x5a, dest.code, src);
     }
 
     static void PatchRel32Absolute(uint8_t* ip, void* ptr) {

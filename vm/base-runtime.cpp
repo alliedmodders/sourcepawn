@@ -1,14 +1,8 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #include "base-runtime.h"
 #include "environment.h"
@@ -19,9 +13,9 @@
 using namespace sp;
 using namespace SourcePawn;
 
-BaseRuntime::BaseRuntime(SmxImage* image)
+BaseRuntime::BaseRuntime(std::shared_ptr<SmxImage> image)
  : env_(Environment::get()),
-   image_(image),
+   image_(std::move(image)),
    computed_code_hash_(false),
    computed_data_hash_(false)
 {

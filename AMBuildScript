@@ -146,7 +146,7 @@ class Config(object):
             '-Werror',
             '-Wno-switch',
         ]
-        cxx.cxxflags += ['-std=c++17']
+        cxx.cxxflags += ['-std=c++20']
 
         if builder.options.debug == '1':
             cxx.cflags += ['-gdwarf-4']
@@ -226,7 +226,7 @@ class Config(object):
             '/EHsc',
             '/GR-',
             '/TP',
-            '/std:c++17',
+            '/std:c++20',
         ]
         cxx.linkflags += [
             'kernel32.lib',
@@ -265,7 +265,7 @@ class Config(object):
             raise
             raise Exception('Could not find {}'.format(libclang_rt))
 
-        self.asan_libs[cxx.target.arch] = os.path.dirname(output)
+        self.asan_libs[cxx.target] = os.path.dirname(output)
 
     def generate_version_header(self):
         includes = builder.AddFolder('includes')
@@ -300,7 +300,7 @@ class Config(object):
         if self.enable_asan:
             binary.compiler.linkflags += [
                 '-shared-libsan',
-                '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target.arch]),
+                '-Wl,-rpath={}'.format(self.asan_libs[binary.compiler.target]),
             ]
         return binary
 
@@ -334,7 +334,11 @@ class SourcePawn(object):
         }
         self.spshell = {}
         self.spcomp = []
+        self.oldspcomp = []
         self.zlib = None
+        self.mimalloc = None
+        self.capstone = None
+        self.gtest = {}
         self.libamtl = None
         self.static_libsp = {}
 
@@ -344,6 +348,9 @@ class SourcePawn(object):
     def BuildCore(self):
         self.EnsureZlib()
         self.EnsureAmtl()
+        self.EnsureGTest()
+        self.EnsureMimalloc()
+        self.EnsureCapstone()
 
         for cxx in self.root.targets:
             builder.CallBuilder(lambda builder: self.BuildCoreForArch(cxx, builder))
@@ -361,9 +368,12 @@ class SourcePawn(object):
                 binary.compiler.defines += ['DARWIN']
 
         binary.compiler.includes += [
-            os.path.join(builder.currentSourcePath),
+            builder.currentSourcePath,
             os.path.join(builder.currentSourcePath, 'include'),
+            os.path.join(builder.currentSourcePath, 'vm'),
             os.path.join(builder.currentSourcePath, 'third_party'),
+            os.path.join(builder.currentSourcePath, 'third_party', 'mimalloc', 'include'),
+            os.path.join(builder.currentSourcePath, 'third_party', 'capstone', 'include'),
             self.amtl,
         ]
 
@@ -379,10 +389,10 @@ class SourcePawn(object):
 
         self.BuildStaticCoreLib(builder)
         self.BuildSpcomp(builder)
+        self.BuildOldSpcomp(builder)
         self.BuildSpshell(builder)
         self.BuildVerifier(builder)
         self.BuildSmxDump(builder)
-
     def BuildStaticCoreLib(self, builder):
         cxx = builder.cxx
         binary = self.root.StaticLibrary(builder, 'libsourcepawn_static')
@@ -399,8 +409,8 @@ class SourcePawn(object):
         builder.Build('vm/AMBuilder', vars)
 
         cppnode = builder.Add(binary)
-        self.static_libsp[cxx.target.arch] = cppnode.binary
-        self.libsourcepawn[cxx.target.arch] = cppnode
+        self.static_libsp[cxx.target] = cppnode.binary
+        self.libsourcepawn[cxx.target] = cppnode
 
     def BuildSpcomp(self, builder):
         binary = self.root.Program(builder, 'spcomp')
@@ -423,27 +433,47 @@ class SourcePawn(object):
         cppnodes = builder.Add(binary)
         self.spcomp.append(cppnodes)
 
+    def BuildOldSpcomp(self, builder):
+        binary = self.root.Program(builder, 'oldspcomp')
+
+        self.SetupBinForArch(binary, builder)
+
+        vars = self.vars.copy()
+        vars['binary'] = binary
+        builder.Build('legacy-compiler/AMBuilder', vars)
+
+        binary.sources = [
+            'legacy-compiler/driver.cpp',
+        ]
+
+        if binary.compiler.target.platform == 'windows':
+            binary.sources += ['legacy-compiler/version.rc']
+
+        self.AddStaticLibraries(binary)
+
+        cppnodes = builder.Add(binary)
+        self.oldspcomp.append(cppnodes)
+
     def BuildSpshell(self, builder):
         binary = self.root.Program(builder, 'spshell')
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         binary.sources = [
             'vm/shell/shell.cpp',
-        ]
-        binary.compiler.cxxincludes += [
-            os.path.join(builder.currentSourcePath, 'vm'),
         ]
 
         self.AddStaticLibraries(binary)
 
         cppnodes = builder.Add(binary)
-        self.spshell[builder.cxx.target.arch] = cppnodes
+        self.spshell[builder.cxx.target] = cppnodes
 
     def BuildVerifier(self, builder):
         binary = self.root.Program(builder, 'verifier')
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         binary.sources = [
             'tools/verifier/verifier.cpp',
@@ -462,6 +492,7 @@ class SourcePawn(object):
             pass
 
         self.SetupBinForArch(binary, builder)
+        self.AddVmFlags(binary)
 
         vars = self.vars.copy()
         vars['binary'] = binary
@@ -475,13 +506,13 @@ class SourcePawn(object):
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
             binary.compiler.linkflags += ['-Wl,--start-group']
 
-        self.AddVmFlags(binary)
-
-        arch = binary.compiler.target.arch
+        target = binary.compiler.target
         binary.compiler.linkflags += [
-            self.zlib[arch],
-            self.libamtl[arch],
-            self.static_libsp[arch],
+            self.static_libsp[target],
+            self.zlib[target],
+            self.libamtl[target],
+            self.mimalloc[target],
+            self.capstone[target],
         ]
 
         if binary.compiler.linker.like('gcc') and binary.compiler.target.platform == 'linux':
@@ -537,15 +568,35 @@ class SourcePawn(object):
             amtl = os.path.relpath(self.amtl, builder.currentSourcePath)
             amtl_builder = os.path.join(amtl, 'amtl', 'AMBuilder')
             libamtl = self.BuildForArch(amtl_builder, cxx, extra_vars)
-            self.libamtl[cxx.target.arch] = libamtl.binary
+            self.libamtl[cxx.target] = libamtl.binary
 
     def EnsureZlib(self):
         if self.zlib is not None:
             return
         self.zlib = {}
         for cxx in self.root.targets:
-            self.zlib[cxx.target.arch] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
+            self.zlib[cxx.target] = self.BuildForArch("third_party/zlib/AMBuilder", cxx)
         self.included_zlib = True
+
+    def EnsureGTest(self):
+        if self.gtest:
+            return
+        for cxx in self.root.targets:
+            self.gtest[cxx.target] = self.BuildForArch("third_party/AMBuilder.gtest", cxx)
+
+    def EnsureMimalloc(self):
+        if self.mimalloc is not None:
+            return
+        self.mimalloc = {}
+        for cxx in self.root.targets:
+            self.mimalloc[cxx.target] = self.BuildForArch("third_party/AMBuild.mimalloc", cxx)
+
+    def EnsureCapstone(self):
+        if self.capstone is not None:
+            return
+        self.capstone = {}
+        for cxx in self.root.targets:
+            self.capstone[cxx.target] = self.BuildForArch("third_party/AMBuild.capstone", cxx)
 
     def SpProgram(self, builder, name):
         binary = self.root.Program(builder, name)
@@ -567,10 +618,19 @@ class SourcePawn(object):
         return rvalue
 
     def AddVmFlags(self, module):
-        is_emscripten = module.compiler.family == 'emscripten'
-        has_jit = module.compiler.target.arch in ['x86', 'x86_64'] and not is_emscripten
-        if has_jit:
-            module.compiler.defines += ['SP_HAS_JIT']
+        arch = module.compiler.target.arch
+        if arch == 'x86_64':
+            arch = 'x64'
+        module.compiler.defines += ['SP_ARCH_STR="{}"'.format(arch)]
+
+        enable_jit = module.compiler.family != 'emscripten'
+        if getattr(builder.options, 'disable_jit', False):
+            enable_jit = False
+        if enable_jit:
+            if module.compiler.target.arch in ['x86', 'x86_64']:
+                module.compiler.defines += ['SP_JIT_V1']
+            if module.compiler.target.arch in ['x86', 'x86_64']:
+                module.compiler.defines += ['SP_JIT_V2']
 
 if builder.parent is None:
     root = Config()

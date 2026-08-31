@@ -1,15 +1,10 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
-// Copyright (C) 2006-2015 AlliedModders LLC
-// 
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
 //
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// SPDX-License-Identifier: BSD-3-Clause
 //
+// Copyright (c) 2006-2026 AlliedModders LLC
+
+#pragma once
 
 #include <stddef.h>
 
@@ -36,7 +31,7 @@ class BitSet
      max_bits_(std::move(other.max_bits_))
   {}
 
-  bool test(uintptr_t bit) {
+  bool test(uintptr_t bit) const {
     size_t word = word_for_bit(bit);
     if (word >= words_.size())
       return false;
@@ -51,11 +46,26 @@ class BitSet
     words_[word] |= (uintptr_t(1) << pos_in_word(bit));
   }
 
+  bool empty() const {
+    for (uintptr_t word : words_) {
+      if (word)
+        return false;
+    }
+    return true;
+  }
+
   void unset(uintptr_t bit) {
     assert(!max_bits_  || bit <= *max_bits_);
     size_t word = word_for_bit(bit);
     if (word < words_.size())
       words_[word] &= ~(uintptr_t(1) << pos_in_word(bit));
+  }
+
+  void shrink_to_fit() {
+    while (!words_.empty() && words_.back() == 0) {
+      words_.pop_back();
+    }
+    words_.shrink_to_fit();
   }
 
   std::optional<uintptr_t> take_any() {
@@ -71,7 +81,7 @@ class BitSet
     return {};
   }
 
-  void for_each(const std::function<void(uintptr_t)>& callback) {
+  void for_each(const std::function<void(uintptr_t)>& callback) const {
     for (size_t i = 0; i < words_.size(); i++) {
       uintptr_t word = words_[i];
 

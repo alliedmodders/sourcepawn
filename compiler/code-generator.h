@@ -1,29 +1,19 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders LLC 2021
-//  Copyright (c) ITB CompuPhase, 1997-2006
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2021-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase, 1997-2006
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #pragma once
 
 #include <list>
 #include <string>
+#include <optional>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include <utils/bitset.h>
@@ -79,41 +69,74 @@ class CodeGenerator final
     void EmitMethodmapDecl(MethodmapDecl* info);
     void EmitReturnStmt(ReturnStmt* stmt);
     void EmitReturnArrayStmt(ReturnStmt* stmt);
+    void EmitGlobalInitStmt(GlobalInitStmt* stmt);
+
+    void EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags);
+    void EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor);
+    void EmitEnumStructCopy(QualType type, Expr* rhs);
+    void EmitArrayFillStructs(ArrayType* type, ArrayExpr* expr);
+    void EmitArrayFillArrays(ArrayType* type, ArrayType* inner, ArrayExpr* expr);
+    void EmitArrayFillHeapItems(ArrayType* type, ArrayExpr* expr);
+    void EmitArrayFillIntptr(ArrayType* type, ArrayExpr* expr);
+    uint32_t EmitArrayFillData(ArrayType* type, ArrayExpr* array);
+    uint32_t EmitStringFillData(ArrayType* type, StringExpr* array);
 
     // Expressions.
-    void EmitExpr(Expr* expr);
+    enum EmitFlags {
+        EMIT_DEFAULT = 0,
+        EMIT_DISCARD_RESULT = (1 << 0),
+        EMIT_ALLOW_LVALUE = (1 << 1),
+        EMIT_REPEATABLE = (1 << 2),
+    };
+
+    void EmitExpr(Expr* expr, unsigned int flags = EMIT_DEFAULT);
     void EmitTest(Expr* expr, bool jump_on_true, sp::Label* target);
     void EmitUnary(UnaryExpr* expr);
-    void EmitIncDec(IncDecExpr* expr);
-    void EmitBinary(BinaryExpr* expr);
-    void EmitBinaryInner(Expr* expr, int oper_tok, Expr* left, Expr* right);
+    void EmitIncDec(IncDecExpr* expr, unsigned int flags);
+    void EmitBinary(BinaryExpr* expr, unsigned int flags);
+    void EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* right);
     void EmitLogicalExpr(LogicalExpr* expr);
     void EmitChainedCompareExpr(ChainedCompareExpr* expr);
-    void EmitTernaryExpr(TernaryExpr* expr);
+    void EmitTernaryExpr(TernaryExpr* expr, unsigned int flags);
     void EmitSymbolExpr(SymbolExpr* expr);
     void EmitIndexExpr(IndexExpr* expr);
+    void EmitSliceExpr(SliceExpr* expr);
+    bool IsElidableSlice(Expr* expr, FunctionDecl* fun, QualType arg);
+    void EmitElidedSliceExpr(SliceExpr* expr);
     void EmitFieldAccessExpr(FieldAccessExpr* expr);
-    void EmitCallExpr(CallExpr* expr);
-    void EmitNativeCallHiddenArg(CallExpr* expr);
+    void EmitCallExpr(CallExpr* expr, unsigned int flags);
     void EmitDefaultArgExpr(DefaultArgExpr* expr);
     void EmitNewArrayExpr(NewArrayExpr* expr);
-    void EmitNumber64Expr(Number64Expr* expr);
     void EmitSimpleCastExpr(SimpleCastExpr* expr);
-    void EmitCastExpr(CastExpr* expr);
+    void EmitCastExpr(CastExpr* expr, unsigned int flags);
+    void EmitRvalue(RvalueExpr* expr);
+    void EmitRvalueFromLvalue(Expr* expr);
+    void EmitCommaExpr(CommaExpr* expr, unsigned int flags);
+    void EmitArrayExpr(ArrayExpr* expr, unsigned int flags);
+    void EmitSizeofExpr(SizeofExpr* expr, unsigned int flags);
+    void EmitFunctionExpr(FunctionExpr* expr);
+    void EmitNewClosure(FunctionDecl* fun);
 
     // Logical test helpers.
     bool EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, sp::Label* target);
     void EmitLogicalExprTest(LogicalExpr* expr, bool jump_on_true, sp::Label* target);
     bool EmitBinaryExprTest(BinaryExpr* expr, bool jump_on_true, sp::Label* target);
 
-    void EmitDefaultArray(Expr* expr, ArgDecl* arg);
-    void EmitCall(FunctionDecl* fun, cell nargs);
-    void InvokeGetter(MethodmapPropertyDecl* method);
-    void InvokeSetter(MethodmapPropertyDecl* method, bool save);
-    void EmitRvalue(const value& lval);
-    void EmitStore(const value& lval, bool save_pri = true);
-    void EmitBreak();
+    void EmitCall(const CallTarget& target, cell nargs, bool is_spread = false);
+    void InvokeGetter(PropertyDecl* method);
+    void EmitRvalue(const ExprVal& lval);
+    void EmitStore(ParseNode* node, const ExprVal& lval);
+    void EmitAddress(const ExprVal& lval);
     void EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok);
+    void EmitAddress(VarDeclBase* decl);
+
+    using Lvalue = std::variant<ExprVal, Expr*>;
+    void EmitInit(const Lvalue& lval, Expr* ctor);
+
+    void EmitLoadField(LayoutFieldDecl* field);
+    void EmitLoadFieldOffset(LayoutFieldDecl* field);
+    void EmitStoreField(LayoutFieldDecl* field);
+    void EmitAddrField(LayoutFieldDecl* field);
 
     // Builtins.
     void EmitFloatBuiltin(CallExpr* expr);
@@ -123,13 +146,33 @@ class CodeGenerator final
     void AddDebugLine(const token_pos_t& pos);
     void AddDebugSymbol(Decl* sym, uint32_t pc);
     void AddDebugSymbols(tr::vector<DebugSymbol>* list);
+    void AddFunctionToQueue(FunctionDecl* decl);
     void EnqueueDebugSymbol(Decl* decl, uint32_t pc);
     uint32_t AddNativeEntry(FunctionDecl* decl);
-    std::optional<smx_rtti_debug_method> AddFunctionEntry(FunctionDecl* decl);
+    smx_rtti_debug_method AddFunctionEntry(FunctionDecl* decl, uint32_t pcode_offset);
 
     // Helper that automatically handles heap deallocations.
     void EmitExprForStmt(Expr* expr);
     void EmitLoopControl(int token);
+
+    // Emit any precursor instructions needed to load or store from an l-value.
+    //
+    // SymbolExpr:
+    //   iVARIABLE: nothing is pushed.
+    //
+    // IndexExpr, base[index]:
+    //   iARRAYELEM: &base[index] is pushed, and loaded if the inner type is not
+    //               a value type (inner arrays are not considered value types).
+    //
+    // FieldAccessExpr: base.field
+    //   iACCESSOR: |base| is pushed.
+    //
+    // If |simple_address| is true, then iARRAYELEM is converted to an iADDRESS.
+    // This is useful if the caller does not want to deal with complex stack
+    // operations. Note that simple_address is ONLY intended to collapse two
+    // stack values into one. It is not intended to compute an address
+    // unconditionally.
+    ExprVal BindLvalue(Expr* expr, bool simple_address = false);
 
   private:
     enum MemuseType {
@@ -149,7 +192,6 @@ class CodeGenerator final
     struct MemoryScope {
         MemoryScope(MemoryScope&& other)
          : scope_id(other.scope_id),
-           usage(std::move(other.usage)),
            needs_restore(other.needs_restore)
         {}
         explicit MemoryScope(int scope_id)
@@ -161,40 +203,23 @@ class CodeGenerator final
         MemoryScope& operator =(const MemoryScope& other) = delete;
         MemoryScope& operator =(MemoryScope&& other) {
             scope_id = other.scope_id;
-            usage = std::move(other.usage);
             needs_restore = other.needs_restore;
             return *this;
         }
 
         int scope_id;
-        std::vector<MemoryUse> usage;
         bool needs_restore;
     };
 
-    // Heap functions
-    void EnterHeapScope(FlowType flow_type);
-    void LeaveHeapScope();
-    void TrackTempHeapAlloc(Expr* source, int size);
-    void TrackHeapAlloc(ParseNode* node, MemuseType type, int size);
-    void modheap_for_scope(const MemoryScope& scope);
-
-    int heap_scope_id();
-    bool has_stack_or_heap_scopes() {
-        return !heap_scopes_.empty();
-    }
-
     void EnterMemoryScope(tr::vector<MemoryScope>& frame);
-    void AllocInScope(ParseNode* node, MemoryScope& scope, MemuseType type, int size);
     int PopScope(tr::vector<MemoryScope>& scope_list);
 
     using CallGraph = tr::unordered_map<FunctionDecl*, tr::vector<FunctionDecl*>>;
 
-    bool ComputeStackUsage();
-    bool ComputeStackUsage(CallGraph::iterator caller_iter);
+    cell_t AcquireTempSlot(ParseNode* node, Type* type);
+    cell_t AcquireTempSlot(ParseNode* node, BuiltinType type);
 
-    void EnterTempSlotScope();
-    void LeaveTempSlotScope();
-    cell_t AcquireTempSlot(BuiltinType type);
+    uint16_t AcquireGlobalSlot(VarDeclBase* decl);
 
   private:
     typedef tr::vector<tr::vector<DebugSymbol>> SymbolStack;
@@ -211,9 +236,6 @@ class CodeGenerator final
     friend class AutoEnterScope;
 
   private:
-    typedef SmxListSection<sp_file_natives_t> SmxNativeSection;
-    typedef SmxListSection<sp_file_pubvars_t> SmxPubvarSection;
-    typedef SmxListSection<sp_file_publics_t> SmxPublicSection;
     typedef SmxBlobSection<sp_file_data_t> SmxDataSection;
     typedef SmxBlobSection<sp_file_code_t> SmxCodeSection;
 
@@ -221,7 +243,6 @@ class CodeGenerator final
     CompileContext& cc_;
     ParseTree* tree_;
     FunctionDecl* fun_ = nullptr;
-    int max_script_memory_ = 0;
 
     SmxAssemblyBuffer asm_;
     DataQueue data_;
@@ -230,34 +251,31 @@ class CodeGenerator final
     SmxBuilder smx_;
     RefPtr<SmxNameTable> names_;
     RefPtr<SmxDataSection> smx_data_;
-    RefPtr<SmxNativeSection> natives_;
-    RefPtr<SmxPubvarSection> pubvars_;
     RefPtr<SmxCodeSection> code_;
-    RefPtr<SmxPublicSection> publics_;
     std::unique_ptr<RttiBuilder> rtti_;
+    std::queue<FunctionDecl*> fun_queue_;
 
-    ke::Maybe<uint32_t> last_break_op_;
-    tr::vector<MemoryScope> heap_scopes_;
+    smx_rtti_debug_method debug_info_;
     SymbolStack local_syms_;
     tr::vector<DebugSymbol> global_syms_;
     tr::vector<std::pair<SymbolScope*, tr::vector<DebugSymbol>>> static_syms_;
     tr::unordered_set<SymbolScope*> static_scopes_;
-    std::list<std::pair<uint32_t, BuiltinType>> free_temp_slots_;
-    std::list<std::pair<uint32_t, BuiltinType>> used_temp_slots_;
+    std::list<std::pair<uint32_t, Type*>> free_temp_slots_;
+    std::list<std::pair<uint32_t, Type*>> used_temp_slots_;
+
+    // Data queue cache.
+    std::unordered_map<Expr*, uint32_t> fill_data_cache_;
 
     // Loop handling.
     struct LoopContext {
         sp::Label break_to;
         sp::Label continue_to;
         int stack_scope_id;
-        int heap_scope_id;
     };
     LoopContext* loop_ = nullptr;
 
-    int current_stack_ = 0;
-    int current_memory_ = 0;
-    int max_func_memory_ = 0;
-    CallGraph callgraph_;
+    cell_t max_array_size_ = 0;
+
     LocalSlotSignature locals_;
 
     AutoCountErrors errors_;

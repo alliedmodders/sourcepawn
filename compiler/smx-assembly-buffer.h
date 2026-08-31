@@ -1,36 +1,47 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
 //
-// Copyright (C) 2012-2014 AlliedModders LLC, David Anderson
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn.
+// Copyright (c) 2012-2026 AlliedModders LLC
 //
-// SourcePawn is free software: you can redistribute it and/or modify it under
-// the terms of the GNU General Public License as published by the Free
-// Software Foundation, either version 3 of the License, or (at your option)
-// any later version.
-//
-// SourcePawn is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
 #pragma once
 
+#include <bit>
+
 #include "utils/byte-buffer.h"
-#include <smx/smx-v1-opcodes.h>
+#include <smx/smx-v2-opcodes.h>
 #include <sp_vm_types.h>
 
 #include "label.h"
-#include "sctracker.h"
 #include "symbols.h"
 
 namespace sp {
 namespace cc {
 
-enum regid {
-    sPRI, /* indicates the primary register */
-    sALT, /* indicates the secundary register */
+using namespace sp::v2;
+
+class VarDeclBase;
+
+struct VarSlot {
+    explicit VarSlot(int16_t offset) : offset(offset) {}
+    explicit VarSlot(VarDeclBase* decl);
+    int16_t offset;
+};
+
+struct Int64Value {
+    explicit Int64Value(int64_t value) : value(value) {}
+    int64_t value;
+};
+
+struct DoubleValue {
+    explicit DoubleValue(int64_t value) : value(value) {}
+    explicit DoubleValue(double d) : value(std::bit_cast<int64_t>(d)) {}
+    int64_t value;
+};
+
+struct UpvarIndex {
+    explicit UpvarIndex(uint16_t index) : index(index) {}
+    uint16_t index;
 };
 
 class SmxAssemblyBuffer : public ByteBuffer
@@ -40,32 +51,55 @@ class SmxAssemblyBuffer : public ByteBuffer
   {}
 
   void emit(OPCODE op) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
   }
   void emit(OPCODE op, cell_t param) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param);
   }
+  void emit(OPCODE op, Int64Value param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int64_t>(param.value);
+  }
+  void emit(OPCODE op, DoubleValue param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int64_t>(param.value);
+  }
+  void emit(OPCODE op, VarSlot slot) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
+  }
   void emit(OPCODE op, cell_t param1, cell_t param2) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<cell_t>(param1);
+    write<cell_t>(param2);
+  }
+  void emit(OPCODE op, VarSlot slot, cell_t param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
+    write<cell_t>(param);
+  }
+  void emit(OPCODE op, VarSlot slot, cell_t param1, cell_t param2) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<int16_t>(slot.offset);
     write<cell_t>(param1);
     write<cell_t>(param2);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3, cell_t param4) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
     write<cell_t>(param4);
   }
   void emit(OPCODE op, cell_t param1, cell_t param2, cell_t param3, cell_t param4, cell_t param5) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(param1);
     write<cell_t>(param2);
     write<cell_t>(param3);
@@ -73,110 +107,50 @@ class SmxAssemblyBuffer : public ByteBuffer
     write<cell_t>(param5);
   }
   void emit(OPCODE op, Label* address) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     encodeAbsoluteAddress(address);
   }
   void emit(OPCODE op, DataLabel* value) {
-    write<cell_t>(static_cast<cell_t>(op));
+    write<uint8_t>(static_cast<uint8_t>(op));
     write<cell_t>(static_cast<cell_t>(0xb0b0b0b0));
     value->use(pc());
   }
 
-  void const_pri(cell_t value) {
-    if (value == 0)
-      emit(OP_ZERO_PRI);
-    else
-      emit(OP_CONST_PRI, value);
+  void emit(OPCODE op, Label* address, uint8_t param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    encodeAbsoluteAddress(address);
+    write<uint8_t>(param);
   }
-  void const_alt(cell_t value) {
-    if (value == 0)
-      emit(OP_ZERO_ALT);
-    else
-      emit(OP_CONST_ALT, value);
+  void emit(OPCODE op, UpvarIndex param) {
+    write<uint8_t>(static_cast<uint8_t>(op));
+    write<uint16_t>(param.index);
   }
 
-  void setheap_pri() {
-    emit(OP_HEAP, sizeof(cell));
-    emit(OP_STOR_I);
-    emit(OP_MOVE_PRI);
+  void PUSH_C(cell_t value) {
+    if (value >= -128 && value <= 127) {
+      emit(OP_PUSH_C_I8);
+      write<int8_t>(static_cast<int8_t>(value));
+    } else {
+      emit(OP_PUSH_C, value);
+    }
   }
-
-  void relop_prefix() {
-    emit(OP_PUSH_PRI);
-    emit(OP_MOVE_PRI);
-  }
-  void relop_suffix() {
-    emit(OP_SWAP_ALT);
-    emit(OP_AND);
-    emit(OP_POP_ALT);
-  }
-
   void load_hidden_arg(FunctionDecl* decl) {
-    assert(decl->needs_hidden_arg());
-    emit(OP_LOAD_S_ALT, -1);
+    assert(decl->signature()->needs_hidden_arg());
+    emit(OP_LOAD_S, VarSlot(-1));
   }
-
-  void address(Decl* sym, regid reg) {
-    address(sym->as<VarDeclBase>(), reg);
-  }
-
-  void address(VarDeclBase* sym, regid reg) {
-    bool is_ref = sym->type()->isArray() ||
-                  sym->type()->isReference() ||
-                  sym->type()->isEnumStruct();
-    if (is_ref && IsLocal(sym->vclass())) {
-      if (reg == sPRI)
-        emit(OP_LOAD_S_PRI, sym->addr());
-      else
-        emit(OP_LOAD_S_ALT, sym->addr());
-    } else {
-      if (sym->type()->isArray())
-        assert(sym->vclass() == sGLOBAL || sym->vclass() == sSTATIC);
-
-      if (reg == sPRI) {
-        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-          if (sym->vclass() == sARGUMENT && sym->type()->isInt64())
-            emit(OP_LOAD_S_PRI, sym->addr());
-          else
-            emit(OP_ADDR_PRI, sym->addr());
-        } else {
-          emit(OP_CONST_PRI, sym->label());
-        }
-      } else {
-        if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT)
-          emit(OP_ADDR_ALT, sym->addr());
-        else
-          emit(OP_CONST_ALT, sym->label());
-      }
-    }
-  }
-
-  void copyarray(VarDeclBase* sym, cell size) {
-    if (sym->type()->isArray()) {
-      assert(sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT); // symbol must be stack relative
-      emit(OP_LOAD_S_ALT, sym->addr());
-    } else if (sym->vclass() == sLOCAL || sym->vclass() == sARGUMENT) {
-      emit(OP_ADDR_ALT, sym->addr());
-    } else {
-      emit(OP_CONST_ALT, sym->addr());
-    }
-    emit(OP_MOVS, size);
+  void newbulkarray(uint8_t count, uint32_t type_id) {
+    write<uint8_t>(static_cast<uint8_t>(OP_NEWBULKARRAY));
+    write<uint8_t>(count);
+    write<uint32_t>(type_id);
   }
 
   void casetbl(cell_t ncases, Label* def) {
-    write<cell_t>(static_cast<cell_t>(OP_CASETBL));
     write<cell_t>(ncases);
     encodeAbsoluteAddress(def);
   }
   void casetbl_entry(cell_t value, Label* where) {
     write<cell_t>(value);
     encodeAbsoluteAddress(where);
-  }
-
-  void sysreq_n(Label* address, uint32_t nparams) {
-    write<cell_t>(static_cast<cell_t>(OP_SYSREQ_N));
-    encodeAbsoluteAddress(address);
-    write<cell_t>(nparams);
   }
 
   void bind(Label* target) {
@@ -197,9 +171,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     uint32_t status = target->status();
     while (Label::More(status)) {
       uint32_t offset = Label::ToOffset(status);
-      assert(offset >= 4 && offset <= pc());
+      assert(offset >= sizeof(cell_t) && offset <= pc());
 
-      int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - 4);
+      int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - sizeof(cell_t));
       status = *p;
       *p = value;
     }
@@ -214,9 +188,9 @@ class SmxAssemblyBuffer : public ByteBuffer
     }
 
     uint32_t offset = DataLabel::ToOffset(target->status());
-    assert(offset >= 4 && offset <= pc());
+    assert(offset >= sizeof(cell_t) && offset <= pc());
 
-    int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - 4);
+    int32_t* p = reinterpret_cast<int32_t*>(bytes() + offset - sizeof(cell_t));
     assert(*p == int32_t(0xb0b0b0b0));
     *p = value;
 

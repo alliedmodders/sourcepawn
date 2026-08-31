@@ -1,11 +1,8 @@
 // vim: set sts=4 ts=8 sw=4 tw=99 et:
 //
-// Copyright (C) 2004-2021 AlliedModers LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is licensed under the GNU
-// General Public License, version 3.0 (GPL). If a copy of the GPL was not
-// provided with this file, you can obtain it here:
-//   http://www.gnu.org/licenses/gpl.html
+// Copyright (c) 2004-2026 AlliedModders LLC
 //
 #ifndef _include_sourcepawn_rtti_h_
 #define _include_sourcepawn_rtti_h_
@@ -52,6 +49,15 @@ class FastRtti final {
         size_(size),
         offset_(offset)
     {}
+    explicit FastRtti(uint32_t type_id) {
+        bytes_[0] = (type_id >> 4) & 0xff;
+        bytes_[1] = (type_id >> 12) & 0xff;
+        bytes_[2] = (type_id >> 20) & 0xff;
+        bytes_[3] = (type_id >> 28) & 0xff;
+        data_ = bytes_;
+        size_ = 4;
+        offset_ = 0;
+    }
 
     bool ReadFunctionSignatureArgCount(uint32_t* out);
     bool ReadLocalSlotCount(uint16_t* out);
@@ -61,12 +67,14 @@ class FastRtti final {
 
     void NextByte() { offset_++; }
 
-    bool ReadCompactUint32(uint32_t* out);
+    bool ReadUint32_Leb128(uint32_t* out);
+    bool ReadUint16(uint16_t* out);
 
   private:
     const uint8_t* data_;
     size_t size_;
     uint32_t offset_;
+    uint8_t bytes_[4];
 };
 
 // Do not use in performance critical code.

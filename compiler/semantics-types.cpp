@@ -1,0 +1,302 @@
+/* vim: set sts=4 ts=8 sw=4 tw=99 et: */
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2024-2026 AlliedModders LLC
+
+#include "semantics.h"
+
+#include <limits>
+
+#include <amtl/am-raii.h>
+#include "errors.h"
+#include "semantics-inl.h"
+
+namespace sp {
+namespace cc {
+
+static const std::vector<std::pair<BuiltinType, BuiltinType>> NumericOperands{
+    {BuiltinType::Int, BuiltinType::Int},
+    {BuiltinType::IntPtr, BuiltinType::IntPtr},
+    {BuiltinType::Int64, BuiltinType::Int64},
+    {BuiltinType::Float, BuiltinType::Float},
+    {BuiltinType::Double, BuiltinType::Double}
+};
+static const std::vector<std::pair<BuiltinType, BuiltinType>> BitwiseOperands{
+    {BuiltinType::Int, BuiltinType::Int},
+    {BuiltinType::IntPtr, BuiltinType::IntPtr},
+    {BuiltinType::Int64, BuiltinType::Int64}
+};
+
+std::optional<ConversionKind> Semantics::FindConstantConversion(Expr* source, Type* from_type,
+                                                                Type* to, CvtContext why) {
+    if (to->isInt16() && from_type->isInt() && source->val().ident == iCONSTEXPR) {
+        cell_t v = source->val().const_i32();
+        if (v >= std::numeric_limits<int16_t>::min() && v <= std::numeric_limits<int16_t>::max())
+            return ConversionKind::Numeric;
+    }
+    if (to->isInt8() && source->val().ident == iCONSTEXPR &&
+        (from_type->isInt() || from_type->isInt16()))
+    {
+        cell_t v = source->val().const_i32();
+        if (v >= std::numeric_limits<int8_t>::min() && v <= std::numeric_limits<int8_t>::max())
+            return ConversionKind::Numeric;
+    }
+    return std::nullopt;
+}
+
+enum class CkCompare {
+    Worse,
+    Same,
+    Better,
+};
+
+static inline CkCompare CompareConversion(ConversionKind candidate, ConversionKind other,
+                                          Type* candidate_to, Type* other_to, CvtContext why)
+{
+    if (static_cast<uint32_t>(candidate) < static_cast<uint32_t>(other))
+        return CkCompare::Worse;
+    if (static_cast<uint32_t>(candidate) > static_cast<uint32_t>(other))
+        return CkCompare::Better;
+
+    // Find which conversion is closer to "from".
+    //
+    // Eg, say we have two options: int64, or float, and our source is int. We
+    // want to check int64 -> float and float -> int64. Since int64 -> float works,
+    // and float -> int64 does not, we can conclude that "int" is closer to "int64".
+    auto candidate_ck = FindConversion(candidate_to, other_to, why);
+    auto other_ck = FindConversion(other_to, candidate_to, why);
+    if (HasImplicitConversion(candidate_ck) && !HasImplicitConversion(other_ck))
+        return CkCompare::Better;
+    if (!HasImplicitConversion(candidate_ck) && HasImplicitConversion(other_ck))
+        return CkCompare::Worse;
+    return CkCompare::Same;
+}
+
+auto Semantics::FindBinaryOperator(int token, Type* left_type, Type* right_type)
+    -> std::optional<BinaryOperator>
+{
+    if (token == tlEQ || token == tlNE) {
+        // Equality is handled totally separately.
+        return FindEqualityOperator(left_type, right_type);
+    }
+
+    const std::vector<std::pair<BuiltinType, BuiltinType>>* operand_list;
+    if (IsBitwise(token))
+        operand_list = &BitwiseOperands;
+    else
+        operand_list = &NumericOperands;
+
+    auto& cc = CompileContext::get();
+
+    BinaryOperator out;
+
+    // Handle legacy cases specially, stuff like enum + enum.
+    if ((left_type->coercesFromInt() && !left_type->isInt()) ||
+        (right_type->coercesFromInt() && !right_type->isInt()))
+    {
+        // Use the left-hand type as canonical.
+        auto ck = FindConversion(right_type, left_type, CvtContext::Operator);
+        if (HasImplicitConversion(ck)) {
+            out.left = {ConversionKind::None, left_type};
+            out.right = {ck, left_type};
+            return {out};
+        }
+    }
+
+    // We use an algorithm similar to C#: when comparing overload A to B, B is rejected
+    // if any conversion is "worse" than needed for A. Then, for B to be chosen over A,
+    // it must have at least one conversion that is "better" than needed for A.
+    //
+    // The ordering of priority for conversions is in ConversionKind. The most ideal case
+    // is that no conversion is needed.
+    //
+    // If two conversions are tied, then we swap the conversion direction. Eg, int -> int64
+    // and int -> float are both Numeric conversions. However, int64 -> int is 
+    unsigned int nmatches = 0;
+    for (const auto& [left, right] : *operand_list) {
+        auto want_left_type = cc.types()->GetBuiltin(left);
+        auto left_ck = FindConversion(left_type, want_left_type, CvtContext::Operator);
+        if (!HasImplicitConversion(left_ck))
+            continue;
+
+        auto want_right_type = cc.types()->GetBuiltin(right);
+        auto right_ck = FindConversion(right_type, want_right_type, CvtContext::Operator);
+        if (!HasImplicitConversion(right_ck))
+            continue;
+
+        // Note that we pass potentially null pointers to CompareConversion.
+        // This is ok, since they are only null if no best ck exists. In that
+        // case, we have a better ck by default, and the pointer won't be used.
+        auto left_cmp = CompareConversion(left_ck, out.left.ck, want_left_type, out.left.type,
+                                          CvtContext::Operator);
+        auto right_cmp = CompareConversion(right_ck, out.right.ck, want_right_type, out.right.type,
+                                          CvtContext::Operator);
+        if (left_cmp == CkCompare::Worse || right_cmp == CkCompare::Worse)
+            continue;
+        if (left_cmp == CkCompare::Better || right_cmp == CkCompare::Better) {
+            nmatches = 0;
+            out.left = {left_ck, want_left_type};
+            out.right = {right_ck, want_right_type};
+        }
+        nmatches++;
+    }
+
+    // Ambiguous matches should be impossible right now.
+    assert(nmatches <= 1);
+
+    if (nmatches == 0)
+        return {};
+
+    assert(out.left.type == out.right.type);
+    return {out};
+}
+
+auto Semantics::FindEqualityOperator(Type* left_type, Type* right_type)
+    -> std::optional<BinaryOperator>
+{
+    auto rtl_ck = FindConversion(right_type, left_type, CvtContext::Operator);
+    auto ltr_ck = FindConversion(left_type, right_type, CvtContext::Operator);
+
+    if (!HasImplicitConversion(ltr_ck) && !HasImplicitConversion(rtl_ck))
+        return {};
+
+    BinaryOperator out;
+    out.left = {ConversionKind::None, left_type};
+    out.right = {ConversionKind::None, right_type};
+
+    // If the right-to-left conversion is better than the left-to-right, we rewrite
+    // the right-hand side.
+    //
+    // Eg, for "float == int", ltr = illegal, rtl = numeric.
+    //
+    // Therefore, we we choose to convert the right-hand side.
+    if (static_cast<uint32_t>(rtl_ck) >= static_cast<uint32_t>(ltr_ck))
+        out.right = {rtl_ck, left_type};
+    else
+        out.left = {ltr_ck, right_type};
+    return out;
+}
+
+template <typename T>
+static void ReportConversionDiagnosticImpl(T location, QualType formal, QualType actual) {
+    auto diag_ck = FindConversion(*formal, *actual, CvtContext::Assignment);
+    if (diag_ck == ConversionKind::Numeric) {
+        report(location, 462) << actual << formal;
+    } else if (actual->isVoid()) {
+        report(location, 466);
+    } else if (actual->isNull()) {
+        report(location, 148) << formal;
+    } else if (formal->isArray() && !formal->isFixedArray() && actual->isFlatArray()) {
+        report(location, 473) << actual << formal;
+    } else {
+        report(location, 450) << actual << formal;
+    }
+}
+
+void Semantics::ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual) {
+    ReportConversionDiagnosticImpl(pos, formal, actual);
+}
+
+void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual) {
+    // Print a better error message for when function signatures match but
+    // we're trying to convert a closure to a legacy ID.
+    if (auto actual_ft = actual->as<FunctionType>()) {
+        if (auto formal_ft = formal->as<FunctionType>()) {
+            if (actual_ft->conv() == FunctionType::Closure &&
+                formal_ft->conv() == FunctionType::Legacy)
+            {
+                report(node->pos(), 43);
+                return;
+            }
+        }
+    }
+
+    // Build a more helpful message for specific cases.
+    if (formal->isInt16() && actual->isInt() && node->val().ident == iCONSTEXPR) {
+        cell_t v = node->val().const_i32();
+        if (v < std::numeric_limits<int16_t>::min() || v > std::numeric_limits<int16_t>::max()) {
+            report(node->pos(), 179) << v
+                                     << std::numeric_limits<int16_t>::min()
+                                     << std::numeric_limits<int16_t>::max()
+                                     << "int16";
+            return;
+        }
+    }
+    if (formal->isInt8() && (actual->isInt() || actual->isInt16()) && node->val().ident == iCONSTEXPR) {
+        cell_t v = node->val().const_i32();
+        if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
+            report(node->pos(), 179) << v
+                                     << std::numeric_limits<int8_t>::min()
+                                     << std::numeric_limits<int8_t>::max()
+                                     << "int8";
+            return;
+        }
+    }
+    if (formal->isIntPtr() && actual->isInt64() && node->val().ident == iCONSTEXPR) {
+        // Encoding 64-bit integers into intptr is not allowed since the VM might be 32-bit.
+        int64_t v = node->val().const_int64();
+        if (v < std::numeric_limits<int32_t>::min() || v > std::numeric_limits<int32_t>::max()) {
+            report(node->pos(), 178) << v
+                                     << std::numeric_limits<int32_t>::min()
+                                     << std::numeric_limits<int32_t>::max()
+                                     << "intptr";
+            return;
+        }
+    }
+    ReportConversionDiagnosticImpl(node, formal, actual);
+}
+
+Expr* Semantics::TryConversion(Expr* expr, QualType formal, CvtContext why) {
+    ConversionKind ck;
+    if (auto constant_ck = FindConstantConversion(expr, expr->val().type(), *formal, why))
+        ck = *constant_ck;
+    else
+        ck = FindConversion(expr->val().type(), *formal, why);
+    if (HasImplicitConversion(ck)) {
+        if (!IsNopConversion(ck))
+            return BuildConversion(expr, ck, *formal);
+        if (ck == ConversionKind::TagMismatch)
+            report(expr->pos(), 213) << formal << expr->val().type();
+        return expr;
+    }
+    ReportConversionDiagnostic(expr, formal, expr->val().type());
+    return nullptr;
+}
+
+bool Semantics::CheckCoercion(Expr* node, QualType formal, QualType actual,
+                              CvtContext why)
+{
+    ConversionKind ck;
+    if (auto constant_ck = FindConstantConversion(node, *actual, *formal, why))
+        ck = *constant_ck;
+    else
+        ck = FindConversion(*actual, *formal, why);
+    return CheckCoercionImpl(node, node->pos(), formal, actual, why, ck);
+}
+
+bool Semantics::CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
+                              CvtContext why)
+{
+    auto ck = FindConversion(*actual, *formal, why);
+    return CheckCoercionImpl(nullptr, pos, formal, actual, why, ck);
+}
+
+bool Semantics::CheckCoercionImpl(Expr* node, const token_pos_t& pos,
+                                  QualType formal, QualType actual,
+                                  CvtContext why, ConversionKind ck)
+{
+    if (!HasImplicitConversion(ck)) {
+        if (node)
+            ReportConversionDiagnostic(node, formal, actual);
+        else
+            ReportConversionDiagnostic(pos, formal, actual);
+        return false;
+    }
+    if (ck == ConversionKind::TagMismatch)
+        report(pos, 213) << formal << actual;
+    return true;
+}
+
+} // namespace cc
+} // namespace sp

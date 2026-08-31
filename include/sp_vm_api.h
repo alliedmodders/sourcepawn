@@ -1,14 +1,8 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-// Copyright (C) 2006-2015 AlliedModders LLC
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
-//
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// Copyright (c) 2006-2026 AlliedModders LLC
 //
 #ifndef _INCLUDE_SOURCEPAWN_VM_API_H_
 #define _INCLUDE_SOURCEPAWN_VM_API_H_
@@ -264,14 +258,8 @@ class IFrameIterator
 };
 
 /**
-   * @brief Interface to managing a debug context at runtime.
-   */
-struct ARRAY_HANDLE;
-typedef ARRAY_HANDLE* ARRAY_PTR;
-
-/**
-   * @brief Interface to managing a runtime plugin.
-   */
+ * @brief Interface to managing a runtime plugin.
+ */
 class IPluginRuntime
 {
   public:
@@ -615,36 +603,6 @@ class IPluginRuntime
     virtual IPluginFunction* GetFunctionByIdOrError(funcid_t func) = 0;
 
     /**
-     * @brief Convert a local address to an ARRAY_PTR handle.
-     *
-     * @param base      Array base.
-     * @param out       Array pointer handle.
-     */
-    virtual int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) = 0;
-
-    /**
-     * @brief Return the data vector for an array.
-     *
-     * For character arrays, the pointer should be casted to a uint8_t* or char*.
-     * For int64 arrays, the pointer should be casted to an int64_t* or uint64_t*.
-     * For all other types, the pointer should be casted to a cell_t*.
-     *
-     * If UsesDirectArrays() is false, note that |data[i]| will not yield an
-     * interior array pointer if the array has interior arrays. Instead, the
-     * formula is:
-     *
-     *      array_base + (i * sizeof(cell_t)) + data[i]
-     *
-     * @param handle    Array pointer handle.
-     * @param size      Optional pointer to store size of the array. If zero,
-     *                  and the return pointer is not null, then the array
-     *                  length is not supported.
-     * @return          Pointer to the data vector for the array, or null if
-     *                  the array has no data vector (zero length).
-     */
-    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
-
-    /**
      * Downcast for embedder convenience.
      */
     virtual sp::BaseRuntime* GetBaseRuntime() = 0;
@@ -916,6 +874,9 @@ class ISourcePawnEnvironment
     // @brief Returns the message of the pending exception.
     virtual const char* GetPendingExceptionMessage(const ExceptionHandler* handler) = 0;
 
+    // @brief Clears any pending exception.
+    virtual void ClearPendingException(ExceptionHandler* handler) = 0;
+
     // @brief Returns the code of the pending exception.
     virtual int GetPendingExceptionCode(const ExceptionHandler* handler) = 0;
 };
@@ -940,13 +901,13 @@ class ExceptionHandler
     friend class sp::Environment;
 
   public:
-    ExceptionHandler(ISourcePawnEnvironment* api)
-     : env_(api),
+    explicit ExceptionHandler(ISourcePawnEnvironment* env)
+     : env_(env),
        catch_(true)
     {
         env_->EnterExceptionHandlingScope(this);
     }
-    ExceptionHandler(IPluginContext* ctx)
+    explicit ExceptionHandler(IPluginContext* ctx)
      : env_(ctx->GetEnvironment()),
        catch_(true)
     {
@@ -964,11 +925,18 @@ class ExceptionHandler
         catch_ = false;
     }
 
+    // Remove the exception so another one can be thrown.
+    void ClearException() {
+        env_->ClearPendingException(this);
+    }
+
     bool HasException() const {
         return env_->HasPendingException(this);
     }
 
     const char* Message() const {
+        if (!HasException())
+            return nullptr;
         return env_->GetPendingExceptionMessage(this);
     }
 
@@ -997,7 +965,7 @@ class ExceptionHandler
 class DetectExceptions : public ExceptionHandler
 {
   public:
-    DetectExceptions(ISourcePawnEngine2* api)
+    DetectExceptions(ISourcePawnEnvironment* api)
      : ExceptionHandler(api)
     {
         catch_ = false;

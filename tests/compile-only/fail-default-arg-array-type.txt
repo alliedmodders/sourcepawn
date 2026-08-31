@@ -1,1 +1,1 @@
-(4) : error 213: tag mismatch (expected "int", got "float")
+(4) : error 462: implicit conversion of 'float' to 'int' can lose data

@@ -1,23 +1,12 @@
 // vim: set ts=8 sts=4 sw=4 tw=99 et:
 //
-//  Copyright (c) AlliedModders 2026
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// Copyright (c) 2026 AlliedModders LLC
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
-//
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #include "ast-printer.h"
+
+#include <inttypes.h>
 
 #include "lexer.h"
 #include "parse-node.h"
@@ -82,12 +71,9 @@ void AstPrinter::PrintExprInline(Expr* expr) {
         return;
 
     switch (expr->kind()) {
-        case ExprKind::Number64Expr: {
-            auto node = expr->to<Number64Expr>();
-            if (node->atom())
-                fprintf(out_, "%s", node->atom()->chars());
-            else
-                fprintf(out_, "%lld", (long long)node->ToInt64().value_or(0));
+        case ExprKind::NumberExpr: {
+            auto node = expr->to<NumberExpr>();
+            PrintConstValue(node->val());
             break;
         }
         case ExprKind::SymbolExpr:
@@ -176,6 +162,16 @@ void AstPrinter::PrintStaticAssertStmt(StaticAssertStmt* node, bool is_last) {
     stack_.pop_back();
 }
 
+void AstPrinter::PrintGlobalInitStmt(GlobalInitStmt* node, bool is_last) {
+    fprintf(out_, "GlobalInitStmt\n");
+    stack_.push_back(is_last);
+    for (size_t i = 0; i < node->vars().size(); i++) {
+        PrintIndent(i == node->vars().size() - 1);
+        fprintf(out_, "%s\n", node->vars()[i]->name()->chars());
+    }
+    stack_.pop_back();
+}
+
 void AstPrinter::PrintVarDecl(VarDecl* node, bool is_last) {
     fprintf(out_, "VarDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
@@ -201,7 +197,21 @@ void AstPrinter::PrintArgDecl(ArgDecl* node, bool is_last) {
 void AstPrinter::PrintConstDecl(ConstDecl* node, bool is_last) {
     fprintf(out_, "ConstDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
-    fprintf(out_, ") value: %d\n", (int)node->const_val());
+    fprintf(out_, ") value: ");
+    PrintConstValue(node->value());
+    fputc('\n', out_);
+}
+
+void AstPrinter::PrintConstValue(const ExprVal& cv) {
+    if (cv.type()->isFloat()) {
+        fprintf(out_, "%f", cv.const_float());
+    } else if (cv.type()->isDouble()) {
+        fprintf(out_, "%f", cv.const_double());
+    } else if (cv.type()->isInt64()) {
+        fprintf(out_, "%" PRId64, (int64_t)cv.const_int64());
+    } else {
+        fprintf(out_, "%d", (int)cv.const_cell());
+    }
 }
 
 void AstPrinter::PrintEnumDecl(EnumDecl* node, bool is_last) {
@@ -260,22 +270,8 @@ void AstPrinter::PrintReturnStmt(ReturnStmt* node, bool is_last) {
     }
 }
 
-void AstPrinter::PrintAssertStmt(AssertStmt* node, bool is_last) {
-    fprintf(out_, "AssertStmt\n");
-    stack_.push_back(is_last);
-    Print(node->expr(), true);
-    stack_.pop_back();
-}
-
 void AstPrinter::PrintDeleteStmt(DeleteStmt* node, bool is_last) {
     fprintf(out_, "DeleteStmt\n");
-    stack_.push_back(is_last);
-    Print(node->expr(), true);
-    stack_.pop_back();
-}
-
-void AstPrinter::PrintExitStmt(ExitStmt* node, bool is_last) {
-    fprintf(out_, "ExitStmt\n");
     stack_.push_back(is_last);
     Print(node->expr(), true);
     stack_.pop_back();
@@ -354,28 +350,61 @@ void AstPrinter::PrintPragmaUnusedStmt(PragmaUnusedStmt* node, bool is_last) {
     fprintf(out_, "\n");
 }
 
-void AstPrinter::PrintFunctionDecl(FunctionDecl* node, bool is_last) {
-    fprintf(out_, "FunctionDecl: %s (args: %d)\n", node->name()->chars(), (int)node->args().size());
+void AstPrinter::PrintFunctionBody(FunctionDecl* node, bool is_last) {
     stack_.push_back(is_last);
+    const auto& prebody = node->prebody();
+    bool has_after_args = !prebody.empty() || node->body();
     for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
+        Print(node->args()[i], (i == node->args().size() - 1) && !has_after_args);
+    for (size_t i = 0; i < prebody.size(); i++)
+        Print(prebody[i], (i == prebody.size() - 1) && !node->body());
     if (node->body())
         Print(node->body(), true);
     stack_.pop_back();
 }
 
+void AstPrinter::PrintFunctionDecl(FunctionDecl* node, bool is_last) {
+    fprintf(out_, "FunctionDecl: %s (args: %d)\n", node->name()->chars(), (int)node->args().size());
+    PrintFunctionBody(node, is_last);
+}
+
 void AstPrinter::PrintMemberFunctionDecl(MemberFunctionDecl* node, bool is_last) {
-    fprintf(out_, "MemberFunctionDecl: %s::%s\n", node->parent()->name()->chars(), node->name()->chars());
-    stack_.push_back(is_last);
-    for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
-    if (node->body())
-        Print(node->body(), true);
-    stack_.pop_back();
+    fprintf(out_, "MemberFunctionDecl: %s::%s (ctor: %d, dtor: %d)\n", node->parent()->name()->chars(), node->name()->chars(),
+            node->is_ctor(), node->is_dtor());
+    PrintFunctionBody(node, is_last);
+}
+
+void AstPrinter::PrintLayoutMemberDecl(LayoutMemberDecl* node, bool is_last) {
+    fprintf(out_, "LayoutMemberDecl: %s (private: %d)\n", node->name()->chars(), node->is_private());
 }
 
 void AstPrinter::PrintEnumStructDecl(EnumStructDecl* node, bool is_last) {
     fprintf(out_, "EnumStructDecl: %s\n", node->name()->chars());
+    stack_.push_back(is_last);
+
+    bool has_methods = !node->methods().empty();
+
+    PrintIndent(!has_methods);
+    fprintf(out_, "fields:\n");
+    stack_.push_back(!has_methods);
+    for (size_t i = 0; i < node->fields().size(); i++)
+        Print(node->fields()[i], i == node->fields().size() - 1);
+    stack_.pop_back();
+
+    if (has_methods) {
+        PrintIndent(true);
+        fprintf(out_, "methods:\n");
+        stack_.push_back(true);
+        for (size_t i = 0; i < node->methods().size(); i++)
+            Print(node->methods()[i], i == node->methods().size() - 1);
+        stack_.pop_back();
+    }
+
+    stack_.pop_back();
+}
+
+void AstPrinter::PrintClassDecl(ClassDecl* node, bool is_last) {
+    fprintf(out_, "ClassDecl: %s\n", node->name()->chars());
     stack_.push_back(is_last);
 
     bool has_methods = !node->methods().empty();
@@ -437,19 +466,12 @@ void AstPrinter::PrintChangeScopeNode(ChangeScopeNode* node, bool is_last) {
     fprintf(out_, "ChangeScopeNode: %s\n", node->file()->chars());
 }
 
-void AstPrinter::PrintMethodmapPropertyDecl(MethodmapPropertyDecl* node, bool is_last) {
-    fprintf(out_, "MethodmapPropertyDecl: %s\n", node->name()->chars());
+void AstPrinter::PrintPropertyDecl(PropertyDecl* node, bool is_last) {
+    fprintf(out_, "PropertyDecl: %s\n", node->name()->chars());
 }
 
-void AstPrinter::PrintMethodmapMethodDecl(MethodmapMethodDecl* node, bool is_last) {
-    fprintf(out_, "MethodmapMethodDecl: %s (ctor: %d, dtor: %d)\n", node->name()->chars(),
-            node->is_ctor(), node->is_dtor());
-    stack_.push_back(is_last);
-    for (size_t i = 0; i < node->args().size(); i++)
-        Print(node->args()[i], (i == node->args().size() - 1) && !node->body());
-    if (node->body())
-        Print(node->body(), true);
-    stack_.pop_back();
+void AstPrinter::PrintUpvarDecl(UpvarDecl* node, bool is_last) {
+    fprintf(out_, "UpvarDecl: %s\n", node->name()->chars());
 }
 
 void AstPrinter::PrintLogicalExpr(LogicalExpr* node, bool is_last) {
@@ -551,7 +573,16 @@ void AstPrinter::PrintIndexExpr(IndexExpr* node, bool is_last) {
 void AstPrinter::PrintRvalueExpr(RvalueExpr* node, bool is_last) {
     fprintf(out_, "RvalueExpr\n");
     stack_.push_back(is_last);
-    Print(node->expr(), true);
+    Print(node->lval(), true);
+    stack_.pop_back();
+}
+
+void AstPrinter::PrintSliceExpr(SliceExpr* node, bool is_last) {
+    fprintf(out_, "RvalueExpr\n");
+    stack_.push_back(is_last);
+    Print(node->expr(), node->index() == nullptr);
+    if (node->index())
+        Print(node->index(), true);
     stack_.pop_back();
 }
 
@@ -571,19 +602,36 @@ void AstPrinter::PrintNullExpr(NullExpr* node, bool is_last) {
     fprintf(out_, "NullExpr\n");
 }
 
-void AstPrinter::PrintTaggedValueExpr(TaggedValueExpr* node, bool is_last) {
-    fprintf(out_, "TaggedValueExpr: %d\n", (int)node->value());
+void AstPrinter::PrintNumberExpr(NumberExpr* node, bool is_last) {
+    fprintf(out_, "NumberExpr: ");
+    PrintConstValue(node->val());
+    fputc('\n', out_);
 }
 
-void AstPrinter::PrintNumber64Expr(Number64Expr* node, bool is_last) {
-    if (node->atom())
-        fprintf(out_, "Number64Expr: %s\n", node->atom()->chars());
-    else
-        fprintf(out_, "Number64Expr: %lld\n", (long long)node->ToInt64().value_or(0));
+void AstPrinter::PrintEscapedString(const char* s) {
+    for (; *s; s++) {
+        unsigned char c = *s;
+        switch (c) {
+            case '\n': fputs("\\n", out_); break;
+            case '\r': fputs("\\r", out_); break;
+            case '\t': fputs("\\t", out_); break;
+            case '"':  fputs("\\\"", out_); break;
+            case '\\': fputs("\\\\", out_); break;
+            default:
+                if (c < 0x20)
+                    fprintf(out_, "\\x%02x", c);
+                else
+                    fputc(c, out_);
+                break;
+        }
+    }
 }
 
 void AstPrinter::PrintStringExpr(StringExpr* node, bool is_last) {
-    fprintf(out_, "StringExpr: \"%s\"\n", node->text()->chars());
+    fprintf(out_, "StringExpr: \"");
+    PrintEscapedString(node->text()->chars());
+    fputc('"', out_);
+    fputc('\n', out_);
 }
 
 void AstPrinter::PrintNewArrayExpr(NewArrayExpr* node, bool is_last) {
@@ -622,6 +670,16 @@ void AstPrinter::PrintSimpleCastExpr(SimpleCastExpr* node, bool is_last) {
     stack_.push_back(is_last);
     Print(node->from(), true);
     stack_.pop_back();
+}
+
+void AstPrinter::PrintSpreadArgsExpr(SpreadArgsExpr* node, bool is_last) {
+    fprintf(out_, "SpreadArgsExpr\n");
+}
+
+void AstPrinter::PrintFunctionExpr(FunctionExpr* node, bool is_last) {
+    fprintf(out_, "FunctionExpr: %s\n",
+            node->decl()->name() ? node->decl()->name()->chars() : "(anonymous)");
+    PrintFunctionBody(node->decl(), is_last);
 }
 
 } // namespace cc

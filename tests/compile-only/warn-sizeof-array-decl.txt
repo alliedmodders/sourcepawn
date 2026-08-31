@@ -1,0 +1,1 @@
+(6) : warning 254: sizeof on enum structs is no longer constant, implicitly creating a dynamic array

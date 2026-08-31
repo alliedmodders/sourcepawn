@@ -1,0 +1,159 @@
+// vim: set sts=2 ts=8 sw=2 tw=99 et:
+//
+// SPDX-License-Identifier: BSD-3-Clause
+//
+// Copyright (c) 2006-2026 AlliedModders LLC
+//
+#include "legacy/builtins.h"
+#include <amtl/am-float.h>
+#include <math.h>
+
+namespace sp::v1 {
+
+using namespace SourcePawn;
+
+extern sp_nativeinfo_t gBuiltinFloatNatives[];
+
+BuiltinNatives::BuiltinNatives() {
+}
+
+bool
+BuiltinNatives::Initialize() {
+    if (!map_.init(32))
+        return false;
+
+    for (size_t i = 0; gBuiltinFloatNatives[i].name != nullptr; i++) {
+        const sp_nativeinfo_t& entry = gBuiltinFloatNatives[i];
+        NativeMap::Insert p = map_.findForAdd(entry.name);
+        assert(!p.found());
+        map_.add(p, entry.name, entry.func);
+    }
+
+    return true;
+}
+
+SPVM_NATIVE_FUNC
+BuiltinNatives::Lookup(const char* name) {
+    NativeMap::Result r = map_.find(name);
+    if (!r.found())
+        return nullptr;
+    return r->value;
+}
+
+static cell_t
+FloatCtor(IPluginContext* pCtx, const cell_t* params) {
+    float val = static_cast<float>(params[1]);
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatAdd(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) + sp_ctof(params[2]);
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatSub(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) - sp_ctof(params[2]);
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatMul(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) * sp_ctof(params[2]);
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatDiv(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]) / sp_ctof(params[2]);
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatMod(IPluginContext* pCtx, const cell_t* params) {
+    float val = fmodf(sp_ctof(params[1]), sp_ctof(params[2]));
+
+    return sp_ftoc(val);
+}
+
+static cell_t
+FloatGt(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) > sp_ctof(params[2]));
+}
+
+static cell_t
+FloatGe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) >= sp_ctof(params[2]));
+}
+
+static cell_t
+FloatLt(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) < sp_ctof(params[2]));
+}
+
+static cell_t
+FloatLe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) <= sp_ctof(params[2]));
+}
+
+static cell_t
+FloatEq(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) == sp_ctof(params[2]));
+}
+
+static cell_t
+FloatNe(IPluginContext* pCtx, const cell_t* params) {
+    return !!(sp_ctof(params[1]) != sp_ctof(params[2]));
+}
+
+static cell_t
+FloatNot(IPluginContext* pCtx, const cell_t* params) {
+    float val = sp_ctof(params[1]);
+    if (ke::IsNaN(val))
+        return 1;
+    return val ? 0 : 1;
+}
+
+static cell_t FloatAbs(IPluginContext* pCtx, const cell_t* params) {
+    return sp_ftoc(fabsf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToCeil(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(ceilf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToZero(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(truncf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToFloor(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(floorf(sp_ctof(params[1])));
+}
+
+static cell_t RoundToNearest(IPluginContext* pCtx, const cell_t* params) {
+    return static_cast<cell_t>(roundf(sp_ctof(params[1])));
+}
+
+sp_nativeinfo_t gBuiltinFloatNatives[] = {
+    {"__float_ctor", FloatCtor}, {"__float_mul", FloatMul}, {"__float_div", FloatDiv},
+    {"__float_mod", FloatMod},   {"__float_add", FloatAdd}, {"__float_sub", FloatSub},
+    {"__float_gt", FloatGt},     {"__float_ge", FloatGe},   {"__float_lt", FloatLt},
+    {"__float_le", FloatLe},     {"__float_eq", FloatEq},   {"__float_ne", FloatNe},
+    {"__float_not", FloatNot},
+
+    // Legacy float natives for SourceMod compatibility.
+    {"FloatAbs", FloatAbs},
+    {"RoundToCeil", RoundToCeil},
+    {"RoundToZero", RoundToZero},
+    {"RoundToFloor", RoundToFloor},
+    {"RoundToNearest", RoundToNearest},
+    {nullptr, nullptr},
+};
+
+} // namespace sp::v1

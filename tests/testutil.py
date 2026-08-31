@@ -1,7 +1,9 @@
 # vim: set ts=2 sw=2 tw=99 et:
 import os
+import re
 import platform
 import shutil
+import sys
 import tempfile
 import subprocess
 from threading import Timer
@@ -51,8 +53,8 @@ def exec_argv(argv, timeout = None, logger = None, env = None):
 
   try:
     stdout, stderr = p.communicate()
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
+    stdout = stdout.decode('utf-8', errors='ignore')
+    stderr = stderr.decode('utf-8', errors='ignore')
     return p.returncode, stdout, stderr
   finally:
     if timer is not None:
@@ -97,6 +99,19 @@ def manifest_get(manifest, filename, key, default_value = None):
   return default_value
 
 
+def load_golden_tests(path):
+  if not os.path.exists(path):
+    raise Exception("Legacy compiler found, but golden test list {0} is missing".format(path))
+  tests = set()
+  with open(path, 'rt', encoding='utf-8') as fp:
+    for line in fp:
+      line = line.strip()
+      if not line or line.startswith('#'):
+        continue
+      tests.add(line.replace('\\', '/'))
+  return tests
+
+
 def find_executable(path):
   if os.path.exists(path):
     pass
@@ -136,3 +151,45 @@ def find_executables_in(search_path, name, arch_filter=None):
       continue
     found.append((parts[1], os.path.abspath(full_path)))
   return found
+
+def find_llvm_profdata():
+  path = shutil.which('llvm-profdata')
+  if path:
+    return path
+  try:
+    rc, stdout, stderr = exec_argv(['clang', '--version'])
+    if rc != 0:
+      return None
+    m = re.search(r'InstalledDir:\s*(.+)', stdout)
+    if m:
+      installed_dir = m.group(1).strip()
+      profdata_path = os.path.join(installed_dir, 'llvm-profdata')
+      if os.path.exists(profdata_path):
+        return profdata_path
+    m = re.search(r'version\s+(\d+)', stdout)
+    if m:
+      version = m.group(1)
+      path = shutil.which('llvm-profdata-{}'.format(version))
+      if path:
+        return path
+  except Exception:
+    pass
+  return None
+
+def merge_profiles(temp_dir, output_file):
+  profdata_path = find_llvm_profdata()
+  if not profdata_path:
+    sys.stderr.write("Error: llvm-profdata not found. Cannot merge coverage profiles.\n")
+    return
+  files = []
+  for root, _, filenames in os.walk(temp_dir):
+    for filename in filenames:
+      if filename.endswith('.profraw'):
+        files.append(os.path.join(root, filename))
+  if not files:
+    return
+  argv = [profdata_path, 'merge', '-sparse'] + files + ['-o', output_file]
+  rc, stdout, stderr = exec_argv(argv)
+  if rc != 0:
+    sys.stderr.write("Error: llvm-profdata failed with code {0}\n".format(rc))
+    sys.stderr.write(stderr + "\n")

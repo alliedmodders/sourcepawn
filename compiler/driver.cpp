@@ -1,22 +1,10 @@
 /* vim: set sts=4 ts=8 sw=4 tw=99 et: */
-//  Copyright (c) AlliedModders LLC 2022
-//  Copyright (c) ITB CompuPhase 1997-2006
 //
-//  This software is provided "as-is", without any express or implied warranty.
-//  In no event will the authors be held liable for any damages arising from
-//  the use of this software.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-//  Permission is granted to anyone to use this software for any purpose,
-//  including commercial applications, and to alter it and redistribute it
-//  freely, subject to the following restrictions:
+// Copyright (c) 2022-2026 AlliedModders LLC
+// Copyright (c) ITB CompuPhase 1997-2006
 //
-//  1.  The origin of this software must not be misrepresented; you must not
-//      claim that you wrote the original software. If you use this software in
-//      a product, an acknowledgment in the product documentation would be
-//      appreciated but is not required.
-//  2.  Altered source versions must be plainly marked as such, and must not be
-//      misrepresented as being the original software.
-//  3.  This notice may not be removed or altered from any source distribution.
 #include <amtl/experimental/am-argparser.h>
 
 #include <filesystem>
@@ -26,7 +14,7 @@
 #include "sc.h"
 
 #if defined _WIN32
-# include <Windows.h>
+# include <windows.h>
 # include <direct.h>
 #else
 # include <unistd.h>
@@ -75,6 +63,8 @@ args::ToggleOption opt_no_verify(nullptr, "--no-verify", Some(false),
                                  "Disable opcode verification (for debugging).");
 args::ToggleOption opt_print_ast(nullptr, "--print-ast", Some(false),
                                  "Print the Abstract Syntax Tree");
+args::ToggleOption opt_sema_only(nullptr, "--sema-only", Some(false),
+                                 "Stop after perforing semantic analysis.");
 
 /* set_extension
  * Set the default extension, or force an extension. To erase the
@@ -119,6 +109,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
     }
 
     cc.options()->syntax_only = opt_syntax_only.value();
+    cc.options()->sema_only = opt_sema_only.value();
     cc.options()->need_semicolon = opt_semicolons.value();
     cc.options()->tabsize = opt_tabsize.value();
     cc.options()->warnings_are_errors = opt_warnings_as_errors.value();
@@ -160,7 +151,7 @@ static void parseoptions(CompileContext& cc, int argc, char** argv) {
 
 #if defined __WIN32__ || defined _WIN32 || defined _Windows
     if (opt_hwnd.hasValue()) {
-        hwndFinish = (HWND)atoi(opt_hwnd.value().c_str());
+        hwndFinish = (HWND)(intptr_t)atoll(opt_hwnd.value().c_str());
         if (!IsWindow(hwndFinish))
             hwndFinish = (HWND)0;
     }

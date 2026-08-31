@@ -1,29 +1,8 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// =============================================================================
-// SourcePawn
-// Copyright (C) 2004-2008 AlliedModders LLC.  All rights reserved.
-// =============================================================================
 //
-// This program is free software; you can redistribute it and/or modify it under
-// the terms of the GNU General Public License, version 3.0, as published by the
-// Free Software Foundation.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-// This program is distributed in the hope that it will be useful, but WITHOUT
-// ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
-// details.
-//
-// You should have received a copy of the GNU General Public License along with
-// this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-// As a special exception, AlliedModders LLC gives you permission to link the
-// code of this program (as well as its derivative works) to "Half-Life 2," the
-// "Source Engine," the "SourcePawn JIT," and any Game MODs that run on software
-// by the Valve Corporation.  You must obey the GNU General Public License in
-// all respects for all other code used.  Additionally, AlliedModders LLC grants
-// this exception to all derivative works.  AlliedModders LLC defines further
-// exceptions, found in LICENSE.txt (as of this writing, version JULY-31-2007),
-// or <http://www.sourcemod.net/license.php>.
+// Copyright (c) 2004-2026 AlliedModders LLC
 
 #ifndef _INCLUDE_SPFILE_HEADERS_H
 #define _INCLUDE_SPFILE_HEADERS_H
@@ -40,21 +19,22 @@ struct SmxConsts {
     // File format verison number.
     // 0x0101 - SourcePawn 1.0; initial version used by SourceMod 1.0.
     // 0x0102 - SourcePawn 1.1; used by SourceMod 1.1+.
-    // 0x0200 - Used by spcomp2.
+    // 0x0200 - SourcePawn 2.0.
     //
     // The major version bits (8-15) indicate a product number. Consumers should
     // reject any version for a different product.
     //
     // The minor version bits (0-7) indicate a compatibility revision. Any minor
     // version higher than the current version should be rejected.
-    static const uint16_t SP1_VERSION_1_0 = 0x0101;
-    static const uint16_t SP1_VERSION_1_1 = 0x0102;
-    static const uint16_t SP1_VERSION_1_7 = 0x0107;
-    static const uint16_t SP1_VERSION_1_13 = 0x0113;
-    static const uint16_t SP1_VERSION_MIN = SP1_VERSION_1_0;
-    static const uint16_t SP1_VERSION_MAX = SP1_VERSION_1_13;
+    static const uint16_t SP_VERSION_1_0 = 0x0101;
+    static const uint16_t SP_VERSION_1_1 = 0x0102;
+    static const uint16_t SP_VERSION_1_7 = 0x0107;
+    static const uint16_t SP_VERSION_1_13 = 0x0113;
+    static const uint16_t SP_VERSION_2 = 0x0200;
+    static const uint16_t SP_VERSION_MIN = SP_VERSION_1_0;
+    static const uint16_t SP_VERSION_MAX = SP_VERSION_2;
 
-    // Compression types.
+    // Compression types. Must be 0 for SP_VERSION_2.
     static const uint8_t FILE_COMPRESSION_NONE = 0;
     static const uint8_t FILE_COMPRESSION_GZ = 1;
 

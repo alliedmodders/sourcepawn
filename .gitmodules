@@ -1,3 +1,12 @@
 [submodule "third_party/amtl"]
 	path = third_party/amtl
 	url = https://github.com/alliedmodders/amtl
+[submodule "third_party/gtest"]
+	path = third_party/gtest
+	url = https://github.com/google/googletest
+[submodule "third_party/mimalloc"]
+	path = third_party/mimalloc
+	url = https://github.com/alliedmodders/mimalloc
+[submodule "third_party/capstone"]
+	path = third_party/capstone
+	url = https://github.com/capstone-engine/capstone

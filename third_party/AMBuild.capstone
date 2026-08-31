@@ -1,0 +1,45 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os
+
+library = Root.StaticLibrary(builder, 'capstone')
+
+library.compiler.includes += [
+    os.path.join(builder.currentSourcePath, 'capstone', 'include'),
+    os.path.join(builder.currentSourcePath, 'capstone'),
+]
+
+library.compiler.defines += [
+    'CAPSTONE_HAS_X86',
+    'CAPSTONE_HAS_ARM64',
+    'CAPSTONE_USE_SYS_DYN_MEM',
+]
+
+# Suppress compiler warnings from third-party code to ensure warnings-as-errors does not break the build
+if library.compiler.like('gcc'):
+    library.compiler.cflags += ['-w']
+elif library.compiler.like('msvc'):
+    library.compiler.cflags += ['/w']
+
+library.sources += [
+    'capstone/cs.c',
+    'capstone/Mapping.c',
+    'capstone/MCInst.c',
+    'capstone/MCInstrDesc.c',
+    'capstone/MCRegisterInfo.c',
+    'capstone/SStream.c',
+    'capstone/utils.c',
+    'capstone/arch/AArch64/AArch64BaseInfo.c',
+    'capstone/arch/AArch64/AArch64Disassembler.c',
+    'capstone/arch/AArch64/AArch64InstPrinter.c',
+    'capstone/arch/AArch64/AArch64Mapping.c',
+    'capstone/arch/AArch64/AArch64Module.c',
+    'capstone/arch/X86/X86Disassembler.c',
+    'capstone/arch/X86/X86DisassemblerDecoder.c',
+    'capstone/arch/X86/X86IntelInstPrinter.c',
+    'capstone/arch/X86/X86InstPrinterCommon.c',
+    'capstone/arch/X86/X86Mapping.c',
+    'capstone/arch/X86/X86Module.c',
+    'capstone/arch/X86/X86ATTInstPrinter.c',
+]
+
+rvalue = builder.Add(library).binary

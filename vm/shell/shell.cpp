@@ -1,23 +1,23 @@
 // vim: set sts=2 ts=8 sw=2 tw=99 et:
-// 
-// Copyright (C) 2006-2015 AlliedModders LLC
-// 
-// This file is part of SourcePawn. SourcePawn is free software: you can
-// redistribute it and/or modify it under the terms of the GNU General Public
-// License as published by the Free Software Foundation, either version 3 of
-// the License, or (at your option) any later version.
 //
-// You should have received a copy of the GNU General Public License along with
-// SourcePawn. If not, see http://www.gnu.org/licenses/.
+// SPDX-License-Identifier: BSD-3-Clause
 //
-#include <sp_vm_api.h>
+// Copyright (c) 2006-2026 AlliedModders LLC
+//
+#include <math.h>
+#include <fenv.h>
+#include <inttypes.h>
 #include <stdlib.h>
 #include <stdarg.h>
+
+#include <sp_vm_api.h>
 #include <amtl/am-cxx.h>
 #include <amtl/experimental/am-argparser.h>
 #include "api.h"
+#include "base-runtime.h"
 #include "environment.h"
 #include "stack-frames.h"
+#include "v2/runtime.h"
 
 #ifdef __EMSCRIPTEN__
 # include <emscripten.h>
@@ -53,9 +53,7 @@ BaseFilename(const char* path)
   return path;
 }
 
-static void
-DumpStack(IFrameIterator& iter)
-{
+static void DumpStack(IFrameIterator& iter) {
   int index_count = 0;
   for (; !iter.Done(); iter.Next()) {
     if (iter.IsInternalFrame())
@@ -125,6 +123,19 @@ static cell_t PrintNum64(IPluginContext* cx, const cell_t* params)
   return printf("%" PRIi64 "\n", *reinterpret_cast<int64_t*>(addr));
 }
 
+static cell_t PrintNumPtr(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[1], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  return printf("%" PRIiPTR "\n", *reinterpret_cast<intptr_t*>(addr));
+}
+
+static cell_t SysIntPtrSize(IPluginContext* cx, const cell_t* params)
+{
+  return sizeof(intptr_t);
+}
+
 static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
 {
   cell_t* out;
@@ -137,6 +148,30 @@ static cell_t AddInt64(IPluginContext* cx, const cell_t* params)
   if (int err = cx->LocalToPhysAddr(params[3], &num2); err != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument");
   *reinterpret_cast<int64_t*>(out) = *reinterpret_cast<int64_t*>(num1) + *reinterpret_cast<int64_t*>(num2);
+  return 0;
+}
+
+static cell_t PrintDouble(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[1], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  return printf("%g\n", *reinterpret_cast<double*>(addr));
+}
+
+static cell_t AddDouble(IPluginContext* cx, const cell_t* params)
+{
+  cell_t* out;
+  cell_t* num1;
+  cell_t* num2;
+  if (int err = cx->LocalToPhysAddr(params[1], &out); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[2], &num1); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  if (int err = cx->LocalToPhysAddr(params[3], &num2); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+  *reinterpret_cast<double*>(out) =
+      *reinterpret_cast<double*>(num1) + *reinterpret_cast<double*>(num2);
   return 0;
 }
 
@@ -185,7 +220,7 @@ static cell_t Printf(IPluginContext* cx, const cell_t* params) {
       char next = *(p + 1);
       if (next == 's' || next == 'd' || next == 'f') {
         index++;
-        if (index > params[0])
+        if (static_cast<cell_t>(index) > params[0])
           return cx->ThrowNativeError("Wrong number of arguments");
 
         cell_t* addr;
@@ -280,12 +315,13 @@ static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
   if (!fn)
     return cx->ThrowNativeError("Could not find function");
 
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
   int err;
-  if ((err = cx->LocalToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read array");
 
-  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
   int length = params[3];
 
   CallArgs args;
@@ -298,6 +334,97 @@ static cell_t CallWithArray(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
+static cell_t CallWithRef(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  cell_t* phys_ptr;
+  if (int err = cx->LocalToPhysAddr(params[2], &phys_ptr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not get reference address");
+
+  CallArgs args;
+  args.PushCellByRef(phys_ptr);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithInt64(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  cell_t* addr;
+  if (int err = cx->LocalToPhysAddr(params[2], &addr); err != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read argument");
+
+  int64_t val = *reinterpret_cast<int64_t*>(addr);
+
+  CallArgs args;
+  args.PushInt64(val);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithFlatArray(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  BaseRuntime* rt = cx->GetBaseRuntime();
+  ARRAY_PTR array;
+  int err;
+  if ((err = rt->ParamToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array");
+
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
+  int length = params[3];
+
+  CallArgs args;
+  args.PushArray(flat_array, length);
+  args.PushCell(length);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t CallWithFlatString(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  char* buf;
+  cx->LocalToString(params[2], &buf);
+
+  CallArgs args;
+  args.PushString(buf);
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
+static cell_t TestLocalToArrayPtr(IPluginContext* cx, const cell_t* params) {
+  BaseRuntime* rt = cx->GetBaseRuntime();
+  ARRAY_PTR array;
+  if (rt->ParamToArrayPtr(params[1], &array) != SP_ERROR_NONE)
+    return -1;
+
+  char* data = reinterpret_cast<char*>(rt->GetArrayData(array));
+  if (!data)
+    return -2;
+
+  return data[params[2]];
+}
 
 static cell_t DoExecute(IPluginContext* cx, const cell_t* params)
 {
@@ -347,6 +474,7 @@ static cell_t AssertEq(IPluginContext* cx, const cell_t* params)
 
 static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 {
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
   cell_t* phys_out;
   uint32_t size;
@@ -355,17 +483,17 @@ static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
     return 0;
 
   int err;
-  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument");
 
-  cell_t* phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  cell_t* phys_in = reinterpret_cast<cell_t*>(rt->GetArrayData(array, &size));
   if (size != 0 && (uint32_t)params[2] >= size)
     return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 0)");
 
-  if ((err = cx->LocalToArrayPtr(phys_in[params[2]], &array)) != SP_ERROR_NONE)
+  if ((err = rt->LocalToArrayPtr(phys_in[params[2]], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read array level 0");
 
-  phys_in = reinterpret_cast<cell_t*>(cx->GetArrayData(array, &size));
+  phys_in = reinterpret_cast<cell_t*>(rt->GetArrayData(array, &size));
   if (size != 0 && (uint32_t)params[3] >= size)
     return cx->ThrowNativeErrorEx(SP_ERROR_ARRAY_BOUNDS, "Index out of bounds (level 1)");
 
@@ -378,12 +506,13 @@ static cell_t Access2DArray(IPluginContext* cx, const cell_t* params)
 
 static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
 {
+  BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
 
   int err;
-  if ((err = cx->LocalToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
+  if ((err = rt->ParamToArrayPtr(params[1], &array)) != SP_ERROR_NONE)
     return cx->ThrowNativeErrorEx(err, "Could not read argument 1");
-  cell_t* flat_array = reinterpret_cast<cell_t*>(cx->GetArrayData(array));
+  cell_t* flat_array = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
 
   IPluginFunction* fn = cx->GetFunctionById(params[4]);
   if (!fn)
@@ -403,6 +532,52 @@ static cell_t Copy2dArrayToCallback(IPluginContext* cx, const cell_t* params)
   if (!fn->Invoke(args, &ignore))
     return 0;
   return 0;
+}
+
+static cell_t FloatAbs(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = (val >= 0.0f) ? val : -val;
+
+  return sp_ftoc(val);
+}
+
+static cell_t RoundToNearest(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+
+  int oldmethod = fegetround();
+  fesetround(FE_TONEAREST);
+  int result = lrintf(val);
+  fesetround(oldmethod);
+  return result;
+}
+
+static cell_t RoundToFloor(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = floor(val);
+
+  return static_cast<int>(val);
+}
+
+static cell_t RoundToCeil(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  val = ceil(val);
+
+  return static_cast<int>(val);
+}
+
+static cell_t RoundToZero(IPluginContext *pCtx, const cell_t *params)
+{
+  float val = sp_ctof(params[1]);
+  if (val >= 0.0f)
+    val = floor(val);
+  else
+    val = ceil(val);
+
+  return static_cast<int>(val);
 }
 
 #pragma pack(push, 1)
@@ -440,6 +615,37 @@ static cell_t AddTestStructs(IPluginContext* cx, const cell_t* params) {
   out->x = a->x + b->x;
   out->y = a->y + b->y;
   return params[1];
+}
+
+// Dumps the fields of a pstruct global, by name, using the SmxImage API.
+static cell_t DumpPstruct(IPluginContext* cx, const cell_t* params) {
+  char* name;
+  cx->LocalToString(params[1], &name);
+
+  SmxImage* image = cx->GetBaseRuntime()->image();
+  const smx_pstruct_global* glb = image->FindPstructGlobal(name);
+  if (!glb)
+    return cx->ThrowNativeErrorEx(SP_ERROR_NOT_FOUND, "%s: not found", name);
+
+  printf("%s {\n", name);
+
+  uint32_t count = image->GetPstructFieldCount(glb);
+  for (uint32_t i = 0; i < count; i++) {
+    auto field = image->pstruct_value(glb->first_value + i);
+    auto field_name = image->names() + field->field_name;
+
+    std::variant<std::string, cell_t> out;
+    int err = image->GetPstructValue(glb, field_name, &out);
+    if (err != SP_ERROR_NONE) {
+      printf("    %s = <error %d>\n", field_name, err);
+    } else if (std::holds_alternative<std::string>(out)) {
+      printf("    %s = %s\n", field_name, std::get<std::string>(out).c_str());
+    } else {
+      printf("    %s = %d\n", field_name, std::get<cell_t>(out));
+    }
+  }
+  printf("}\n");
+  return 0;
 }
 
 class DynamicNative : public INativeCallback
@@ -480,10 +686,12 @@ static_assert(offsetof(LayoutVerifier, x) == 52);
 
 static int Execute(const char* file)
 {
-  char error[255];
-  std::unique_ptr<PluginRuntime> rt(sEnv->LoadBinaryFromFile(file, error, sizeof(error)));
+  ExceptionHandler eh(sEnv);
+
+  std::unique_ptr<BaseRuntime> rt(sEnv->LoadBinaryFromFile(file));
   if (!rt) {
-    fprintf(stderr, "Could not load plugin %s: %s\n", file, error);
+    const char* message = eh.HasException() ? eh.Message() : "unknown error";
+    fprintf(stderr, "Could not load plugin %s: %s\n", file, message);
     return 1;
   }
 
@@ -493,6 +701,8 @@ static int Execute(const char* file)
   BindNative(rt.get(), "print", Print);
   BindNative(rt.get(), "printnum", PrintNum);
   BindNative(rt.get(), "printnum64", PrintNum64);
+  BindNative(rt.get(), "printnumptr", PrintNumPtr);
+  BindNative(rt.get(), "sys_intptr_size", SysIntPtrSize);
   BindNative(rt.get(), "writenum", WriteNum);
   BindNative(rt.get(), "printnums", PrintNums);
   BindNative(rt.get(), "printnums64", PrintNums64);
@@ -509,13 +719,28 @@ static int Execute(const char* file)
   BindNative(rt.get(), "copy_2d_array_to_callback", Copy2dArrayToCallback);
   BindNative(rt.get(), "call_with_string", CallWithString);
   BindNative(rt.get(), "call_with_array", CallWithArray);
+  BindNative(rt.get(), "call_with_ref", CallWithRef);
+  BindNative(rt.get(), "call_with_int64", CallWithInt64);
+  BindNative(rt.get(), "call_with_flat_array", CallWithFlatArray);
+  BindNative(rt.get(), "call_with_flat_string", CallWithFlatString);
+  BindNative(rt.get(), "test_local_to_array_ptr", TestLocalToArrayPtr);
 
   BindNative(rt.get(), "assert_eq", AssertEq);
   BindNative(rt.get(), "printf", Printf);
   BindNative(rt.get(), "print_test_struct", PrintTestStruct);
   BindNative(rt.get(), "add_test_structs", AddTestStructs);
+  BindNative(rt.get(), "dump_pstruct", DumpPstruct);
   BindNative(rt.get(), "add_int64", AddInt64);
+  BindNative(rt.get(), "printdouble", PrintDouble);
+  BindNative(rt.get(), "add_double", AddDouble);
   BindNative(rt.get(), "donothing_varargs", DoNothingVarargs);
+
+  // These are hacks, since the legacy VM hardcodes them and the v2 VM does not.
+  BindNative(rt.get(), "FloatAbs", FloatAbs);
+  BindNative(rt.get(), "RoundToZero", RoundToZero);
+  BindNative(rt.get(), "RoundToCeil", RoundToCeil);
+  BindNative(rt.get(), "RoundToFloor", RoundToFloor);
+  BindNative(rt.get(), "RoundToNearest", RoundToNearest);
 
   IPluginFunction* fun = rt->GetFunctionByName("main");
   if (!fun)
@@ -523,7 +748,6 @@ static int Execute(const char* file)
 
   int result;
   {
-    ExceptionHandler eh(rt.get());
     if (!fun->Invoke(&result)) {
       fprintf(stderr, "Error executing main: %s\n", eh.Message());
       return 1;
@@ -570,6 +794,10 @@ int main(int argc, char** argv)
     "-d", "--enable-debugging",
     Some(kIsDebug),
     "Enable debugging.");
+  ToggleOption leak_check(parser,
+    "l", "leak-check",
+    Some(false),
+    "Report leaked heap objects when runtimes are destroyed.");
 
   if (!parser.parse(argc, argv)) {
     parser.usage(stderr, argc, argv);
@@ -577,9 +805,14 @@ int main(int argc, char** argv)
   }
 
   if (show_version.value()) {
-    fprintf(stdout, "SourcePawn version: %s\n", SM_VERSION_STRING);
-    if (sEnv->IsJitAvailable())
-      fprintf(stdout, "Just-in-time (JIT) compiler available.\n");
+    if ((sEnv = Environment::New()) == nullptr) {
+      fprintf(stderr, "Could not initialize ISourcePawnEnvironment\n");
+      return 1;
+    }
+    fprintf(stdout, "%s\n", sEnv->GetEngineName());
+    sEnv->Shutdown();
+    delete sEnv;
+    sEnv = nullptr;
     return 0;
   }
 
@@ -593,6 +826,15 @@ int main(int argc, char** argv)
 
   if (enable_debugging.value())
       sEnv->EnableDebugBreak();
+
+  bool has_leaks = false;
+  if (leak_check.value()) {
+    sEnv->SetLeakReportCallback([&](v2::Runtime* rt, const char* message) {
+      fprintf(stderr, "LEAK DETECTED IN %s! LIVE OBJECTS:\n", rt->Name());
+      fprintf(stderr, "%s", message);
+      has_leaks = true;
+    });
+  }
 
   if (getenv("SPEW_INTERP_OPS"))
     sEnv->set_spew_interp_ops(true);
@@ -608,6 +850,9 @@ int main(int argc, char** argv)
   }
 
   int errcode = Execute(filename.value().c_str());
+
+  if (!errcode && has_leaks)
+    errcode = 3;
 
   sEnv->SetDebugger(NULL);
   sEnv->Shutdown();

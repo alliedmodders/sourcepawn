@@ -1,0 +1,1 @@
+(6) : warning 237: coercing functions to and from primitives is unsupported and will be removed in the future
