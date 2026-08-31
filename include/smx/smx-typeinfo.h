@@ -64,6 +64,29 @@ struct smx_rtti_table_header {
 // than this value.
 static const uint32_t kNoTableIndex = 0x7fffffff;
 
+// Some opcodes reference difference tables, so we need a selector bit in the
+// immediate encoding.
+static constexpr uint32_t kTableId_SelectorBits = 8;
+static constexpr uint32_t kMaxTableSelector = (1 << kTableId_SelectorBits) - 1;
+static constexpr uint32_t kTableId_IndexShift = kTableId_SelectorBits;
+static constexpr uint32_t kTableId_IndexBits = 24;
+static constexpr uint32_t kMaxTableIndex = (1 << kTableId_IndexBits) - 1;
+
+// List of table identifiers.
+static constexpr uint32_t kTableId_RttiField = 0x00;
+
+static inline uint32_t GetTableIdSelector(uint32_t table_id) {
+    return table_id & ((1 << kTableId_SelectorBits) - 1);
+}
+static inline uint32_t GetTableIdIndex(uint32_t table_id) {
+    return (table_id >> kTableId_IndexShift) & ((1 << kTableId_IndexBits) - 1);
+}
+static inline uint32_t MakeTableId(uint32_t selector, uint32_t index) {
+    assert(selector < kMaxTableSelector);
+    assert(index <= kMaxTableIndex);
+    return (index << kTableId_IndexShift) | selector;
+}
+
 // The rtti.enums table has the following row structure:
 struct smx_rtti_enum {
     // Index into the names table.
@@ -134,15 +157,6 @@ struct smx_rtti_typeset {
     //    NumTypes      uint32
     //    Types*        type
     uint32_t signature;
-};
-
-// The rtti.field_refs table has the following row structure:
-struct smx_rtti_field_ref {
-    // Index into the classdef table.
-    uint32_t cls_index;
-
-    // Index into the field table.
-    uint32_t field_index;
 };
 
 static const uint32_t kClassType_Struct = 0x0;

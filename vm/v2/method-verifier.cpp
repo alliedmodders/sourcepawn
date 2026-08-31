@@ -751,19 +751,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetStringLitType(offset));
         }
         case OP_LOAD_FLD: {
-            uint32_t ref_index = read<uint32_t>();
-            auto ref = smx_->getFieldRef(ref_index);
-            if (!ref)
+            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* obj;
             if (!popStack(&obj))
                 return false;
-            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+            if (!obj->HasClassdef() || obj->cls() != fl->classdef)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto field = smx_->getField(ref->field_index);
-            if (!field)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto td = rt_->LoadTypeFromId(field->type_id);
+            auto td = rt_->LoadTypeFromId(fl->field->type_id);
             if (!td)
                 return false;
             if (td->IsCompositeValue())
@@ -771,19 +767,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(td);
         }
         case OP_ADDR_FLD: {
-            uint32_t ref_index = read<uint32_t>();
-            auto ref = smx_->getFieldRef(ref_index);
-            if (!ref)
+            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* obj;
             if (!popStack(&obj))
                 return false;
-            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+            if (!obj->HasClassdef() || obj->cls() != fl->classdef)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto field = smx_->getField(ref->field_index);
-            if (!field)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto td = rt_->LoadTypeFromId(field->type_id);
+            auto td = rt_->LoadTypeFromId(fl->field->type_id);
             if (!td)
                 return false;
             if (td->IsCompositeValue())
@@ -791,9 +783,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(rt_->GetReferenceType(td));
         }
         case OP_STOR_FLD: {
-            uint32_t ref_index = read<uint32_t>();
-            auto ref = smx_->getFieldRef(ref_index);
-            if (!ref)
+            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             const TypeDesc* val_type;
             if (!popStack(&val_type))
@@ -801,12 +792,9 @@ MethodVerifier::verifyOp(OPCODE op) {
             const TypeDesc* obj;
             if (!popStack(&obj))
                 return false;
-            if (!obj->HasClassdef() || obj->cls() != smx_->getClassdef(ref->cls_index))
+            if (!obj->HasClassdef() || obj->cls() != fl->classdef)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto field = smx_->getField(ref->field_index);
-            if (!field)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto td = rt_->LoadTypeFromId(field->type_id);
+            auto td = rt_->LoadTypeFromId(fl->field->type_id);
             if (!td)
                 return false;
             if (!ValidateStore(td, val_type))
@@ -814,12 +802,8 @@ MethodVerifier::verifyOp(OPCODE op) {
             return true;
         }
         case OP_LOAD_FLD_OFFSET: {
-            uint32_t ref_index = read<uint32_t>();
-            auto ref = smx_->getFieldRef(ref_index);
-            if (!ref)
-                return reportError(SP_ERROR_INSTRUCTION_PARAM);
-            auto field = smx_->getField(ref->field_index);
-            if (!field)
+            auto fl = rt_->ResolveFieldRef(read<uint32_t>());
+            if (!fl)
                 return reportError(SP_ERROR_INSTRUCTION_PARAM);
             return pushStack(cell_type());
         }

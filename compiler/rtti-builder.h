@@ -99,6 +99,7 @@ class RttiBuilder
     void build_debuginfo();
 
     uint8_t TypeToRttiBytecode(Type* type);
+    void ensure_type_added(Decl* decl);
 
   private:
     CompileContext& cc_;
@@ -113,7 +114,6 @@ class RttiBuilder
     RefPtr<SmxRttiTable<smx_rtti_field>> fields_;
     RefPtr<SmxRttiTable<smx_rtti_string>> stringpool_;
     RefPtr<SmxRttiTable<smx_rtti_global>> globals_;
-    RefPtr<SmxRttiTable<smx_rtti_field_ref>> field_refs_;
     RefPtr<SmxDebugInfoSection> dbg_info_;
     RefPtr<SmxRttiTable<smx_rtti_debug_line>> dbg_lines_;
     RefPtr<SmxDebugFileSection> dbg_files_;
@@ -126,12 +126,7 @@ class RttiBuilder
     typedef ke::HashMap<Atom*, uint16_t, ke::PointerPolicy<Atom>> StringCache;
     StringCache string_cache_;
 
-    struct FieldMapping {
-        uint32_t cls_index;
-        uint32_t field_index;
-    };
-    std::unordered_map<LayoutFieldDecl*, FieldMapping> field_mappings_;
-    std::unordered_map<LayoutFieldDecl*, uint32_t> field_refs_map_;
+    std::unordered_map<LayoutFieldDecl*, uint32_t> field_id_map_;
 
     ucell last_file_addr_ = 0;
     std::string last_file_name_;

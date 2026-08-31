@@ -251,18 +251,18 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         case OP_STOR_FLD:
         case OP_LOAD_FLD_OFFSET:
         {
-            uint32_t ref_index = reader.read<uint32_t>();
-            auto ref = smx_->getFieldRef(ref_index);
-            if (ref) {
+            uint32_t table_id = reader.read<uint32_t>();
+            if (GetTableIdSelector(table_id) == kTableId_RttiField) {
+                uint32_t field_index = GetTableIdIndex(table_id);
                 const char* cls_name = "unknown";
                 const char* field_name = "unknown";
-                if (auto cls = smx_->getClassdef(ref->cls_index))
+                if (auto cls = smx_->FindClassdefForField(field_index))
                     cls_name = smx_->names() + cls->name;
-                if (auto field = smx_->getField(ref->field_index))
+                if (auto field = smx_->getField(field_index))
                     field_name = smx_->names() + field->name;
                 fprintf(stdout, " %s::%s", cls_name, field_name);
             } else {
-                fprintf(stdout, " unknown_field_ref_%u", ref_index);
+                fprintf(stdout, " unknown_field_ref_%u", table_id);
             }
             break;
         }

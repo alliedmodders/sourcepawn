@@ -363,4 +363,5 @@ static const char* errmsg_ex[] = {
     /*481*/ "fixed arrays captured by a closure must be marked as 'shared' (variable \"%s\")\n",
     /*482*/ "shared variable \"%s\" is not captured by any closure\n",
     /*483*/ "function arguments cannot be marked as shared\n",
+    /*484*/ "too many RTTI table entries used\n",
 };

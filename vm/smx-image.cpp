@@ -416,7 +416,6 @@ SmxImage::validateRtti() {
     const char* optional_tables[] = {
         "rtti.classdefs", "rtti.enums",    "rtti.enumstructs", "rtti.enumstruct_fields",
         "rtti.fields",    "rtti.typedefs", "rtti.typesets", "rtti.globals",
-        "rtti.field_refs",
     };
     for (size_t i = 0; i < sizeof(optional_tables) / sizeof(optional_tables[0]); i++) {
         const char* table_name = optional_tables[i];
@@ -435,10 +434,6 @@ SmxImage::validateRtti() {
     rtti_fields_ = findRttiSection("rtti.fields");
     rtti_classdefs_ = findRttiSection("rtti.classdefs");
     if (rtti_classdefs_ && !validateRttiClassdefs())
-        return false;
-
-    rtti_field_refs_ = findRttiSection("rtti.field_refs");
-    if (rtti_field_refs_ && !validateRttiFieldRefs())
         return false;
 
     rtti_typesets_ = findRttiSection("rtti.typesets");
@@ -496,27 +491,22 @@ uint32_t SmxImage::getClassdefFieldsEnd(uint32_t i) const {
     return next_classdef->first_field;
 }
 
-bool SmxImage::validateRttiFieldRefs() {
-    if (!rtti_classdefs_)
-        return error("rtti.classdefs section missing for field refs");
-    if (!rtti_fields_)
-        return error("rtti.fields section missing for field refs");
+const smx_rtti_classdef* SmxImage::FindClassdefForField(uint32_t field_index) const {
+    if (!rtti_classdefs_ || !rtti_classdefs_->row_count)
+        return nullptr;
 
-    for (uint32_t i = 0; i < rtti_field_refs_->row_count; i++) {
-        const smx_rtti_field_ref* ref = getFieldRef(i);
-        if (!ref)
-            return error("invalid field ref");
-        const smx_rtti_classdef* classdef = getClassdef(ref->cls_index);
-        if (!classdef)
-            return error("invalid field ref class index");
-        if (!getField(ref->field_index))
-            return error("invalid field ref field index");
-
-        uint32_t stopat = getClassdefFieldsEnd(ref->cls_index);
-        if (ref->field_index < classdef->first_field || ref->field_index >= stopat)
-            return error("field not within class field bounds");
+    uint32_t lo = 0, hi = rtti_classdefs_->row_count - 1;
+    while (lo < hi) {
+        uint32_t mid = lo + (hi - lo + 1) / 2;
+        if (getClassdef(mid)->first_field <= field_index)
+            lo = mid;
+        else
+            hi = mid - 1;
     }
-    return true;
+    const auto* cd = getClassdef(lo);
+    if (field_index >= cd->first_field && field_index < getClassdefFieldsEnd(lo))
+        return cd;
+    return nullptr;
 }
 
 bool

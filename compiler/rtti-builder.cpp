@@ -40,7 +40,6 @@ RttiBuilder::RttiBuilder(CompileContext& cc, SmxNameTable* names)
     fields_ = new SmxRttiTable<smx_rtti_field>("rtti.fields");
     stringpool_ = new SmxRttiTable<smx_rtti_string>("rtti.stringpool");
     globals_ = new SmxRttiTable<smx_rtti_global>("rtti.globals");
-    field_refs_ = new SmxRttiTable<smx_rtti_field_ref>("rtti.field_refs");
     dbg_info_ = new SmxDebugInfoSection(".dbg.info");
     dbg_lines_ = new SmxRttiTable<smx_rtti_debug_line>(".dbg.method_lines");
     dbg_files_ = new SmxDebugFileSection(".dbg.files");
@@ -69,7 +68,6 @@ RttiBuilder::finish(SmxBuilder& builder)
     builder.addIfNotEmpty(fields_);
     builder.addIfNotEmpty(stringpool_);
     builder.addIfNotEmpty(globals_);
-    builder.addIfNotEmpty(field_refs_);
     builder.add(dbg_files_);
     builder.add(dbg_lines_);
     builder.add(dbg_info_);
@@ -268,7 +266,11 @@ RttiBuilder::add_enumstruct(Type* type)
         uint32_t field_idx = classdef.first_field + index;
         fields_->at(field_idx) = info;
 
-        field_mappings_[field] = FieldMapping{es_index, field_idx};
+        if (field_idx > kMaxTableIndex) {
+            report(484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
         index++;
     }
 
@@ -308,7 +310,11 @@ uint32_t RttiBuilder::add_class(Type* type) {
         uint32_t field_idx = classdef.first_field + index;
         fields_->at(field_idx) = info;
 
-        field_mappings_[field] = FieldMapping{cls_index, field_idx};
+        if (field_idx > kMaxTableIndex) {
+            report(484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[field] = MakeTableId(kTableId_RttiField, field_idx);
         index++;
     }
 
@@ -353,7 +359,11 @@ RttiBuilder::add_struct(Type* type)
         uint32_t field_idx = classdef.first_field + i;
         fields_->at(field_idx) = field;
 
-        field_mappings_[arg] = FieldMapping{struct_index, field_idx};
+        if (field_idx > kMaxTableIndex) {
+            report(484);
+            field_idx = kMaxTableIndex;
+        }
+        field_id_map_[arg] = MakeTableId(kTableId_RttiField, field_idx);
     }
     return struct_index;
 }
@@ -657,35 +667,27 @@ int32_t RttiBuilder::AddLocalSlot(LocalSlotSignature* locals, QualType type) {
     return locals->count++;
 }
 
+void RttiBuilder::ensure_type_added(Decl* decl) {
+    if (auto es = decl->as<EnumStructDecl>())
+        add_enumstruct(*es->type());
+    else if (auto ps = decl->as<PstructDecl>())
+        add_struct(*ps->type());
+    else if (auto cls = decl->as<ClassDecl>())
+        add_class(*cls->type());
+    else
+        assert(false);
+}
+
 uint32_t RttiBuilder::AddFieldRef(LayoutFieldDecl* decl) {
-    auto iter = field_refs_map_.find(decl);
-    if (iter != field_refs_map_.end())
+    auto iter = field_id_map_.find(decl);
+    if (iter != field_id_map_.end())
         return iter->second;
 
-    auto mapping_iter = field_mappings_.find(decl);
-    if (mapping_iter == field_mappings_.end()) {
-        if (Decl* parent = decl->parent()) {
-            if (auto es = parent->as<EnumStructDecl>())
-                add_enumstruct(*es->type());
-            else if (auto ps = parent->as<PstructDecl>())
-                add_struct(*ps->type());
-            else if (auto cls = parent->as<ClassDecl>())
-                add_class(*cls->type());
-            else
-                assert(false);
-        }
-        mapping_iter = field_mappings_.find(decl);
-    }
-    assert(mapping_iter != field_mappings_.end());
+    ensure_type_added(decl->parent());
 
-    uint32_t ref_index = field_refs_->count();
-    smx_rtti_field_ref ref;
-    ref.cls_index = mapping_iter->second.cls_index;
-    ref.field_index = mapping_iter->second.field_index;
-    field_refs_->add(ref);
-
-    field_refs_map_[decl] = ref_index;
-    return ref_index;
+    iter = field_id_map_.find(decl);
+    assert(iter != field_id_map_.end());
+    return iter->second;
 }
 
 } // namespace cc

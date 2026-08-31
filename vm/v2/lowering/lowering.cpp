@@ -1126,14 +1126,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_LOAD_FLD: {
-            uint32_t ref_index = reader_.read<uint32_t>();
-            auto ref = image_->getFieldRef(ref_index);
-            auto classdef = image_->getClassdef(ref->cls_index);
-            auto field = image_->getField(ref->field_index);
-            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
+            auto fl = rt_->ResolveFieldRef(reader_.read<uint32_t>());
+            assert(fl);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(fl->field->type_id);
+            const TypeDesc* class_td = rt_->GetClassdefType(fl->classdef);
 
-            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t relative_field_index = fl->field_index - fl->classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
 
             ExprNode* base_node = popStack();
@@ -1144,15 +1142,13 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_ADDR_FLD: {
-            uint32_t ref_index = reader_.read<uint32_t>();
-            auto ref = image_->getFieldRef(ref_index);
-            auto classdef = image_->getClassdef(ref->cls_index);
-            auto field = image_->getField(ref->field_index);
-            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
+            auto fl = rt_->ResolveFieldRef(reader_.read<uint32_t>());
+            assert(fl);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(fl->field->type_id);
+            const TypeDesc* class_td = rt_->GetClassdefType(fl->classdef);
             const TypeDesc* pushed_td = field_td->IsCompositeValue() ? field_td : rt_->GetReferenceType(field_td);
 
-            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t relative_field_index = fl->field_index - fl->classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
 
             ExprNode* base_node = popStack();
@@ -1169,14 +1165,12 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_STOR_FLD: {
-            uint32_t ref_index = reader_.read<uint32_t>();
-            auto ref = image_->getFieldRef(ref_index);
-            auto classdef = image_->getClassdef(ref->cls_index);
-            auto field = image_->getField(ref->field_index);
-            const TypeDesc* field_td = rt_->LoadTypeFromId(field->type_id);
-            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
+            auto fl = rt_->ResolveFieldRef(reader_.read<uint32_t>());
+            assert(fl);
+            const TypeDesc* field_td = rt_->LoadTypeFromId(fl->field->type_id);
+            const TypeDesc* class_td = rt_->GetClassdefType(fl->classdef);
 
-            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t relative_field_index = fl->field_index - fl->classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
 
             ExprNode* val_node = popStack();
@@ -1201,12 +1195,11 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
         }
 
         case OP_LOAD_FLD_OFFSET: {
-            uint32_t ref_index = reader_.read<uint32_t>();
-            auto ref = image_->getFieldRef(ref_index);
-            auto classdef = image_->getClassdef(ref->cls_index);
-            const TypeDesc* class_td = rt_->GetClassdefType(classdef);
+            auto fl = rt_->ResolveFieldRef(reader_.read<uint32_t>());
+            assert(fl);
+            const TypeDesc* class_td = rt_->GetClassdefType(fl->classdef);
 
-            uint32_t relative_field_index = ref->field_index - classdef->first_field;
+            uint32_t relative_field_index = fl->field_index - fl->classdef->first_field;
             uint32_t offset = class_td->cls_offsets()[relative_field_index];
             uint32_t cell_offset = offset / sizeof(cell_t);
 

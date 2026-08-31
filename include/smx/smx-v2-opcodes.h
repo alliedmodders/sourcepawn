@@ -148,11 +148,12 @@ namespace v2 {
     FOR_EACH(SLICE, 67, "slice", 1) \
     /* Pops a value from the stack, which must be an address to an object-
      * like structure. Loads a value from the specified field, which is
-     * encoded as an index into the smx_rtti_field_refs table. The value
-     * is then pushed onto the stack (except in the ADDR case, when the
-     * address is pushed instead).
+     * encoded as a table ID (see smx-typeinfo.h MakeTableId). The selector
+     * must be kTableId_RttiField, and the index is into the fields table.
+     * The value is then pushed onto the stack (except in the ADDR case, when
+     * the address is pushed instead).
      *
-     * The object type in the field ref must match the type of the object.
+     * The owning classdef of the field must match the type of the object.
      */ \
     FOR_EACH(LOAD_FLD, 68, "load.fld", 5) \
     FOR_EACH(ADDR_FLD, 69, "addr.fld", 5) \

@@ -100,11 +100,6 @@ class SmxImage final :
         assert(rtti_methods_);
         return method - getRttiRow<smx_rtti_method>(rtti_methods_, 0);
     }
-    const smx_rtti_field_ref* getFieldRef(uint32_t index) const {
-        if (!rtti_field_refs_ || index >= rtti_field_refs_->row_count)
-            return nullptr;
-        return getRttiRow<smx_rtti_field_ref>(rtti_field_refs_, index);
-    }
     const smx_rtti_classdef* getClassdef(uint32_t index) const {
         if (!rtti_classdefs_ || index >= rtti_classdefs_->row_count)
             return nullptr;
@@ -116,6 +111,7 @@ class SmxImage final :
         return getRttiRow<smx_rtti_field>(rtti_fields_, index);
     }
     uint32_t getClassdefFieldsEnd(uint32_t i) const;
+    const smx_rtti_classdef* FindClassdefForField(uint32_t field_index) const;
     bool IsVoidMethod(const smx_rtti_method* method) const;
 
     FastRtti GetTypeParser(uint32_t offset);
@@ -237,7 +233,6 @@ class SmxImage final :
     const smx_rtti_table_header* rtti_stringpool() const { return rtti_stringpool_; }
     const smx_rtti_table_header* rtti_classdefs() const { return rtti_classdefs_; }
     const smx_rtti_table_header* rtti_fields() const { return rtti_fields_; }
-    const smx_rtti_table_header* rtti_field_refs() const { return rtti_field_refs_; }
 
     BinaryReader GetDataReader(uint32_t offset) {
         assert(IsValidDataOffset(offset));
@@ -259,7 +254,6 @@ class SmxImage final :
     bool validateNatives();
     bool validateRtti();
     bool validateRttiClassdefs();
-    bool validateRttiFieldRefs();
     bool validateRttiEnums();
     bool validateRttiField(uint32_t index);
     bool validateRttiMethods();
@@ -333,7 +327,6 @@ class SmxImage final :
     std::unique_ptr<const RttiData> rtti_data_ = nullptr;
     const smx_rtti_table_header* rtti_classdefs_ = nullptr;
     const smx_rtti_table_header* rtti_enums_ = nullptr;
-    const smx_rtti_table_header* rtti_field_refs_ = nullptr;
     const smx_rtti_table_header* rtti_fields_ = nullptr;
     const smx_rtti_table_header* rtti_methods_ = nullptr;
     const smx_rtti_table_header* rtti_typedefs_ = nullptr;
