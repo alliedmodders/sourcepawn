@@ -9,12 +9,12 @@
 #include <assert.h>
 #include <string.h>
 
-#include <bit>
 #include <list>
 #include <memory>
 #include <span>
 #include <vector>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-vector.h>
 #include "binary-reader.h"
 #include "type-desc.h"
@@ -728,7 +728,7 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
                 LowerBinary(LL_ADD_I32, float32_type_);
             } else if (a->type->kind() == TypeKind::Float64) {
                 double val = (op == OP_INC ? 1.0 : -1.0);
-                pushStack(CreateConstNode64(float64_type_, std::bit_cast<int64_t>(val)));
+                pushStack(CreateConstNode64(float64_type_, ke::BitCast<int64_t>(val)));
                 LowerBinary(LL_ADD_I32, float64_type_);
             } else if (a->type->IsWideInt()) {
                 pushStack(CreateConstNode64(a->type, op == OP_INC ? 1 : -1));

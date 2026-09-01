@@ -6,7 +6,7 @@
 //
 #pragma once
 
-#include <bit>
+#include <amtl/am-bits.h>
 
 #include "utils/byte-buffer.h"
 #include <smx/smx-v2-opcodes.h>
@@ -35,7 +35,7 @@ struct Int64Value {
 
 struct DoubleValue {
     explicit DoubleValue(int64_t value) : value(value) {}
-    explicit DoubleValue(double d) : value(std::bit_cast<int64_t>(d)) {}
+    explicit DoubleValue(double d) : value(ke::BitCast<int64_t>(d)) {}
     int64_t value;
 };
 

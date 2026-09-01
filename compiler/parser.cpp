@@ -10,6 +10,7 @@
 
 #include <deque>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-raii.h>
 #include "builtin-generator.h"
 #include "compile-options.h"
@@ -1199,8 +1200,7 @@ Parser::constant()
             const auto& atom = lexer_->current_token()->atom;
             char* endptr;
             uint64_t bits = strtoull(atom->chars(), &endptr, 10);
-            return new NumberExpr(pos, types_->type_double(),
-                                  std::bit_cast<double>(bits));
+            return new NumberExpr(pos, types_->type_double(), ke::BitCast<double>(bits));
         }
         case tSTRING: {
             const auto& atom = lexer_->current_token()->atom;

@@ -13,7 +13,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <bit>
 #include <filesystem>
 #include <string>
 #include <unordered_set>
@@ -27,6 +26,7 @@
 #    include <direct.h>
 #endif
 
+#include <amtl/am-bits.h>
 #include <amtl/am-hashmap.h>
 #include <amtl/am-platform.h>
 #include <amtl/am-raii.h>
@@ -278,7 +278,7 @@ void Lexer::lex_float(full_token_t* tok, double whole) {
     }
 
     if (match_char('d')) {
-        tok->atom = cc_.atom(std::to_string(std::bit_cast<uint64_t>(fnum)));
+        tok->atom = cc_.atom(std::to_string(ke::BitCast<uint64_t>(fnum)));
         tok->id = tDOUBLE_LITERAL;
     } else {
         float value = (float)fnum;
