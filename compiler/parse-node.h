@@ -10,7 +10,6 @@
 #include <amtl/am-string.h>
 #include <amtl/am-vector.h>
 
-#include <bit>
 #include <optional>
 #include <tuple>
 #include <variant>
