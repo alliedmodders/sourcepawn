@@ -58,15 +58,6 @@ And they can be assigned to inner arrays:
             gArray[i] = new int[10];
     }
 
-Arrays now have an intrinsic "length" property:
-
-    int sum(int[] array) {
-        int x = 0;
-        for (int i = 0; i < array.length; i++)
-            x += array[i];
-        return x;
-    }
-
 For compatibility reasons, there are some restrictions and idiosyncracies here.
 Regardless of whether an array is stack or heap allocated, if it's assigned to
 an array of fixed-size, it will result in a deep copy. For example:
@@ -163,7 +154,7 @@ SourcePawn now has support for nested functions, anonymous functions, and closur
 This feature was quite difficult to shim into the existing type system, so it comes
 with some subtleties.
 
-### Typed Signatures
+#### Typed Signatures
 By default, all functions now have what is referred to as a "typed" signature.
 A typed signature can be declared with a new typedef syntax:
 
@@ -210,7 +201,7 @@ detected). This is because natives do not have access to the garbage collection
 system, so it would be unsafe for a native to store an object with ephemeral
 lifetime.
 
-#### Classes
+### Classes
 
 SourcePawn now has support for classes. A class describes a heap allocated
 object, with syntax similar to enum structs. Unlike enum structs, an object is
@@ -246,7 +237,25 @@ do not understand garbage collection.
 Also unlike methodmaps, a class's constructor does not return the new object.
 The new object is allocated internally as "this".
 
-#### New Types
+### Type Inference
+
+SourcePawn now has support for type inference on variable declarations. For
+example:
+
+    let i = 0;
+
+Declares an integer without needing an explicit "int" type. The type of "i"
+cannot change later, the compiler has simply inferred the proper type based
+on the assigned expression.
+
+If the compiler can't infer a type, it will error. For example:
+
+    let x = {};
+
+The empty array expression has an ambiguous type here, so the assignment will
+fail.
+
+### New Types
 
 There are a number of new primitive types:
 
