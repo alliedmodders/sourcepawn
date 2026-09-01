@@ -1034,9 +1034,61 @@ PragmaUnusedStmt::Bind(SemaContext& sc)
     return names_.size() == symbols_.size();
 }
 
+class EnumStructRecursionChecker final {
+  public:
+    explicit EnumStructRecursionChecker(Type* es)
+      : es_(es)
+    {}
+
+    bool CheckRecursion(Type* other) {
+        visited_.clear();
+
+        if (!Enqueue(other))
+            return false;
+
+        while (!worklist_.empty()) {
+            auto type = ke::PopBack(&worklist_);
+
+            if (auto at = type->as<ArrayType>()) {
+                // Dynamic references are ok (even though we don't allow them
+                // anyway). Fixed are problematic since it would lead to
+                // recursive construction.
+                if (at->size() == 0)
+                    continue;
+
+                if (!Enqueue(at->inner()))
+                    return false;
+            } else if (auto es = type->asEnumStruct()) {
+                for (const auto& field : es->fields()) {
+                    auto ti = field->type_info();
+                    if (ti.type && !Enqueue(ti.type))
+                        return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    bool Enqueue(Type* type) {
+        if (type == es_)
+            return false;
+
+        if (auto result = visited_.insert(type); result.second)
+            worklist_.emplace_back(type);
+        return true;
+    }
+
+  private:
+    Type* es_;
+    std::vector<Type*> worklist_;
+    std::unordered_set<Type*> visited_;
+};
+
 bool EnumStructDecl::EnterTypes(SemaContext& sc) {
     if (!CheckTypeNameRedefinition(sc, name_, pos_))
         return false;
+
     type_ = sc.cc().types()->defineEnumStruct(name_, this);
     AddScopedType(sc, type_);
     return true;
@@ -1051,19 +1103,11 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
         return false;
 
     std::unordered_set<Atom*> seen;
+    EnumStructRecursionChecker esrc(type_);
 
     for (auto& field : fields_) {
         if (!sc.BindType(field->pos(), &field->mutable_type_info()))
             continue;
-
-        // It's not possible to have circular references other than this, because
-        // Pawn is inherently forward-pass only.
-        //
-        // :TODO: this will not be true when we move to recursive binding.
-        if (field->type_info().type == type_) {
-            report(field->pos(), 87) << name_;
-            continue;
-        }
 
         if (!field->type_info().dim_exprs.empty()) {
             if (!ResolveArrayType(sc.sema(), field->pos(), &field->mutable_type_info(),
@@ -1095,6 +1139,11 @@ bool EnumStructDecl::EnterNames(SemaContext& sc) {
             continue;
         }
         seen.emplace(field->name());
+
+        if (!esrc.CheckRecursion(field->type().unqualified())) {
+            report(field->pos(), 87) << name_;
+            continue;
+        }
 
         if (!field->type()->isAllowedInNativeCall())
             type_->forbidInNativeCall();
