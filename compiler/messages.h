@@ -54,7 +54,7 @@ static const char* errmsg[] = {
     /*048*/ "type '%s' cannot be passed through natives or varargs\n",
     /*049*/ "invalid line continuation\n",
     /*050*/ "missing function call, cannot use non-static member function as a value\n",
-    /*051*/ "unused\n",
+    /*051*/ "cannot use ... operator to forward arguments to non-native functions\n",
     /*052*/ "array size exceeds memory capacity\n",
     /*053*/ "number literal contains alphanumeric character\n",
     /*054*/ "unmatched closing brace (\"}\")\n",

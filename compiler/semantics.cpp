@@ -2441,6 +2441,11 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
             report(param, 476);
             return nullptr;
         }
+        auto callee = call->fun();
+        if (!callee || !callee->is_native()) {
+            report(param, 51);
+            return nullptr;
+        }
         return param;
     }
 
