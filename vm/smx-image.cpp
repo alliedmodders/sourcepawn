@@ -460,9 +460,6 @@ SmxImage::validateRttiEnums() {
 }
 
 bool SmxImage::validateRttiClassdefs() {
-    if (!rtti_fields_)
-        return error("rtti.fields section missing");
-
     for (uint32_t i = 0; i < rtti_classdefs_->row_count; i++) {
         const smx_rtti_classdef* classdef = getClassdef(i);
         if (!classdef)
@@ -473,7 +470,7 @@ bool SmxImage::validateRttiClassdefs() {
 
         // Calculate how many fields this class has.
         uint32_t stopat = getClassdefFieldsEnd(i);
-        if (classdef->first_field >= stopat)
+        if (classdef->first_field > stopat)
             return error("invalid classdef fields boundary");
 
         for (uint32_t j = classdef->first_field; j < stopat; j++) {
@@ -486,7 +483,7 @@ bool SmxImage::validateRttiClassdefs() {
 
 uint32_t SmxImage::getClassdefFieldsEnd(uint32_t i) const {
     if (i == rtti_classdefs_->row_count - 1)
-        return rtti_fields_->row_count;
+        return rtti_fields_ ? rtti_fields_->row_count : 0;
     const smx_rtti_classdef* next_classdef = getRttiRow<smx_rtti_classdef>(rtti_classdefs_, i + 1);
     return next_classdef->first_field;
 }
