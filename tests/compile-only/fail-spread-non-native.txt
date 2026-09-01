@@ -1,0 +1,1 @@
+(5) : error 051: cannot use ... operator to forward arguments to non-native functions
