@@ -2705,6 +2705,10 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
 
         Type* to = expr->val().type();
         Type* from_type = from->val().type();
+
+        if (to == from_type)
+            return;
+
         // Wide int -> int32: truncate.
         if ((to->isInt() || to->isAny()) && from_type->isWideInt()) {
             __ emit(OP_CVT_I32);
