@@ -119,7 +119,9 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
     uint32_t ncows = 0;
 
     const auto& expected_arg_types = method_->arg_types();
-    for (uint32_t i = 0; i < args.argc; i++) {
+    // Callbacks attached to a forward may omit trailing parameters.
+    uint32_t argc = std::min(args.argc, uint32_t(expected_arg_types.size()));
+    for (uint32_t i = 0; i < argc; i++) {
         const auto& arg = args.argv[i];
 
         // Simple case, no memory allocation needed.
@@ -239,7 +241,7 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
         SafeStrcpy((char*)debugNameForCrashDumps + 1, debugNameLength - 1, debugName);
     }
 
-    if (!context_->InvokeMethod(method_index_, params.data(), args.argc, result))
+    if (!context_->InvokeMethod(method_index_, params.data(), argc, result))
         return false;
 
     assert(!env->hasPendingException());
