@@ -413,6 +413,47 @@ static cell_t CallWithFlatString(IPluginContext* cx, const cell_t* params) {
   return rval;
 }
 
+// Invokes |fn| with 11 arguments, even though its callback type declares 6,
+// mimicking a callback attached to a wider forward (e.g. OnPlayerRunCmd).
+static cell_t CallWithExtraArgs(IPluginContext* cx, const cell_t* params) {
+  auto fn = cx->GetFunctionById(params[1]);
+  if (!fn)
+    return cx->ThrowNativeError("Could not find function");
+
+  BaseRuntime* rt = cx->GetBaseRuntime();
+  ARRAY_PTR array;
+  int err;
+  if ((err = rt->ParamToArrayPtr(params[2], &array)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not read array");
+  cell_t* angles = reinterpret_cast<cell_t*>(rt->GetArrayData(array));
+
+  char* name;
+  cx->LocalToString(params[3], &name);
+
+  cell_t* result;
+  if ((err = cx->LocalToPhysAddr(params[4], &result)) != SP_ERROR_NONE)
+    return cx->ThrowNativeErrorEx(err, "Could not get reference address");
+
+  cell_t extra_array[3] = {44, 55, 66};
+  CallArgs args;
+  args.PushCell(42);
+  args.PushCell(7);
+  args.PushArray(angles, 3);
+  args.PushCell(3);
+  args.PushString(name);
+  args.PushCellByRef(result);
+  args.PushCell(111);
+  args.PushCell(222);
+  args.PushCell(333);
+  args.PushArray(extra_array, 3);
+  args.PushString("extra");
+
+  cell_t rval;
+  if (!fn->Invoke(args, &rval))
+    return 0;
+  return rval;
+}
+
 static cell_t TestLocalToArrayPtr(IPluginContext* cx, const cell_t* params) {
   BaseRuntime* rt = cx->GetBaseRuntime();
   ARRAY_PTR array;
@@ -723,6 +764,7 @@ static int Execute(const char* file)
   BindNative(rt.get(), "call_with_int64", CallWithInt64);
   BindNative(rt.get(), "call_with_flat_array", CallWithFlatArray);
   BindNative(rt.get(), "call_with_flat_string", CallWithFlatString);
+  BindNative(rt.get(), "call_with_extra_args", CallWithExtraArgs);
   BindNative(rt.get(), "test_local_to_array_ptr", TestLocalToArrayPtr);
 
   BindNative(rt.get(), "assert_eq", AssertEq);
