@@ -1853,11 +1853,19 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
     std::vector<VReg> argv(explicit_args);
     std::vector<VReg> args_to_free;
 
+    bool package_variadic = (!method || !(method->flags & kRttiMethod_Native)) && is_variadic;
+
     for (uint32_t i = 0; i < explicit_args; i++) {
         ExprNode* node = popStack();
         VReg arg_reg = EmitNode(node);
 
-        if (node->type->IsNonFlatArray() && (method && (method->flags & kRttiMethod_Native))) {
+        // Variadic arguments are marshalled as raw cells, and the native they are
+        // eventually spread into resolves them through LocalToPhysAddr(), which
+        // expects an address of flat data. Heap-backed arrays (Array, FixedArray and
+        // ArraySlice) hold a SpArray ref instead, so flatten them here. FlatArray
+        // already holds a data address and must be left alone.
+        bool is_variadic_arg = package_variadic && (i >= expected_argc);
+        if (node->type->IsNonFlatArray() && ((method && (method->flags & kRttiMethod_Native)) || is_variadic_arg)) {
             VReg dest = AllocateTempCells(1, false);
             emit(LL_ARRAY_TO_FLAT, arg_reg, dest);
             args_to_free.push_back(arg_reg);
@@ -1866,8 +1874,6 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
             argv[i] = arg_reg;
         }
     }
-
-    bool package_variadic = (!method || !(method->flags & kRttiMethod_Native)) && is_variadic;
 
     if (package_variadic) {
         uint32_t variadic_count = arg_count - expected_argc;
