@@ -210,8 +210,9 @@ class MethodLowerer
     void EmitCall(const smx_rtti_method* method, const TypeDesc* ret_type, VReg fn_reg,
                   VReg dest_reg, const std::span<VReg>& argv, VReg spread_reg = VReg());
 
-    void LowerCall(uint32_t method_index, std::optional<uint8_t> argc, const TypeDesc* sig = nullptr,
-                   VReg fn_reg = VReg(), VReg spread_reg = VReg());
+    void LowerCall(uint32_t method_index, std::optional<uint8_t> argc,
+                   const TypeDesc* sig = nullptr, VReg fn_reg = VReg(),
+                   VReg spread_reg = VReg());
     void LowerBinary(LLOp op_i32,
                      const TypeDesc* force_result_type = nullptr);
     void LowerBitwise(LLOp op_i32, LLOp op_i64);
@@ -1853,11 +1854,19 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
     std::vector<VReg> argv(explicit_args);
     std::vector<VReg> args_to_free;
 
+    bool is_native = method && (method->flags & kRttiMethod_Native);
+    bool package_varargs = !is_native && is_variadic;
+
     for (uint32_t i = 0; i < explicit_args; i++) {
         ExprNode* node = popStack();
         VReg arg_reg = EmitNode(node);
 
-        if (node->type->IsNonFlatArray() && (method && (method->flags & kRttiMethod_Native))) {
+        // Packaged varargs are ultimately forwarded to a native, so arrays in
+        // the package must be retrofit for natives, even if we're not lowering
+        // directly to a native call.
+        if (node->type->IsNonFlatArray() &&
+            (is_native || (package_varargs && i >= expected_argc)))
+        {
             VReg dest = AllocateTempCells(1, false);
             emit(LL_ARRAY_TO_FLAT, arg_reg, dest);
             args_to_free.push_back(arg_reg);
@@ -1867,9 +1876,7 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         }
     }
 
-    bool package_variadic = (!method || !(method->flags & kRttiMethod_Native)) && is_variadic;
-
-    if (package_variadic) {
+    if (package_varargs) {
         uint32_t variadic_count = arg_count - expected_argc;
 
         VReg array_reg = AllocateTempCells(variadic_count + 1);
