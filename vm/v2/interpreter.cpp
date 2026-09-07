@@ -523,10 +523,10 @@ bool Interpreter::run_internal() {
 
             case LL_FILLARRAY_FLAT: {
                 uint32_t data_offs = reader_.read<uint32_t>();
-                const TypeDesc* td = reader_.read<const TypeDesc*>();
+                uint32_t pad_bytes = reader_.read<uint32_t>();
                 uint16_t addr_reg = reader_.read<uint16_t>();
                 cell_t local_addr = vregs_[addr_reg];
-                rt_->FillFlatArray(local_addr, td, data_offs);
+                rt_->FillFlatArray(local_addr, data_offs, pad_bytes);
                 break;
             }
             case LL_SLICE_FLAT: {
@@ -1412,9 +1412,10 @@ bool Interpreter::run_internal() {
             }
             case LL_FILLARRAY: {
                 uint32_t data_offset = reader_.read<uint32_t>();
+                uint32_t pad_bytes = reader_.read<uint32_t>();
                 uint16_t reg = reader_.read<uint16_t>();
                 auto array = rt_->heap().ToPhysAddr<SpArray*>(vregs_[reg]);
-                rt_->FillArray(array, data_offset);
+                rt_->FillArray(array, data_offset, pad_bytes);
                 break;
             }
             case LL_SLICE_ES: {

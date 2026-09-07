@@ -606,30 +606,26 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
             }
             case LL_FILLARRAY: {
                 uint32_t data_offset = reader.read<uint32_t>();
+                uint32_t pad_bytes = reader.read<uint32_t>();
                 uint16_t addr_reg = reader.read<uint16_t>();
 
                 BinaryReader br = image_->GetDataReader(data_offset);
                 auto data_bytes = br.readCompactUint32();
                 assert(data_bytes);
 
-                EmitFillArray(addr_reg, br.cursor(), *data_bytes);
+                EmitFillArray(addr_reg, br.cursor(), *data_bytes, pad_bytes);
                 break;
             }
             case LL_FILLARRAY_FLAT: {
                 uint32_t data_offs = reader.read<uint32_t>();
-                const TypeDesc* td = reader.read<const TypeDesc*>();
+                uint32_t pad_bytes = reader.read<uint32_t>();
                 uint16_t addr_reg = reader.read<uint16_t>();
 
                 BinaryReader br = image_->GetDataReader(data_offs);
                 auto data_bytes = br.readCompactUint32();
                 assert(data_bytes);
 
-                auto elt_size = td->array_elt()->element_size();
-                assert(*data_bytes % elt_size == 0);
-                [[maybe_unused]] auto elt_count = *data_bytes / elt_size;
-                assert(elt_count <= td->array_size());
-
-                EmitFillArrayFlat(addr_reg, br.cursor(), *data_bytes);
+                EmitFillArrayFlat(addr_reg, br.cursor(), *data_bytes, pad_bytes);
                 break;
             }
             case LL_LOAD_ELEM_FLAT_I32:
