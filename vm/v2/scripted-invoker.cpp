@@ -150,8 +150,12 @@ bool ScriptedInvoker::Invoke(const CallArgs& args, cell_t* result) {
             }
             case CallArgs::ARG_ARRAY: {
                 auto expected_td = expected_arg_types[i];
-                if (expected_td->IsFlatArray()) {
-                    uint32_t flat_bytes = expected_td->array_size() * sizeof(cell_t);
+                if (expected_td->IsCompositeValue()) {
+                    uint32_t flat_bytes;
+                    if (expected_td->IsFlatArray())
+                        flat_bytes = expected_td->array_size() * sizeof(cell_t);
+                    else
+                        flat_bytes = expected_td->slot_size();
 
                     params[i] = env->sp();
                     if (!env->addStack(flat_bytes))
