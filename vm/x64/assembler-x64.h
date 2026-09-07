@@ -511,6 +511,9 @@ class Assembler : public AssemblerBase
     void rep_movsb() {
         emit2(0xf3, 0xa4);
     }
+    void rep_stosb() {
+        emit2(0xf3, 0xaa);
+    }
     void movsd() {
         emit1(0xa5);
     }

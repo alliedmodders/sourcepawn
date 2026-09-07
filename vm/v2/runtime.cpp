@@ -1225,7 +1225,7 @@ Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* 
     return array;
 }
 
-void Runtime::FillArray(SpArray* array, uint32_t data_offset) {
+void Runtime::FillArray(SpArray* array, uint32_t data_offset, uint32_t pad_bytes) {
     assert(array->td->kind() == TypeKind::FixedArray);
     assert(!array->td->array_elt()->IsIntPtr());
 
@@ -1233,31 +1233,24 @@ void Runtime::FillArray(SpArray* array, uint32_t data_offset) {
     auto data_bytes = br.readCompactUint32();
     assert(data_bytes);
 
-    auto elt_size = array->td->array_elt()->element_size();
-    assert(*data_bytes % elt_size == 0);
-    [[maybe_unused]] auto elt_count = *data_bytes / elt_size;
-    assert(elt_count <= array->length);
+    [[maybe_unused]] auto elt_size = array->td->array_elt()->element_size();
+    [[maybe_unused]] auto total_bytes = *data_bytes + pad_bytes;
+    assert(total_bytes % elt_size == 0);
+    assert(total_bytes / elt_size == array->length);
 
     auto data = heap_.ToPhysAddr<uint8_t*>(array->data);
     memcpy(data, br.cursor(), *data_bytes);
+    memset(data + *data_bytes, 0, pad_bytes);
 }
 
-void Runtime::FillFlatArray(cell_t local_addr, const TypeDesc* td, uint32_t data_offset) {
-    assert(td->IsFlatArray());
-    assert(!td->array_elt()->IsHeapItem());
-    assert(!td->array_elt()->IsIntPtr());
-
+void Runtime::FillFlatArray(cell_t local_addr, uint32_t data_offset, uint32_t pad_bytes) {
     BinaryReader br = image_->GetDataReader(data_offset);
     auto data_bytes = br.readCompactUint32();
     assert(data_bytes);
 
-    auto elt_size = td->array_elt()->element_size();
-    assert(*data_bytes % elt_size == 0);
-    [[maybe_unused]] auto elt_count = *data_bytes / elt_size;
-    assert(elt_count <= td->array_size());
-
     auto data = heap_.ToPhysAddr<uint8_t*>(local_addr);
     memcpy(data, br.cursor(), *data_bytes);
+    memset(data + *data_bytes, 0, pad_bytes);
 }
 
 void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {

@@ -1466,10 +1466,18 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
 
             VReg base_reg = EmitNode(base_node);
 
-            if (base_node->type->IsFlatArray())
-                emit(LL_FILLARRAY_FLAT, data_offs, base_node->type, base_reg);
+            const TypeDesc* td = base_node->type;
+            BinaryReader br = image_->GetDataReader(data_offs);
+            auto data_bytes = br.readCompactUint32();
+            assert(data_bytes);
+
+            uint32_t array_bytes = td->array_size() * td->array_elt()->element_size();
+            uint32_t pad_bytes = array_bytes - *data_bytes;
+
+            if (td->IsFlatArray())
+                emit(LL_FILLARRAY_FLAT, data_offs, pad_bytes, base_reg);
             else
-                emit(LL_FILLARRAY, data_offs, base_reg);
+                emit(LL_FILLARRAY, data_offs, pad_bytes, base_reg);
             FreeReg(base_reg);
             break;
         }

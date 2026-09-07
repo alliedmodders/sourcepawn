@@ -1056,7 +1056,9 @@ void Compiler::EmitStorGlb(LLOp op, uint32_t addr, uint16_t val_reg) {
     }
 }
 
-void Compiler::EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size) {
+void Compiler::EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size,
+                             uint32_t pad_bytes)
+{
     __ movl(rdi, RegAddr(addr_reg));
     __ movl(rdi, HeapAddr(rdi, offsetof(SpArray, data)));
     __ lea(rdi, HeapAddr(rdi));
@@ -1070,9 +1072,22 @@ void Compiler::EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_
         __ movl(rcx, data_size % 8);
         __ rep_movsb();
     }
+    if (pad_bytes) {
+        __ xorl(rax, rax);
+        if (pad_bytes >= 8) {
+            __ movl(rcx, pad_bytes / 8);
+            __ rep_stosq();
+        }
+        if (pad_bytes % 8) {
+            __ movl(rcx, pad_bytes % 8);
+            __ rep_stosb();
+        }
+    }
 }
 
-void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) {
+void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size,
+                                 uint32_t pad_bytes)
+{
     __ movl(rax, RegAddr(addr_reg));
     __ lea(rdi, HeapAddr(rax));
     __ movq(rsi, reinterpret_cast<intptr_t>(data_addr));
@@ -1083,6 +1098,17 @@ void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint3
     if (data_size % 8) {
         __ movl(rcx, data_size % 8);
         __ rep_movsb();
+    }
+    if (pad_bytes) {
+        __ xorl(rax, rax);
+        if (pad_bytes >= 8) {
+            __ movl(rcx, pad_bytes / 8);
+            __ rep_stosq();
+        }
+        if (pad_bytes % 8) {
+            __ movl(rcx, pad_bytes % 8);
+            __ rep_stosb();
+        }
     }
 }
 

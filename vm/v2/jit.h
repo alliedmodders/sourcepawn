@@ -120,8 +120,10 @@ class CompilerBase
     virtual void EmitStorFld(LLOp op, uint16_t addr_reg, uint16_t offset, uint16_t val_reg) = 0;
     virtual void EmitLoadGlb(LLOp op, uint32_t addr, uint16_t dest_reg) = 0;
     virtual void EmitStorGlb(LLOp op, uint32_t addr, uint16_t val_reg) = 0;
-    virtual void EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size) = 0;
-    virtual void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size) = 0;
+    virtual void EmitFillArray(uint16_t addr_reg, const void* data, uint32_t data_size,
+                               uint32_t pad_bytes) = 0;
+    virtual void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size,
+                                   uint32_t pad_bytes) = 0;
     virtual void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) = 0;
     virtual void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) = 0;
     virtual void EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) = 0;

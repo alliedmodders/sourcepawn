@@ -192,7 +192,7 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(LOAD_STR, "load.str", {LL_FMT_STR_ID, LL_FMT_REG}) \
     FOR_EACH(NEWARRAY, "newarray", {LL_FMT_TYPEDESC, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(NEWBULKARRAY, "newbulkarray", {LL_FMT_U8, LL_FMT_TYPEDESC, LL_FMT_REG, LL_FMT_REG}) \
-    FOR_EACH(FILLARRAY, "fillarray", {LL_FMT_U32, LL_FMT_REG}) \
+    FOR_EACH(FILLARRAY, "fillarray", {LL_FMT_U32, LL_FMT_U32, LL_FMT_REG}) \
     FOR_EACH(SLICE, "slice", {LL_FMT_REG, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(LOAD_FLD_X32, "load.fld.x32", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(ADDR_FLD, "addr.fld", {LL_FMT_U32, LL_FMT_REG, LL_FMT_REG}) \
