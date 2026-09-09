@@ -153,7 +153,7 @@ void CodeGenerator::EmitStmt(Stmt* stmt) {
             break;
         case StmtKind::ExprStmt:
             // Emit even if no side effects.
-            EmitExpr(stmt->to<ExprStmt>()->expr(), EMIT_DISCARD_RESULT);
+            EmitExpr(stmt->to<ExprStmt>()->sema_expr(), EMIT_DISCARD_RESULT);
             break;
         case StmtKind::BlockStmt: {
             auto s = stmt->to<BlockStmt>();
@@ -322,7 +322,7 @@ uint16_t CodeGenerator::AcquireGlobalSlot(VarDeclBase* decl) {
 
 void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
     for (const auto& var : stmt->vars()) {
-        auto init = var->init_rhs();
+        auto init = var->sema_init_rhs();
 
         if (!var->is_emitted())
             continue;
@@ -763,7 +763,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         decl->BindAddress(slot);
     }
 
-    EmitInit(Lvalue{ExprVal(decl)}, decl->init_rhs());
+    EmitInit(Lvalue{ExprVal(decl)}, decl->sema_init_rhs());
 }
 
 void
@@ -1643,8 +1643,8 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     // we store the address in a local slot, so we can easily read it back out
     // after the function returns. For simple stack allocations we just use a
     // local variable.
-    bool is_spread = !call->args().empty() && call->args().back()->as<SpreadArgsExpr>();
-    cell_t nargs = (cell_t)call->args().size();
+    bool is_spread = !call->sema_args().empty() && call->sema_args().back()->as<SpreadArgsExpr>();
+    cell_t nargs = (cell_t)call->sema_args().size();
     if (is_spread)
         nargs--;
 
@@ -1654,7 +1654,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     // placeholder that is never on the operand stack.
     size_t first_arg = call->ctor_type() ? 1 : 0;
 
-    const auto& argv = call->args();
+    const auto& argv = call->sema_args();
     // Use a post-decrement in the condition to work around overflow. The body
     // gets the updated index.
     for (size_t i = nargs; i-- > first_arg;) {
@@ -1787,7 +1787,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     const auto& arg = expr->arg();
 
-    auto init = arg->init_rhs();
+    auto init = arg->sema_init_rhs();
 
     if (auto array = init->as<ArrayExpr>()) {
         Type* type = *arg->type();
@@ -1860,7 +1860,7 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 {
     Label flab1;
 
-    EmitTest(stmt->cond(), false, &flab1);
+    EmitTest(stmt->sema_cond(), false, &flab1);
     EmitStmt(stmt->on_true());
     if (stmt->on_false()) {
         Label flab2;
@@ -1878,7 +1878,7 @@ CodeGenerator::EmitIfStmt(IfStmt* stmt)
 void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     if (auto es = fun_->return_type()->asEnumStruct()) {
         __ load_hidden_arg(fun_);
-        EmitExpr(stmt->expr());
+        EmitExpr(stmt->sema_expr());
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_COPYOBJ, type_id);
         __ emit(OP_RETV);
@@ -1889,21 +1889,21 @@ void CodeGenerator::EmitReturnArrayStmt(ReturnStmt* stmt) {
     assert(!type->inner()->isArray());
 
     __ load_hidden_arg(fun_);
-    EmitExpr(stmt->expr());
+    EmitExpr(stmt->sema_expr());
     __ emit(OP_COPYARRAY);
     __ emit(OP_RETV);
 }
 
 void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
-    if (stmt->expr()) {
-        const auto& v = stmt->expr()->val();
+    if (stmt->sema_expr()) {
+        const auto& v = stmt->sema_expr()->val();
         if (fun_->signature()->needs_hidden_arg()) {
             if (v.type()->isEnumStruct() || v.type()->isArray()) {
                 EmitReturnArrayStmt(stmt);
             } else if (v.type()->isWideType()) {
                 // Must copy to the hidden arg.
                 __ load_hidden_arg(fun_);
-                EmitExpr(stmt->expr());
+                EmitExpr(stmt->sema_expr());
                 if (v.type()->isInt64())
                     __ emit(OP_STOR_I_I64);
                 else if (v.type()->isIntPtr())
@@ -1915,7 +1915,7 @@ void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
                 assert(false);
             }
         } else {
-            EmitExpr(stmt->expr());
+            EmitExpr(stmt->sema_expr());
             __ emit(OP_RETN);
         }
     } else if (fun_->MustReturnValue() || !fun_->return_type()->isVoid()) {
@@ -1930,7 +1930,7 @@ void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
 void
 CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 {
-    Expr* expr = stmt->expr();
+    Expr* expr = stmt->sema_expr();
     ExprVal v = expr->val();
 
     // Only zap non-const lvalues.
@@ -2337,7 +2337,7 @@ void CodeGenerator::EmitDoWhileStmt(DoWhileStmt* stmt) {
     ke::SaveAndSet<LoopContext*> push_context(&loop_, &loop_cx);
 
     auto body = stmt->body();
-    auto cond = stmt->cond();
+    auto cond = stmt->sema_cond();
     if (token == tDO) {
         Label start;
         __ bind(&start);
@@ -2397,8 +2397,8 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
     if (IsTerminalFlow(body->flow_type()) && !stmt->has_continue())
         body_always_exits = true;
 
-    auto advance = stmt->advance();
-    auto cond = stmt->cond();
+    auto advance = stmt->sema_advance();
+    auto cond = stmt->sema_cond();
     if (advance && !stmt->never_taken()) {
         // top:
         //   <cond>
@@ -2449,15 +2449,15 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
 void
 CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 {
-    EmitExpr(stmt->expr());
+    EmitExpr(stmt->sema_expr());
 
     Label exit_label;
 
     // Note: we use map for ordering so the case table is sorted.
     std::map<cell, Label> case_labels;
 
-    for (const auto& case_entry : stmt->cases()) {
-        for (const auto& expr : case_entry.first) {
+    for (size_t i = 0; i < stmt->cases().size(); i++) {
+        for (const auto& expr : stmt->sema_case_exprs(i)) {
             const auto& v = expr->val();
             assert(v.ident == iCONSTEXPR);
             case_labels.emplace(v.const_i32(), Label());
@@ -2475,10 +2475,11 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
     for (auto& pair : case_labels)
         __ casetbl_entry(pair.first, &pair.second);
 
-    for (const auto& case_entry : stmt->cases()) {
+    for (size_t i = 0; i < stmt->cases().size(); i++) {
+        const auto& case_entry = stmt->cases()[i];
         Stmt* stmt_node = case_entry.second;
 
-        for (const auto& expr : case_entry.first) {
+        for (const auto& expr : stmt->sema_case_exprs(i)) {
             const auto& v = expr->val();
             __ bind(&case_labels[v.const_i32()]);
         }
@@ -2749,9 +2750,9 @@ void CodeGenerator::EmitCommaExpr(CommaExpr* ce, unsigned int flags) {
 }
 
 void CodeGenerator::EmitFloatBuiltin(CallExpr* expr) {
-    assert(expr->args().size() == 1);
+    assert(expr->sema_args().size() == 1);
 
-    EmitExpr(expr->args()[0]);
+    EmitExpr(expr->sema_args()[0]);
     __ emit(OP_CVT_F32);
 }
 

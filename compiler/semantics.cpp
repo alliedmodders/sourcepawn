@@ -110,7 +110,9 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
     for (const auto& file_ctor : file_ctors) {
         auto call = new CallExpr(fun->pos(), '(', file_ctor, {});
         call->val().set_expr(types_->type_void());
-        stmts.emplace_back(new ExprStmt(fun->pos(), call));
+        auto stmt = new ExprStmt(fun->pos(), call);
+        stmt->set_sema_expr(call);
+        stmts.emplace_back(stmt);
     }
     fun->set_body(new BlockStmt(fun->pos(), stmts));
     fun->set_is_live();
@@ -226,16 +228,21 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     } else {
         if (!CheckTypedVarDecl(decl))
             return false;
-        if (decl->type()->isPstruct())
+        if (decl->type()->isPstruct()) {
+            decl->set_sema_init(decl->init());
             return true;
+        }
     }
 
     auto vclass = decl->vclass();
     auto init_rhs = decl->init_rhs();
     if (decl->init() && init_rhs && vclass != sLOCAL && !decl->type()->isComposite()) {
-        if (!CheckExpr(init_rhs) || init_rhs->val().ident != iCONSTEXPR) {
-            if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr)))
+        Expr* checked_rhs = CheckExpr(init_rhs);
+        if (!checked_rhs || checked_rhs->val().ident != iCONSTEXPR) {
+            if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr))) {
+                decl->set_sema_init(decl->init());
                 return true;
+            }
 
             report(init_rhs->pos(), 8);
         }
@@ -244,6 +251,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     if (decl->init() && (vclass == sGLOBAL || vclass == sSTATIC))
         globals_to_init_.emplace_back(decl);
 
+    decl->set_sema_init(decl->init());
     return true;
 }
 
@@ -317,7 +325,7 @@ bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
 
     // Analyze the RHS to determine its type.
     Expr* init_rhs = decl->init_rhs();
-    if (!CheckExpr(init_rhs)) {
+    if (!(init_rhs = CheckExpr(init_rhs))) {
         *decl->mutable_type_info() = ErrorTypeinfo();
         return false;
     }
@@ -369,10 +377,11 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     }
 
     // Non-literal initialization (e.g. from a function result).
-    if (!CheckRvalue(init))
+    if (!(init = CheckRvalue(init)))
         return false;
     if (init->lvalue())
-        decl->init()->set_right(new RvalueExpr(init));
+        init = new RvalueExpr(init);
+    decl->init()->set_right(init);
 
     auto ck = FindConversion(init->val().type(), *decl->type(), CvtContext::Assignment);
     if (ck == ConversionKind::NeedsCast) {
@@ -413,8 +422,9 @@ bool Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init) {
         } else {
             AutoErrorPos pos(expr->pos());
 
-            if (!CheckExpr(expr))
+            if (!(expr = CheckExpr(expr)))
                 continue;
+            array->exprs()[i] = expr;
 
             const auto& v = expr->val();
             if (v.ident != iCONSTEXPR) {
@@ -518,7 +528,7 @@ bool Semantics::CheckPstructArg(VarDeclBase* decl, PstructDecl* ps,
     return true;
 }
 
-bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
+Expr* Semantics::CheckExpr(Expr* expr, uint32_t flags) {
     AutoErrorPos aep(expr->pos());
     switch (expr->kind()) {
         case ExprKind::UnaryExpr:
@@ -556,13 +566,13 @@ bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
         case ExprKind::NewArrayExpr:
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
         case ExprKind::NumberExpr:
-            return true;
+            return expr;
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
         case ExprKind::RvalueExpr:
         case ExprKind::SliceExpr:
         case ExprKind::SimpleCastExpr:
-            return true;
+            return expr;
         case ExprKind::NamedArgExpr:
             return CheckWrappedExpr(expr, expr->to<NamedArgExpr>()->expr);
         case ExprKind::FunctionExpr:
@@ -571,20 +581,21 @@ bool Semantics::CheckExpr(Expr* expr, uint32_t flags) {
             return CheckWrappedExpr(expr, expr->to<StructInitFieldExpr>()->value);
         case ExprKind::DefaultArgExpr:
         case ExprKind::SpreadArgsExpr:
-            return true;
+            return expr;
         default:
             assert(false);
             report(expr, 420) << (int)expr->kind();
-            return false;
+            return nullptr;
     }
 }
 
-bool Semantics::CheckWrappedExpr(Expr* outer, Expr* inner) {
-    if (!CheckExpr(inner))
-        return false;
+Expr* Semantics::CheckWrappedExpr(Expr* outer, Expr* inner) {
+    Expr* checked = CheckExpr(inner);
+    if (!checked)
+        return nullptr;
 
-    outer->val() = inner->val();
-    return true;
+    outer->val() = checked->val();
+    return outer;
 }
 
 CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
@@ -730,7 +741,7 @@ bool Semantics::CheckScalarType(Expr* expr) {
 }
 
 Expr* Semantics::AnalyzeForTest(Expr* expr) {
-    if (!CheckRvalue(expr))
+    if (!(expr = CheckRvalue(expr)))
         return nullptr;
     if (!CheckScalarType(expr))
         return nullptr;
@@ -762,7 +773,7 @@ Expr* Semantics::AnalyzeForTest(Expr* expr) {
 }
 
 ExprVal* Semantics::AnalyzeForConst(Expr* expr) {
-    if (!CheckExpr(expr))
+    if (!(expr = CheckExpr(expr)))
         return nullptr;
 
     auto& val = expr->val();
@@ -801,19 +812,21 @@ SliceExpr::SliceExpr(Expr* expr, Expr* index, Type* type)
     val_.set_type(type);
 }
 
-bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
+Expr* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     AutoErrorPos aep(unary->pos());
 
-    auto expr = unary->expr();
-    if (!CheckRvalue(expr))
-        return false;
+    Expr* expr = unary->expr();
+    if (!(expr = CheckRvalue(expr)))
+        return nullptr;
     if (!CheckScalarType(expr))
-        return false;
+        return nullptr;
 
     if (expr->lvalue())
-        expr = unary->set_expr(new RvalueExpr(expr));
+        expr = new RvalueExpr(expr);
 
-    auto& out_val = unary->val();
+    auto unary_expr = new UnaryExpr(unary->pos(), unary->token(), expr);
+
+    auto& out_val = unary_expr->val();
     out_val = expr->val();
 
     // :TODO: check for invalid types
@@ -833,10 +846,10 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             auto ck = FindConversion(out_val.type(), types_->type_bool(), CvtContext::Explicit);
             if (!HasImplicitConversion(ck)) {
                 ReportConversionDiagnostic(unary, types_->type_bool(), out_val.qualified());
-                return false;
+                return nullptr;
             }
-            expr = unary->set_expr(BuildConversion(unary->expr(), ck, types_->type_bool()));
-            out_val = unary->expr()->val();
+            expr = unary_expr->set_expr(BuildConversion(unary_expr->expr(), ck, types_->type_bool()));
+            out_val = unary_expr->expr()->val();
 
             if (out_val.ident == iCONSTEXPR)
                 out_val.set_constval(types_->type_bool(), out_val.const_i32() ? 0 : 1);
@@ -867,27 +880,27 @@ bool Semantics::CheckUnaryExpr(UnaryExpr* unary) {
 
     if (out_val.ident != iCONSTEXPR)
         out_val.ident = iEXPRESSION;
-    return true;
+    return unary_expr;
 }
 
-bool Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
+Expr* Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
     AutoErrorPos aep(incdec->pos());
 
-    auto expr = incdec->expr();
-    if (!CheckExpr(expr))
-        return false;
+    Expr* expr = incdec->expr();
+    if (!(expr = CheckExpr(expr)))
+        return nullptr;
     if (!CheckScalarType(expr))
-        return false;
+        return nullptr;
     if (!expr->lvalue()) {
         report(incdec, 22);
-        return false;
+        return nullptr;
     }
 
     const auto& expr_val = expr->val();
     if (expr_val.ident != iACCESSOR) {
         if (expr_val.sym() && expr_val.sym()->is_const()) {
             report(incdec, 22); /* assignment to const argument */
-            return false;
+            return nullptr;
         }
         markusage(expr_val, uWRITTEN);
         if (!(flags & EXPR_DISCARD_RESULT))
@@ -895,11 +908,11 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
     } else {
         if (!expr_val.accessor()->setter()) {
             report(incdec, 152) << expr_val.accessor()->name();
-            return false;
+            return nullptr;
         }
         if (!expr_val.accessor()->getter()) {
             report(incdec, 149) << expr_val.accessor()->name();
-            return false;
+            return nullptr;
         }
         markusage(expr_val.accessor()->getter(), uREAD);
         markusage(expr_val.accessor()->setter(), uREAD);
@@ -909,11 +922,13 @@ bool Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
     if (type->isReference())
         type = type->inner();
 
+    auto result = new IncDecExpr(incdec->pos(), incdec->token(), expr, incdec->prefix());
+
     // :TODO: more type checks
-    auto& val = incdec->val();
+    auto& val = result->val();
     val.ident = iEXPRESSION;
     val.set_type(type);
-    return true;
+    return result;
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -926,17 +941,19 @@ static inline bool CanPromoteToInt64(Type* type) {
     return type->isInt() || type->isAny();
 }
 
-bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
-    if (!CheckExpr(state.left))
-        return false;
+Expr* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
+    if (!(state.left = CheckExpr(state.left)))
+        return nullptr;
+    state.expr->set_left(state.left);
 
     if (state.expr->token() == '=') {
-        if (!state.rhs_resolved && !CheckRvalue(state.right, state.left->val().type()))
-            return false;
+        if (!state.rhs_resolved && !(state.right = CheckRvalue(state.right, state.left->val().type())))
+            return nullptr;
     } else {
-        if (!CheckRvalue(state.right))
-            return false;
+        if (!(state.right = CheckRvalue(state.right)))
+            return nullptr;
     }
+    state.expr->set_right(state.right);
 
     int token = state.expr->token();
     int op_token = NormalizeBinaryToken(token);
@@ -956,7 +973,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         } else if (auto* accessor = state.left->val().accessor()) {
             if (!accessor->setter()) {
                 report(state.expr, 152) << accessor->name();
-                return false;
+                return nullptr;
             }
             markusage(accessor->setter(), uREAD);
             if (accessor->getter() && token != '=')
@@ -964,12 +981,12 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         }
 
         if (!CheckAssignmentLHS(state))
-            return false;
+            return nullptr;
         if (token != '=' && !CheckRvalueAccess(state.left))
-            return false;
+            return nullptr;
     } else if (state.left->lvalue()) {
         if (!CheckRvalueAccess(state.left))
-            return false;
+            return nullptr;
         state.left = state.expr->set_left(new RvalueExpr(state.left));
     }
 
@@ -993,7 +1010,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         op = FindBinaryOperator(op_token, left_type, right_type);
         if (!op) {
             report(state.expr, 461) << get_token_string(token) << left_type << right_type;
-            return false;
+            return nullptr;
         }
 
         if (op->left.ck == ConversionKind::TagMismatch)
@@ -1026,11 +1043,11 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         }
         if (ck == ConversionKind::NeedsCast) {
             report(state.expr, 462) << assign_type << left_type;
-            return false;
+            return nullptr;
         }
         if (!HasImplicitConversion(ck)) {
             ReportConversionDiagnostic(state.right, left_type, assign_type);
-            return false;
+            return nullptr;
         }
 
         if (ck == ConversionKind::TagMismatch)
@@ -1045,7 +1062,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
             // implicit numeric conversion, which seems impossible.
             if (!op->left.IsNop() || !IsNopConversion(ck)) {
                 report(state.expr, 462) << assign_type << left_type;
-                return false;
+                return nullptr;
             }
         } else {
             // This is a non-compound assignment with a conversion, so update the right-hand side.
@@ -1060,7 +1077,7 @@ bool Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
     // Finally, do a constant folding pass.
     state.expr->FoldToConstant();
 
-    return true;
+    return state.expr;
 }
 
 static inline bool IsContextInsideClass(SemaContext& sc, LayoutDecl* cls) {
@@ -1118,7 +1135,7 @@ bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
     return true;
 }
 
-bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
+Expr* Semantics::CheckBinaryExpr(BinaryExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     BinaryExprState state(expr);
@@ -1126,16 +1143,16 @@ bool Semantics::CheckBinaryExpr(BinaryExpr* expr) {
 }
 
 
-bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
+Expr* Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     auto left = expr->left();
     auto right = expr->right();
 
     if ((left = AnalyzeForTest(left)) == nullptr)
-        return false;
+        return nullptr;
     if ((right = AnalyzeForTest(right)) == nullptr)
-        return false;
+        return nullptr;
 
     if (left->lvalue())
         left = new RvalueExpr(left);
@@ -1160,19 +1177,20 @@ bool Semantics::CheckLogicalExpr(LogicalExpr* expr) {
         val.ident = iEXPRESSION;
     }
     val.set_type(types_->type_bool());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
+Expr* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     auto first = chain->first();
-    if (!CheckRvalue(first))
-        return false;
+    if (!(first = CheckRvalue(first)))
+        return nullptr;
+    first = chain->set_first(first);
     if (first->lvalue())
         first = chain->set_first(new RvalueExpr(first));
 
     for (auto& op : chain->ops()) {
-        if (!CheckRvalue(op.expr))
-            return false;
+        if (!(op.expr = CheckRvalue(op.expr)))
+            return nullptr;
         if (op.expr->lvalue())
             op.expr = new RvalueExpr(op.expr);
     }
@@ -1194,7 +1212,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         auto binop = FindBinaryOperator(op.token, left_type, right_type);
         if (!binop) {
             report(op.pos, 461) << get_token_string(op.token) << left_type << right_type;
-            return false;
+            return nullptr;
         }
 
         // For subsequent comparisons, the left operand has already been evaluated
@@ -1202,7 +1220,7 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         // coercions to it.
         if (!is_first && !binop->left.IsNop()) {
             report(op.pos, 461) << get_token_string(op.token) << left_type << right_type;
-            return false;
+            return nullptr;
         }
 
         if (binop->left.ck == ConversionKind::TagMismatch)
@@ -1247,10 +1265,10 @@ bool Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
 
     if (all_const)
         val.set_constval(constval ? 1 : 0);
-    return true;
+    return chain;
 }
 
-bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
+Expr* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     AutoErrorPos aep(expr->pos());
 
     auto first = expr->first();
@@ -1258,18 +1276,22 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     auto third = expr->third();
 
     if (target) {
-        if (!CheckRvalue(second, target))
-            return false;
-        if (!CheckRvalue(third, target))
-            return false;
+        if (!(second = CheckRvalue(second, target)))
+            return nullptr;
+        if (!(third = CheckRvalue(third, target)))
+            return nullptr;
     } else {
-        if (!CheckRvalue(second) || !CheckRvalue(third))
-            return false;
+        if (!(second = CheckRvalue(second)))
+            return nullptr;
+        if (!(third = CheckRvalue(third)))
+            return nullptr;
     }
+    expr->set_second(second);
+    expr->set_third(third);
 
     Expr* new_first = AnalyzeForTest(first);
     if (!new_first)
-        return false;
+        return nullptr;
     first = expr->set_first(new_first);
 
     if (second->lvalue())
@@ -1337,7 +1359,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
             use_left_to_right = true;
         } else if (!HasImplicitConversion(right_to_left)) {
             ReportConversionDiagnostic(second, left.type(), right.type());
-            return false;
+            return nullptr;
         }
 
         if (use_left_to_right)
@@ -1355,7 +1377,7 @@ bool Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
 
     auto& val = expr->val();
     val.set_expr(out_type);
-    return true;
+    return expr;
 }
 
 
@@ -1383,33 +1405,37 @@ static inline bool CastNeedsRvalue(const ExprVal& out_val, Type* to_type) {
     return false;
 }
 
-bool Semantics::CheckCastExpr(CastExpr* expr) {
+Expr* Semantics::CheckCastExpr(CastExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     Type* to_type = expr->type();
     if (to_type->isVoid()) {
         report(expr, 144);
-        return false;
+        return nullptr;
     }
 
     auto inner = expr->expr();
     if (auto array = inner->as<ArrayExpr>()) {
         Type* target_array = types_->defineArray(to_type, (int)array->exprs().size());
-        if (!CheckRvalue(array, target_array))
-            return false;
+        Expr* checked_array = CheckRvalue(array, target_array);
+        if (!checked_array)
+            return nullptr;
+        inner = checked_array;
     } else {
-        if (!CheckExpr(inner))
-            return false;
+        if (!(inner = CheckExpr(inner)))
+            return nullptr;
     }
 
-    auto& out_val = expr->val();
+    auto cast_expr = new CastExpr(expr->pos(), expr->token(), expr->type_info(), inner);
+
+    auto& out_val = cast_expr->val();
     out_val = inner->val();
 
     Type* from_type = out_val.type();
     if (from_type == to_type) {
-        if (expr->lvalue())
+        if (cast_expr->lvalue())
             out_val.ident = iADDRESS;
-        return true;
+        return cast_expr;
     }
 
     auto actual_array =  from_type->as<ArrayType>();
@@ -1433,14 +1459,14 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         Type* func_type = to_type->isFunctionLike() ? to_type : from_type;
         if (!func_type->isLegacyFunction()) {
             report(expr, 460) << from_type << to_type;
-            return false;
+            return nullptr;
         }
         report(expr, 237);
     } else if (from_type->isFunctionLike() && to_type->isFunctionLike()) {
         inner = TryConversion(inner, to_type, CvtContext::Assignment);
         if (!inner)
-            return false;
-        expr->set_expr(inner);
+            return nullptr;
+        cast_expr->set_expr(inner);
         out_val = inner->val();
     } else if (out_val.type()->isVoid()) {
         report(expr, 89);
@@ -1450,7 +1476,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     if (from_type->isReference() && !to_type->isReference()) {
         if (to_type->isEnumStruct()) {
             report(expr, 136);
-            return false;
+            return nullptr;
         }
         to_type = types_->defineReference(to_type);
     }
@@ -1471,13 +1497,13 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
             target_elem = iter->inner();
         }
         if (!AreSliceElementsCompatible(from_type, target_elem)) {
-            report(expr, 460) << expr->expr()->val().type() << to_array_type;
-            return false;
+            report(expr, 460) << cast_expr->expr()->val().type() << to_array_type;
+            return nullptr;
         }
     }
     if (actual_array && from_type->isInt64()) {
         report(expr, 460) << actual_array << to_array_type;
-        return false;
+        return nullptr;
     }
 
     if (actual_array)
@@ -1486,7 +1512,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
     if (out_val.type()->isWideInt() || to_type->isWideInt()) {
         if (!IsValidIntWidthChange(out_val.type(), to_type)) {
             report(expr, 460) << out_val.type() << to_type;
-            return false;
+            return nullptr;
         }
     }
 
@@ -1494,7 +1520,7 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         auto other_type = out_val.type()->isFloat() ? to_type : out_val.type();
         if (other_type->podLoadSize() != 4) {
             report(expr, 460) << out_val.type() << to_type;
-            return false;
+            return nullptr;
         }
     }
 
@@ -1504,36 +1530,36 @@ bool Semantics::CheckCastExpr(CastExpr* expr) {
         !to_type->isInt64() && !out_val.type()->isInt64())
     {
         report(expr, 460) << out_val.type() << to_type;
-        return false;
+        return nullptr;
     }
 
     if (CastNeedsRvalue(out_val, to_type)) {
         if (inner->lvalue())
-            expr->set_expr(new RvalueExpr(inner));
+            cast_expr->set_expr(new RvalueExpr(inner));
         out_val.ident = iEXPRESSION;
     }
 
-    if (expr->lvalue())
+    if (cast_expr->lvalue())
         out_val.ident = iADDRESS;
 
     out_val.set_type(to_type);
 
-    expr->FoldToConstant();
-    return true;
+    cast_expr->FoldToConstant();
+    return cast_expr;
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
 // checks, so for now, we forbid it by default. Since the '.' operator *is*
 // prepared for this, we have a special analysis option to allow returning
 // types as values.
-bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
+Expr* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     AutoErrorPos aep(expr->pos());
 
     auto decl = expr->decl();
     if (!decl) {
         // This can happen if CheckSymbolExpr is called during name resolution.
         assert(cc_.reports()->total_errors() > 0);
-        return false;
+        return nullptr;
     }
 
     auto& val = expr->val();
@@ -1541,7 +1567,7 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         case StmtKind::VarDecl:
         case StmtKind::ArgDecl:
             val.set_variable(decl->as<VarDeclBase>(), decl->type());
-            return true;
+            return expr;
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl:
             val = decl->ConstVal();
@@ -1559,14 +1585,14 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             auto es = decl->as<EnumDecl>();
             if (!es->mm()) {
                 report(expr, 174) << decl->name();
-                return false;
+                return nullptr;
             }
             val.set_typename(decl);
             break;
         }
         case StmtKind::UpvarDecl:
             val.set_upvar(decl->as<UpvarDecl>(), decl->type());
-            return true;
+            return expr;
         default:
             assert(false);
     }
@@ -1578,15 +1604,15 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         fun = fun->canonical();
         if (fun->is_native()) {
             report(expr, 76);
-            return false;
+            return nullptr;
         }
         if (fun->return_array() || fun->return_type()->isArray()) {
             report(expr, 182);
-            return false;
+            return nullptr;
         }
         if (!fun->impl()) {
             report(expr, 4) << fun->name();
-            return false;
+            return nullptr;
         }
 
         val.ident = iEXPRESSION;
@@ -1601,19 +1627,19 @@ bool Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     if (val.ident == iTYPENAME) {
         if (!allow_types) {
             report(expr, 174) << decl->name();
-            return false;
+            return nullptr;
         }
     }
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckCommaExpr(CommaExpr* comma) {
+Expr* Semantics::CheckCommaExpr(CommaExpr* comma) {
     AutoErrorPos aep(comma->pos());
 
     size_t index = 0;
     for (auto& expr : comma->exprs()) {
-        if (!CheckRvalue(expr))
-            return false;
+        if (!(expr = CheckRvalue(expr)))
+            return nullptr;
         if (expr->lvalue())
             expr = new RvalueExpr(expr);
         if (!expr->HasSideEffects())
@@ -1623,50 +1649,50 @@ bool Semantics::CheckCommaExpr(CommaExpr* comma) {
 
     const auto& last = comma->exprs().back();
     comma->val().set_expr(last->val().qualified());
-    return true;
+    return comma;
 }
 
 
-bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
+Expr* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
     AutoErrorPos aep(array->pos());
 
     if (!target) {
         report(array->pos(), 142);
-        return false;
+        return nullptr;
     }
 
     // Handle enum struct target — validate {x, y, ...} against struct fields.
     if (auto es = target->asEnumStruct()) {
         if (!ValidateEnumStructInitializer(es, array))
-            return false;
+            return nullptr;
         array->val().set_expr(target);
-        return true;
+        return array;
     }
 
     auto array_target = target->as<ArrayType>();
     if (!array_target) {
         report(array->pos(), 142);
-        return false;
+        return nullptr;
     }
 
     Type* formal_elt = array_target->inner();
 
-    for (const auto& entry : array->exprs()) {
+    for (auto& entry : array->exprs()) {
         if (entry->as<ArrayExpr>()) {
-            if (!CheckRvalue(entry, formal_elt))
-                return false;
+            if (!(entry = CheckRvalue(entry, formal_elt)))
+                return nullptr;
         } else {
-            if (!CheckExpr(entry))
-                return false;
+            if (!(entry = CheckExpr(entry)))
+                return nullptr;
 
             const auto& val = entry->val();
             if (val.ident != iCONSTEXPR) {
                 report(entry, 8);
-                return false;
+                return nullptr;
             }
 
             if (!CheckCoercion(entry, formal_elt, val.type(), CvtContext::Assignment))
-                return false;
+                return nullptr;
         }
     }
 
@@ -1676,36 +1702,36 @@ bool Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
     return CheckRvalueAccess(array);
 }
 
-bool Semantics::CheckIndexExpr(IndexExpr* expr) {
+Expr* Semantics::CheckIndexExpr(IndexExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     auto base = expr->base();
     auto index = expr->index();
-    if (!CheckRvalue(base))
-        return false;
+    if (!(base = CheckRvalue(base)))
+        return nullptr;
     if (base->lvalue())
-        base = expr->set_base(new RvalueExpr(base));
+        base = new RvalueExpr(base);
 
     const auto& base_val = base->val();
     if (!base_val.type()->isArray()) {
         report(index, 28);
-        return false;
+        return nullptr;
     }
 
     ArrayType* array = base_val.type()->to<ArrayType>();
 
     if (index) {
-        if (!CheckRvalue(index))
-            return false;
+        if (!(index = CheckRvalue(index)))
+            return nullptr;
         if (!CheckScalarType(index))
-            return false;
+            return nullptr;
         if (index->lvalue())
-            index = expr->set_index(new RvalueExpr(index));
+            index = new RvalueExpr(index);
 
         auto idx_type = index->val().type();
         if (!IsValidIndexType(idx_type)) {
             report(index, 77) << idx_type;
-            return false;
+            return nullptr;
         }
 
         const auto& index_val = index->val();
@@ -1716,7 +1742,7 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                     (array->size() != 0 && array->size() <= index_val.const_i32()))
                 {
                     report(index, 32);
-                    return false;
+                    return nullptr;
                 }
             } else {
                 /* character index */
@@ -1724,36 +1750,37 @@ bool Semantics::CheckIndexExpr(IndexExpr* expr) {
                     (array->size() != 0 && array->size() <= index_val.const_i32()))
                 {
                     report(index, 32);
-                    return false;
+                    return nullptr;
                 }
             }
         }
     }
 
-    auto& out_val = expr->val();
+    auto result = new IndexExpr(expr->pos(), base, index);
+    auto& out_val = result->val();
     out_val = base_val;
 
     out_val.set_slice(iARRAYELEM, QualType(array->inner()));
-    return true;
+    return result;
 }
 
-bool Semantics::CheckThisExpr(ThisExpr* expr) {
+Expr* Semantics::CheckThisExpr(ThisExpr* expr) {
     auto sym = expr->decl();
     assert(sym->as<ArgDecl>());
 
     auto& val = expr->val();
     val.set_variable(sym, sym->type());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckNullExpr(NullExpr* expr) {
+Expr* Semantics::CheckNullExpr(NullExpr* expr) {
     auto& val = expr->val();
     val.set_constval(0);
     val.set_type(types_->type_null());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
+Expr* Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
     auto& val = expr->val();
     val.ident = iEXPRESSION;
 
@@ -1769,76 +1796,82 @@ bool Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
     }
 
     val.set_type(types_->defineArray(types_->type_char(), (cell)expr->text()->length() + 1));
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
+Expr* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
     AutoErrorPos aep(expr->pos());
 
     auto base = expr->base();
     if (auto sym_expr = base->as<SymbolExpr>()) {
         if (!CheckSymbolExpr(sym_expr, true))
-            return false;
+            return nullptr;
     } else {
-        if (!CheckRvalue(base))
-            return false;
+        if (!(base = CheckRvalue(base)))
+            return nullptr;
     }
+
+    auto result = new FieldAccessExpr(expr->pos(), expr->token(), base, expr->name());
 
     int token = expr->token();
     if (token == tDBLCOLON)
-        return CheckStaticFieldAccessExpr(expr);
+        return CheckStaticFieldAccessExpr(result);
 
     const auto& base_val = base->val();
     switch (base_val.ident) {
         case iFUNCTN:
             report(expr, 107);
-            return false;
+            return nullptr;
         default:
             if (base_val.type()->isArray()) {
                 report(expr, 96) << expr->name() << "type" << "array";
-                return false;
+                return nullptr;
             }
             break;
     }
 
-    auto& val = expr->val();
+    auto& val = result->val();
     if (base_val.ident == iTYPENAME) {
         Decl* typename_decl = base_val.typename_decl();
         auto layout = typename_decl->as<LayoutDecl>();
         if (!layout) {
             report(expr, 444) << typename_decl->name() << expr->name();
-            return false;
+            return nullptr;
         }
 
         auto member = layout->FindMember(expr->name());
         if (!member || !member->as<MemberFunctionDecl>()) {
             report(expr, 444) << typename_decl->name() << expr->name();
-            return false;
+            return nullptr;
         }
         auto method = member->as<MemberFunctionDecl>();
         if (!method->is_static()) {
             report(expr, 176) << method->decl_name() << typename_decl->name();
-            return false;
+            return nullptr;
         }
-        expr->set_resolved(method);
+        result->set_resolved(method);
         val.set_function(method);
         markusage(method, uREAD);
-        return true;
+        return result;
     }
 
     Type* base_type = base_val.type();
     if (auto es = base_type->asEnumStruct()) {
-        if (base->lvalue())
-            base = expr->set_base(new RvalueExpr(base));
-        return CheckEnumStructFieldAccessExpr(expr, base_type, es, from_call);
+        if (base->lvalue()) {
+            base = new RvalueExpr(base);
+            result->set_base(base);
+        }
+        return CheckEnumStructFieldAccessExpr(result, base_type, es, from_call);
     }
     if (base_type->isReference())
         base_type = base_type->inner();
 
     if (auto cls = base_type->asClass()) {
-        if (base->lvalue())
-            base = expr->set_base(new RvalueExpr(base));
-        return CheckClassFieldAccessExpr(expr, base_type, cls, from_call);
+        if (base->lvalue()) {
+            base = new RvalueExpr(base);
+            result->set_base(base);
+        }
+        return CheckClassFieldAccessExpr(result, base_type, cls, from_call);
     }
 
     auto map = base_type->asMethodmap();
@@ -1847,40 +1880,42 @@ bool Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
             report(expr, 104) << "function";
         else
             report(expr, 104) << base_val.type();
-        return false;
+        return nullptr;
     }
 
     auto member = map->FindMember(expr->name());
     if (!member) {
         report(expr, 105) << map->name() << expr->name();
-        return false;
+        return nullptr;
     }
 
     if (auto prop = member->as<PropertyDecl>()) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
-        if (base->lvalue())
-            base = expr->set_base(new RvalueExpr(base));
+        if (base->lvalue()) {
+            base = new RvalueExpr(base);
+            result->set_base(base);
+        }
         val.set_type(prop->property_type());
         val.set_accessor(prop);
-        return true;
+        return result;
     }
 
     auto method = member->as<MemberFunctionDecl>();
     if (method->is_static()) {
         report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
-        return false;
+        return nullptr;
     }
-    expr->set_resolved(method);
+    result->set_resolved(method);
 
     if (!from_call) {
         report(expr, 50);
-        return false;
+        return nullptr;
     }
 
     val.set_function(method);
     markusage(method, uREAD);
-    return true;
+    return result;
 }
 
 CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
@@ -1889,19 +1924,21 @@ CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
     switch (target->kind()) {
         case ExprKind::FieldAccessExpr: {
             auto expr = target->to<FieldAccessExpr>();
-            if (!CheckFieldAccessExpr(expr, true))
+            Expr* checked = CheckFieldAccessExpr(expr, true);
+            if (!checked)
                 return {};
 
-            auto& val = expr->val();
+            auto field_access = checked->to<FieldAccessExpr>();
+            auto& val = field_access->val();
             if (val.ident != iFUNCTN) {
                 report(target, 12);
                 return {};
             }
 
             // The static accessor (::) is offsetof(), so it can't return functions.
-            assert(expr->token() == '.');
+            assert(field_access->token() == '.');
 
-            auto resolved = expr->resolved();
+            auto resolved = field_access->resolved();
             if (auto method = resolved->as<MemberFunctionDecl>()) {
                 if (auto map = method->parent()->as<MethodmapDecl>()) {
                     if (map->ctor() == method) {
@@ -1914,9 +1951,9 @@ CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             auto method = resolved->as<MemberFunctionDecl>();
             assert(resolved->as<LayoutFieldDecl>() || method);
 
-            auto base = expr->base();
+            auto base = field_access->base();
             if (base->lvalue())
-                base = expr->set_base(new RvalueExpr(base));
+                base = new RvalueExpr(base);
             if (resolved->as<LayoutFieldDecl>() || !method->is_static())
                 call->set_implicit_this(base);
             return val.fun()->canonical();
@@ -1950,7 +1987,7 @@ CallTarget Semantics::BindCallTarget(CallExpr* call, Expr* target) {
             [[fallthrough]];
         }
         default: {
-            if (!CheckRvalue(target))
+            if (!(target = CheckRvalue(target)))
                 return {};
 
             if (target->lvalue())
@@ -2003,47 +2040,47 @@ auto Semantics::BindNewTarget(Expr* target) -> std::optional<CallCtor> {
     return {};
 }
 
-bool Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
-                                               bool from_call)
+Expr* Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
+                                                bool from_call)
 {
     expr->set_resolved(FindEnumStructField(type, expr->name()));
 
     auto field_decl = expr->resolved();
     if (!field_decl) {
         report(expr, 105) << type << expr->name();
-        return false;
+        return nullptr;
     }
 
     auto& val = expr->val();
     if (auto fun = field_decl->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
-            return false;
+            return nullptr;
         }
 
         val.set_function(fun);
         markusage(fun, uREAD);
-        return true;
+        return expr;
     }
 
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
     val.set_field(field, field->type());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
-                                           bool from_call)
+Expr* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
+                                            bool from_call)
 {
     Decl* member = FindClassField(type, expr->name());
     if (!member) {
         report(expr, 105) << type << expr->name();
-        return false;
+        return nullptr;
     }
 
     if (!CheckPrivateMemberAccess(expr, member, decl, *sc_))
-        return false;
+        return nullptr;
 
     // Only set resolved() for properties and methods. Regular fields carry
     // their info in val() via set_field(), and EmitFieldAccessExpr asserts
@@ -2057,70 +2094,71 @@ bool Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, Cla
             expr->set_base(new RvalueExpr(expr->base()));
         val.set_type(prop->property_type());
         val.set_accessor(prop);
-        return true;
+        return expr;
     }
 
     if (auto fun = member->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
-            return false;
+            return nullptr;
         }
 
         val.set_function(fun);
         markusage(fun, uREAD);
-        return true;
+        return expr;
     }
 
     auto field = member->as<LayoutFieldDecl>();
     assert(field);
 
     val.set_field(field, field->type());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
+Expr* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     auto base = expr->base();
     const auto& base_val = base->val();
     if (base_val.ident != iTYPENAME) {
         report(expr, 108);
-        return false;
+        return nullptr;
     }
 
     Type* type = base_val.type();
     Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
         report(expr, 105) << type << expr->name();
-        return false;
+        return nullptr;
     }
 
     auto fd = field->as<LayoutFieldDecl>();
     if (!fd) {
         report(expr, 445) << field->name();
-        return false;
+        return nullptr;
     }
 
     expr->set_resolved(field);
 
     auto& val = expr->val();
     val.set_expr(types_->type_int());
-    return true;
+    return expr;
 }
 
-bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
+Expr* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
     AutoErrorPos aep(expr->pos());
 
     Expr* child = expr->child();
     if (auto sym = child->as<SymbolExpr>()) {
         if (!CheckSymbolExpr(sym, true))
-            return false;
+            return nullptr;
     } else {
-        if (!CheckExpr(child))
-            return false;
+        if (!(child = CheckExpr(child)))
+            return nullptr;
     }
 
-    auto& val = expr->val();
+    auto result = new SizeofExpr(expr->pos(), child);
+    auto& val = result->val();
     val.set_type(types_->type_int());
 
     const auto& cv = child->val();
@@ -2134,7 +2172,7 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             } else if (auto array = cv.type()->as<ArrayType>()) {
                 if (!array->size()) {
                     report(child, 163);
-                    return false;
+                    return nullptr;
                 }
                 val.set_constval(array->size());
             } else if (cv.ident == iEXPRESSION) {
@@ -2147,36 +2185,36 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                             val.set_expr(QualType(types_->type_int()));
                         else
                             val.set_constval(1);
-                        return true;
+                        return result;
                     }
                 }
                 report(child, 72);
-                return false;
+                return nullptr;
             } else {
                 if (cv.type()->isIntPtr()) {
                     report(expr, 449) << cv.type();
-                    return false;
+                    return nullptr;
                 }
                 val.set_constval(1);
                 report(expr, 252);
             }
-            return true;
+            return result;
 
         case iTYPENAME: {
             auto es = cv.typename_decl()->as<EnumStructDecl>();
             if (!es) {
                 report(child, 72);
-                return false;
+                return nullptr;
             }
             val.set_expr(QualType(types_->type_int()));
-            return true;
+            return result;
         }
 
         case iCONSTEXPR: {
             auto access = child->as<FieldAccessExpr>();
             if (!access || access->token() != tDBLCOLON) {
                 report(child, 72);
-                return false;
+                return nullptr;
             }
             auto field = access->resolved()->as<LayoutFieldDecl>();
             if (auto array = field->type()->as<ArrayType>())
@@ -2185,12 +2223,12 @@ bool Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 val.set_expr(QualType(types_->type_int()));
             else
                 val.set_constval(1);
-            return true;
+            return result;
         }
 
         default:
             report(child, 72);
-            return false;
+            return nullptr;
     }
 }
 
@@ -2210,7 +2248,7 @@ static inline bool IsValidInt64RefArg(Type* param) {
     return false;
 }
 
-bool Semantics::CheckCallExpr(CallExpr* call) {
+Expr* Semantics::CheckCallExpr(CallExpr* call) {
     AutoErrorPos aep(call->pos());
 
     FunctionDecl* fun = nullptr;
@@ -2220,7 +2258,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     if (call->token() == tNEW) {
         auto ctor = BindNewTarget(call->target());
         if (!ctor)
-            return false;
+            return nullptr;
         fun = ctor->first;
         ctor_type = ctor->second;
     } else {
@@ -2230,7 +2268,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         } else if (auto target_expr = std::get_if<Expr*>(&result)) {
             target = *target_expr;
         } else {
-            return false;
+            return nullptr;
         }
     }
 
@@ -2243,7 +2281,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         if (fun->return_type()->isArray() || fun->return_type()->isEnumStruct()) {
             if (fun->is_analyzing() || !CheckFunctionDecl(fun)) {
                 report(call, 411);
-                return false;
+                return nullptr;
             }
         }
 
@@ -2264,10 +2302,10 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         if (!fun) {
             if (!call->args().empty()) {
                 report(call->pos(), 92);
-                return false;
+                return nullptr;
             }
             val.set_expr(ctor_type);
-            return true;
+            return call;
         }
     }
 
@@ -2286,11 +2324,11 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     if (call->implicit_this()) {
         if (ft->nargs() == 0) {
             report(call->implicit_this(), 92);
-            return false;
+            return nullptr;
         }
         Expr* param = CheckArgument(call, ft, ft->arg_type(0), call->implicit_this(), &ps, 0);
         if (!param)
-            return false;
+            return nullptr;
         ps.argv[0] = param;
         nargs++;
         argidx++;
@@ -2317,29 +2355,29 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         } else {
             if (namedparams) {
                 report(call, 44); // positional parameters must precede named parameters
-                return false;
+                return nullptr;
             }
             argpos = nargs;
             if (!ft->variadic() && argidx >= ft->nargs()) {
                 report(param, 92);
-                return false;
+                return nullptr;
             }
         }
 
         if (argpos >= SP_MAX_CALL_ARGUMENTS) {
             report(call, 45); // too many function arguments
-            return false;
+            return nullptr;
         }
         if (argpos < ps.argv.size() && ps.argv[argpos]) {
             report(call, 58); // argument already set
-            return false;
+            return nullptr;
         }
 
         // Add the argument to |argv| and perform type checks.
         auto formal = argidx < ft->nargs() ? ft->arg_type(argidx) : QualType{};
         auto result = CheckArgument(call, ft, formal, param, &ps, argpos);
         if (!result)
-            return false;
+            return nullptr;
 
         ps.argv[argpos] = result;
         nargs++;
@@ -2353,7 +2391,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
             if (auto* array = formal_param->type()->as<ArrayType>()) {
                 if (formal_param->is_captured() && !array->is_fixed()) {
                     report(param, 487);
-                    return false;
+                    return nullptr;
                 }
             }
         }
@@ -2365,7 +2403,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
 
     if (!sc_->func()) {
         report(call, 10);
-        return false;
+        return nullptr;
     }
 
     // Check for missing or invalid extra arguments, and fill in default
@@ -2374,7 +2412,7 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
         if (argidx >= ps.argv.size() || !ps.argv[argidx]) {
             auto result = CheckArgument(call, ft, ft->arg_type(argidx), nullptr, &ps, argidx);
             if (!result)
-                return false;
+                return nullptr;
             ps.argv[argidx] = result;
         }
     }
@@ -2383,15 +2421,14 @@ bool Semantics::CheckCallExpr(CallExpr* call) {
     if (call->args().size() == ps.argv.size()) {
         for (size_t i = 0; i < ps.argv.size(); i++)
             call->args()[i] = ps.argv[i];
-    } else {
-        new (&call->args()) PoolArray<Expr*>(ps.argv);
     }
+    call->set_sema_args(ps.argv);
 
     if (ctor_type)
         val.set_expr(ctor_type);
     else
         val.set_expr(ft->return_type());
-    return true;
+    return call;
 }
 
 // Note: currently formal is null for variadic arguments. We don't really
@@ -2451,10 +2488,10 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
 
     if (param != call->implicit_this()) {
         if (formal) {
-            if (!CheckRvalue(param, *formal))
+            if (!(param = CheckRvalue(param, *formal)))
                 return nullptr;
         } else {
-            if (!CheckExpr(param))
+            if (!(param = CheckExpr(param)))
                 return nullptr;
         }
     }
@@ -2585,7 +2622,7 @@ Expr* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType formal
 
 bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckExpr(expr))
+    if (!(expr = CheckExpr(expr)))
         return false;
 
     auto ck = FindConversion(expr->val().type(), types_->type_bool(), CvtContext::Argument);
@@ -2594,6 +2631,7 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
         return false;
     }
     expr = BuildConversion(expr, ck, types_->type_bool());
+    stmt->set_sema_expr(expr);
 
     ExprVal* val = AnalyzeForConst(expr);
     if (!val)
@@ -2610,15 +2648,15 @@ bool Semantics::CheckStaticAssertStmt(StaticAssertStmt* stmt) {
     return false;
 }
 
-bool Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
+Expr* Semantics::CheckNewArrayExpr(NewArrayExpr* expr) {
     return CheckNewArrayExprForArrayInitializer(expr);
 }
 
-bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
+Expr* Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
     if (na->analyzed())
-        return na->analysis_result();
+        return na->sema_result();
 
-    na->set_analysis_result(false);
+    na->set_sema_result(nullptr);
 
     auto& val = na->val();
     val.ident = iEXPRESSION;
@@ -2633,38 +2671,39 @@ bool Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
         }
         if (seen_null) {
             report(na, 185);
-            return false;
+            return nullptr;
         }
-        if (!CheckRvalue(expr))
-            return false;
+        if (!(expr = CheckRvalue(expr)))
+            return nullptr;
         if (expr->lvalue())
             expr = new RvalueExpr(expr);
 
         const auto& v = expr->val();
         if (IsLegacyEnumType(sc_->scope(), v.type())) {
             report(expr, 153);
-            return false;
+            return nullptr;
         }
         if (!IsValidIndexType(v.type())) {
             report(expr, 77) << v.type();
-            return false;
+            return nullptr;
         }
         if (v.ident == iCONSTEXPR && v.const_i32() <= 0) {
             report(expr, 9);
-            return false;
+            return nullptr;
         }
         dims.emplace_back(0);
     }
     assert(na->type()->isArray());
 
     val.set_type(na->type());
-    na->set_analysis_result(true);
-    return true;
+    na->set_sema_result(na);
+    return na;
 }
 
 bool Semantics::CheckIfStmt(IfStmt* stmt) {
     if (Expr* expr = AnalyzeForTest(stmt->cond()))
         stmt->set_cond(expr);
+    stmt->set_sema_cond(stmt->cond());
 
     // Note: unlike loop conditions, we don't factor in constexprs here, it's
     // too much work and way less common than constant loop conditions.
@@ -2685,13 +2724,14 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
 
 bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckRvalue(expr, nullptr, EXPR_DISCARD_RESULT))
+    if (!(expr = CheckRvalue(expr, nullptr, EXPR_DISCARD_RESULT)))
         return false;
     if (expr->lvalue())
         expr = stmt->set_expr(new RvalueExpr(expr));
 
     if (!expr->HasSideEffects())
         report(expr, 215);
+    stmt->set_sema_expr(expr);
     return true;
 }
 
@@ -2821,7 +2861,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         }
     }
 
-    if (!CheckRvalue(expr))
+    if (!(expr = CheckRvalue(expr)))
         return false;
 
     if (expr->lvalue())
@@ -2839,6 +2879,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
 
     if (fun->return_type()->isInt64() && CanPromoteToInt64(expr->val().type())) {
         expr = stmt->set_expr(BuildSimpleCast(expr, BuiltinType::Int64));
+        stmt->set_sema_expr(expr);
         return true;
     }
 
@@ -2851,6 +2892,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     if ((expr = TryConversion(expr, fun->return_type(), why)) == nullptr)
         return false;
     stmt->set_expr(expr);
+    stmt->set_sema_expr(expr);
 
     if (expr->val().type()->isEnumStruct() || expr->val().type()->isFixedArray()) {
         if (!CheckCompoundReturnStmt(stmt))
@@ -2906,7 +2948,7 @@ bool Semantics::CheckNativeCompoundReturn(FunctionDecl* info) {
 
 bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     auto expr = stmt->expr();
-    if (!CheckRvalue(expr))
+    if (!(expr = CheckRvalue(expr)))
         return false;
 
     const auto& v = expr->val();
@@ -2960,6 +3002,7 @@ bool Semantics::CheckDeleteStmt(DeleteStmt* stmt) {
     markusage(map->dtor(), uREAD);
 
     stmt->set_map(map);
+    stmt->set_sema_expr(expr);
     return true;
 }
 
@@ -2967,6 +3010,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
     if (Expr* expr = AnalyzeForTest(stmt->cond())) {
         stmt->set_cond(expr);
     }
+    stmt->set_sema_cond(stmt->cond());
 
     auto cond = stmt->cond();
 
@@ -3015,10 +3059,16 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
         else
             ok = false;
     }
-    if (stmt->advance()) {
-        if (!CheckRvalue(stmt->advance()))
+    stmt->set_sema_cond(cond);
+
+    auto advance = stmt->advance();
+    if (advance) {
+        if (!(advance = CheckRvalue(advance)))
             ok = false;
+        else
+            advance = stmt->set_advance(advance);
     }
+    stmt->set_sema_advance(advance);
 
     ke::Maybe<cell> constval;
     if (cond && cond->val().ident == iCONSTEXPR)
@@ -3065,9 +3115,14 @@ bool Semantics::CheckForStmt(ForStmt* stmt) {
 
 bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     auto expr = stmt->expr();
-    bool tag_ok = CheckRvalue(expr);
-    if (expr->lvalue())
-        expr = stmt->set_expr(new RvalueExpr(expr));
+    Expr* checked_expr = CheckRvalue(expr);
+    bool tag_ok = checked_expr != nullptr;
+    if (checked_expr) {
+        if (checked_expr->lvalue())
+            checked_expr = stmt->set_expr(new RvalueExpr(checked_expr));
+        stmt->set_sema_expr(checked_expr);
+        expr = checked_expr;
+    }
 
     const auto& v = expr->val();
     if (tag_ok && !(v.type()->coercesToInt() || v.type()->isFloat())) {
@@ -3086,34 +3141,40 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     };
 
     std::unordered_set<cell> case_values;
-    for (const auto& case_entry : stmt->cases()) {
+    for (size_t i = 0; i < stmt->cases().size(); i++) {
+        const auto& case_entry = stmt->cases()[i];
+
+        std::vector<Expr*> checked_case_exprs;
         for (Expr* expr : case_entry.first) {
-            if (!CheckRvalue(expr))
+            Expr* checked = CheckRvalue(expr);
+            checked_case_exprs.push_back(checked ? checked : expr);
+            if (!checked)
                 continue;
 
             if (!tag_ok)
                 continue;
 
-            ConversionKind ck = FindConversion(expr->val().type(), v.type(),
-                                              CvtContext::Assignment);
+            ConversionKind ck = FindConversion(checked->val().type(), v.type(),
+                                               CvtContext::Assignment);
             if (!IsNopConversion(ck)) {
-                report(expr, 450) << v.type() << expr->val().type();
+                report(expr, 450) << v.type() << checked->val().type();
                 continue;
             }
             if (ck == ConversionKind::TagMismatch)
-                report(expr, 213) << v.type() << expr->val().type();
+                report(expr, 213) << v.type() << checked->val().type();
 
-            if (expr->val().ident != iCONSTEXPR) {
+            if (checked->val().ident != iCONSTEXPR) {
                 report(expr, 8);
                 continue;
             }
 
-            cell value = expr->val().const_cell();
+            cell value = checked->val().const_cell();
             if (!case_values.count(value))
                 case_values.emplace(value);
             else
                 report(expr, 40) << value;
         }
+        stmt->set_sema_case_exprs(i, checked_case_exprs);
 
         if (CheckStmt(case_entry.second))
             update_flow(case_entry.second->flow_type());
@@ -3341,16 +3402,16 @@ void Semantics::CheckFunctionReturnUsage(FunctionDecl* info) {
         ReportFunctionReturnError(info);
 }
 
-bool Semantics::CheckFunctionExpr(FunctionExpr* expr) {
+Expr* Semantics::CheckFunctionExpr(FunctionExpr* expr) {
     auto fun = expr->decl();
     if (!CheckFunctionDecl(fun))
-        return false;
+        return nullptr;
 
     closures_.emplace_back(fun);
 
     auto& v = expr->val();
     v.set_expr(fun->type());
-    return true;
+    return expr;
 }
 
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
@@ -3514,7 +3575,7 @@ void Semantics::DeduceMaybeUsed() {
     }
 }
 
-bool Semantics::CheckRvalue(Expr* expr, Type* target, uint32_t flags) {
+Expr* Semantics::CheckRvalue(Expr* expr, Type* target, uint32_t flags) {
     switch (expr->kind()) {
         case ExprKind::ArrayExpr:
             return CheckArrayExpr(expr->to<ArrayExpr>(), target);
@@ -3526,21 +3587,21 @@ bool Semantics::CheckRvalue(Expr* expr, Type* target, uint32_t flags) {
             break;
     }
 
-    if (!CheckExpr(expr, flags))
-        return false;
+    if (!(expr = CheckExpr(expr, flags)))
+        return nullptr;
     return CheckRvalueAccess(expr);
 }
 
-bool Semantics::CheckRvalueAccess(Expr* expr) {
+Expr* Semantics::CheckRvalueAccess(Expr* expr) {
     if (auto accessor = expr->val().accessor()) {
         if (!accessor->getter()) {
             report(expr, 149) << accessor->name();
-            return false;
+            return nullptr;
         }
         if (!CheckAccessorAccess(*sc_, expr, accessor, accessor->getter()))
-            return false;
+            return nullptr;
     }
-    return true;
+    return expr;
 }
 
 bool Semantics::IsThisAtom(sp::Atom* atom) {
@@ -3716,6 +3777,7 @@ bool FunctionDecl::GenerateSharedClass(SemaContext& sc) {
         call->set_ctor_type(shared_class_->type().unqualified());
         call->val().set_expr(shared_class_->type().unqualified());
         shared_object_->set_init(call);
+        shared_object_->set_sema_init(shared_object_->init());
     }
 
     return true;

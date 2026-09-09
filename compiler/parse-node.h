@@ -264,10 +264,14 @@ class StaticAssertStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::StaticAssertStmt; }
 
     Expr* expr() const { return expr_; }
+    Expr* set_expr(Expr* expr) { return expr_ = expr; }
+    Expr* sema_expr() const { return sema_expr_; }
+    void set_sema_expr(Expr* expr) { sema_expr_ = expr; }
     Atom* text() const { return text_; }
 
   private:
     Expr* expr_;
+    Expr* sema_expr_ = nullptr;
     Atom* text_;
 };
 
@@ -342,6 +346,9 @@ class VarDeclBase : public Decl
     const typeinfo_t& type_info() const { return type_; }
     typeinfo_t* mutable_type_info() { return &type_; }
     void set_init(Expr* expr);
+    BinaryExpr* sema_init() const { return sema_init_; }
+    Expr* sema_init_rhs() const { return sema_init_rhs_; }
+    void set_sema_init(BinaryExpr* init);
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
     bool is_public() const { return is_public_; }
@@ -368,6 +375,8 @@ class VarDeclBase : public Decl
   protected:
     typeinfo_t type_;
     BinaryExpr* init_ = nullptr;
+    BinaryExpr* sema_init_ = nullptr;
+    Expr* sema_init_rhs_ = nullptr;
     uint8_t vclass_ : 4; // This will be implied by scope, when we get there.
     bool is_public_ : 1;
     bool is_static_ : 1;
@@ -805,6 +814,7 @@ class IncDecExpr : public Expr
 
     int token() const { return token_; }
     Expr* expr() const { return expr_; }
+    Expr* set_expr(Expr* expr) { return expr_ = expr; }
     bool prefix() const { return prefix_; }
 
   protected:
@@ -942,6 +952,10 @@ class CallExpr final : public Expr
     static bool is_a(Expr* node) { return node->kind() == ExprKind::CallExpr; }
 
     PoolArray<Expr*>& args() { return args_; }
+    PoolArray<Expr*>& sema_args() { return sema_args_; }
+    void set_sema_args(const std::vector<Expr*>& argv) {
+        new (&sema_args_) PoolArray<Expr*>(argv);
+    }
     Expr* target() const { return target_; }
     void set_target(Expr* target) { target_ = target; }
     int token() const { return token_; }
@@ -976,6 +990,7 @@ class CallExpr final : public Expr
     int token_;
     Expr* target_;
     PoolArray<Expr*> args_;
+    PoolArray<Expr*> sema_args_;
     CallTarget resolved_target_;
     std::variant<std::monostate, Expr*, Type*> implicit_this_;
 };
@@ -1217,15 +1232,15 @@ class NewArrayExpr final : public Expr
     const TypenameInfo& type_info() const { return type_; }
     bool autozero() const { return autozero_; }
     void set_no_autozero() { autozero_ = false; }
-    bool analyzed() const { return analyzed_.isValid(); }
-    bool analysis_result() const { return analyzed_.get(); }
-    void set_analysis_result(bool value) { analyzed_.init(value); }
+    bool analyzed() const { return sema_result_.isValid(); }
+    Expr* sema_result() const { return sema_result_.get(); }
+    void set_sema_result(Expr* result) { sema_result_.init(result); }
 
   private:
     TypenameInfo type_;
     PoolArray<Expr*> exprs_;
     bool autozero_ = true;
-    ke::Maybe<bool> analyzed_;
+    ke::Maybe<Expr*> sema_result_;
 };
 
 class ArrayExpr final : public Expr
@@ -1328,11 +1343,14 @@ class IfStmt : public Stmt
 
     Expr* cond() const { return cond_; }
     Expr* set_cond(Expr* cond) { return cond_ = cond; }
+    Expr* sema_cond() const { return sema_cond_; }
+    void set_sema_cond(Expr* cond) { sema_cond_ = cond; }
     Stmt* on_true() const { return on_true_; }
     Stmt* on_false() const { return on_false_; }
 
   private:
     Expr* cond_;
+    Expr* sema_cond_ = nullptr;
     Stmt* on_true_;
     Stmt* on_false_;
 };
@@ -1351,9 +1369,12 @@ class ExprStmt : public Stmt
 
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
+    Expr* sema_expr() const { return sema_expr_; }
+    void set_sema_expr(Expr* expr) { sema_expr_ = expr; }
 
   private:
     Expr* expr_;
+    Expr* sema_expr_ = nullptr;
 };
 
 class ReturnStmt : public Stmt
@@ -1372,12 +1393,15 @@ class ReturnStmt : public Stmt
 
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
+    Expr* sema_expr() const { return sema_expr_; }
+    void set_sema_expr(Expr* expr) { sema_expr_ = expr; }
 
   private:
     bool CheckArrayReturn(SemaContext& sc);
 
   private:
     Expr* expr_;
+    Expr* sema_expr_ = nullptr;
 };
 
 class DeleteStmt : public Stmt
@@ -1393,11 +1417,15 @@ class DeleteStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::DeleteStmt; }
 
     Expr* expr() const { return expr_; }
+    Expr* set_expr(Expr* expr) { return expr_ = expr; }
+    Expr* sema_expr() const { return sema_expr_; }
+    void set_sema_expr(Expr* expr) { sema_expr_ = expr; }
     MethodmapDecl* map() const { return map_; }
     void set_map(MethodmapDecl* map) { map_ = map; }
 
   private:
     Expr* expr_;
+    Expr* sema_expr_ = nullptr;
     MethodmapDecl* map_;
 };
 
@@ -1418,6 +1446,8 @@ class DoWhileStmt : public Stmt
     int token() const { return token_; }
     Expr* cond() const { return cond_; }
     Expr* set_cond(Expr* expr) { return cond_ = expr; }
+    Expr* sema_cond() const { return sema_cond_; }
+    void set_sema_cond(Expr* cond) { sema_cond_ = cond; }
     Stmt* body() const { return body_; }
     bool always_taken() const { return always_taken_; }
     void set_always_taken(bool val) { always_taken_ = val; }
@@ -1427,6 +1457,7 @@ class DoWhileStmt : public Stmt
   private:
     int token_;
     Expr* cond_;
+    Expr* sema_cond_ = nullptr;
     Stmt* body_;
     bool always_taken_ = false;
     bool never_taken_ = false;
@@ -1452,7 +1483,12 @@ class ForStmt : public Stmt
     Stmt* init() const { return init_; }
     Expr* cond() const { return cond_; }
     Expr* set_cond(Expr* cond) { return cond_ = cond; }
+    Expr* sema_cond() const { return sema_cond_; }
+    void set_sema_cond(Expr* cond) { sema_cond_ = cond; }
     Expr* advance() const { return advance_; }
+    Expr* set_advance(Expr* advance) { return advance_ = advance; }
+    Expr* sema_advance() const { return sema_advance_; }
+    void set_sema_advance(Expr* advance) { sema_advance_ = advance; }
     Stmt* body() const { return body_; }
     bool always_taken() const { return always_taken_; }
     void set_always_taken(bool val) { always_taken_ = val; }
@@ -1465,7 +1501,9 @@ class ForStmt : public Stmt
     SymbolScope* scope_;
     Stmt* init_;
     Expr* cond_;
+    Expr* sema_cond_ = nullptr;
     Expr* advance_;
+    Expr* sema_advance_ = nullptr;
     Stmt* body_;
     bool always_taken_ = false;
     bool never_taken_ = false;
@@ -1482,7 +1520,8 @@ class SwitchStmt : public Stmt
       : Stmt(StmtKind::SwitchStmt, pos),
         expr_(expr),
         default_case_(default_case),
-        cases_(std::move(cases))
+        cases_(std::move(cases)),
+        sema_cases_(cases_.size())
     {}
 
     bool Bind(SemaContext& sc) override;
@@ -1491,14 +1530,24 @@ class SwitchStmt : public Stmt
 
     Expr* expr() const { return expr_; }
     Expr* set_expr(Expr* expr) { return expr_ = expr; }
+    Expr* sema_expr() const { return sema_expr_; }
+    void set_sema_expr(Expr* expr) { sema_expr_ = expr; }
     Stmt* default_case() const { return default_case_; }
     const PoolArray<Case>& cases() const { return cases_; }
+    PoolArray<Case>& cases() { return cases_; }
+    PoolArray<Expr*>& sema_case_exprs(size_t index) { return sema_cases_[index]; }
+    const PoolArray<Expr*>& sema_case_exprs(size_t index) const { return sema_cases_[index]; }
+    void set_sema_case_exprs(size_t index, const std::vector<Expr*>& exprs) {
+        new (&sema_cases_[index]) PoolArray<Expr*>(exprs);
+    }
 
   private:
     Expr* expr_;
+    Expr* sema_expr_ = nullptr;
     Stmt* default_case_;
 
     PoolArray<Case> cases_;
+    PoolArray<PoolArray<Expr*>> sema_cases_;
 };
 
 class PragmaUnusedStmt : public Stmt

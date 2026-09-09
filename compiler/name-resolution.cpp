@@ -681,7 +681,7 @@ bool
 NewArrayExpr::Bind(SemaContext& sc)
 {
     if (analyzed())
-        return analysis_result();
+        return sema_result() != nullptr;
 
     if (!sc.BindType(pos_, &type_))
         return false;

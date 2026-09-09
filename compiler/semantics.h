@@ -195,34 +195,34 @@ class Semantics final
         EXPR_DISCARD_RESULT = (1 << 0),
     };
 
-    bool CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
-    bool CheckNewArrayExpr(NewArrayExpr* expr);
-    bool CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
-    bool CheckStringExpr(StringExpr* expr, Type* target = nullptr);
-    bool CheckNullExpr(NullExpr* expr);
-    bool CheckThisExpr(ThisExpr* expr);
-    bool CheckCommaExpr(CommaExpr* expr);
-    bool CheckIndexExpr(IndexExpr* expr);
-    bool CheckCallExpr(CallExpr* expr);
-    bool CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
-    bool CheckSizeofExpr(SizeofExpr* expr);
-    bool CheckCastExpr(CastExpr* expr);
-    bool CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
-    bool CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
-    bool CheckChainedCompareExpr(ChainedCompareExpr* expr);
-    bool CheckLogicalExpr(LogicalExpr* expr);
-    bool CheckBinaryExpr(BinaryExpr* expr);
-    bool CheckUnaryExpr(UnaryExpr* expr);
-    bool CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
-    bool CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
-    bool CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
+    Expr* CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
+    Expr* CheckNewArrayExpr(NewArrayExpr* expr);
+    Expr* CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
+    Expr* CheckStringExpr(StringExpr* expr, Type* target = nullptr);
+    Expr* CheckNullExpr(NullExpr* expr);
+    Expr* CheckThisExpr(ThisExpr* expr);
+    Expr* CheckCommaExpr(CommaExpr* expr);
+    Expr* CheckIndexExpr(IndexExpr* expr);
+    Expr* CheckCallExpr(CallExpr* expr);
+    Expr* CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
+    Expr* CheckSizeofExpr(SizeofExpr* expr);
+    Expr* CheckCastExpr(CastExpr* expr);
+    Expr* CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
+    Expr* CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
+    Expr* CheckChainedCompareExpr(ChainedCompareExpr* expr);
+    Expr* CheckLogicalExpr(LogicalExpr* expr);
+    Expr* CheckBinaryExpr(BinaryExpr* expr);
+    Expr* CheckUnaryExpr(UnaryExpr* expr);
+    Expr* CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
+    Expr* CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
+    Expr* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
                                          bool from_call);
-    bool CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
-                                   bool from_call);
-    bool CheckFunctionExpr(FunctionExpr* expr);
+    Expr* CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
+                                    bool from_call);
+    Expr* CheckFunctionExpr(FunctionExpr* expr);
 
-    bool CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = EXPR_DEFAULT);
-    bool CheckRvalueAccess(Expr* expr);
+    Expr* CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = EXPR_DEFAULT);
+    Expr* CheckRvalueAccess(Expr* expr);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
     Expr* BuildConversion(Expr* from, const Conversion& cv);
@@ -241,10 +241,10 @@ class Semantics final
     };
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
-    bool CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
+    Expr* CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
     Expr* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
                         ParamState* ps, unsigned int argpos);
-    bool CheckWrappedExpr(Expr* outer, Expr* inner);
+    Expr* CheckWrappedExpr(Expr* outer, Expr* inner);
     using CallCtor = std::pair<FunctionDecl*, Type*>;
     std::optional<CallCtor> BindNewTarget(Expr* target);
     CallTarget BindCallTarget(CallExpr* call, Expr* target);
@@ -277,7 +277,7 @@ class Semantics final
           : expr(expr), left(expr->left()), right(expr->right())
         {}
     };
-    bool CheckBinaryExprImpl(BinaryExprState& state);
+    Expr* CheckBinaryExprImpl(BinaryExprState& state);
     bool CheckAssignmentLHS(BinaryExprState& state);
 
     struct BinaryOperator {

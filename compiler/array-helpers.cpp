@@ -386,7 +386,7 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, ExprVal* v) {
         }
     }
 
-    if (!sema_->CheckExpr(expr))
+    if (!(expr = sema_->CheckExpr(expr)))
         return false;
 
     *v = expr->val();
@@ -537,10 +537,11 @@ bool ArrayValidator::ValidateInitializer() {
             report(init_->pos(), 160);
             return false;
         }
-        if (!sema_->CheckRvalue(init_, at_))
+        if (!(init_ = sema_->CheckRvalue(init_, at_)))
             return false;
         if (init_->lvalue())
-            decl_->init()->set_right(new RvalueExpr(init_));
+            init_ = new RvalueExpr(init_);
+        decl_->init()->set_right(init_);
         return sema_->CheckCoercion(init_, at_, init_->val().type(), CvtContext::Assignment);
     }
 
@@ -631,7 +632,7 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             return false;
         }
 
-        if (!sema_->CheckExpr(init))
+        if (!(init = sema_->CheckExpr(init)))
             return false;
 
         if (init->val().ident != iCONSTEXPR) {
@@ -672,8 +673,8 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     }
 
     bool prev1 = false, prev2 = false;
-    for (const auto& expr : array->exprs()) {
-        if (!sema_->CheckExpr(expr))
+    for (auto& expr : array->exprs()) {
+        if (!(expr = sema_->CheckExpr(expr)))
             continue;
 
         AutoErrorPos pos(expr->pos());
