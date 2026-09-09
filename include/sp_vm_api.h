@@ -257,6 +257,9 @@ class IFrameIterator
     virtual bool IsInternalFrame() const = 0;
 };
 
+struct ARRAY_HANDLE;
+typedef ARRAY_HANDLE* ARRAY_PTR;
+
 /**
  * @brief Interface to managing a runtime plugin.
  */
@@ -601,6 +604,11 @@ class IPluginRuntime
      * the function is invalid or null.
      */
     virtual IPluginFunction* GetFunctionByIdOrError(funcid_t func) = 0;
+
+    // These transition methods are retained for binary compatibility.
+    // They should not be used outside of the core embedding.
+    virtual int LocalToArrayPtr(cell_t base, ARRAY_PTR* out) { return SP_ERROR_PARAM; }
+    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size) { return nullptr; }
 
     /**
      * Downcast for embedder convenience.
