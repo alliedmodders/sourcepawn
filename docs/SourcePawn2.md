@@ -119,6 +119,8 @@ structs, with a few changes and notes:
   types, and participate in garbage collection.
 - Currently objects are reference counted. Cycles must be broken manually.
 - There is no inheritance, so there is no "protected" keyword.
+- Unlike methodmaps, a class's constructor does not return the new object. The
+  new object is allocated internally as "this".
 
 Example of using classes in SourcePawn:
 
@@ -200,42 +202,6 @@ variables, the implicit cast will fail at runtime (or compile-time, if
 detected). This is because natives do not have access to the garbage collection
 system, so it would be unsafe for a native to store an object with ephemeral
 lifetime.
-
-### Classes
-
-SourcePawn now has support for classes. A class describes a heap allocated
-object, with syntax similar to enum structs. Unlike enum structs, an object is
-always a pointer, and is assigned as a pointer. Like closures and arrays they
-are garbage collected.
-
-An example class:
-
-    class Player {
-        private int index_;
-
-        Player(int index) {
-            this.index_ = index;
-        }
-
-        void Print(const char[] text) {
-            PrintToChat(index, text);
-        }
-
-        property int index {
-            get() { return this.index; }
-        }
-    }
-
-Class fields and methods are public by default, but can be made private with
-a new "private" keyword. There is no inheritance, so there is no "protected"
-keyword.
-
-Unlike methodmaps, classes may not have any native functions. In addition,
-values containing an object type may not be passed to natives, since natives
-do not understand garbage collection.
-
-Also unlike methodmaps, a class's constructor does not return the new object.
-The new object is allocated internally as "this".
 
 ### Type Inference
 
