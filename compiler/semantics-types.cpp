@@ -11,6 +11,7 @@
 #include <amtl/am-raii.h>
 #include "errors.h"
 #include "semantics-inl.h"
+#include "ir-node.h"
 
 namespace sp {
 namespace cc {
@@ -28,7 +29,7 @@ static const std::vector<std::pair<BuiltinType, BuiltinType>> BitwiseOperands{
     {BuiltinType::Int64, BuiltinType::Int64}
 };
 
-std::optional<ConversionKind> Semantics::FindConstantConversion(Expr* source, Type* from_type,
+std::optional<ConversionKind> Semantics::FindConstantConversion(ir::Value* source, Type* from_type,
                                                                 Type* to, CvtContext why) {
     if (to->isInt16() && from_type->isInt() && source->val().ident == iCONSTEXPR) {
         cell_t v = source->val().const_i32();
@@ -198,7 +199,7 @@ void Semantics::ReportConversionDiagnostic(const token_pos_t& pos, QualType form
     ReportConversionDiagnosticImpl(pos, formal, actual);
 }
 
-void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual) {
+void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, QualType actual) {
     // Print a better error message for when function signatures match but
     // we're trying to convert a closure to a legacy ID.
     if (auto actual_ft = actual->as<FunctionType>()) {
@@ -206,7 +207,7 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
             if (actual_ft->conv() == FunctionType::Closure &&
                 formal_ft->conv() == FunctionType::Legacy)
             {
-                report(node->pos(), 43);
+                report(node, 43);
                 return;
             }
         }
@@ -216,20 +217,20 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
     if (formal->isInt16() && actual->isInt() && node->val().ident == iCONSTEXPR) {
         cell_t v = node->val().const_i32();
         if (v < std::numeric_limits<int16_t>::min() || v > std::numeric_limits<int16_t>::max()) {
-            report(node->pos(), 179) << v
-                                     << std::numeric_limits<int16_t>::min()
-                                     << std::numeric_limits<int16_t>::max()
-                                     << "int16";
+            report(node, 179) << v
+                              << std::numeric_limits<int16_t>::min()
+                              << std::numeric_limits<int16_t>::max()
+                              << "int16";
             return;
         }
     }
     if (formal->isInt8() && (actual->isInt() || actual->isInt16()) && node->val().ident == iCONSTEXPR) {
         cell_t v = node->val().const_i32();
         if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
-            report(node->pos(), 179) << v
-                                     << std::numeric_limits<int8_t>::min()
-                                     << std::numeric_limits<int8_t>::max()
-                                     << "int8";
+            report(node, 179) << v
+                              << std::numeric_limits<int8_t>::min()
+                              << std::numeric_limits<int8_t>::max()
+                              << "int8";
             return;
         }
     }
@@ -237,17 +238,17 @@ void Semantics::ReportConversionDiagnostic(Expr* node, QualType formal, QualType
         // Encoding 64-bit integers into intptr is not allowed since the VM might be 32-bit.
         int64_t v = node->val().const_int64();
         if (v < std::numeric_limits<int32_t>::min() || v > std::numeric_limits<int32_t>::max()) {
-            report(node->pos(), 178) << v
-                                     << std::numeric_limits<int32_t>::min()
-                                     << std::numeric_limits<int32_t>::max()
-                                     << "intptr";
+            report(node, 178) << v
+                              << std::numeric_limits<int32_t>::min()
+                              << std::numeric_limits<int32_t>::max()
+                              << "intptr";
             return;
         }
     }
-    ReportConversionDiagnosticImpl(node, formal, actual);
+    ReportConversionDiagnosticImpl(node->pos(), formal, actual);
 }
 
-Expr* Semantics::TryConversion(Expr* expr, QualType formal, CvtContext why) {
+ir::Value* Semantics::TryConversion(ir::Value* expr, QualType formal, CvtContext why) {
     ConversionKind ck;
     if (auto constant_ck = FindConstantConversion(expr, expr->val().type(), *formal, why))
         ck = *constant_ck;
@@ -257,14 +258,14 @@ Expr* Semantics::TryConversion(Expr* expr, QualType formal, CvtContext why) {
         if (!IsNopConversion(ck))
             return BuildConversion(expr, ck, *formal);
         if (ck == ConversionKind::TagMismatch)
-            report(expr->pos(), 213) << formal << expr->val().type();
+            report(expr, 213) << formal << expr->val().type();
         return expr;
     }
     ReportConversionDiagnostic(expr, formal, expr->val().type());
     return nullptr;
 }
 
-bool Semantics::CheckCoercion(Expr* node, QualType formal, QualType actual,
+bool Semantics::CheckCoercion(ir::Value* node, QualType formal, QualType actual,
                               CvtContext why)
 {
     ConversionKind ck;
@@ -282,7 +283,7 @@ bool Semantics::CheckCoercion(const token_pos_t& pos, QualType formal, QualType 
     return CheckCoercionImpl(nullptr, pos, formal, actual, why, ck);
 }
 
-bool Semantics::CheckCoercionImpl(Expr* node, const token_pos_t& pos,
+bool Semantics::CheckCoercionImpl(ir::Value* node, const token_pos_t& pos,
                                   QualType formal, QualType actual,
                                   CvtContext why, ConversionKind ck)
 {

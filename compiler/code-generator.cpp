@@ -16,6 +16,7 @@
 #include "compile-context.h"
 #include "compile-options.h"
 #include "errors.h"
+#include "ir-node.h"
 #include "semantics-inl.h"
 #include "symbols.h"
 #include "utils/compact-encoding.h"
@@ -330,23 +331,23 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
         if (init)
             AddDebugLine(init->pos());
 
-        EmitInit(Lvalue{ExprVal(var)}, init);
+        EmitInit(ExprVal(var), init);
     }
 }
 
-static inline uint32_t DeduceArraySize(ArrayType* type, Expr* ctor) {
+static inline uint32_t DeduceArraySize(ArrayType* type, ir::Value* ctor) {
     if (type->is_fixed())
         return type->size();
-    if (auto array = ctor->as<ArrayExpr>())
-        return (uint32_t)array->exprs().size();
-    if (auto se = ctor->as<StringExpr>())
-        return se->text()->str().size() + 1;
+    if (auto array = ctor->as<ir::Array>())
+        return (uint32_t)array->elements().size();
+    if (auto s = ctor->as<ir::String>())
+        return s->parent()->text()->str().size() + 1;
 
     assert(false);
     return 0;
 }
 
-void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
+void CodeGenerator::EmitArrayExpr(ir::Array* expr, unsigned int flags) {
     auto val_type = expr->val().type();
 
     if (auto es = val_type->asEnumStruct()) {
@@ -367,10 +368,10 @@ void CodeGenerator::EmitArrayExpr(ArrayExpr* expr, unsigned int flags) {
     EmitArrayCtor(type, expr, flags);
 }
 
-void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flags) {
-    if (auto new_array = Expr::As<NewArrayExpr>(ctor)) {
+void CodeGenerator::EmitArrayCtor(ArrayType* type, ir::Value* ctor, unsigned int flags) {
+    if (ctor && ctor->is(IrKind::NewArray)) {
         assert(!type->is_flat());
-        EmitNewArrayExpr(new_array);
+        EmitNewArrayExpr(ctor->to<ir::NewArray>());
         return;
     }
 
@@ -394,27 +395,27 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
     }
 
     if (type->inner()->isEnumStruct()) {
-        EmitArrayFillStructs(type, ctor->as<ArrayExpr>());
+        EmitArrayFillStructs(type, ctor->as<ir::Array>());
     } else if (ArrayType* inner = type->inner()->as<ArrayType>()) {
         assert(!inner->is_flat());
 
-        EmitArrayFillArrays(type, inner, ctor->as<ArrayExpr>());
+        EmitArrayFillArrays(type, inner, ctor->as<ir::Array>());
     } else if (type->inner()->isIntPtr() && ctor) {
-        EmitArrayFillIntptr(type, ctor->as<ArrayExpr>());
+        EmitArrayFillIntptr(type, ctor->as<ir::Array>());
     } else if (ctor) {
         if (type->inner()->isHeapItem())
-            return EmitArrayFillHeapItems(type, ctor->as<ArrayExpr>());
+            return EmitArrayFillHeapItems(type, ctor->as<ir::Array>());
 
         std::optional<uint32_t> fill_data_pos;
 
         auto iter = fill_data_cache_.find(ctor);
         if (iter != fill_data_cache_.end()) {
             fill_data_pos = iter->second;
-        } else if (auto array = ctor->as<ArrayExpr>()) {
-            if (array->exprs().size() > 0)
+        } else if (auto array = ctor->as<ir::Array>()) {
+            if (array->elements().size() > 0)
                 fill_data_pos = EmitArrayFillData(type, array);
-        } else if (auto str = ctor->as<StringExpr>()) {
-            fill_data_pos = EmitStringFillData(type, str);
+        } else if (ctor->is(IrKind::String)) {
+            fill_data_pos = EmitStringFillData(type, ctor->to<ir::String>());
         } else {
             assert(false);
         }
@@ -441,20 +442,20 @@ void CodeGenerator::EmitArrayCtor(ArrayType* type, Expr* ctor, unsigned int flag
         __ emit(OP_POP);
 }
 
-void CodeGenerator::EmitArrayFillStructs(ArrayType* type, ArrayExpr* array) {
-    uint32_t len = array ? array->exprs().size() : type->size();
+void CodeGenerator::EmitArrayFillStructs(ArrayType* type, ir::Array* array) {
+    uint32_t len = array ? (uint32_t)array->elements().size() : type->size();
     for (size_t i = 0; i < len; i++) {
         __ emit(OP_DUP);
         __ PUSH_C(i);
         __ emit(OP_IDXADDR);
 
         if (array)
-            EmitEnumStructCtor(type->inner()->asEnumStruct(), array->exprs().at(i));
+            EmitEnumStructCtor(type->inner()->asEnumStruct(), array->elements().at(i));
     }
 }
 
-void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, ArrayExpr* array) {
-    uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
+void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, ir::Array* array) {
+    uint32_t len = array ? (uint32_t)array->elements().size() : type->size();
     for (size_t i = 0; i < len; i++) {
         __ emit(OP_DUP);
         __ PUSH_C(i);
@@ -464,7 +465,7 @@ void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, Array
         if (inner->is_flat())
             __ emit(OP_LOAD_I_I32);
 
-        EmitArrayCtor(inner, array ? array->exprs().at(i) : nullptr, 0);
+        EmitArrayCtor(inner, array ? array->elements().at(i) : nullptr, 0);
 
         // Otherwise, the allocation is now on the stack.
         if (!inner->is_flat())
@@ -472,14 +473,14 @@ void CodeGenerator::EmitArrayFillArrays(ArrayType* type, ArrayType* inner, Array
     }
 }
 
-void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ArrayExpr* array) {
-    uint32_t len = array ? (uint32_t)array->exprs().size() : type->size();
+void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ir::Array* array) {
+    uint32_t len = array ? (uint32_t)array->elements().size() : type->size();
     for (size_t i = 0; i < len; i++) {
         __ emit(OP_DUP);
         __ PUSH_C(i);
 
-        if (array && i < array->exprs().size())
-            EmitExpr(array->exprs().at(i));
+        if (array && i < array->elements().size())
+            EmitExpr(array->elements().at(i));
         else
             __ emit(OP_LOAD_NULL);
 
@@ -487,9 +488,9 @@ void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ArrayExpr* array) {
     }
 }
 
-void CodeGenerator::EmitArrayFillIntptr(ArrayType* type, ArrayExpr* array) {
-    for (size_t i = 0; i < array->exprs().size(); i++) {
-        const auto& val = array->exprs()[i]->val();
+void CodeGenerator::EmitArrayFillIntptr(ArrayType* type, ir::Array* array) {
+    for (size_t i = 0; i < array->elements().size(); i++) {
+        const auto& val = array->elements()[i]->val();
         assert(val.ident == iCONSTEXPR);
         __ emit(OP_DUP);
         __ PUSH_C((cell_t)i);
@@ -512,8 +513,8 @@ static inline void AddValue(std::string* out, T value) {
     out->append(u.bytes, sizeof(u.bytes));
 }
 
-void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
-    ArrayExpr* array = ctor ? ctor->to<ArrayExpr>() : nullptr;
+void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, ir::Value* ctor) {
+    auto array = ctor ? ctor->to<ir::Array>() : nullptr;
     if (!array)
         return;
 
@@ -524,10 +525,10 @@ void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
         auto field = *field_iter;
         field_iter++;
 
-        if (i >= array->exprs().size())
+        if (i >= array->elements().size())
             break;
 
-        Expr* expr = array->exprs().at(i);
+        auto expr = array->elements().at(i);
         auto field_type = field->type_info().type;
         __ emit(OP_DUP);
         if (auto field_array = field_type->as<ArrayType>()) {
@@ -546,9 +547,9 @@ void CodeGenerator::EmitEnumStructCtor(EnumStructDecl* es, Expr* ctor) {
     __ emit(OP_POP);
 }
 
-void CodeGenerator::EmitEnumStructCopy(QualType type, Expr* rhs) {
+void CodeGenerator::EmitEnumStructCopy(QualType type, ir::Value* rhs) {
     auto es = type->asEnumStruct();
-    if (rhs->as<ArrayExpr>()) {
+    if (rhs->is(IrKind::Array)) {
         EmitEnumStructCtor(es, rhs);
     } else {
         EmitExpr(rhs);
@@ -556,12 +557,12 @@ void CodeGenerator::EmitEnumStructCopy(QualType type, Expr* rhs) {
     }
 }
 
-uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
+uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ir::Array* array) {
     std::string data;
 
     uint32_t num_items = 0;
     std::optional<cell_t> prev1, prev2;
-    for (const auto& item : array->exprs()) {
+    for (const auto& item : array->elements()) {
         prev2 = prev1;
         const auto& val = item->val();
         if (val.type()->isDouble()) {
@@ -624,14 +625,14 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ArrayExpr* array) {
     return pos;
 }
 
-uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, StringExpr* array) {
+uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, ir::String* node) {
     assert(type->inner()->isChar());
 
-    auto text = array->text();
+    auto text = node->parent()->text();
 
     std::string prefix;
     if (!EncodeCompactUint32(&prefix, text->str().size())) {
-        report(array, 431);
+        report(node, 431);
         return 0;
     }
 
@@ -641,35 +642,19 @@ uint32_t CodeGenerator::EmitStringFillData(ArrayType* type, StringExpr* array) {
     return pos;
 }
 
-static inline bool IsInlineArrayInitializer(Expr* ctor) {
+static inline bool IsInlineArrayInitializer(ir::Value* ctor) {
     switch (ctor->kind()) {
-        case ExprKind::ArrayExpr:
-        case ExprKind::StringExpr:
-        case ExprKind::NewArrayExpr:
+        case IrKind::Array:
+        case IrKind::String:
+        case IrKind::NewArray:
             return true;
         default:
             return false;
     }
 }
 
-void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
-    ExprVal val;
-    Expr* base = nullptr;
-    if (auto p = std::get_if<Expr*>(&lval)) {
-        base = *p;
-
-        assert(base->lvalue());
-        val = base->val();
-    } else {
-        val = std::get<ExprVal>(lval);
-    }
-
-    // We need a parse node for any errors.
-    ParseNode* pn = ctor;
-    if (!pn)
-        pn = base;
-    if (!pn)
-        pn = val.sym();
+void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
+    ExprVal val = lval;
 
     auto type = val.type();
     if (auto array = type->as<ArrayType>()) {
@@ -686,7 +671,7 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
             // Non-flat arrays are heap allocated so we need to store the
             // pointer back.
             if (!array->is_flat())
-                EmitStore(pn, val);
+                EmitStore(ctor, val);
         } else if (array->is_flat()) {
             EmitAddress(val);
             EmitExpr(ctor);
@@ -694,7 +679,7 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         } else {
             // Dynamic array with arbitrary RHS.
             EmitExpr(ctor);
-            EmitStore(pn, val);
+            EmitStore(ctor, val);
         }
     } else if (type->asEnumStruct()) {
         // Enum structs are stack-allocated; no ctor is no allocation.
@@ -751,7 +736,7 @@ void CodeGenerator::EmitInit(const Lvalue& lval, Expr* ctor) {
         } else {
             EmitExpr(ctor);
         }
-        EmitStore(pn, val);
+        EmitStore(ctor, val);
     }
 }
 
@@ -763,7 +748,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         decl->BindAddress(slot);
     }
 
-    EmitInit(Lvalue{ExprVal(decl)}, decl->sema_init_rhs());
+    EmitInit(ExprVal(decl), decl->sema_init_rhs());
 }
 
 void
@@ -814,136 +799,129 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
     rtti_->AddPstructGlobal(decl, field_entries);
 }
 
-void CodeGenerator::EmitExpr(Expr* expr, unsigned int flags) {
+void CodeGenerator::EmitConstantExpr(const ExprVal& val) {
+    if (val.type()->isNull()) {
+        __ emit(OP_LOAD_NULL);
+    } else if (val.type()->isFloat()) {
+        __ emit(OP_PUSH_C_F32, val.const_cell());
+    } else if (val.type()->isDouble()) {
+        __ emit(OP_PUSH_C_F64, DoubleValue(val.const_double()));
+    } else if (val.type()->isInt64()) {
+        __ emit(OP_PUSH_C_I64, Int64Value(val.const_int64()));
+    } else if (val.type()->isIntPtr()) {
+        __ PUSH_C(val.const_intptr());
+        __ emit(OP_CVT_INTPTR);
+    } else {
+        __ PUSH_C(val.const_cell());
+    }
+}
+
+static bool HandlesDiscardResult(ir::Value* node) {
+    switch (node->kind()) {
+        case IrKind::IncDec:
+        case IrKind::Comma:
+        case IrKind::Call:
+        case IrKind::Ternary:
+            return true;
+        case IrKind::Binary:
+            return IsAssignOp(node->to<ir::Binary>()->token());
+        default:
+            return node->val().ident == iCONSTEXPR;
+    }
+}
+
+void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
     AutoErrorPos aep(expr->pos());
 
     if (expr->val().ident == iCONSTEXPR) {
-        if (!(flags & EMIT_DISCARD_RESULT)) {
-            if (expr->val().type()->isNull()) {
-                __ emit(OP_LOAD_NULL);
-            } else if (expr->val().type()->isFloat()) {
-                __ emit(OP_PUSH_C_F32, expr->val().const_cell());
-            } else if (expr->val().type()->isDouble()) {
-                __ emit(OP_PUSH_C_F64, DoubleValue(expr->val().const_double()));
-            } else if (expr->val().type()->isInt64()) {
-                __ emit(OP_PUSH_C_I64, Int64Value(expr->val().const_int64()));
-            } else if (expr->val().type()->isIntPtr()) {
-                __ PUSH_C(expr->val().const_intptr());
-                __ emit(OP_CVT_INTPTR);
-            } else {
-                __ PUSH_C(expr->val().const_cell());
-            }
-        }
+        if (!(flags & EMIT_DISCARD_RESULT))
+            EmitConstantExpr(expr->val());
         return;
     }
 
     assert(!expr->lvalue() || !!(flags & EMIT_ALLOW_LVALUE));
 
     switch (expr->kind()) {
-        case ExprKind::UnaryExpr:
-            EmitUnary(expr->to<UnaryExpr>());
+        case IrKind::Binary:
+            EmitBinary(expr->to<ir::Binary>(), flags);
             break;
-        case ExprKind::IncDecExpr:
-            EmitIncDec(expr->to<IncDecExpr>(), flags);
+        case IrKind::Logical:
+            EmitLogicalExpr(expr->to<ir::Logical>());
             break;
-        case ExprKind::BinaryExpr:
-            EmitBinary(expr->to<BinaryExpr>(), flags);
+        case IrKind::Ternary:
+            EmitTernaryExpr(expr->to<ir::Ternary>(), flags);
             break;
-        case ExprKind::LogicalExpr:
-            EmitLogicalExpr(expr->to<LogicalExpr>());
+        case IrKind::Comma:
+            EmitCommaExpr(expr->to<ir::Comma>(), flags);
             break;
-        case ExprKind::ChainedCompareExpr:
-            EmitChainedCompareExpr(expr->to<ChainedCompareExpr>());
+        case IrKind::ChainedCompare:
+            EmitChainedCompareExpr(expr->to<ir::ChainedCompare>());
             break;
-        case ExprKind::TernaryExpr:
-            EmitTernaryExpr(expr->to<TernaryExpr>(), flags);
+        case IrKind::Call:
+            EmitCallExpr(expr->to<ir::Call>(), flags);
             break;
-        case ExprKind::CastExpr:
-            EmitCastExpr(expr->to<CastExpr>(), flags);
+        case IrKind::DefaultArg:
+            EmitDefaultArgExpr(expr->to<ir::DefaultArg>());
             break;
-        case ExprKind::SymbolExpr:
-            EmitSymbolExpr(expr->to<SymbolExpr>());
+        case IrKind::NamedArg:
+            EmitExpr(expr->to<ir::NamedArg>()->expr());
             break;
-        case ExprKind::RvalueExpr: {
-            EmitRvalue(expr->to<RvalueExpr>());
+        case IrKind::Function:
+            EmitFunctionExpr(expr->to<ir::Function>());
             break;
-        }
-        case ExprKind::CommaExpr: {
-            EmitCommaExpr(expr->to<CommaExpr>(), flags);
+        case IrKind::NewArray:
+            EmitNewArrayExpr(expr->to<ir::NewArray>());
             break;
-        }
-        case ExprKind::ThisExpr: {
-            auto e = expr->to<ThisExpr>();
-            if (e->decl()->type()->isEnumStruct())
-                EmitAddress(e->decl());
+        case IrKind::Array:
+            EmitArrayExpr(expr->to<ir::Array>(), flags);
             break;
-        }
-        case ExprKind::StringExpr: {
-            auto se = expr->to<StringExpr>();
-            uint16_t index = rtti_->AddString(se->text(), &data_);
-            __ emit(OP_LOAD_STR, VarSlot(index));
+        case IrKind::Slice:
+            EmitSliceExpr(expr->to<ir::Slice>());
             break;
-        }
-
-        case ExprKind::ArrayExpr:
-            EmitArrayExpr(expr->to<ArrayExpr>(), flags);
+        case IrKind::IncDec:
+            EmitIncDec(expr->to<ir::IncDec>(), flags);
             break;
-        case ExprKind::IndexExpr:
-            EmitIndexExpr(expr->to<IndexExpr>());
+        case IrKind::Rvalue:
+            EmitRvalue(expr->to<ir::Rvalue>());
             break;
-        case ExprKind::FieldAccessExpr:
-            EmitFieldAccessExpr(expr->to<FieldAccessExpr>());
+        case IrKind::Unary:
+            EmitUnary(expr->to<ir::Unary>());
             break;
-        case ExprKind::CallExpr:
-            EmitCallExpr(expr->to<CallExpr>(), flags);
+        case IrKind::Index:
+            EmitIndexExpr(expr->to<ir::Index>());
             break;
-        case ExprKind::DefaultArgExpr:
-            EmitDefaultArgExpr(expr->to<DefaultArgExpr>());
+        case IrKind::FieldAccess:
+            EmitFieldAccessExpr(expr->to<ir::FieldAccess>());
             break;
-        case ExprKind::NewArrayExpr:
-            EmitNewArrayExpr(expr->to<NewArrayExpr>());
+        case IrKind::Cast:
+            EmitCastExpr(expr->to<ir::Cast>(), flags);
             break;
-        case ExprKind::NamedArgExpr:
-            EmitExpr(expr->to<NamedArgExpr>()->expr);
+        case IrKind::SimpleCast:
+            EmitSimpleCastExpr(expr->to<ir::SimpleCast>());
             break;
-        case ExprKind::SimpleCastExpr:
-            EmitSimpleCastExpr(expr->to<SimpleCastExpr>());
+        case IrKind::Sizeof:
+            EmitSizeofExpr(expr->to<ir::Sizeof>());
             break;
-        case ExprKind::SliceExpr:
-            EmitSliceExpr(expr->to<SliceExpr>());
+        case IrKind::Symbol:
+            EmitSymbolExpr(expr->to<ir::Symbol>());
             break;
-        case ExprKind::SizeofExpr:
-            EmitSizeofExpr(expr->to<SizeofExpr>(), flags);
+        case IrKind::String:
+            EmitStringExpr(expr->to<ir::String>());
             break;
-        case ExprKind::SpreadArgsExpr:
-            assert(false);
+        case IrKind::This:
+            EmitThisExpr(expr->to<ir::This>());
             break;
-        case ExprKind::FunctionExpr:
-            EmitFunctionExpr(expr->to<FunctionExpr>());
-            break;
-        case ExprKind::NumberExpr: {
-            if (expr->val().type()->isFloat())
-                __ emit(OP_PUSH_C_F32, expr->val().const_cell());
-            else if (expr->val().type()->isDouble())
-                __ emit(OP_PUSH_C_F64, DoubleValue(expr->val().const_double()));
-            else if (expr->val().type()->isInt64())
-                __ emit(OP_PUSH_C_I64, Int64Value(expr->val().const_int64()));
-            else
-                __ PUSH_C(expr->val().const_cell());
-            break;
-        }
-
         default:
             assert(false);
+            break;
     }
 
-    if ((flags & EMIT_DISCARD_RESULT) && !expr->HandlesDiscardResult())
+    if ((flags & EMIT_DISCARD_RESULT) && !HandlesDiscardResult(expr))
         __ emit(OP_POP);
 }
 
-void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
-    Expr* child = expr->child();
-    const auto& cv = child->val();
+void CodeGenerator::EmitSizeofExpr(ir::Sizeof* expr) {
+    const auto& cv = expr->child()->val();
     EnumStructDecl* es = nullptr;
 
     switch (cv.ident) {
@@ -964,7 +942,7 @@ void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
     // always int (the field offset), so grab the actual enum struct type from
     // the resolved field.
     if (!es) {
-        if (auto access = child->as<FieldAccessExpr>()) {
+        if (auto access = expr->child()->as<ir::FieldAccess>()) {
             if (access->token() == tDBLCOLON) {
                 if (auto fd = access->resolved()->as<LayoutFieldDecl>())
                     es = fd->type()->asEnumStruct();
@@ -977,32 +955,21 @@ void CodeGenerator::EmitSizeofExpr(SizeofExpr* expr, unsigned int flags) {
     __ emit(OP_LOAD_ES_SIZE, type_id);
 }
 
-bool Expr::HandlesDiscardResult() {
-    switch (kind()) {
-        case ExprKind::IncDecExpr:
-        case ExprKind::CommaExpr:
-        case ExprKind::CallExpr:
-        case ExprKind::TernaryExpr:
-            return true;
-        case ExprKind::BinaryExpr:
-            return IsAssignOp(to<BinaryExpr>()->token());
-        default:
-            return val().ident == iCONSTEXPR;
-    }
-}
 
-void CodeGenerator::EmitTest(Expr* expr, bool jump_on_true, Label* target) {
+void CodeGenerator::EmitTest(ir::Value* expr, bool jump_on_true, Label* target) {
     switch (expr->kind()) {
-        case ExprKind::LogicalExpr:
-            EmitLogicalExprTest(expr->to<LogicalExpr>(), jump_on_true, target);
+        case IrKind::Logical:
+            EmitLogicalTest(expr->to<ir::Logical>(), jump_on_true, target);
             return;
-        case ExprKind::UnaryExpr:
-            if (EmitUnaryExprTest(expr->to<UnaryExpr>(), jump_on_true, target))
+        case IrKind::Unary:
+            if (EmitUnaryTest(expr->to<ir::Unary>(), jump_on_true, target))
                 return;
             break;
-        case ExprKind::BinaryExpr:
-            if (EmitBinaryExprTest(expr->to<BinaryExpr>(), jump_on_true, target))
+        case IrKind::Binary:
+            if (EmitBinaryTest(expr->to<ir::Binary>(), jump_on_true, target))
                 return;
+            break;
+        default:
             break;
     }
 
@@ -1017,14 +984,14 @@ void CodeGenerator::EmitTest(Expr* expr, bool jump_on_true, Label* target) {
 }
 
 void
-CodeGenerator::EmitUnary(UnaryExpr* expr)
+CodeGenerator::EmitUnary(ir::Unary* expr)
 {
     auto inner = expr->expr();
-    if (expr->token() == '!' && inner->is(ExprKind::UnaryExpr) &&
-        inner->to<UnaryExpr>()->token() == '!')
+    if (expr->token() == '!' && inner->is(IrKind::Unary) &&
+        inner->to<ir::Unary>()->token() == '!')
     {
         // Reduce "!!" to a TEST instruction to avoid NOT; NOT.
-        EmitExpr(inner->to<UnaryExpr>()->expr());
+        EmitExpr(inner->to<ir::Unary>()->expr());
         __ emit(OP_TEST);
         return;
     }
@@ -1057,19 +1024,19 @@ CodeGenerator::EmitUnary(UnaryExpr* expr)
 }
 
 bool
-CodeGenerator::EmitUnaryExprTest(UnaryExpr* expr, bool jump_on_true, Label* target)
+CodeGenerator::EmitUnaryTest(ir::Unary* expr, bool jump_on_true, Label* target)
 {
     if (expr->token() == '!') {
         auto inner = expr->expr();
         if (!inner->val().type()->isInt64()) {
-            EmitTest(expr->expr(), !jump_on_true, target);
+            EmitTest(inner, !jump_on_true, target);
             return true;
         }
     }
     return false;
 }
 
-ExprVal CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
+ExprVal CodeGenerator::BindLvalue(ir::Value* expr, bool simple_address) {
     ExprVal val = expr->val();
     switch (val.ident) {
         case iVARIABLE:
@@ -1093,8 +1060,7 @@ ExprVal CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
             break;
         }
         case iFIELD: {
-            auto fe = expr->as<FieldAccessExpr>();
-            EmitExpr(fe->base());
+            EmitExpr(expr->to<ir::FieldAccess>()->base());
             break;
         }
         case iADDRESS: {
@@ -1107,7 +1073,19 @@ ExprVal CodeGenerator::BindLvalue(Expr* expr, bool simple_address) {
     return val;
 }
 
-void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
+void CodeGenerator::EmitStringExpr(ir::String* expr) {
+    auto text = expr->parent()->text();
+    uint16_t index = rtti_->AddString(text, &data_);
+    __ emit(OP_LOAD_STR, VarSlot(index));
+}
+
+void CodeGenerator::EmitThisExpr(ir::This* expr) {
+    auto decl = expr->pn()->to<ThisExpr>()->decl();
+    if (decl->type()->isEnumStruct())
+        EmitAddress(decl);
+}
+
+void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
     ExprVal val = BindLvalue(expr->expr(), true);
 
@@ -1119,7 +1097,7 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     if (!val.canRematerialize())
         __ emit(OP_DUP);
 
-    EmitRvalue(val);
+    EmitRvalue(expr, val);
 
     // We use a temporary to store the result value, if we need to due to the
     // l-value mucking up the operand stack.
@@ -1167,7 +1145,32 @@ void CodeGenerator::EmitIncDec(IncDecExpr* expr, unsigned int flags) {
     }
 }
 
-void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
+OPCODE GetBinaryOp(int oper_tok) {
+    switch (oper_tok) {
+        case '*': return OP_SMUL;
+        case '/': return OP_SDIV;
+        case '%': return OP_SMOD;
+        case '+': return OP_ADD;
+        case '-': return OP_SUB;
+        case tSHL: return OP_SHL;
+        case tSHR: return OP_SSHR;
+        case tSHRU: return OP_SHR;
+        case '&': return OP_AND;
+        case '^': return OP_XOR;
+        case '|': return OP_OR;
+        case tlEQ: return OP_EQ;
+        case tlNE: return OP_NEQ;
+        case '>': return OP_SGRTR;
+        case tlGE: return OP_SGEQ;
+        case '<': return OP_SLESS;
+        case tlLE: return OP_SLEQ;
+        default:
+            assert(false);
+            return OP_NOP;
+    }
+}
+
+void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
     auto left = expr->left();
     auto right = expr->right();
 
@@ -1206,7 +1209,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
             if (!left_val.canRematerialize())
                 __ emit(OP_DUP);
 
-            EmitRvalue(left_val);
+            EmitRvalue(left, left_val);
         }
     } else {
         EmitExpr(left);
@@ -1216,7 +1219,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     assert(!left_val.type()->isArray() || !left_val.type()->to<ArrayType>()->is_flat());
 
     EmitExpr(right);
-    EmitBinaryTail(expr, oper, left, right);
+    EmitBinaryTail(oper, left, right);
 
     if (IsAssignOp(token)) {
         std::optional<uint32_t> temp_slot;
@@ -1249,7 +1252,7 @@ void CodeGenerator::EmitBinary(BinaryExpr* expr, unsigned int flags) {
     }
 }
 
-void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* right) {
+void CodeGenerator::EmitBinaryTail(int oper_tok, ir::Value* left, ir::Value* right) {
     Type* effective = left->val().type();
     if (effective->isReference())
         effective = effective->inner();
@@ -1267,35 +1270,10 @@ void CodeGenerator::EmitBinaryTail(Expr* expr, int oper_tok, Expr* left, Expr* r
         type = BuiltinType::Double;
 
     if (oper_tok)
-        EmitBinaryOp(expr, type, oper_tok);
+        EmitBinaryOp(type, oper_tok);
 }
 
-OPCODE GetBinaryOp(int oper_tok) {
-    switch (oper_tok) {
-        case '*': return OP_SMUL;
-        case '/': return OP_SDIV;
-        case '%': return OP_SMOD;
-        case '+': return OP_ADD;
-        case '-': return OP_SUB;
-        case tSHL: return OP_SHL;
-        case tSHR: return OP_SSHR;
-        case tSHRU: return OP_SHR;
-        case '&': return OP_AND;
-        case '^': return OP_XOR;
-        case '|': return OP_OR;
-        case tlEQ: return OP_EQ;
-        case tlNE: return OP_NEQ;
-        case '>': return OP_SGRTR;
-        case tlGE: return OP_SGEQ;
-        case '<': return OP_SLESS;
-        case tlLE: return OP_SLEQ;
-        default:
-            assert(false);
-            return OP_NOP;
-    }
-}
-
-void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
+void CodeGenerator::EmitBinaryOp(BuiltinType type, int oper_tok) {
     __ emit(GetBinaryOp(oper_tok));
 
     if (type == BuiltinType::Int16 && !IsCompare(oper_tok))
@@ -1305,7 +1283,7 @@ void CodeGenerator::EmitBinaryOp(Expr* expr, BuiltinType type, int oper_tok) {
 }
 
 void
-CodeGenerator::EmitLogicalExpr(LogicalExpr* expr)
+CodeGenerator::EmitLogicalExpr(ir::Logical* expr)
 {
     bool jump_on_true = expr->token() == tlOR;
 
@@ -1319,12 +1297,20 @@ CodeGenerator::EmitLogicalExpr(LogicalExpr* expr)
     __ bind(&done);
 }
 
-void
-CodeGenerator::EmitLogicalExprTest(LogicalExpr* root, bool jump_on_true, Label* target)
-{
-    std::vector<Expr*> sequence;
-    root->FlattenLogical(root->token(), &sequence);
+static void FlattenLogical(ir::Value* expr, int token, std::vector<ir::Value*>* out) {
+    if (auto logical = expr->as<ir::Logical>()) {
+        if (logical->token() == token) {
+            FlattenLogical(logical->left(), token, out);
+            FlattenLogical(logical->right(), token, out);
+            return;
+        }
+    }
+    out->push_back(expr);
+}
 
+void
+CodeGenerator::EmitLogicalTest(ir::Logical* root, bool jump_on_true, Label* target)
+{
     // a || b || c .... given jumpOnTrue, should be:
     //
     //   resolve a
@@ -1366,6 +1352,8 @@ CodeGenerator::EmitLogicalExprTest(LogicalExpr* root, bool jump_on_true, Label* 
     //
     // Note: to make this slightly easier to read, we make all this logic
     // explicit below rather than collapsing it into a single test() call.
+    std::vector<ir::Value*> sequence;
+    FlattenLogical(root, root->token(), &sequence);
 
     Label fallthrough;
     for (size_t i = 0; i < sequence.size() - 1; i++) {
@@ -1384,9 +1372,34 @@ CodeGenerator::EmitLogicalExprTest(LogicalExpr* root, bool jump_on_true, Label* 
         }
     }
 
-    Expr* last = sequence.back();
+    ir::Value* last = sequence.back();
     EmitTest(last, jump_on_true, target);
     __ bind(&fallthrough);
+}
+
+void CodeGenerator::EmitTernaryExpr(ir::Ternary* expr, unsigned int flags) {
+    EmitExpr(expr->first());
+
+    Label flab1, flab2;
+
+    __ emit(OP_JZER, &flab1);
+    EmitExpr(expr->second(), flags);
+    __ emit(OP_JUMP, &flab2);
+    __ bind(&flab1);
+    EmitExpr(expr->third(), flags);
+    __ bind(&flab2);
+}
+
+void CodeGenerator::EmitCommaExpr(ir::Comma* ce, unsigned int flags) {
+    const auto& exprs = ce->exprs();
+    for (size_t i = 0; i < exprs.size(); i++) {
+        unsigned int new_flags;
+        if (i == exprs.size() - 1)
+            new_flags = flags;
+        else
+            new_flags = EMIT_DISCARD_RESULT;
+        EmitExpr(exprs[i], new_flags);
+    }
 }
 
 static inline OPCODE
@@ -1411,15 +1424,15 @@ CmpTokenToOp(int token)
     }
 }
 
-bool CodeGenerator::EmitBinaryExprTest(BinaryExpr* root, bool jump_on_true, Label* target) {
+bool CodeGenerator::EmitBinaryTest(ir::Binary* root, bool jump_on_true, Label* target) {
     if (!IsCompare(root->token()))
         return false;
 
-    Expr* left = root->left();
+    auto left = root->left();
     if (left->val().type()->isInt64() || left->val().type()->isFloat())
         return false;
 
-    Expr* right = root->right();
+    auto right = root->right();
 
     EmitExpr(left);
     EmitExpr(right);
@@ -1454,23 +1467,24 @@ bool CodeGenerator::EmitBinaryExprTest(BinaryExpr* root, bool jump_on_true, Labe
     return true;
 }
 
-void CodeGenerator::EmitChainedCompareExpr(ChainedCompareExpr* root) {
+void CodeGenerator::EmitChainedCompareExpr(ir::ChainedCompare* root) {
     Label on_false, last_false, done;
     EmitExpr(root->first());
 
-    Expr* left = root->first();
+    ir::Value* left = root->first();
 
     std::unordered_map<Type*, uint32_t> temp_slots;
 
     assert(root->ops().size() > 0);
-    for (size_t i = 0; i < root->ops().size(); i++) {
-        const auto& op = root->ops().at(i);
+    const auto& ops = root->ops();
+    for (size_t i = 0; i < ops.size(); i++) {
+        const auto& op = ops.at(i);
         int oper_tok = NormalizeBinaryToken(op.token);
 
         EmitExpr(op.expr);
 
         std::optional<uint32_t> temp_slot;
-        if (i != root->ops().size() - 1) {
+        if (i != ops.size() - 1) {
             auto temp_type = op.expr->val().type();
             if (auto iter = temp_slots.find(temp_type); iter != temp_slots.end()) {
                 temp_slot = {iter->second};
@@ -1483,7 +1497,7 @@ void CodeGenerator::EmitChainedCompareExpr(ChainedCompareExpr* root) {
             __ emit(OP_STOR_S, VarSlot(*temp_slot));
         }
 
-        EmitBinaryTail(root, oper_tok, left, op.expr);
+        EmitBinaryTail(oper_tok, left, op.expr);
         __ emit(OP_JZER, &on_false);
 
         if (temp_slot)
@@ -1499,21 +1513,8 @@ void CodeGenerator::EmitChainedCompareExpr(ChainedCompareExpr* root) {
     __ bind(&done);
 }
 
-void CodeGenerator::EmitTernaryExpr(TernaryExpr* expr, unsigned int flags) {
-    EmitExpr(expr->first());
-
-    Label flab1, flab2;
-
-    __ emit(OP_JZER, &flab1);
-    EmitExpr(expr->second(), flags);
-    __ emit(OP_JUMP, &flab2);
-    __ bind(&flab1);
-    EmitExpr(expr->third(), flags);
-    __ bind(&flab2);
-}
-
-void CodeGenerator::EmitSymbolExpr(SymbolExpr* expr) {
-    Decl* sym = expr->decl();
+void CodeGenerator::EmitSymbolExpr(ir::Symbol* expr) {
+    Decl* sym = expr->pn()->to<SymbolExpr>()->decl();
     if (auto fun = sym->as<FunctionDecl>()) {
         assert(fun == fun->canonical());
 
@@ -1531,22 +1532,23 @@ void CodeGenerator::EmitSymbolExpr(SymbolExpr* expr) {
     }
 }
 
-void CodeGenerator::EmitIndexExpr(IndexExpr* expr) {
+void CodeGenerator::EmitIndexExpr(ir::Index* expr) {
     EmitExpr(expr->base());
     EmitExpr(expr->index());
 }
 
-void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
-    if (slice->expr()->lvalue())
-        EmitRvalueFromLvalue(slice->expr());
+void CodeGenerator::EmitSliceExpr(ir::Slice* slice) {
+    auto base = slice->base();
+    if (base->lvalue())
+        EmitRvalueFromLvalue(base);
     else
-        EmitExpr(slice->expr());
+        EmitExpr(base);
 
-    auto es = slice->expr()->val().type()->asEnumStruct();
+    auto es = base->val().type()->asEnumStruct();
     if (es) {
         uint32_t type_id = rtti_->to_typeid(es->type());
         __ emit(OP_SLICE_ES, type_id);
-    } else if (slice->expr()->val().type()->isArray() && !slice->index()) {
+    } else if (base->val().type()->isArray() && !slice->index()) {
         uint32_t type_id = rtti_->to_typeid(slice->val().type());
         __ emit(OP_SLICE_AS, type_id);
     } else {
@@ -1558,23 +1560,23 @@ void CodeGenerator::EmitSliceExpr(SliceExpr* slice) {
     }
 }
 
-bool CodeGenerator::IsElidableSlice(Expr* expr, FunctionDecl* fun, QualType arg) {
+bool CodeGenerator::IsElidableSlice(ir::Value* expr, FunctionDecl* fun, QualType arg) {
     if (!fun || !fun->is_native())
         return false;
-    if (expr->kind() != ExprKind::SliceExpr)
+    if (!expr->is(IrKind::Slice))
         return false;
     if (!arg) // variadic argument
         return false;
     if (!arg->isFlatArray())
         return false;
-    return expr->to<SliceExpr>()->expr()->val().type()->isFlatArray();
+    return expr->to<ir::Slice>()->base()->val().type()->isFlatArray();
 }
 
-void CodeGenerator::EmitElidedSliceExpr(SliceExpr* slice) {
-    if (slice->expr()->lvalue())
-        EmitRvalueFromLvalue(slice->expr());
+void CodeGenerator::EmitElidedSliceExpr(ir::Slice* slice) {
+    if (slice->base()->lvalue())
+        EmitRvalueFromLvalue(slice->base());
     else
-        EmitExpr(slice->expr());
+        EmitExpr(slice->base());
 
     if (slice->index()) {
         EmitExpr(slice->index());
@@ -1582,7 +1584,7 @@ void CodeGenerator::EmitElidedSliceExpr(SliceExpr* slice) {
     }
 }
 
-void CodeGenerator::EmitFieldAccessExpr(FieldAccessExpr* expr) {
+void CodeGenerator::EmitFieldAccessExpr(ir::FieldAccess* expr) {
     if (expr->token() == tDBLCOLON) {
         LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>();
         EmitLoadFieldOffset(field);
@@ -1614,24 +1616,25 @@ static inline Type* UnwrapRef(Type* type) {
     return type;
 }
 
-void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
+void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
+    auto ast = call->pn()->to<CallExpr>();
     auto return_type = call->val().type();
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
-    auto fun = call->fun();
+    auto fun = ast->fun();
     if (fun && fun->is_builtin()) {
         auto iter = builtins_.find(fun->name());
         assert(iter != builtins_.end());
 
-        (this->*(iter->second))(call);
+        (this->*iter->second)(call);
 
         if (discard && !return_type->isVoid())
             __ emit(OP_POP);
         return;
     }
 
-    if (call->token() == tNEW && call->ctor_type() && !call->fun()) {
-        uint32_t classdef_index = rtti_->add_class(call->ctor_type());
+    if (ast->token() == tNEW && ast->ctor_type() && !ast->fun()) {
+        uint32_t classdef_index = rtti_->add_class(ast->ctor_type());
         uint32_t table_id = MakeTableId(kTableId_RttiClassDef, classdef_index);
         __ emit(OP_NEWOBJ, table_id);
         if (discard)
@@ -1639,26 +1642,22 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
         return;
     }
 
-    // Calculate the hidden parameter if needed. If we need to heap allocate,
-    // we store the address in a local slot, so we can easily read it back out
-    // after the function returns. For simple stack allocations we just use a
-    // local variable.
-    bool is_spread = !call->sema_args().empty() && call->sema_args().back()->as<SpreadArgsExpr>();
-    cell_t nargs = (cell_t)call->sema_args().size();
+    const auto& argv = call->args();
+    bool is_spread = !argv.empty() && argv.back()->is(IrKind::SpreadArgs);
+    cell_t nargs = (cell_t)argv.size();
     if (is_spread)
         nargs--;
 
-    auto ft = call->callee_type();
+    auto ft = ast->callee_type();
 
     // The VM supplies |this| for a constructor, so argument 0 is a
     // placeholder that is never on the operand stack.
-    size_t first_arg = call->ctor_type() ? 1 : 0;
+    size_t first_arg = ast->ctor_type() ? 1 : 0;
 
-    const auto& argv = call->sema_args();
     // Use a post-decrement in the condition to work around overflow. The body
     // gets the updated index.
     for (size_t i = nargs; i-- > first_arg;) {
-        const auto& expr = argv[i];
+        auto expr = argv[i];
 
         QualType arg;
         if (i < ft->nargs())
@@ -1670,14 +1669,14 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
         ExprVal val = expr->val();
         if (is_elided_slice) {
-            EmitElidedSliceExpr(expr->to<SliceExpr>());
+            EmitElidedSliceExpr(expr->to<ir::Slice>());
         } else if (expr->lvalue()) {
             val = BindLvalue(expr, true);
         } else {
             EmitExpr(expr);
         }
 
-        if (expr->as<DefaultArgExpr>())
+        if (expr->is(IrKind::DefaultArg))
             continue;
         bool needs_temp = false;
         if (!arg) {
@@ -1696,7 +1695,7 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
 
             if (lvalue) {
                 if (needs_temp)
-                    EmitRvalue(val);
+                    EmitRvalue(expr, val);
                 else if (val.ident == iVARIABLE)
                     EmitAddress(val.sym());
                  else if (val.ident == iFIELD)
@@ -1755,21 +1754,20 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     }
 
     if (!fun) {
-        auto target = call->target();
         EmitExpr(call->target());
-        auto ft = target->val().type()->to<FunctionType>();
+        auto ft = call->target()->val().type()->to<FunctionType>();
         if (ft->conv() == FunctionType::Convention::Legacy) {
-            uint32_t type_id = rtti_->to_typeid(target->val().type());
+            uint32_t type_id = rtti_->to_typeid(call->target()->val().type());
             __ emit(OP_GETFNOBJ, type_id);
         }
     }
 
-    if (call->ctor_type()) {
+    if (ast->ctor_type()) {
         __ emit(OP_NEWOBJ, &fun->cg()->method_id);
         if (discard)
             __ emit(OP_POP);
     } else {
-        EmitCall(call->callee(), nargs, is_spread);
+        EmitCall(ast->callee(), nargs, is_spread);
 
         if (discard) {
             if (!return_type->isVoid() && !ft->needs_hidden_arg())
@@ -1784,12 +1782,12 @@ void CodeGenerator::EmitCallExpr(CallExpr* call, unsigned int flags) {
     }
 }
 
-void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
-    const auto& arg = expr->arg();
+void CodeGenerator::EmitDefaultArgExpr(ir::DefaultArg* expr) {
+    const auto& arg = expr->parent()->arg();
 
     auto init = arg->sema_init_rhs();
 
-    if (auto array = init->as<ArrayExpr>()) {
+    if (auto array = init->as<ir::Array>()) {
         Type* type = *arg->type();
         if (type->isEnumStruct()) {
             auto temp_slot = AcquireTempSlot(expr, type);
@@ -1810,10 +1808,15 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
             }
         }
     } else {
-        if (init->lvalue())
-            EmitRvalue(init->val());
-        else
+        if (init->val().ident == iCONSTEXPR && init->val().type()->isNull() &&
+            !arg->type()->isHeapItem())
+        {
+            __ PUSH_C(0);
+        } else if (init->lvalue()) {
+            EmitRvalue(init, init->val());
+        } else {
             EmitExpr(init);
+        }
 
         // Reference and wide type arguments need temporary slots to pass by
         // reference.
@@ -1826,28 +1829,29 @@ void CodeGenerator::EmitDefaultArgExpr(DefaultArgExpr* expr) {
     }
 }
 
-void CodeGenerator::EmitNewArrayExpr(NewArrayExpr* expr) {
-    uint32_t type_id = rtti_->to_typeid(expr->type());
-    const auto& exprs = expr->exprs();
+void CodeGenerator::EmitNewArrayExpr(ir::NewArray* expr) {
+    auto ast = expr->parent();
+    uint32_t type_id = rtti_->to_typeid(ast->type());
+    const auto& dims = expr->dims();
 
     // Find the number of dynamic dimensions leading up to the first fixed
     // dimension or unspecified dimension (nullptr in exprs).
     size_t num_dynamic = 0;
-    ArrayType* type = expr->type()->as<ArrayType>();
+    ArrayType* type = ast->type()->as<ArrayType>();
     while (type && !type->is_fixed()) {
-        if (num_dynamic >= exprs.size() || exprs[num_dynamic] == nullptr)
+        if (num_dynamic >= dims.size() || dims[num_dynamic] == nullptr)
             break;
         num_dynamic++;
         type = type->inner()->as<ArrayType>();
     }
 
     // Emit these onto the stack.
-    assert(num_dynamic <= exprs.size());
+    assert(num_dynamic <= dims.size());
     for (size_t i = num_dynamic - 1; i < num_dynamic; i--)
-        EmitExpr(exprs[i]);
+        EmitExpr(dims[i]);
 
     if (num_dynamic > std::numeric_limits<uint8_t>::max())
-        report(expr, 431);
+        report(ast, 431);
 
     if (num_dynamic <= 1)
         __ emit(OP_NEWARRAY, type_id);
@@ -1930,7 +1934,7 @@ void CodeGenerator::EmitReturnStmt(ReturnStmt* stmt) {
 void
 CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 {
-    Expr* expr = stmt->sema_expr();
+    ir::Value* expr = stmt->sema_expr();
     ExprVal v = expr->val();
 
     // Only zap non-const lvalues.
@@ -1948,7 +1952,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
         if (zap && !v.canRematerialize())
             __ emit(OP_DUP);
 
-        EmitRvalue(v);
+        EmitRvalue(expr, v);
     } else {
         EmitExpr(expr);
     }
@@ -1958,21 +1962,21 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     if (zap) {
         // Store 0 back.
         __ PUSH_C(0);
-        EmitStore(stmt, v);
+        EmitStore(expr, v);
     }
 }
 
-void CodeGenerator::EmitRvalue(RvalueExpr* expr) {
-    EmitRvalueFromLvalue(expr->lval());
+void CodeGenerator::EmitRvalue(ir::Rvalue* expr) {
+    EmitRvalueFromLvalue(expr->expr());
 }
 
-void CodeGenerator::EmitRvalueFromLvalue(Expr* expr) {
+void CodeGenerator::EmitRvalueFromLvalue(ir::Value* expr) {
     assert(expr->lvalue());
     ExprVal val = BindLvalue(expr);
-    EmitRvalue(val);
+    EmitRvalue(expr, val);
 }
 
-void CodeGenerator::EmitRvalue(const ExprVal& lval) {
+void CodeGenerator::EmitRvalue(ir::Value* node, const ExprVal& lval) {
     switch (lval.ident) {
         case iARRAYELEM:
             assert(!lval.type()->isFlatArray());
@@ -2030,7 +2034,7 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
             break;
         }
         case iACCESSOR:
-            InvokeGetter(lval.accessor());
+            InvokeGetter(node, lval.accessor());
             break;
         case iUPVAR: {
             auto upvar = lval.upvar();
@@ -2103,7 +2107,7 @@ void CodeGenerator::EmitRvalue(const ExprVal& lval) {
     }
 }
 
-void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
+void CodeGenerator::EmitStore(ir::Value* node, const ExprVal& lval) {
     switch (lval.ident) {
         case iARRAYELEM:
             if (lval.type()->isChar())
@@ -2155,7 +2159,7 @@ void CodeGenerator::EmitStore(ParseNode* pn, const ExprVal& lval) {
         case iACCESSOR:
             if (lval.type()->isWideType()) {
                 // Need to pass the value as an address for native compatibility.
-                auto slot = AcquireTempSlot(pn, lval.type()->builtin_type());
+                auto slot = AcquireTempSlot(node, lval.type()->builtin_type());
                 __ emit(OP_STOR_S, VarSlot(slot));
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
@@ -2306,14 +2310,14 @@ void CodeGenerator::EmitAddrField(LayoutFieldDecl* field) {
     __ emit(OP_ADDR_FLD, ref);
 }
 
-void CodeGenerator::InvokeGetter(PropertyDecl* prop) {
+void CodeGenerator::InvokeGetter(ir::Value* node, PropertyDecl* prop) {
     assert(prop->getter());
 
     // :TODO: figure out how to factor this code with EmitCallExpr.
     std::optional<cell_t> hidden_slot;
     if (prop->getter()->return_type()->isWideType()) {
         auto return_type = prop->getter()->return_type();
-        hidden_slot = {AcquireTempSlot(prop, return_type->builtin_type())};
+        hidden_slot = {AcquireTempSlot(node, return_type->builtin_type())};
     }
 
     cell_t nargs = 1;
@@ -2593,15 +2597,15 @@ void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
         } else {
             // Note: We can't BindLvalue because we don't have an expr, but we
             // don't need one here technically, since it's just a variable.
-            EmitRvalue(ExprVal{var});
+            EmitRvalue(nullptr, ExprVal{var});
         }
     }
 
     __ emit(OP_NEWCLOSURE, &fun->cg()->method_id);
 }
 
-void CodeGenerator::EmitFunctionExpr(FunctionExpr* expr) {
-    EmitNewClosure(expr->decl());
+void CodeGenerator::EmitFunctionExpr(ir::Function* expr) {
+    EmitNewClosure(expr->parent()->decl());
 }
 
 void CodeGenerator::EmitEnumStructDecl(EnumStructDecl* decl) {
@@ -2652,7 +2656,7 @@ void CodeGenerator::EmitCall(const CallTarget& target, cell nargs, bool is_sprea
     }
 }
 
-void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
+void CodeGenerator::EmitSimpleCastExpr(ir::SimpleCast* expr) {
     EmitExpr(expr->from());
 
     Type* from_type = expr->from()->val().type();
@@ -2694,7 +2698,7 @@ void CodeGenerator::EmitSimpleCastExpr(SimpleCastExpr* expr) {
     }
 }
 
-void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
+void CodeGenerator::EmitCastExpr(ir::Cast* expr, unsigned int flags) {
     auto from = expr->expr();
     if (expr->lvalue()) {
         assert(from->lvalue());
@@ -2738,21 +2742,11 @@ void CodeGenerator::EmitCastExpr(CastExpr* expr, unsigned int flags) {
     }
 }
 
-void CodeGenerator::EmitCommaExpr(CommaExpr* ce, unsigned int flags) {
-    for (const auto& expr : ce->exprs()) {
-        unsigned int new_flags;
-        if (expr == ce->exprs().back())
-            new_flags = flags;
-        else
-            new_flags = EMIT_DISCARD_RESULT;
-        EmitExpr(expr, new_flags);
-    }
-}
 
-void CodeGenerator::EmitFloatBuiltin(CallExpr* expr) {
-    assert(expr->sema_args().size() == 1);
+void CodeGenerator::EmitFloatBuiltin(ir::Call* expr) {
+    assert(expr->args().size() == 1);
 
-    EmitExpr(expr->sema_args()[0]);
+    EmitExpr(expr->args()[0]);
     __ emit(OP_CVT_F32);
 }
 
@@ -2801,11 +2795,11 @@ CodeGenerator::AutoEnterScope::~AutoEnterScope() {
     cg_->AddDebugSymbols(&scope);
 }
 
-cell_t CodeGenerator::AcquireTempSlot(ParseNode* node, BuiltinType builtin_type) {
+cell_t CodeGenerator::AcquireTempSlot(ir::Value* node, BuiltinType builtin_type) {
     return AcquireTempSlot(node, cc_.types()->GetBuiltin(builtin_type));
 }
 
-cell_t CodeGenerator::AcquireTempSlot(ParseNode* node, Type* type) {
+cell_t CodeGenerator::AcquireTempSlot(ir::Value* node, Type* type) {
     auto iter = free_temp_slots_.begin();
     while (iter != free_temp_slots_.end()) {
         if ((*iter).second == type) {

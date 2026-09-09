@@ -19,6 +19,7 @@ module.sources += [
   'constant-fold.cpp',
   'data-queue.cpp',
   'errors.cpp',
+  'ir-node.cpp',
   'lexer.cpp',
   'main.cpp',
   'name-resolution.cpp',

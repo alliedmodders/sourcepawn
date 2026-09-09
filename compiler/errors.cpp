@@ -24,6 +24,7 @@
 #include "compile-context.h"
 #include "compile-options.h"
 #include "errors.h"
+#include "ir-node.h"
 #include "lexer.h"
 #include "parse-node.h"
 #include "sc.h"
@@ -126,6 +127,10 @@ MessageBuilder::MessageBuilder(ParseNode* node, int number)
 {
     where_ = node->pos();
     number_ = number;
+}
+
+MessageBuilder report(ir::Value* node, int number) {
+    return MessageBuilder(node->pn(), number);
 }
 
 MessageBuilder&

@@ -57,7 +57,6 @@
     FOR_EACH(DefaultArgExpr) \
     FOR_EACH(FieldAccessExpr) \
     FOR_EACH(IndexExpr) \
-    FOR_EACH(RvalueExpr) \
     FOR_EACH(CommaExpr) \
     FOR_EACH(ThisExpr) \
     FOR_EACH(NullExpr) \
@@ -67,10 +66,38 @@
     FOR_EACH(ArrayExpr) \
     FOR_EACH(StructExpr) \
     FOR_EACH(StructInitFieldExpr) \
-    FOR_EACH(SimpleCastExpr) \
-    FOR_EACH(SliceExpr) \
     FOR_EACH(SpreadArgsExpr) \
     FOR_EACH(FunctionExpr) \
+
+#define IR_TYPE_LIST(FOR_EACH) \
+    FOR_EACH(Number) \
+    FOR_EACH(Rvalue) \
+    FOR_EACH(Symbol) \
+    FOR_EACH(String) \
+    FOR_EACH(This) \
+    FOR_EACH(Null) \
+    FOR_EACH(Unary) \
+    FOR_EACH(Index) \
+    FOR_EACH(FieldAccess) \
+    FOR_EACH(Cast) \
+    FOR_EACH(SimpleCast) \
+    FOR_EACH(Sizeof) \
+    FOR_EACH(IncDec) \
+    FOR_EACH(Binary) \
+    FOR_EACH(Logical) \
+    FOR_EACH(Ternary) \
+    FOR_EACH(Comma) \
+    FOR_EACH(ChainedCompare) \
+    FOR_EACH(Call) \
+    FOR_EACH(DefaultArg) \
+    FOR_EACH(NamedArg) \
+    FOR_EACH(SpreadArgs) \
+    FOR_EACH(Function) \
+    FOR_EACH(Array) \
+    FOR_EACH(Slice) \
+    FOR_EACH(NewArray) \
+    FOR_EACH(Struct) \
+    FOR_EACH(StructInitField)
 
 
 enum class ExprKind : uint8_t
@@ -84,5 +111,12 @@ enum class StmtKind : uint8_t
 {
 #define _(Name) Name,
     AST_STMT_TYPE_LIST(_)
+#undef _
+};
+
+enum class IrKind : uint8_t
+{
+#define _(Name) Name,
+    IR_TYPE_LIST(_)
 #undef _
 };

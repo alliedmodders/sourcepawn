@@ -18,6 +18,10 @@ class Expr;
 struct ExprVal;
 struct typeinfo_t;
 
+namespace ir {
+class Value;
+} // namespace ir
+
 #define _(Name) class Name;
 AST_STMT_TYPE_LIST(_)
 #undef _
@@ -41,6 +45,7 @@ class AstPrinter
     void PrintIndent(bool is_last);
     void PrintType(const typeinfo_t& type);
     void PrintExprInline(Expr* expr);
+    void PrintIr(ir::Value* expr, bool is_last);
     void PrintEscapedString(const char* s);
     void PrintConstValue(const ExprVal& cv);
 

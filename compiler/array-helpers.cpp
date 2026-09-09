@@ -11,6 +11,7 @@
 #include <amtl/am-raii.h>
 #include <amtl/am-utility.h>
 #include "errors.h"
+#include "ir-node.h"
 #include "lexer-inl.h"
 #include "semantics.h"
 #include "symbols.h"
@@ -386,10 +387,11 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, ExprVal* v) {
         }
     }
 
-    if (!(expr = sema_->CheckExpr(expr)))
+    ir::Value* checked = sema_->CheckExpr(expr);
+    if (!checked)
         return false;
 
-    *v = expr->val();
+    *v = checked->val();
     return true;
 }
 
@@ -427,10 +429,11 @@ class ArrayValidator final
 
     bool Validate();
 
+    ir::Value* init_ir() const { return init_ir_; }
+
   private:
     bool ValidateInitializer();
-    bool ValidateRank(ArrayType* rank, Expr* init);
-    bool ValidateEnumStruct(EnumStructDecl* es, Expr* init);
+    ir::Value* ValidateRank(ArrayType* rank, Expr* init);
     bool AddCells(size_t ncells);
     bool CheckArgument(SymbolExpr* init);
 
@@ -442,14 +445,20 @@ class ArrayValidator final
     Expr* init_;
     QualType type_;
     ArrayType* at_;
+    ir::Value* init_ir_ = nullptr;
     unsigned total_cells_ = 0;
 };
 
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init) {
+bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init,
+                              ir::Value** out) {
     ArrayValidator av(sema, type, init);
 
     AutoCountErrors errors;
-    return av.Validate() && errors.ok();
+    if (!av.Validate() && errors.ok())
+        return false;
+
+    *out = av.init_ir();
+    return true;
 }
 
 bool ArrayValidator::Validate() {
@@ -522,11 +531,15 @@ bool ArrayValidator::ValidateInitializer() {
             iter = iter->inner()->as<ArrayType>();
         } while (iter);
 
-        if (!sema_->CheckCoercion(ctor, at_, ctor->type(), CvtContext::Assignment))
+        ir::Value* na_node = sema_->CheckNewArrayExprForArrayInitializer(ctor);
+        if (!na_node)
             return false;
 
-        if (!sema_->CheckNewArrayExprForArrayInitializer(ctor))
+        if (!sema_->CheckCoercion(na_node, at_, ctor->type(), CvtContext::Assignment))
             return false;
+        init_ir_ = na_node;
+        if (decl_)
+            decl_->set_sema_init_rhs(na_node);
         return true;
     }
 
@@ -537,16 +550,20 @@ bool ArrayValidator::ValidateInitializer() {
             report(init_->pos(), 160);
             return false;
         }
-        if (!(init_ = sema_->CheckRvalue(init_, at_)))
+        ir::Value* node = sema_->CheckRvalue(init_, at_);
+        if (!node)
             return false;
-        if (init_->lvalue())
-            init_ = new RvalueExpr(init_);
-        decl_->init()->set_right(init_);
-        return sema_->CheckCoercion(init_, at_, init_->val().type(), CvtContext::Assignment);
+        if (node->lvalue())
+            node = new ir::Rvalue(node);
+        init_ir_ = node;
+        if (decl_)
+            decl_->set_sema_init_rhs(node);
+        return sema_->CheckCoercion(node, at_, node->val().type(), CvtContext::Assignment);
     }
 
     // Not a dynamic array, check for a fixed initializer.
-    return ValidateRank(at_, init_);
+    init_ir_ = ValidateRank(at_, init_);
+    return !!init_ir_;
 }
 
 bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
@@ -560,59 +577,66 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
 
     assert(var->vclass() == sGLOBAL || var->vclass() == sSTATIC);
 
-    if (!sema_->CheckCoercion(expr, type_, var->type(), CvtContext::Argument))
-        return false;
-
     // Since default arguments are not analyzed by standard expression checkers
     // (such as CheckSymbolExpr), we must explicitly set the variable's semantic
     // value here. This ensures that the code generator recognizes this SymbolExpr
     // as an lvalue and correctly emits OP_LOAD_GLB to load the array address/pointer.
-    expr->val().set_variable(var, var->type());
-    if (auto slice = sema_->ParamNeedsSliceWrapper(expr, at_)) {
-        decl_->set_init(slice);
-    }
+    ir::Value* node = new ir::Symbol(expr);
+    node->val().set_variable(var, var->type());
+
+    if (!sema_->CheckCoercion(node, type_, var->type(), CvtContext::Argument))
+        return false;
+    if (auto slice = sema_->ParamNeedsSlice(node, at_))
+        node = slice;
+    init_ir_ = node;
+    decl_->set_sema_init_rhs(node);
 
     return true;
 }
 
-bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
+ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     if (auto next_rank = rank->inner()->as<ArrayType>()) {
         ArrayExpr* array = init->as<ArrayExpr>();
         if (!array) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
         if ((cell)array->exprs().size() != rank->size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
         if (!AddCells(array->exprs().size()))
-            return false;
+            return nullptr;
 
-        for (const auto& expr : array->exprs()) {
-            if (!ValidateRank(next_rank, expr))
-                return false;
+        std::vector<ir::Value*> elts;
+        for (auto& expr : array->exprs()) {
+            ir::Value* n = ValidateRank(next_rank, expr);
+            if (!n)
+                return nullptr;
+            elts.push_back(n);
         }
-        return true;
+        return new ir::Array(array, elts, array->ellipses());
     }
 
     if (StringExpr* str = init->as<StringExpr>()) {
         if (!rank->isCharArray()) {
-            report(init->pos(), 134) << str->val().type() << rank;
-            return false;
+            Type* from = types_->defineArray(types_->type_char(),
+                                             (cell)str->text()->length() + 1);
+            report(init->pos(), 134) << from << rank;
+            return nullptr;
         }
 
         auto bytes = str->text()->length() + 1;
         // The string initializer contributes |bytes| char elements.
         if (!AddCells(bytes))
-            return false;
+            return nullptr;
 
         if (rank->size() && bytes > static_cast<size_t>(rank->size())) {
             report(str->pos(), 47);
-            return false;
+            return nullptr;
         }
-        return true;
+        return new ir::String(str);
     }
 
     // |rank_size| is the declared element count (0 if unbounded). It is used
@@ -629,15 +653,16 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         //    int x[10] = 0;
         if (rank->inner()->isEnumStruct() || !decl_ || at_->inner()->isArray() || !at_->size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
-        if (!(init = sema_->CheckExpr(init)))
-            return false;
+        ir::Value* node = sema_->CheckExpr(init);
+        if (!node)
+            return nullptr;
 
-        if (init->val().ident != iCONSTEXPR) {
+        if (node->val().ident != iCONSTEXPR) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
 
         report(init->pos(), 241);
@@ -650,17 +675,22 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     }
 
     if (auto es = rank->inner()->asEnumStruct()) {
+        std::vector<ir::Value*> elts;
         for (const auto& expr : array->exprs()) {
-            if (!ValidateEnumStruct(es, expr))
-                return false;
+            ir::Value* node = sema_->ValidateEnumStructInitializer(es, expr);
+            if (!node)
+                continue;
+            elts.push_back(node);
         }
-        return true;
+        if (elts.size() != array->exprs().size())
+            return nullptr;
+        return new ir::Array(array, elts, array->ellipses());
     }
 
     if (rank_size) {
         if (rank_size < (cell)array->exprs().size()) {
             report(init->pos(), 47);
-            return false;
+            return nullptr;
         }
     } else {
         // There is no actual reason to forbid this, as it works fine in the
@@ -668,13 +698,16 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         // of worms yet.
         if (decl_ && decl_->vclass() != sARGUMENT && !decl_->type_info().has_postdims) {
             report(init->pos(), 160);
-            return false;
+            return nullptr;
         }
     }
 
     bool prev1 = false, prev2 = false;
+    std::vector<ir::Value*> elts;
     for (auto& expr : array->exprs()) {
-        if (!(expr = sema_->CheckExpr(expr)))
+        ir::Value* n = sema_->CheckExpr(expr);
+        elts.push_back(n);
+        if (!n)
             continue;
 
         AutoErrorPos pos(expr->pos());
@@ -684,13 +717,13 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             continue;
         }
 
-        const auto& v = expr->val();
+        const auto& v = n->val();
         if (v.ident != iCONSTEXPR) {
             report(expr, 8);
             continue;
         }
 
-        sema_->CheckCoercion(expr, rank->inner(), v.type(), CvtContext::Assignment);
+        sema_->CheckCoercion(n, rank->inner(), v.type(), CvtContext::Assignment);
 
         prev2 = prev1;
         if (v.ident == iCONSTEXPR)
@@ -699,36 +732,32 @@ bool ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
 
     cell ncells = rank_size ? rank_size : array->exprs().size();
     if (!AddCells(ncells))
-        return false;
+        return nullptr;
 
     if (array->ellipses()) {
         if (array->exprs().empty()) {
             // Invalid ellipses, array size unknown.
             report(array->pos(), 41);
-            return true;
+            return nullptr;
         }
         if (rank->inner()->isInt64()) {
             report(array->exprs().back()->pos(), 68) << rank->inner();
-            return false;
+            return nullptr;
         }
         if (prev1 && prev2 && !rank->inner()->isInt()) {
             // Unknown stepping type.
             report(array->exprs().back()->pos(), 68) << rank->inner();
-            return false;
+            return nullptr;
         }
         if (!rank_size ||
             (rank_size == (cell)array->exprs().size() && !array->synthesized_for_compat()))
         {
             // Initialization data exceeds declared size.
             report(array->exprs().back()->pos(), 18);
-            return false;
+            return nullptr;
         }
     }
-    return true;
-}
-
-bool ArrayValidator::ValidateEnumStruct(EnumStructDecl* es, Expr* init) {
-    return sema_->ValidateEnumStructInitializer(es, init);
+    return new ir::Array(array, elts, array->ellipses());
 }
 
 bool ArrayValidator::AddCells(size_t ncells) {
@@ -794,6 +823,11 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
     if (!validator.Validate() || !errors.ok())
         return false;
 
+    if (decl->init()) {
+        assert(validator.init_ir());
+        decl->set_sema_init_rhs(validator.init_ir());
+    }
+
     // We need an explicit initializer so that EmitArrayCtor() will generate
     // the appropriate NEWARRAY or NEWBULKARRAY opcode via EmitNewArrayExpr.
     if (!decl->init_rhs() && decl->vclass() != sARGUMENT) {
@@ -802,8 +836,19 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
                 report(decl->pos(), 478);
                 return false;
             }
-            if (!array->is_flat() && !AddImplicitDynamicInitializer(decl))
-                return false;
+            if (!array->is_flat()) {
+                if (!AddImplicitDynamicInitializer(decl))
+                    return false;
+                auto na = decl->init_rhs()->to<NewArrayExpr>();
+                std::vector<ir::Value*> dim_nodes;
+                for (auto dim : na->exprs()) {
+                    ir::Value* dim_node = CheckExpr(dim, EXPR_ALLOW_TYPE_SYMS);
+                    if (!dim_node)
+                        return false;
+                    dim_nodes.emplace_back(dim_node);
+                }
+                decl->set_sema_init_rhs(new ir::NewArray(na, dim_nodes, {}));
+            }
         }
     }
 

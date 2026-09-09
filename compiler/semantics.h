@@ -13,10 +13,11 @@
 
 #include "coercion-rules.h"
 #include "compile-context.h"
+#include "errors.h"
+#include "ir-node.h"
 #include "sc.h"
 #include "scopes.h"
 #include "parse-node.h"
-#include "errors.h"
 
 namespace sp {
 namespace cc {
@@ -138,9 +139,10 @@ class Semantics final
     CompileContext& cc() { return cc_; }
     bool CheckCoercion(const token_pos_t& pos, QualType formal, QualType actual,
                        CvtContext why);
-    bool CheckCoercion(Expr* node, QualType formal, QualType actual,
+    ir::Value* ParamNeedsSlice(ir::Value* param, ArrayType* to);
+    bool CheckCoercion(ir::Value* node, QualType formal, QualType actual,
                        CvtContext why);
-    Expr* TryConversion(Expr* expr, QualType formal, CvtContext why);
+    ir::Value* TryConversion(ir::Value* expr, QualType formal, CvtContext why);
     SymbolScope* current_scope() const;
     SemaContext* context() { return sc_; }
     void set_context(SemaContext* sc) { sc_ = sc; }
@@ -160,14 +162,13 @@ class Semantics final
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
     bool CheckEnumStructVarDecl(VarDeclBase* decl);
-    bool ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init);
+    ir::Value* ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init);
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
     void CheckFunctionReturnUsage(FunctionDecl* info);
     bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
     bool CheckSwitchStmt(SwitchStmt* stmt);
-    void CheckSwitchCaseType(Expr* expr, Type* formal, Type* actual);
     bool CheckForStmt(ForStmt* stmt);
     bool CheckDoWhileStmt(DoWhileStmt* stmt);
     bool CheckBreakStmt(BreakStmt* stmt);
@@ -178,6 +179,7 @@ class Semantics final
     bool CheckCompoundReturnStmt(ReturnStmt* stmt);
     bool CheckNativeCompoundReturn(FunctionDecl* info);
     void ReportInvalidNativeArgument(ParseNode* node, Type* type);
+    void ReportInvalidNativeArgument(ir::Value* arg, Type* type);
     bool CheckExprStmt(ExprStmt* stmt);
     bool CheckIfStmt(IfStmt* stmt);
     bool CheckConstDecl(ConstDecl* decl);
@@ -193,65 +195,76 @@ class Semantics final
     enum ExprFlags {
         EXPR_DEFAULT = 0,
         EXPR_DISCARD_RESULT = (1 << 0),
+        EXPR_ALLOW_TYPE_SYMS = (1 << 1),
     };
 
-    Expr* CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
-    Expr* CheckNewArrayExpr(NewArrayExpr* expr);
-    Expr* CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
-    Expr* CheckStringExpr(StringExpr* expr, Type* target = nullptr);
-    Expr* CheckNullExpr(NullExpr* expr);
-    Expr* CheckThisExpr(ThisExpr* expr);
-    Expr* CheckCommaExpr(CommaExpr* expr);
-    Expr* CheckIndexExpr(IndexExpr* expr);
-    Expr* CheckCallExpr(CallExpr* expr);
-    Expr* CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
-    Expr* CheckSizeofExpr(SizeofExpr* expr);
-    Expr* CheckCastExpr(CastExpr* expr);
-    Expr* CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
-    Expr* CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
-    Expr* CheckChainedCompareExpr(ChainedCompareExpr* expr);
-    Expr* CheckLogicalExpr(LogicalExpr* expr);
-    Expr* CheckBinaryExpr(BinaryExpr* expr);
-    Expr* CheckUnaryExpr(UnaryExpr* expr);
-    Expr* CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
-    Expr* CheckStaticFieldAccessExpr(FieldAccessExpr* expr);
-    Expr* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, Type* type, EnumStructDecl* root,
-                                         bool from_call);
-    Expr* CheckClassFieldAccessExpr(FieldAccessExpr* expr, Type* type, ClassDecl* decl,
-                                    bool from_call);
-    Expr* CheckFunctionExpr(FunctionExpr* expr);
+    ir::Value* CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
+    ir::Value* CheckNewArrayExpr(NewArrayExpr* expr);
+    ir::Value* CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
+    ir::Value* CheckStringExpr(StringExpr* expr, Type* target = nullptr);
+    ir::Value* CheckNullExpr(NullExpr* expr);
+    ir::Value* CheckThisExpr(ThisExpr* expr);
+    ir::Value* CheckCommaExpr(CommaExpr* expr);
+    ir::Value* CheckIndexExpr(IndexExpr* expr);
+    ir::Value* CheckCallExpr(CallExpr* expr);
+    ir::Value* CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
+    ir::Value* CheckSizeofExpr(SizeofExpr* expr);
+    ir::Value* CheckCastExpr(CastExpr* expr);
+    ir::Value* CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
+    ir::Value* CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
+    ir::Value* CheckChainedCompareExpr(ChainedCompareExpr* expr);
+    ir::Value* CheckLogicalExpr(LogicalExpr* expr);
+    ir::Value* CheckBinaryExpr(BinaryExpr* expr);
+    ir::Value* CheckUnaryExpr(UnaryExpr* expr);
+    ir::Value* CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
+    ir::Value* CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir);
+    ir::Value* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+                                               Type* type, EnumStructDecl* root, bool from_call);
+    ir::Value* CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+                                          Type* type, ClassDecl* decl, bool from_call);
+    ir::Value* CheckFunctionExpr(FunctionExpr* expr);
 
-    Expr* CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = EXPR_DEFAULT);
-    Expr* CheckRvalueAccess(Expr* expr);
+    ir::Value* CheckRvalueAccess(ir::Value* expr);
 
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
-    Expr* BuildConversion(Expr* from, const Conversion& cv);
-    Expr* BuildConversion(Expr* from, ConversionKind ck, Type* to);
-    Expr* BuildSimpleCast(Expr* from, BuiltinType type);
-    Expr* CoerceNull(Expr* expr, Type* formal);
-    std::optional<ConversionKind> FindConstantConversion(Expr* source, Type* from_type,
+    ir::Value* BuildConversion(ir::Value* from, ConversionKind ck, Type* to);
+    ir::Value* BuildConversion(ir::Value* from, const Conversion& cv);
+    ir::Value* CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = 0);
+    ir::Value* BuildSimpleCast(ir::Value* from, BuiltinType type);
+    ir::Value* CoerceNull(ir::Value* expr, Type* formal);
+    std::optional<ConversionKind> FindConstantConversion(ir::Value* source, Type* from_type,
                                                          Type* to, CvtContext why);
-    bool CheckCoercionImpl(Expr* node, const token_pos_t& pos, QualType formal,
+    bool CheckCoercionImpl(ir::Value* node, const token_pos_t& pos, QualType formal,
                            QualType actual, CvtContext why, ConversionKind ck);
     void ReportConversionDiagnostic(const token_pos_t& pos, QualType formal, QualType actual);
-    void ReportConversionDiagnostic(Expr* node, QualType formal, QualType actual);
+    void ReportConversionDiagnostic(ir::Value* node, QualType formal, QualType actual);
 
     struct ParamState {
-        std::vector<Expr*> argv;
+        std::vector<ir::Value*> argv;
     };
 
     bool CheckArrayDeclaration(VarDeclBase* decl);
-    Expr* CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
-    Expr* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
-                        ParamState* ps, unsigned int argpos);
-    Expr* CheckWrappedExpr(Expr* outer, Expr* inner);
+    ir::Value* CheckNewArrayExprForArrayInitializer(NewArrayExpr* expr);
+    ir::Value* CheckArgument(CallExpr* call, FunctionType* ft, QualType formal, Expr* param,
+                             ParamState* ps, unsigned int argpos);
+    ir::Value* ProcessArgument(CallExpr* call, FunctionType* ft, QualType formal,
+                               ir::Value* arg, ParamState* ps, unsigned int argpos);
     using CallCtor = std::pair<FunctionDecl*, Type*>;
     std::optional<CallCtor> BindNewTarget(Expr* target);
-    CallTarget BindCallTarget(CallExpr* call, Expr* target);
-    SliceExpr* ParamNeedsSliceWrapper(Expr* param, ArrayType* to);
 
-    Expr* AnalyzeForTest(Expr* expr);
-    ExprVal* AnalyzeForConst(Expr* expr);
+    struct CallBinding
+    {
+        CallTarget target;
+        ir::Value* this_arg = nullptr;
+    };
+
+    CallBinding BindCallTarget(CallExpr* call, Expr* target);
+
+    ir::Value* AnalyzeForTest(Expr* expr);
+    const ExprVal* AnalyzeForConst(ir::Value* node);
+
+    // Helper for CheckExpr + AnalyzeForConst.
+    ir::Value* CheckExprForConst(Expr* expr);
 
     void DeduceLiveness();
     void DeduceMaybeUsed();
@@ -261,7 +274,7 @@ class Semantics final
     void CheckVoidDecl(const typeinfo_t* type, int variable);
     void CheckVoidDecl(const declinfo_t* decl, int variable);
 
-    bool CheckScalarType(Expr* expr);
+    bool CheckScalarType(ir::Value* node);
     bool IsThisAtom(sp::Atom* atom);
 
     bool IsIncluded(Decl* expr);
@@ -269,15 +282,15 @@ class Semantics final
 
     struct BinaryExprState {
         BinaryExpr* expr;
-        Expr* left;
-        Expr* right;
+        ir::Value* left = nullptr;
+        ir::Value* right = nullptr;
         bool rhs_resolved = false;
 
         BinaryExprState(BinaryExpr* expr)
-          : expr(expr), left(expr->left()), right(expr->right())
+          : expr(expr)
         {}
     };
-    Expr* CheckBinaryExprImpl(BinaryExprState& state);
+    ir::Value* CheckBinaryExprImpl(BinaryExprState& state);
     bool CheckAssignmentLHS(BinaryExprState& state);
 
     struct BinaryOperator {
