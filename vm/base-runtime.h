@@ -23,8 +23,8 @@ namespace v2 {
 class Runtime;
 } // namespace v2
 
-struct ARRAY_HANDLE;
-typedef ARRAY_HANDLE* ARRAY_PTR;
+using SourcePawn::ARRAY_HANDLE;
+using SourcePawn::ARRAY_PTR;
 
 class BaseRuntime : public SourcePawn::IPluginRuntime
 {
@@ -121,11 +121,11 @@ class BaseRuntime : public SourcePawn::IPluginRuntime
     //                  length is not supported.
     // @return          Pointer to the data vector for the array, or null if
     //                  the array has no data vector (zero length).
-    virtual void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) = 0;
+    void* GetArrayData(ARRAY_PTR handle, uint32_t* size = nullptr) override = 0;
 
     // Convert an internal address representing a heap-allocated array to an
     // ARRAY_PTR.
-    virtual int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) = 0;
+    int LocalToArrayPtr(cell_t addr, ARRAY_PTR* out) override = 0;
 
     const char* GetFilename() override { return full_name_.c_str(); }
     virtual BaseRuntime* GetBaseRuntime() override { return this; }
