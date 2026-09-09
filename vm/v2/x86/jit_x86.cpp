@@ -690,6 +690,7 @@ void Compiler::EmitUnaryFloatOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
             // NaN sets ZF, and so does a successful comparison to 0.0, so we only need
             // a ZF check.
             __ set(not_zero, r8_al);
+            __ movzxb(eax, eax);
             __ movl(RegAddr(dest_reg), eax);
             break;
         case LL_NEG_F32:
@@ -722,6 +723,7 @@ void Compiler::EmitUnaryDoubleOp(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
             // NaN sets ZF, and so does a successful comparison to 0.0, so we only
             // need a ZF check.
             __ set(not_zero, r8_al);
+            __ movzxb(eax, eax);
             __ movl(RegAddr(dest_reg), eax);
             break;
         }
