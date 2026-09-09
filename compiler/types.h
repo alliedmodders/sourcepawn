@@ -25,24 +25,6 @@ typedef uint32_t ucell;
 namespace sp {
 namespace cc {
 
-// Possible entries for "ident". These are used in the "symbol", "value"
-// and arginfo structures. Not every constant is valid for every use.
-// In an argument list, the list is terminated with a "zero" ident; labels
-// cannot be passed as function arguments, so the value 0 is overloaded.
-enum IdentifierKind {
-    iINVALID = 0,
-    iVARIABLE = 1,      /* cell that has an address and that can be fetched directly (lvalue) */
-    iARRAYELEM = 5,     /* array element, cell that must be fetched indirectly */
-    iADDRESS = 6,       /* explicit address on the stack */
-    iEXPRESSION = 7,    /* expression result, has no address (rvalue) */
-    iCONSTEXPR = 8,     /* constant expression (or constant symbol) */
-    iFUNCTN = 9,
-    iACCESSOR = 13,     /* property accessor via a methodmap_method_t */
-    iTYPENAME = 14,     /* symbol defining a type */
-    iFIELD = 15,        /* field of a struct or enumstruct */
-    iUPVAR = 16,        /* captured variable in closure */
-};
-
 enum class BuiltinType : uint8_t {
     Bool,
     Char,
@@ -704,15 +686,6 @@ class TypeManager
     ke::HashTable<FunctionCachePolicy> function_cache_;
 };
 
-static inline bool IsValueKind(IdentifierKind kind) {
-    switch (kind) {
-        case iINVALID:
-        case iTYPENAME:
-            return false;
-        default:
-            return true;
-    }
-}
 
 } // namespace cc
 } // namespace sp

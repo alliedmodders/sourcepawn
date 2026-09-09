@@ -74,7 +74,7 @@ void AstPrinter::PrintExprInline(Expr* expr) {
     switch (expr->kind()) {
         case ExprKind::NumberExpr: {
             auto node = expr->to<NumberExpr>();
-            PrintConstValue(node->val());
+            PrintConstVal(node->val());
             break;
         }
         case ExprKind::SymbolExpr:
@@ -206,19 +206,19 @@ void AstPrinter::PrintConstDecl(ConstDecl* node, bool is_last) {
     fprintf(out_, "ConstDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
     fprintf(out_, ") value: ");
-    PrintConstValue(node->value());
+    PrintConstVal(node->value());
     fputc('\n', out_);
 }
 
-void AstPrinter::PrintConstValue(const ExprVal& cv) {
-    if (cv.type()->isFloat()) {
-        fprintf(out_, "%f", cv.const_float());
-    } else if (cv.type()->isDouble()) {
-        fprintf(out_, "%f", cv.const_double());
-    } else if (cv.type()->isInt64()) {
-        fprintf(out_, "%" PRId64, (int64_t)cv.const_int64());
+void AstPrinter::PrintConstVal(const ConstVal& cv) {
+    if (cv.type->isFloat()) {
+        fprintf(out_, "%f", cv.get_float());
+    } else if (cv.type->isDouble()) {
+        fprintf(out_, "%f", cv.get_double());
+    } else if (cv.type->isInt64()) {
+        fprintf(out_, "%" PRId64, cv.get_int64());
     } else {
-        fprintf(out_, "%d", (int)cv.const_cell());
+        fprintf(out_, "%d", cv.cell_bits());
     }
 }
 
@@ -608,7 +608,7 @@ void AstPrinter::PrintNullExpr(NullExpr* node, bool is_last) {
 
 void AstPrinter::PrintNumberExpr(NumberExpr* node, bool is_last) {
     fprintf(out_, "NumberExpr: ");
-    PrintConstValue(node->val());
+    PrintConstVal(node->val());
     fputc('\n', out_);
 }
 
@@ -686,17 +686,18 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
     PrintIndent(is_last);
     switch (expr->kind()) {
         case IrKind::Constant: {
-            const auto& v = expr->val();
+            auto* c = expr->to<ir::Constant>();
+            const auto& v = c->val();
             if (v.type()->isInt64())
-                fprintf(out_, "Constant i64 0x%" PRIx64 "\n", v.const_int64());
+                fprintf(out_, "Constant i64 0x%" PRIx64 "\n", c->get_int64());
             else if (v.type()->isIntPtr())
-                fprintf(out_, "Constant intptr 0x%x\n", v.const_intptr());
+                fprintf(out_, "Constant intptr 0x%x\n", c->get_intptr());
             else if (v.type()->isDouble())
-                fprintf(out_, "Constant f64 %g\n", v.const_double());
+                fprintf(out_, "Constant f64 %g\n", c->get_double());
             else if (v.type()->isHeapItem())
-                fprintf(out_, "Constant heapitem 0x%x\n", v.const_i32_);
+                fprintf(out_, "Constant heapitem 0x%x\n", c->value().i32);
             else
-                fprintf(out_, "Constant 0x%x\n", v.const_cell());
+                fprintf(out_, "Constant 0x%x\n", c->get_cell());
             break;
         }
         case IrKind::Typename:
@@ -713,9 +714,6 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
             break;
         case IrKind::String:
             fprintf(out_, "String \"%s\"\n", expr->pn()->to<StringExpr>()->text()->chars());
-            break;
-        case IrKind::This:
-            fprintf(out_, "This\n");
             break;
         case IrKind::Unary: {
             auto u = expr->to<ir::Unary>();

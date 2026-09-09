@@ -1,0 +1,5 @@
+(5) : error 462: implicit conversion of 'float' to 'int' can lose data
+(6) : error 462: implicit conversion of 'float' to 'int' can lose data
+(8) : error 462: implicit conversion of 'double' to 'int' can lose data
+(9) : error 462: implicit conversion of 'function void()' to 'int' can lose data
+(10) : error 462: implicit conversion of 'null_t' to 'int' can lose data

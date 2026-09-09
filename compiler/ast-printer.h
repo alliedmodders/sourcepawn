@@ -12,6 +12,8 @@
 namespace sp {
 namespace cc {
 
+struct ConstVal;
+
 class ParseTree;
 class Stmt;
 class Expr;
@@ -47,7 +49,7 @@ class AstPrinter
     void PrintExprInline(Expr* expr);
     void PrintIr(ir::Value* expr, bool is_last);
     void PrintEscapedString(const char* s);
-    void PrintConstValue(const ExprVal& cv);
+    void PrintConstVal(const ConstVal& cv);
 
 #define _(Name) void Print##Name(Name* node, bool is_last);
     AST_STMT_TYPE_LIST(_)

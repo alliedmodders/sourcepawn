@@ -261,7 +261,7 @@ class Semantics final
     CallBinding BindCallTarget(CallExpr* call, Expr* target);
 
     ir::Value* AnalyzeForTest(Expr* expr);
-    const ExprVal* AnalyzeForConst(ir::Value* node);
+    ir::Constant* AnalyzeForConst(ir::Value* node);
 
     // Helper for CheckExpr + AnalyzeForConst.
     ir::Value* CheckExprForConst(Expr* expr);

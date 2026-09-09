@@ -10,6 +10,7 @@
 #include "array-helpers.h"
 #include "compile-context.h"
 #include "errors.h"
+#include "ir-node.h"
 #include "lexer.h"
 #include "parser.h"
 #include "sc.h"
@@ -56,18 +57,16 @@ void markusage(Decl* decl, int usage) {
     parent_func->AddReferenceTo(decl->as<FunctionDecl>()->canonical());
 }
 
-void markusage(const ExprVal& val, int usage) {
-    if (val.ident == iVARIABLE) {
-        markusage(val.sym(), usage);
-    } else if (val.ident == iUPVAR) {
-        markusage(val.upvar(), usage);
-    } else if (val.ident == iACCESSOR) {
-        if (val.accessor()->getter())
-            markusage(val.accessor()->getter(), uREAD);
-        if ((usage & uWRITTEN) && val.accessor()->setter())
-            markusage(val.accessor()->setter(), uREAD);
-    } else if (val.ident == iFUNCTN) {
-        markusage(val.fun(), usage);
+void markusage(ir::Lvalue* lval, int usage) {
+    if (auto* var = lval->as<ir::Variable>()) {
+        markusage(var->decl(), usage);
+    } else if (auto* upvar = lval->as<ir::Upvar>()) {
+        markusage(upvar->decl(), usage);
+    } else if (auto* acc = lval->as<ir::Accessor>()) {
+        if (acc->accessor()->getter())
+            markusage(acc->accessor()->getter(), uREAD);
+        if ((usage & uWRITTEN) && acc->accessor()->setter())
+            markusage(acc->accessor()->setter(), uREAD);
     }
 }
 

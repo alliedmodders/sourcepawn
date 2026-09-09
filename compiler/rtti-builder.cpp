@@ -119,9 +119,9 @@ void RttiBuilder::AddDebugVar(FunctionDecl* parent, Decl* decl, uint32_t code_st
             return;
         if (auto cv = var->as<ConstDecl>()) {
             // :TODO: support wide types
-            const ExprVal& val = cv->value();
-            if (!val.type()->isWideType())
-                addr.emplace(val.const_cell());
+            const ConstVal& val = cv->value();
+            if (!val.type->isWideType())
+                addr.emplace(val.get_cell());
             else
                 addr.emplace(0);
         }

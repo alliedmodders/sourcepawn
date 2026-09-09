@@ -77,7 +77,6 @@
     FOR_EACH(Variable) \
     FOR_EACH(Upvar) \
     FOR_EACH(String) \
-    FOR_EACH(This) \
     FOR_EACH(Unary) \
     FOR_EACH(Index) \
     FOR_EACH(StaticFieldRef) \
