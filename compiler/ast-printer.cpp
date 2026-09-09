@@ -685,31 +685,37 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
 
     PrintIndent(is_last);
     switch (expr->kind()) {
-        case IrKind::Number: {
+        case IrKind::Constant: {
             const auto& v = expr->val();
             if (v.type()->isInt64())
-                fprintf(out_, "Number i64 0x%" PRIx64 "\n", v.const_int64());
+                fprintf(out_, "Constant i64 0x%" PRIx64 "\n", v.const_int64());
             else if (v.type()->isIntPtr())
-                fprintf(out_, "Number intptr 0x%x\n", v.const_intptr());
+                fprintf(out_, "Constant intptr 0x%x\n", v.const_intptr());
             else if (v.type()->isDouble())
-                fprintf(out_, "Number f64 %g\n", v.const_double());
+                fprintf(out_, "Constant f64 %g\n", v.const_double());
             else if (v.type()->isHeapItem())
-                fprintf(out_, "Number heapitem 0x%x\n", v.const_i32_);
+                fprintf(out_, "Constant heapitem 0x%x\n", v.const_i32_);
             else
-                fprintf(out_, "Number 0x%x\n", v.const_cell());
+                fprintf(out_, "Constant 0x%x\n", v.const_cell());
             break;
         }
-        case IrKind::Symbol:
-            fprintf(out_, "Symbol %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+        case IrKind::Typename:
+            fprintf(out_, "Typename %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            break;
+        case IrKind::FunctionRef:
+            fprintf(out_, "FunctionRef %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            break;
+        case IrKind::Variable:
+            fprintf(out_, "Variable %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            break;
+        case IrKind::Upvar:
+            fprintf(out_, "Upvar %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
             break;
         case IrKind::String:
             fprintf(out_, "String \"%s\"\n", expr->pn()->to<StringExpr>()->text()->chars());
             break;
         case IrKind::This:
             fprintf(out_, "This\n");
-            break;
-        case IrKind::Null:
-            fprintf(out_, "Null\n");
             break;
         case IrKind::Unary: {
             auto u = expr->to<ir::Unary>();
@@ -886,20 +892,49 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
             stack_.pop_back();
             break;
         }
-        case IrKind::FieldAccess: {
-            auto e = expr->to<ir::FieldAccess>();
-            fprintf(out_, "FieldAccess '%s'\n",
-                    e->token() == tDBLCOLON ? "::" : expr->pn()->to<FieldAccessExpr>()->name()->chars());
+        case IrKind::StaticFieldRef: {
+            auto e = expr->to<ir::StaticFieldRef>();
+            fprintf(out_, "StaticFieldRef '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->base(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::FieldRef: {
+            auto e = expr->to<ir::FieldRef>();
+            fprintf(out_, "FieldRef '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->base(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::MethodRef: {
+            auto e = expr->to<ir::MethodRef>();
+            fprintf(out_, "MethodRef '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->base(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Accessor: {
+            auto e = expr->to<ir::Accessor>();
+            fprintf(out_, "Accessor '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
             stack_.push_back(is_last);
             PrintIr(e->base(), true);
             stack_.pop_back();
             break;
         }
         case IrKind::Cast: {
-            auto e = expr->to<ir::Cast>();
             fprintf(out_, "Cast\n");
             stack_.push_back(is_last);
-            PrintIr(e->expr(), true);
+            PrintIr(expr->to<ir::Cast>()->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::LvalueCast: {
+            fprintf(out_, "Cast\n");
+            stack_.push_back(is_last);
+            PrintIr(expr->to<ir::LvalueCast>()->expr(), true);
             stack_.pop_back();
             break;
         }

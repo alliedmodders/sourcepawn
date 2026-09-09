@@ -70,16 +70,22 @@
     FOR_EACH(FunctionExpr) \
 
 #define IR_TYPE_LIST(FOR_EACH) \
-    FOR_EACH(Number) \
+    FOR_EACH(Constant) \
     FOR_EACH(Rvalue) \
-    FOR_EACH(Symbol) \
+    FOR_EACH(Typename) \
+    FOR_EACH(FunctionRef) \
+    FOR_EACH(Variable) \
+    FOR_EACH(Upvar) \
     FOR_EACH(String) \
     FOR_EACH(This) \
-    FOR_EACH(Null) \
     FOR_EACH(Unary) \
     FOR_EACH(Index) \
-    FOR_EACH(FieldAccess) \
+    FOR_EACH(StaticFieldRef) \
+    FOR_EACH(FieldRef) \
+    FOR_EACH(Accessor) \
+    FOR_EACH(MethodRef) \
     FOR_EACH(Cast) \
+    FOR_EACH(LvalueCast) \
     FOR_EACH(SimpleCast) \
     FOR_EACH(Sizeof) \
     FOR_EACH(IncDec) \

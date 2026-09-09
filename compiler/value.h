@@ -215,5 +215,11 @@ struct ExprVal {
     }
 };
 
+static inline ExprVal ExpressionVal(QualType type) {
+    ExprVal v;
+    v.set_expr(type);
+    return v;
+}
+
 } // namespace cc
 } // namespace sp

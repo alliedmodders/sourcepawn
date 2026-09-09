@@ -112,7 +112,7 @@ void Semantics::GenerateInitFunctions(ParseTree* tree) {
         auto call = new CallExpr(fun->pos(), '(', file_ctor, {});
         ExprVal void_val;
         void_val.set_expr(types_->type_void());
-        auto call_ir = new ir::Call(call, new ir::Symbol(call->target()), {}, void_val);
+        auto call_ir = new ir::Call(call, nullptr, {}, void_val);
         auto stmt = new ExprStmt(fun->pos(), call);
         stmt->set_sema_expr(call_ir);
         stmts.emplace_back(stmt);
@@ -242,7 +242,7 @@ bool Semantics::CheckVarDecl(VarDeclBase* decl) {
     auto init_rhs = decl->init_rhs();
     if (decl->init() && init_rhs && vclass != sLOCAL && !decl->type()->isComposite()) {
         ir::Value* checked_rhs = CheckExpr(init_rhs);
-        if (!checked_rhs || checked_rhs->val().ident != iCONSTEXPR) {
+        if (!checked_rhs || !checked_rhs->is(IrKind::Constant)) {
             if (vclass == sARGUMENT && (init_rhs->is(ExprKind::SymbolExpr) || init_rhs->is(ExprKind::SizeofExpr))) {
                 decl->set_sema_init_rhs(checked_rhs);
                 return true;
@@ -376,7 +376,8 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     // Handle array literal initializer — validate against enum struct fields.
     if (init->as<ArrayExpr>()) {
         AutoErrorPos aep(init->pos());
-        ir::Value* node = ValidateEnumStructInitializer(decl->type()->asEnumStruct(), init);
+        ir::Value* node =
+           ValidateEnumStructInitializer(decl->type()->asEnumStruct(), init, nullptr);
         if (!node)
             return false;
         decl->set_sema_init_rhs(node);
@@ -392,8 +393,8 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     ir::Value* node = CheckRvalue(init);
     if (!node)
         return false;
-    if (node->lvalue())
-        node = new ir::Rvalue(node);
+    if (auto lval = node->as<ir::Lvalue>())
+        node = new ir::Rvalue(lval);
     decl->set_sema_init_rhs(node);
 
     auto ck = FindConversion(node->val().type(), *decl->type(), CvtContext::Assignment);
@@ -408,7 +409,9 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     return true;
 }
 
-ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init) {
+ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init,
+                                                    Type* expr_type)
+{
     auto array = init->as<ArrayExpr>();
     if (!array) {
         report(init->pos(), 47);
@@ -443,7 +446,7 @@ ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* in
                 continue;
 
             const auto& v = expr_ir->val();
-            if (v.ident != iCONSTEXPR) {
+            if (!expr_ir->is(IrKind::Constant)) {
                 report(8);
                 continue;
             }
@@ -469,7 +472,10 @@ ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* in
     }
     if (elements.size() != array->exprs().size())
         return nullptr;
-    return new ir::Array(array, elements, array->ellipses());
+    ExprVal val = {};
+    if (expr_type)
+        val.set_expr(expr_type);
+    return new ir::Array(array, elements, array->ellipses(), val);
 }
 
 bool Semantics::CheckPstructDecl(VarDeclBase* decl) {
@@ -584,7 +590,7 @@ ir::Value* Semantics::CheckExpr(Expr* expr, uint32_t flags) {
             return CheckNewArrayExpr(expr->to<NewArrayExpr>());
         case ExprKind::NumberExpr: {
             auto e = expr->to<NumberExpr>();
-            return new ir::Number(e, e->val());
+            return new ir::Constant(e, e->val());
         }
         case ExprKind::SizeofExpr:
             return CheckSizeofExpr(expr->to<SizeofExpr>());
@@ -621,8 +627,7 @@ CompareOp::CompareOp(const token_pos_t& pos, int token, Expr* expr)
 
 static bool HasSideEffects(ir::Value* node);
 
-template <typename NodeList>
-static bool HasSideEffects(const NodeList& nodes) {
+static bool HasSideEffects(const PoolArray<ir::Value*>& nodes) {
     for (auto n : nodes) {
         if (HasSideEffects(n))
             return true;
@@ -663,6 +668,8 @@ static bool HasSideEffects(ir::Value* node) {
         }
         case IrKind::Cast:
             return HasSideEffects(node->to<ir::Cast>()->expr());
+        case IrKind::LvalueCast:
+            return HasSideEffects(node->to<ir::LvalueCast>()->expr());
         case IrKind::NamedArg:
             return HasSideEffects(node->to<ir::NamedArg>()->expr());
         case IrKind::StructInitField:
@@ -691,18 +698,26 @@ static bool HasSideEffects(ir::Value* node) {
             auto e = node->to<ir::Index>();
             return HasSideEffects(e->base()) || (e->index() && HasSideEffects(e->index()));
         }
-        case IrKind::FieldAccess:
-            return HasSideEffects(node->to<ir::FieldAccess>()->base());
+        case IrKind::StaticFieldRef:
+            return HasSideEffects(node->to<ir::StaticFieldRef>()->base());
+        case IrKind::MethodRef:
+            return HasSideEffects(node->to<ir::MethodRef>()->base());
+        case IrKind::FieldRef:
+            return HasSideEffects(node->to<ir::FieldRef>()->base());
+        case IrKind::Accessor:
+            return HasSideEffects(node->to<ir::Accessor>()->base());
         case IrKind::Rvalue:
             return HasSideEffects(node->to<ir::Rvalue>()->expr());
         case IrKind::Call:  // Not intelligent yet.
         case IrKind::IncDec:
             return true;
-        case IrKind::Symbol:
+        case IrKind::Typename:
+        case IrKind::FunctionRef:
+        case IrKind::Variable:
+        case IrKind::Upvar:
         case IrKind::String:
         case IrKind::This:
-        case IrKind::Null:
-        case IrKind::Number:
+        case IrKind::Constant:
         case IrKind::Sizeof:
         case IrKind::DefaultArg:
         case IrKind::SpreadArgs:
@@ -749,7 +764,7 @@ ir::Value* Semantics::AnalyzeForTest(Expr* expr) {
         return nullptr;
     }
 
-    if (val.ident == iCONSTEXPR) {
+    if (node->is(IrKind::Constant)) {
         if (!sc_->preprocessing()) {
             if (val.const_i32())
                 report(expr, 206);
@@ -761,15 +776,15 @@ ir::Value* Semantics::AnalyzeForTest(Expr* expr) {
             report(expr, 249);
     }
 
-    if (node->lvalue())
-        return new ir::Rvalue(node);
+    if (auto lval = node->as<ir::Lvalue>())
+        return new ir::Rvalue(lval);
 
     return node;
 }
 
 const ExprVal* Semantics::AnalyzeForConst(ir::Value* node) {
     const auto& val = node->val();
-    if (val.ident != iCONSTEXPR) {
+    if (!node->is(IrKind::Constant)) {
         report(node, 8);
         return nullptr;
     }
@@ -793,8 +808,8 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
     if (!CheckScalarType(operand))
         return nullptr;
 
-    if (operand->lvalue())
-        operand = new ir::Rvalue(operand);
+    if (auto lval = operand->as<ir::Lvalue>())
+        operand = new ir::Rvalue(lval);
 
     ExprVal out_val = operand->val();
 
@@ -802,7 +817,7 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
 
     switch (unary->token()) {
         case '~':
-            if (out_val.ident == iCONSTEXPR) {
+            if (operand->is(IrKind::Constant)) {
                 if (out_val.type()->isInt64())
                     out_val.set_const_int64(~out_val.const_int64());
                 else if (out_val.type()->coercesToInt())
@@ -820,12 +835,12 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             operand = BuildConversion(operand, ck, types_->type_bool());
             out_val = operand->val();
 
-            if (out_val.ident == iCONSTEXPR)
+            if (operand->is(IrKind::Constant))
                 out_val.set_constval(types_->type_bool(), out_val.const_i32() ? 0 : 1);
             break;
         }
         case '-':
-            if (out_val.ident == iCONSTEXPR) {
+            if (operand->is(IrKind::Constant)) {
                 if (out_val.type()->isFloat()) {
                     out_val.set_const_float(-out_val.const_float());
                 } else if (out_val.type()->isInt64()) {
@@ -847,9 +862,10 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
             assert(false);
     }
 
-    if (out_val.ident != iCONSTEXPR)
-        out_val.ident = iEXPRESSION;
+    if (out_val.ident == iCONSTEXPR)
+        return new ir::Constant(unary, out_val);
 
+    out_val.ident = iEXPRESSION;
     return new ir::Unary(unary, unary->token(), operand, out_val);
 }
 
@@ -892,13 +908,12 @@ ir::Value* Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
     if (type->isReference())
         type = type->inner();
 
-    auto result = new ir::IncDec(incdec, incdec->token(), incdec->prefix(), operand);
+    ExprVal val;
+    val.set_expr(type);
 
     // :TODO: more type checks
-    auto& val = result->val();
-    val.ident = iEXPRESSION;
-    val.set_type(type);
-    return result;
+    return new ir::IncDec(incdec, incdec->token(), incdec->prefix(), operand->to<ir::Lvalue>(),
+                          val);
 }
 
 BinaryExpr::BinaryExpr(const token_pos_t& pos, int token, Expr* left, Expr* right)
@@ -955,13 +970,13 @@ ir::Value* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
     } else if (state.left->lvalue()) {
         if (!CheckRvalueAccess(state.left))
             return nullptr;
-        state.left = new ir::Rvalue(state.left);
+        state.left = new ir::Rvalue(state.left->to<ir::Lvalue>());
     }
 
     // RHS is always loaded. Note we do this after validating the left-hand side,
     // so ValidateAssignment has an original view of RHS.
-    if (state.right->lvalue())
-        state.right = new ir::Rvalue(state.right);
+    if (auto lval = state.right->as<ir::Lvalue>())
+        state.right = new ir::Rvalue(lval);
 
     auto left_type = state.left->val().type();
     if (left_type->isReference())
@@ -1044,7 +1059,7 @@ ir::Value* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
 
     // Finally, do a constant folding pass.
     if (auto folded = TryFoldBinary(state.expr, state.left, state.right, val.type()))
-        return new ir::Number(state.expr, *folded);
+        return new ir::Constant(state.expr, *folded);
     return new ir::Binary(state.expr, state.expr->token(), state.left, state.right, val);
 }
 
@@ -1122,17 +1137,15 @@ ir::Value* Semantics::CheckLogicalExpr(LogicalExpr* expr) {
     if (!right)
         return nullptr;
 
-    if (left->lvalue())
-        left = new ir::Rvalue(left);
-    if (right->lvalue())
-        right = new ir::Rvalue(right);
+    if (auto lval = left->as<ir::Lvalue>())
+        left = new ir::Rvalue(lval);
+    if (auto lval = right->as<ir::Lvalue>())
+        right = new ir::Rvalue(lval);
 
-    auto node = new ir::Logical(expr, expr->token(), left, right);
-
+    ExprVal val;
     const auto& left_val = left->val();
     const auto& right_val = right->val();
-    auto& val = node->val();
-    if (left_val.ident == iCONSTEXPR && right_val.ident == iCONSTEXPR) {
+    if (left->is(IrKind::Constant) && right->is(IrKind::Constant)) {
         val.ident = iCONSTEXPR;
         if (expr->token() == tlOR)
             val.set_constval((left_val.const_i32() || right_val.const_i32()));
@@ -1140,19 +1153,21 @@ ir::Value* Semantics::CheckLogicalExpr(LogicalExpr* expr) {
             val.set_constval((left_val.const_i32() && right_val.const_i32()));
         else
             assert(false);
-    } else {
-        val.ident = iEXPRESSION;
+        val.set_type(types_->type_bool());
+        return new ir::Constant(expr, val);
     }
+
+    val.ident = iEXPRESSION;
     val.set_type(types_->type_bool());
-    return node;
+    return new ir::Logical(expr, expr->token(), left, right, val);
 }
 
 ir::Value* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     ir::Value* first = CheckRvalue(chain->first());
     if (!first)
         return nullptr;
-    if (first->lvalue())
-        first = new ir::Rvalue(first);
+    if (auto lval = first->as<ir::Lvalue>())
+        first = new ir::Rvalue(lval);
 
     struct ChainedOpIr {
         int token;
@@ -1164,13 +1179,13 @@ ir::Value* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         ir::Value* e = CheckRvalue(op.expr);
         if (!e)
             return nullptr;
-        if (e->lvalue())
-            e = new ir::Rvalue(e);
+        if (auto lval = e->as<ir::Lvalue>())
+            e = new ir::Rvalue(lval);
         ops.push_back({op.token, op.pos, e});
     }
 
     ir::Value* left = first;
-    bool all_const = (left->val().ident == iCONSTEXPR && left->val().type()->isInt());
+    bool all_const = (left->is(IrKind::Constant) && left->val().type()->isInt());
     bool constval = true;
 
     bool is_first = true;
@@ -1203,7 +1218,7 @@ ir::Value* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
         if (is_first && !binop->left.IsNop())
             first = BuildConversion(first, binop->left);
 
-        if (right->val().ident != iCONSTEXPR || !right->val().type()->isInt())
+        if (!right->is(IrKind::Constant) || !right->val().type()->isInt())
             all_const = false;
 
         // Fold constants as we go.
@@ -1236,13 +1251,17 @@ ir::Value* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     std::vector<ir::ChainedCompare::Op> irops;
     for (auto& op : ops)
         irops.push_back({op.token, op.expr});
-    auto node = new ir::ChainedCompare(chain, first, std::move(irops));
-    auto& val = node->val();
+    if (all_const) {
+        ExprVal val;
+        val.set_constval(constval ? 1 : 0);
+        val.set_type(types_->type_bool());
+        return new ir::Constant(chain, val);
+    }
+
+    ExprVal val;
     val.ident = iEXPRESSION;
     val.set_type(types_->type_bool());
-    if (all_const)
-        val.set_constval(constval ? 1 : 0);
-    return node;
+    return new ir::ChainedCompare(chain, first, std::move(irops), val);
 }
 
 ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
@@ -1259,10 +1278,10 @@ ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     if (!first_ir)
         return nullptr;
 
-    if (second->lvalue())
-        second = new ir::Rvalue(second);
-    if (third->lvalue())
-        third = new ir::Rvalue(third);
+    if (auto lval = second->as<ir::Lvalue>())
+        second = new ir::Rvalue(lval);
+    if (auto lval = third->as<ir::Lvalue>())
+        third = new ir::Rvalue(lval);
 
     QualType out_type = second->val().qualified();
 
@@ -1398,6 +1417,10 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
     if (from_type == to_type) {
         if (out_val.is_lvalue())
             out_val.ident = iADDRESS;
+        if (out_val.ident == iCONSTEXPR)
+            return new ir::Constant(expr, out_val);
+        if (out_val.ident == iADDRESS)
+            return new ir::LvalueCast(expr, operand, out_val);
         return new ir::Cast(expr, operand, out_val);
     }
 
@@ -1498,7 +1521,7 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
 
     if (CastNeedsRvalue(out_val, to_type)) {
         if (inner_ir->lvalue())
-            operand = new ir::Rvalue(inner_ir);
+            operand = new ir::Rvalue(inner_ir->to<ir::Lvalue>());
         out_val.ident = iEXPRESSION;
     }
 
@@ -1507,8 +1530,12 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
 
     out_val.set_type(to_type);
 
-    if (auto folded = TryFoldCast(inner_ir->val(), to_type))
-        return new ir::Number(expr, *folded);
+    if (auto folded = TryFoldCast(inner_ir, to_type))
+        return new ir::Constant(expr, *folded);
+    if (out_val.ident == iCONSTEXPR)
+        return new ir::Constant(expr, out_val);
+    if (out_val.ident == iADDRESS)
+        return new ir::LvalueCast(expr, operand, out_val);
     return new ir::Cast(expr, operand, out_val);
 }
 
@@ -1526,21 +1553,39 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
         return nullptr;
     }
 
-    auto node = new ir::Symbol(expr);
-    auto& val = node->val();
+    ExprVal val = {};
     switch (decl->kind()) {
         case StmtKind::VarDecl:
         case StmtKind::ArgDecl:
-            val.set_variable(decl->as<VarDeclBase>(), decl->type());
-            return node;
+            return new ir::Variable(expr, decl->as<VarDeclBase>());
         case StmtKind::ConstDecl:
-        case StmtKind::EnumFieldDecl:
-            val = decl->ConstVal();
-            break;
+        case StmtKind::EnumFieldDecl: {
+            ExprVal const_val = decl->ConstVal();
+            const_val.set_type(decl->type());
+            return new ir::Constant(expr, const_val);
+        }
         case StmtKind::FunctionDecl:
-        case StmtKind::MemberFunctionDecl:
-            val.set_function(decl->as<FunctionDecl>());
-            break;
+        case StmtKind::MemberFunctionDecl: {
+            auto fun = decl->as<FunctionDecl>()->canonical();
+            if (fun->is_native()) {
+                report(expr, 76);
+                return nullptr;
+            }
+            if (fun->return_array() || fun->return_type()->isArray()) {
+                report(expr, 182);
+                return nullptr;
+            }
+            if (!fun->impl()) {
+                report(expr, 4) << fun->name();
+                return nullptr;
+            }
+
+            // Mark as being indirectly invoked. Direct invocations go
+            // through BindCallTarget.
+            fun->set_is_callback();
+            markusage(fun, uREAD);
+            return new ir::FunctionRef(expr, fun);
+        }
         case StmtKind::ClassDecl:
         case StmtKind::EnumStructDecl:
         case StmtKind::MethodmapDecl:
@@ -1556,46 +1601,19 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             break;
         }
         case StmtKind::UpvarDecl:
-            val.set_upvar(decl->as<UpvarDecl>(), decl->type());
-            return node;
+            return new ir::Upvar(expr, decl->as<UpvarDecl>(), decl->type());
         default:
             assert(false);
     }
 
-    QualType type = decl->type();
-    val.set_type(type);
-
-    if (auto fun = decl->as<FunctionDecl>()) {
-        fun = fun->canonical();
-        if (fun->is_native()) {
-            report(expr, 76);
-            return nullptr;
-        }
-        if (fun->return_array() || fun->return_type()->isArray()) {
-            report(expr, 182);
-            return nullptr;
-        }
-        if (!fun->impl()) {
-            report(expr, 4) << fun->name();
-            return nullptr;
-        }
-
-        val.ident = iEXPRESSION;
-        val.set_type(fun->type());
-
-        // Mark as being indirectly invoked. Direct invocations go through
-        // BindCallTarget.
-        fun->set_is_callback();
-        markusage(fun, uREAD);
+    // Everything other than type names returns earlier in the switch.
+    assert(val.ident == iTYPENAME);
+    val.set_type(decl->type());
+    if (!allow_types) {
+        report(expr, 174) << decl->name();
+        return nullptr;
     }
-
-    if (val.ident == iTYPENAME) {
-        if (!allow_types) {
-            report(expr, 174) << decl->name();
-            return nullptr;
-        }
-    }
-    return node;
+    return new ir::Typename(expr, val);
 }
 
 ir::Value* Semantics::CheckCommaExpr(CommaExpr* comma) {
@@ -1607,8 +1625,8 @@ ir::Value* Semantics::CheckCommaExpr(CommaExpr* comma) {
         ir::Value* e = CheckRvalue(expr);
         if (!e)
             return nullptr;
-        if (e->lvalue())
-            e = new ir::Rvalue(e);
+        if (auto lval = e->as<ir::Lvalue>())
+            e = new ir::Rvalue(lval);
         if (!HasSideEffects(e))
             report(e, 231) << index;
         exprs.push_back(e);
@@ -1628,13 +1646,8 @@ ir::Value* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
     }
 
     // Handle enum struct target — validate {x, y, ...} against struct fields.
-    if (auto es = target->asEnumStruct()) {
-        ir::Value* node = ValidateEnumStructInitializer(es, array);
-        if (!node)
-            return nullptr;
-        node->val().set_expr(target);
-        return node;
-    }
+    if (auto es = target->asEnumStruct())
+        return ValidateEnumStructInitializer(es, array, target);
 
     auto array_target = target->as<ArrayType>();
     if (!array_target) {
@@ -1655,7 +1668,7 @@ ir::Value* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
                 return nullptr;
 
             const auto& val = enode->val();
-            if (val.ident != iCONSTEXPR) {
+            if (!enode->is(IrKind::Constant)) {
                 report(entry, 8);
                 return nullptr;
             }
@@ -1666,11 +1679,13 @@ ir::Value* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
         elements.emplace_back(enode);
     }
 
-    auto node = new ir::Array(array, elements, array->ellipses());
-    auto& val = node->val();
+    ExprVal val;
     val.ident = iEXPRESSION;
-    val.set_type(types_->defineArray(formal_elt, (int)array->exprs().size()));
-    return node;
+    if (array_target->is_flat())
+        val.set_type(types_->defineFlatArray(formal_elt, array_target->size()));
+    else
+        val.set_type(types_->defineArray(formal_elt, (int)array->exprs().size()));
+    return new ir::Array(array, elements, array->ellipses(), val);
 }
 
 ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
@@ -1679,8 +1694,8 @@ ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
     auto checked_base = CheckRvalue(expr->base());
     if (!checked_base)
         return nullptr;
-    if (checked_base->lvalue())
-        checked_base = new ir::Rvalue(checked_base);
+    if (auto lval = checked_base->as<ir::Lvalue>())
+        checked_base = new ir::Rvalue(lval);
 
     ir::Value* checked_index = nullptr;
 
@@ -1697,8 +1712,8 @@ ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
             return nullptr;
         if (!CheckScalarType(checked_index))
             return nullptr;
-        if (checked_index->lvalue())
-            checked_index = new ir::Rvalue(checked_index);
+        if (auto lval = checked_index->as<ir::Lvalue>())
+            checked_index = new ir::Rvalue(lval);
 
         auto idx_type = checked_index->val().type();
         if (!IsValidIndexType(idx_type)) {
@@ -1707,7 +1722,7 @@ ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
         }
 
         const auto& index_val = checked_index->val();
-        if (index_val.ident == iCONSTEXPR) {
+        if (checked_index->is(IrKind::Constant)) {
             if (!array->isCharArray()) {
                 /* normal array index */
                 if (index_val.const_i32() < 0 ||
@@ -1728,37 +1743,26 @@ ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
         }
     }
 
-    auto result = new ir::Index(expr, checked_base, checked_index);
-    auto& out_val = result->val();
-    out_val = base_val;
-
-    out_val.set_slice(iARRAYELEM, QualType(array->inner()));
-    return result;
+    return new ir::Index(expr, checked_base, checked_index, array->inner());
 }
 
 ir::Value* Semantics::CheckThisExpr(ThisExpr* expr) {
     auto sym = expr->decl();
     assert(sym->as<ArgDecl>());
 
-    auto node = new ir::This(expr);
-    auto& val = node->val();
+    ExprVal val;
     val.set_variable(sym, sym->type());
-    return node;
+    return new ir::This(expr, val);
 }
 
 ir::Value* Semantics::CheckNullExpr(NullExpr* expr) {
-    auto node = new ir::Null(expr);
-    auto& val = node->val();
+    ExprVal val;
     val.set_constval(0);
     val.set_type(types_->type_null());
-    return node;
+    return new ir::Constant(expr, val);
 }
 
 ir::Value* Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
-    auto str_node = new ir::String(expr);
-    auto& val = str_node->val();
-    val.ident = iEXPRESSION;
-
     auto arr = target ? target->as<ArrayType>() : nullptr;
     if (arr && arr->size() > 0 && arr->inner()->isChar()) {
         size_t needed = arr->size();
@@ -1770,8 +1774,10 @@ ir::Value* Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
         }
     }
 
+    ExprVal val;
+    val.ident = iEXPRESSION;
     val.set_type(types_->defineArray(types_->type_char(), (cell)expr->text()->length() + 1));
-    return str_node;
+    return new ir::String(expr, val);
 }
 
 ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
@@ -1786,11 +1792,9 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
             return nullptr;
     }
 
-    auto field_ir = new ir::FieldAccess(expr, expr->token(), base, nullptr);
-
     int token = expr->token();
     if (token == tDBLCOLON)
-        return CheckStaticFieldAccessExpr(expr, field_ir);
+        return CheckStaticFieldAccessExpr(expr, base);
 
     const auto& base_val = base->val();
     switch (base_val.ident) {
@@ -1805,7 +1809,6 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
             break;
     }
 
-    auto& val = field_ir->val();
     if (base_val.ident == iTYPENAME) {
         Decl* typename_decl = base_val.typename_decl();
         auto layout = typename_decl->as<LayoutDecl>();
@@ -1824,25 +1827,23 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
             report(expr, 176) << method->decl_name() << typename_decl->name();
             return nullptr;
         }
-        field_ir->set_resolved(method);
-        val.set_function(method);
         markusage(method, uREAD);
-        return field_ir;
+        return new ir::MethodRef(expr, token, base, method);
     }
 
     Type* base_type = base_val.type();
     if (auto es = base_type->asEnumStruct()) {
-        if (base->lvalue())
-            field_ir->set_base(new ir::Rvalue(base));
-        return CheckEnumStructFieldAccessExpr(expr, field_ir, base_type, es, from_call);
+        if (auto lval = base->as<ir::Lvalue>())
+            base = new ir::Rvalue(lval);
+        return CheckEnumStructFieldAccessExpr(expr, base, base_type, es, from_call);
     }
     if (base_type->isReference())
         base_type = base_type->inner();
 
     if (auto cls = base_type->asClass()) {
-        if (base->lvalue())
-            field_ir->set_base(new ir::Rvalue(base));
-        return CheckClassFieldAccessExpr(expr, field_ir, base_type, cls, from_call);
+        if (auto lval = base->as<ir::Lvalue>())
+            base = new ir::Rvalue(lval);
+        return CheckClassFieldAccessExpr(expr, base, base_type, cls, from_call);
     }
 
     auto map = base_type->asMethodmap();
@@ -1863,11 +1864,9 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
     if (auto prop = member->as<PropertyDecl>()) {
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
-        if (base->lvalue())
-            field_ir->set_base(new ir::Rvalue(base));
-        val.set_type(prop->property_type());
-        val.set_accessor(prop);
-        return field_ir;
+        if (auto lval = base->as<ir::Lvalue>())
+            base = new ir::Rvalue(lval);
+        return new ir::Accessor(expr, token, base, prop);
     }
 
     auto method = member->as<MemberFunctionDecl>();
@@ -1875,16 +1874,14 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
         report(expr, 177) << method->decl_name() << map->name() << method->decl_name();
         return nullptr;
     }
-    field_ir->set_resolved(method);
 
     if (!from_call) {
         report(expr, 50);
         return nullptr;
     }
 
-    val.set_function(method);
     markusage(method, uREAD);
-    return field_ir;
+    return new ir::MethodRef(expr, token, base, method);
 }
 
 auto Semantics::BindCallTarget(CallExpr* call, Expr* target) -> CallBinding {
@@ -1897,38 +1894,30 @@ auto Semantics::BindCallTarget(CallExpr* call, Expr* target) -> CallBinding {
             if (!checked)
                 return {};
 
-            auto field_access = checked->to<ir::FieldAccess>();
-            auto& val = checked->val();
-            if (val.ident != iFUNCTN) {
+            if (!checked->is(IrKind::MethodRef)) {
                 report(target, 12);
                 return {};
             }
 
-            // The static accessor (::) is offsetof(), so it can't return functions.
-            assert(field_access->token() == '.');
+            auto method_ref = checked->to<ir::MethodRef>();
 
-            auto resolved = field_access->resolved();
-            if (auto method = resolved->as<MemberFunctionDecl>()) {
-                if (auto map = method->parent()->as<MethodmapDecl>()) {
-                    if (map->ctor() == method) {
-                        report(call, 84) << method->parent()->name();
-                        return {};
-                    }
+            auto method = method_ref->decl();
+            if (auto map = method->parent()->as<MethodmapDecl>()) {
+                if (map->ctor() == method) {
+                    report(call, 84) << method->parent()->name();
+                    return {};
                 }
             }
 
-            auto method = resolved->as<MemberFunctionDecl>();
-            assert(resolved->as<LayoutFieldDecl>() || method);
-
-            auto base = field_access->base();
-            if (base->lvalue())
-                base = new ir::Rvalue(base);
+            auto base = method_ref->base();
+            if (auto lval = base->as<ir::Lvalue>())
+                base = new ir::Rvalue(lval);
             ir::Value* this_arg = nullptr;
-            if (resolved->as<LayoutFieldDecl>() || !method->is_static()) {
+            if (method_ref->token() == '.' && !method->is_static()) {
                 call->set_implicit_this(target);
                 this_arg = base;
             }
-            return {val.fun()->canonical(), this_arg};
+            return {method->canonical(), this_arg};
         }
         case ExprKind::SymbolExpr: {
             call->set_implicit_this(nullptr);
@@ -1963,8 +1952,8 @@ auto Semantics::BindCallTarget(CallExpr* call, Expr* target) -> CallBinding {
             if (!node)
                 return {};
 
-            if (node->lvalue())
-                node = new ir::Rvalue(node);
+            if (auto lval = node->as<ir::Lvalue>())
+                node = new ir::Rvalue(lval);
 
             if (auto ft = node->val().type()->as<FunctionType>()) {
                 if (ft->conv() == FunctionType::Legacy)
@@ -2013,37 +2002,32 @@ auto Semantics::BindNewTarget(Expr* target) -> std::optional<CallCtor> {
     return {};
 }
 
-ir::Value* Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+ir::Value* Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
                                                       Type* type, EnumStructDecl* root, bool from_call)
 {
-    field_ir->set_resolved(FindEnumStructField(type, expr->name()));
-
-    auto field_decl = field_ir->resolved();
+    Decl* field_decl = FindEnumStructField(type, expr->name());
     if (!field_decl) {
         report(expr, 105) << type << expr->name();
         return nullptr;
     }
 
-    auto& val = field_ir->val();
     if (auto fun = field_decl->as<MemberFunctionDecl>()) {
         if (!from_call) {
             report(expr, 76);
             return nullptr;
         }
 
-        val.set_function(fun);
         markusage(fun, uREAD);
-        return field_ir;
+        return new ir::MethodRef(expr, expr->token(), base, fun);
     }
 
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
-    val.set_field(field, field->type());
-    return field_ir;
+    return new ir::FieldRef(expr, expr->token(), base, field);
 }
 
-ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
                                                  Type* type, ClassDecl* decl, bool from_call)
 {
     Decl* member = FindClassField(type, expr->name());
@@ -2055,19 +2039,10 @@ ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Field
     if (!CheckPrivateMemberAccess(expr, member, decl, *sc_))
         return nullptr;
 
-    // Only set resolved() for properties and methods. Regular fields carry
-    // their info in val() via set_field(), and EmitFieldAccessExpr asserts
-    // if resolved() is a LayoutFieldDecl.
-    if (!member->as<LayoutFieldDecl>())
-        field_ir->set_resolved(member);
-
-    auto& val = field_ir->val();
     if (auto prop = member->as<PropertyDecl>()) {
-        if (field_ir->base()->lvalue())
-            field_ir->set_base(new ir::Rvalue(field_ir->base()));
-        val.set_type(prop->property_type());
-        val.set_accessor(prop);
-        return field_ir;
+        if (auto lval = base->as<ir::Lvalue>())
+            base = new ir::Rvalue(lval);
+        return new ir::Accessor(expr, expr->token(), base, prop);
     }
 
     if (auto fun = member->as<MemberFunctionDecl>()) {
@@ -2076,22 +2051,20 @@ ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Field
             return nullptr;
         }
 
-        val.set_function(fun);
         markusage(fun, uREAD);
-        return field_ir;
+        return new ir::MethodRef(expr, expr->token(), base, fun);
     }
 
     auto field = member->as<LayoutFieldDecl>();
     assert(field);
 
-    val.set_field(field, field->type());
-    return field_ir;
+    return new ir::FieldRef(expr, expr->token(), base, field);
 }
 
-ir::Value* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir) {
+ir::Value* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base) {
     AutoErrorPos aep(expr->pos());
 
-    const auto& base_val = field_ir->base()->val();
+    const auto& base_val = base->val();
     if (base_val.ident != iTYPENAME) {
         report(expr, 108);
         return nullptr;
@@ -2110,11 +2083,7 @@ ir::Value* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Fiel
         return nullptr;
     }
 
-    field_ir->set_resolved(field);
-
-    auto& val = field_ir->val();
-    val.set_expr(types_->type_int());
-    return field_ir;
+    return new ir::StaticFieldRef(expr, base, fd, types_->type_int());
 }
 
 ir::Value* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
@@ -2130,8 +2099,7 @@ ir::Value* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
             return nullptr;
     }
 
-    auto result = new ir::Sizeof(expr, child_ir);
-    auto& val = result->val();
+    ExprVal val = {};
     val.set_type(types_->type_int());
 
     const auto& cv = child_ir->val();
@@ -2149,17 +2117,17 @@ ir::Value* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 }
                 val.set_constval(array->size());
             } else if (cv.ident == iEXPRESSION) {
-                if (auto access = child_ir->as<ir::FieldAccess>()) {
-                    if (access->token() == tDBLCOLON) {
-                        auto field = access->resolved()->as<LayoutFieldDecl>();
-                        if (auto array = field->type()->as<ArrayType>())
-                            val.set_constval(array->size());
-                        else if (field->type()->asEnumStruct())
-                            val.set_expr(QualType(types_->type_int()));
-                        else
-                            val.set_constval(1);
-                        return result;
-                    }
+                if (auto access = child_ir->as<ir::StaticFieldRef>()) {
+                    auto field = access->field();
+                    if (auto array = field->type()->as<ArrayType>())
+                        val.set_constval(array->size());
+                    else if (field->type()->asEnumStruct())
+                        val.set_expr(QualType(types_->type_int()));
+                    else
+                        val.set_constval(1);
+                    if (val.ident == iCONSTEXPR)
+                        return new ir::Constant(expr, val);
+                    return new ir::Sizeof(expr, child_ir, val);
                 }
                 report(child, 72);
                 return nullptr;
@@ -2171,7 +2139,9 @@ ir::Value* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 val.set_constval(1);
                 report(expr, 252);
             }
-            return result;
+            if (val.ident == iCONSTEXPR)
+                return new ir::Constant(expr, val);
+            return new ir::Sizeof(expr, child_ir, val);
 
         case iTYPENAME: {
             auto es = cv.typename_decl()->as<EnumStructDecl>();
@@ -2180,23 +2150,27 @@ ir::Value* Semantics::CheckSizeofExpr(SizeofExpr* expr) {
                 return nullptr;
             }
             val.set_expr(QualType(types_->type_int()));
-            return result;
+            if (val.ident == iCONSTEXPR)
+                return new ir::Constant(expr, val);
+            return new ir::Sizeof(expr, child_ir, val);
         }
 
         case iCONSTEXPR: {
-            auto access = child_ir->as<ir::FieldAccess>();
-            if (!access || access->token() != tDBLCOLON) {
+            auto access = child_ir->as<ir::StaticFieldRef>();
+            if (!access) {
                 report(child, 72);
                 return nullptr;
             }
-            auto field = access->resolved()->as<LayoutFieldDecl>();
+            auto field = access->field();
             if (auto array = field->type()->as<ArrayType>())
                 val.set_constval(array->size());
             else if (field->type()->asEnumStruct())
                 val.set_expr(QualType(types_->type_int()));
             else
                 val.set_constval(1);
-            return result;
+            if (val.ident == iCONSTEXPR)
+                return new ir::Constant(expr, val);
+            return new ir::Sizeof(expr, child_ir, val);
         }
 
         default:
@@ -2479,7 +2453,7 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
     if (arg->val().ident == iACCESSOR) {
         if (!CheckRvalueAccess(arg))
             return nullptr;
-        arg = new ir::Rvalue(arg);
+        arg = new ir::Rvalue(arg->to<ir::Lvalue>());
     }
 
 #ifndef NDEBUG
@@ -2519,7 +2493,7 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         if (auto slice = ParamNeedsSlice(arg, nullptr))
             arg = slice;
         if (arg->lvalue() && val->type()->isNonFlatArray()) {
-            arg = new ir::Rvalue(arg);
+            arg = new ir::Rvalue(arg->to<ir::Lvalue>());
             val = &arg->val();
         }
     } else if (formal->isReference()) {
@@ -2552,8 +2526,8 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
     } else if (auto to_array = formal->as<ArrayType>()) {
         if (auto slice = ParamNeedsSlice(arg, to_array))
             arg = slice;
-        if (arg->lvalue())
-            arg = new ir::Rvalue(arg);
+        if (auto lval = arg->as<ir::Lvalue>())
+            arg = new ir::Rvalue(lval);
 
         val = &arg->val();
 
@@ -2561,18 +2535,13 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         if (!CheckCoercion(arg, *formal, QualType(type), CvtContext::Argument))
             return nullptr;
 
-        if (arg->is(IrKind::Array) && to_array->is_flat()) {
-            auto flat_type = types_->defineFlatArray(to_array->inner(), to_array->size());
-            arg->val().set_type(flat_type);
-        }
-
         if (val->sym() && val->sym()->is_const() && !formal.is_const()) {
             report(arg, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
     } else {
         if (lvalue) {
-            arg = new ir::Rvalue(arg);
+            arg = new ir::Rvalue(arg->to<ir::Lvalue>());
             val = &arg->val();
         }
 
@@ -2653,8 +2622,8 @@ ir::Value* Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
         ir::Value* dim = CheckRvalue(expr);
         if (!dim)
             return nullptr;
-        if (dim->lvalue())
-            dim = new ir::Rvalue(dim);
+        if (auto lval = dim->as<ir::Lvalue>())
+            dim = new ir::Rvalue(lval);
         dim_nodes.emplace_back(dim);
 
         const auto& v = dim->val();
@@ -2666,7 +2635,7 @@ ir::Value* Semantics::CheckNewArrayExprForArrayInitializer(NewArrayExpr* na) {
             report(expr, 77) << v.type();
             return nullptr;
         }
-        if (v.ident == iCONSTEXPR && v.const_i32() <= 0) {
+        if (dim->is(IrKind::Constant) && v.const_i32() <= 0) {
             report(expr, 9);
             return nullptr;
         }
@@ -2704,8 +2673,8 @@ bool Semantics::CheckExprStmt(ExprStmt* stmt) {
     auto node = CheckRvalue(stmt->expr(), nullptr, EXPR_DISCARD_RESULT);
     if (!node)
         return false;
-    if (node->lvalue())
-        node = new ir::Rvalue(node);
+    if (auto lval = node->as<ir::Lvalue>())
+        node = new ir::Rvalue(lval);
 
     if (!HasSideEffects(node))
         report(node, 215);
@@ -2843,8 +2812,8 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     if (!node)
         return false;
 
-    if (node->lvalue())
-        node = new ir::Rvalue(node);
+    if (auto lval = node->as<ir::Lvalue>())
+        node = new ir::Rvalue(lval);
 
     AutoErrorPos aep(node->pos());
 
@@ -2990,7 +2959,7 @@ bool Semantics::CheckDoWhileStmt(DoWhileStmt* stmt) {
     stmt->set_sema_cond(cond_ir);
 
     ke::Maybe<cell> constval;
-    if (cond_ir && cond_ir->val().ident == iCONSTEXPR)
+    if (cond_ir && cond_ir->is(IrKind::Constant))
         constval.init(cond_ir->val().const_i32());
 
     bool has_break = false;
@@ -3090,8 +3059,8 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
     ir::Value* checked_expr = CheckRvalue(expr);
     bool tag_ok = checked_expr != nullptr;
     if (checked_expr) {
-        if (checked_expr->lvalue())
-            checked_expr = new ir::Rvalue(checked_expr);
+        if (auto lval = checked_expr->as<ir::Lvalue>())
+            checked_expr = new ir::Rvalue(lval);
         stmt->set_sema_expr(checked_expr);
 
         const auto& v = checked_expr->val();
@@ -3591,32 +3560,32 @@ ir::Value* Semantics::CoerceNull(ir::Value* expr, Type* formal) {
     if (expr->val().type()->isNull() && !formal->isHeapItem()) {
         ExprVal v = {};
         v.set_constval(types_->type_int(), 0);
-        return new ir::Number(expr->pn(), v);
+        return new ir::Constant(expr->pn(), v);
     }
     return expr;
 }
 
 ir::Value* Semantics::BuildSimpleCast(ir::Value* from, BuiltinType type) {
-    if (from->lvalue())
-        from = new ir::Rvalue(from);
+    if (auto lval = from->as<ir::Lvalue>())
+        from = new ir::Rvalue(lval);
 
     Type* to = types_->GetBuiltin(type);
 
-    // Fold constant conversions into a Number rather than building a cast.
+    // Fold constant conversions into a Constant rather than building a cast.
     if (from->val().ident == iCONSTEXPR) {
         const ExprVal& v = from->val();
         ExprVal out = {};
         if (type == BuiltinType::Float && v.type()->coercesToInt()) {
             out.set_constval(to, sp::FloatCellUnion(float(v.const_cell())).cell);
-            return new ir::Number(from->pn(), out);
+            return new ir::Constant(from->pn(), out);
         }
         if (v.type()->isInt() && type == BuiltinType::Int64) {
             out.set_const_int64(to, int64_t(v.const_i32()));
-            return new ir::Number(from->pn(), out);
+            return new ir::Constant(from->pn(), out);
         }
         if (v.type()->isInt() && type == BuiltinType::IntPtr) {
             out.set_constval(to, v.const_i32());
-            return new ir::Number(from->pn(), out);
+            return new ir::Constant(from->pn(), out);
         }
     }
 
@@ -3635,8 +3604,8 @@ ir::Value* Semantics::BuildConversion(ir::Value* from, ConversionKind ck, Type* 
         case ConversionKind::FuncToLegacy:
         case ConversionKind::LegacyToFunc:
         {
-            if (from->lvalue())
-                from = new ir::Rvalue(from);
+            if (auto lval = from->as<ir::Lvalue>())
+                from = new ir::Rvalue(lval);
             return new ir::SimpleCast(from->pn(), from, to);
         }
         case ConversionKind::CoerceNull:

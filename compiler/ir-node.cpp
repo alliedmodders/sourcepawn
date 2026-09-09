@@ -12,12 +12,8 @@ namespace sp {
 namespace cc {
 namespace ir {
 
-Rvalue::Rvalue(Value* operand)
-  : Value(IrKind::Rvalue, operand->pn()),
-    expr_(operand)
-{
-    auto& v = val();
-    v = operand->val();
+static ExprVal RvalueVal(Value* operand) {
+    ExprVal v = operand->val();
     if (v.ident == iACCESSOR) {
         if (v.accessor()->getter())
             markusage(v.accessor()->getter(), uREAD);
@@ -25,7 +21,13 @@ Rvalue::Rvalue(Value* operand)
     }
     if (v.type()->isReference())
         v.set_type(v.type()->inner());
+    return v;
 }
+
+Rvalue::Rvalue(Lvalue* operand)
+  : Value(IrKind::Rvalue, operand->pn(), RvalueVal(operand)),
+    expr_(operand)
+{}
 
 } // namespace ir
 } // namespace cc

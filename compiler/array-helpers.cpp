@@ -553,8 +553,8 @@ bool ArrayValidator::ValidateInitializer() {
         ir::Value* node = sema_->CheckRvalue(init_, at_);
         if (!node)
             return false;
-        if (node->lvalue())
-            node = new ir::Rvalue(node);
+        if (auto lval = node->as<ir::Lvalue>())
+            node = new ir::Rvalue(lval);
         init_ir_ = node;
         if (decl_)
             decl_->set_sema_init_rhs(node);
@@ -581,8 +581,7 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
     // (such as CheckSymbolExpr), we must explicitly set the variable's semantic
     // value here. This ensures that the code generator recognizes this SymbolExpr
     // as an lvalue and correctly emits OP_LOAD_GLB to load the array address/pointer.
-    ir::Value* node = new ir::Symbol(expr);
-    node->val().set_variable(var, var->type());
+    ir::Value* node = new ir::Variable(expr, var);
 
     if (!sema_->CheckCoercion(node, type_, var->type(), CvtContext::Argument))
         return false;
@@ -677,7 +676,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     if (auto es = rank->inner()->asEnumStruct()) {
         std::vector<ir::Value*> elts;
         for (const auto& expr : array->exprs()) {
-            ir::Value* node = sema_->ValidateEnumStructInitializer(es, expr);
+            ir::Value* node = sema_->ValidateEnumStructInitializer(es, expr, nullptr);
             if (!node)
                 continue;
             elts.push_back(node);
@@ -847,7 +846,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
                         return false;
                     dim_nodes.emplace_back(dim_node);
                 }
-                decl->set_sema_init_rhs(new ir::NewArray(na, dim_nodes, {}));
+                decl->set_sema_init_rhs(new ir::NewArray(na, dim_nodes));
             }
         }
     }

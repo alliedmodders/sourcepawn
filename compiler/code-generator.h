@@ -100,21 +100,20 @@ class CodeGenerator final
     void EmitLogicalExpr(ir::Logical* expr);
     void EmitChainedCompareExpr(ir::ChainedCompare* expr);
     void EmitTernaryExpr(ir::Ternary* expr, unsigned int flags);
-    void EmitSymbolExpr(ir::Symbol* expr);
     void EmitStringExpr(ir::String* expr);
     void EmitThisExpr(ir::This* expr);
     void EmitIndexExpr(ir::Index* expr);
     void EmitSliceExpr(ir::Slice* expr);
     bool IsElidableSlice(ir::Value* expr, FunctionDecl* fun, QualType arg);
     void EmitElidedSliceExpr(ir::Slice* expr);
-    void EmitFieldAccessExpr(ir::FieldAccess* expr);
     void EmitCallExpr(ir::Call* expr, unsigned int flags);
     void EmitDefaultArgExpr(ir::DefaultArg* expr);
     void EmitNewArrayExpr(ir::NewArray* expr);
     void EmitSimpleCastExpr(ir::SimpleCast* expr);
-    void EmitCastExpr(ir::Cast* expr, unsigned int flags);
+    void EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int flags);
     void EmitRvalue(ir::Rvalue* expr);
-    void EmitRvalueFromLvalue(ir::Value* expr);
+    void EmitRvalueFromLvalue(ir::Lvalue* expr);
+    void EmitAsRvalue(ir::Value* expr);
     void EmitCommaExpr(ir::Comma* expr, unsigned int flags);
     void EmitArrayExpr(ir::Array* expr, unsigned int flags);
     void EmitSizeofExpr(ir::Sizeof* expr);
@@ -126,15 +125,37 @@ class CodeGenerator final
     bool EmitUnaryTest(ir::Unary* expr, bool jump_on_true, sp::Label* target);
     void EmitLogicalTest(ir::Logical* expr, bool jump_on_true, sp::Label* target);
 
+    struct BoundLval {
+        ir::Lvalue* lval = nullptr;
+        bool address_on_stack = false;
+
+        // Returns true if binding is idempotent and no operand needs to be
+        // pushed onto the stack.
+        bool canRematerialize() const {
+            switch (lval->kind()) {
+                case IrKind::Variable:
+                case IrKind::This:
+                case IrKind::Upvar:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    };
+
     void EmitCall(const CallTarget& target, cell nargs, bool is_spread = false);
     void InvokeGetter(ir::Value* node, PropertyDecl* method);
-    void EmitRvalue(ir::Value* node, const ExprVal& lval);
-    void EmitStore(ir::Value* node, const ExprVal& lval);
-    void EmitAddress(const ExprVal& lval);
+    void EmitRvalue(ir::Value* node, const BoundLval& binding);
+    void EmitLoadVar(VarDeclBase* var);
+    void EmitStoreVar(VarDeclBase* var);
+    void EmitIndirectLoad(Type* type);
+    void EmitIndirectStore(Type* type);
+    void EmitStore(ir::Value* node, const BoundLval& binding);
+    void EmitAddress(const BoundLval& binding);
     void EmitBinaryOp(BuiltinType type, int oper_tok);
     void EmitAddress(VarDeclBase* decl);
 
-    void EmitInit(const ExprVal& lval, ir::Value* ctor);
+    void EmitInit(VarDeclBase* decl, ir::Value* ctor);
 
     void EmitLoadField(LayoutFieldDecl* field);
     void EmitLoadFieldOffset(LayoutFieldDecl* field);
@@ -173,7 +194,8 @@ class CodeGenerator final
     // operations. Note that simple_address is ONLY intended to collapse two
     // stack values into one. It is not intended to compute an address
     // unconditionally.
-    ExprVal BindLvalue(ir::Value* expr, bool simple_address = false);
+    BoundLval BindLval(ir::Lvalue* expr, bool simple_address = false);
+    static int StackSlotsForLval(const BoundLval& binding);
 
   private:
     enum MemuseType {
