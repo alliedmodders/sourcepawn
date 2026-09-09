@@ -490,14 +490,13 @@ void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ir::Array* array) {
 
 void CodeGenerator::EmitArrayFillIntptr(ArrayType* type, ir::Array* array) {
     for (size_t i = 0; i < array->elements().size(); i++) {
-        const auto& val = array->elements()[i]->val();
-        assert(val.ident == iCONSTEXPR);
+        auto* c = array->elements()[i]->to<ir::Constant>();
         __ emit(OP_DUP);
         __ PUSH_C((cell_t)i);
-        if (val.type()->isIntPtr())
-            __ emit(OP_PUSH_C, val.const_intptr());
+        if (c->val().type()->isIntPtr())
+            __ emit(OP_PUSH_C, c->get_intptr());
         else
-            __ emit(OP_PUSH_C, val.const_cell());
+            __ emit(OP_PUSH_C, c->get_cell());
         __ emit(OP_CVT_INTPTR);
         __ emit(OP_STOR_ELEM_INTPTR);
     }
@@ -564,19 +563,18 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ir::Array* array) {
     std::optional<cell_t> prev1, prev2;
     for (const auto& item : array->elements()) {
         prev2 = prev1;
-        const auto& val = item->val();
-        if (val.type()->isDouble()) {
-            AddValue<double>(&data, val.const_double());
+        auto* c = item->to<ir::Constant>();
+        if (c->val().type()->isDouble()) {
+            AddValue<double>(&data, c->get_double());
             prev1 = {};
-        } else if (val.type()->isInt64()) {
-            AddValue<int64_t>(&data, val.const_int64());
+        } else if (c->val().type()->isInt64()) {
+            AddValue<int64_t>(&data, c->get_int64());
             prev1 = {};
-        } else if (val.type()->isIntPtr()) {
-            AddValue<int32_t>(&data, val.const_intptr());
+        } else if (c->val().type()->isIntPtr()) {
+            AddValue<int32_t>(&data, c->get_intptr());
             prev1 = {};
         } else {
-            assert(val.ident == iCONSTEXPR);
-            cell_t cv = val.const_cell();
+            cell_t cv = c->get_cell();
             if (type->inner()->lit_size() == 1)
                 AddValue<int8_t>(&data, cv);
             else if (type->inner()->lit_size() == 2)
@@ -686,49 +684,55 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
         EmitAddress(decl);
         EmitEnumStructCopy(type, ctor);
     } else {
-        ExprVal rhs;
+        Type* rhs_type;
         if (ctor)
-            rhs = ctor->val();
+            rhs_type = ctor->val().type();
         else
-            rhs.set_constval(type->normalize(), 0);
+            rhs_type = type->normalize();
+
+        std::optional<ConstVal> rhs;
+        if (!ctor)
+            rhs = ConstVal(rhs_type, 0);
+        else if (auto* c = ctor->as<ir::Constant>())
+            rhs = c->value();
 
         // Optimize to a single instruction if we can. Note that intptr has a
         // lit size of 4 bytes, but OP_STOR_S_C doesn't accept it (yet), so
         // we have to exclude it.
-        auto lit_size = rhs.type()->maybe_lit_size();
-        if (rhs.ident == iCONSTEXPR && lit_size && lit_size <= sizeof(cell_t) &&
-            !rhs.type()->isWideType() &&
+        auto lit_size = rhs_type->maybe_lit_size();
+        if (rhs && lit_size && lit_size <= sizeof(cell_t) &&
+            !rhs_type->isWideType() &&
             decl->vclass() == sLOCAL && !decl->is_shared() && !type->isHeapItem())
         {
-            __ emit(OP_STOR_S_C, VarSlot(decl), rhs.const_cell());
+            __ emit(OP_STOR_S_C, VarSlot(decl), rhs->cell_bits());
             return;
         }
 
-        if (!ctor && rhs.type()->isHeapItem()) {
+        if (!ctor && rhs_type->isHeapItem()) {
             // The zero value of a heap item is a null reference; emit a
             // typed null, since an integer push fails validation when
             // stored through a reference-typed l-value.
             __ emit(OP_LOAD_NULL);
-        } else if (!ctor && rhs.type()->isInt64()) {
+        } else if (!ctor && rhs_type->isInt64()) {
             // int64 has to be handled separately since we can't represent it
             // in an ExprValue right now.
             __ emit(OP_PUSH_C_I64, Int64Value(0));
-        } else if (!ctor && rhs.type()->isDouble()) {
+        } else if (!ctor && rhs_type->isDouble()) {
             __ emit(OP_PUSH_C_F64, DoubleValue(0.0));
-        } else if (rhs.ident == iCONSTEXPR) {
-            if (rhs.type()->isNull() && type->isHeapItem()) {
+        } else if (rhs) {
+            if (rhs_type->isNull() && type->isHeapItem()) {
                 __ emit(OP_LOAD_NULL);
-            } else if (rhs.type()->isFloat()) {
-                __ emit(OP_PUSH_C_F32, rhs.const_cell());
-            } else if (rhs.type()->isDouble()) {
-                __ emit(OP_PUSH_C_F64, DoubleValue(rhs.const_double()));
-            } else if (rhs.type()->isInt64()) {
-                __ emit(OP_PUSH_C_I64, Int64Value(rhs.const_int64()));
-            } else if (rhs.type()->isIntPtr()) {
-                __ PUSH_C(rhs.const_intptr());
+            } else if (rhs_type->isFloat()) {
+                __ emit(OP_PUSH_C_F32, rhs->cell_bits());
+            } else if (rhs_type->isDouble()) {
+                __ emit(OP_PUSH_C_F64, DoubleValue(rhs->get_double()));
+            } else if (rhs_type->isInt64()) {
+                __ emit(OP_PUSH_C_I64, Int64Value(rhs->get_int64()));
+            } else if (rhs_type->isIntPtr()) {
+                __ PUSH_C(rhs->cell_bits());
                 __ emit(OP_CVT_INTPTR);
             } else {
-                __ PUSH_C(rhs.const_cell());
+                __ PUSH_C(rhs->cell_bits());
             }
         } else {
             EmitExpr(ctor);
@@ -780,7 +784,7 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
             Type* type = cc_.types()->defineArray(cc_.types()->type_char(), 0);
             entry.type_id = rtti_->to_typeid(type);
         } else if (auto expr = field->value->as<NumberExpr>()) {
-            entry.value = expr->val().const_cell();
+            entry.value = expr->val().cell_bits();
             entry.type_id = rtti_->to_typeid(field_type);
         } else if (auto expr = field->value->as<SymbolExpr>()) {
             auto var = expr->decl()->as<VarDeclBase>();
@@ -796,20 +800,21 @@ CodeGenerator::EmitPstruct(VarDeclBase* decl)
     rtti_->AddPstructGlobal(decl, field_entries);
 }
 
-void CodeGenerator::EmitConstantExpr(const ExprVal& val) {
-    if (val.type()->isNull()) {
+void CodeGenerator::EmitConstantExpr(ir::Constant* expr) {
+    auto type = expr->val().type();
+    if (type->isNull()) {
         __ emit(OP_LOAD_NULL);
-    } else if (val.type()->isFloat()) {
-        __ emit(OP_PUSH_C_F32, val.const_cell());
-    } else if (val.type()->isDouble()) {
-        __ emit(OP_PUSH_C_F64, DoubleValue(val.const_double()));
-    } else if (val.type()->isInt64()) {
-        __ emit(OP_PUSH_C_I64, Int64Value(val.const_int64()));
-    } else if (val.type()->isIntPtr()) {
-        __ PUSH_C(val.const_intptr());
+    } else if (type->isFloat()) {
+        __ emit(OP_PUSH_C_F32, expr->get_cell());
+    } else if (type->isDouble()) {
+        __ emit(OP_PUSH_C_F64, DoubleValue(expr->get_double()));
+    } else if (type->isInt64()) {
+        __ emit(OP_PUSH_C_I64, Int64Value(expr->get_int64()));
+    } else if (type->isIntPtr()) {
+        __ PUSH_C(expr->get_intptr());
         __ emit(OP_CVT_INTPTR);
     } else {
-        __ PUSH_C(val.const_cell());
+        __ PUSH_C(expr->get_cell());
     }
 }
 
@@ -832,7 +837,7 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
 
     if (expr->is(IrKind::Constant)) {
         if (!(flags & EMIT_DISCARD_RESULT))
-            EmitConstantExpr(expr->val());
+            EmitConstantExpr(expr->to<ir::Constant>());
         return;
     }
 
@@ -928,9 +933,6 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
         case IrKind::String:
             EmitStringExpr(expr->to<ir::String>());
             break;
-        case IrKind::This:
-            EmitThisExpr(expr->to<ir::This>());
-            break;
         default:
             assert(false);
             break;
@@ -941,20 +943,20 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
 }
 
 void CodeGenerator::EmitSizeofExpr(ir::Sizeof* expr) {
-    const auto& cv = expr->child()->val();
+    auto* child = expr->child();
     EnumStructDecl* es = nullptr;
 
-    switch (cv.ident) {
-        case iARRAYELEM:
-        case iVARIABLE:
-        case iEXPRESSION:
-        case iFIELD:
-            es = cv.type()->asEnumStruct();
+    switch (child->kind()) {
+        case IrKind::Typename:
+            es = child->to<ir::Typename>()->decl()->as<EnumStructDecl>();
             break;
-        case iTYPENAME:
-            es = cv.typename_decl()->as<EnumStructDecl>();
+        case IrKind::Constant:
+        case IrKind::Upvar:
+        case IrKind::LvalueCast:
+        case IrKind::Accessor:
             break;
         default:
+            es = child->val().type()->asEnumStruct();
             break;
     }
 
@@ -1055,7 +1057,6 @@ CodeGenerator::EmitUnaryTest(ir::Unary* expr, bool jump_on_true, Label* target)
 int CodeGenerator::StackSlotsForLval(const BoundLval& b) {
     switch (b.lval->kind()) {
         case IrKind::Variable:
-        case IrKind::This:
             return 0;
         case IrKind::Upvar:
             // For shared upvars we push the shared object ref on the stack.
@@ -1077,7 +1078,6 @@ CodeGenerator::BoundLval CodeGenerator::BindLval(ir::Lvalue* lval, bool simple_a
     b.lval = lval;
     switch (lval->kind()) {
         case IrKind::Variable:
-        case IrKind::This:
             break;
         case IrKind::Index:
             EmitExpr(lval, EMIT_ALLOW_LVALUE);
@@ -1108,16 +1108,12 @@ CodeGenerator::BoundLval CodeGenerator::BindLval(ir::Lvalue* lval, bool simple_a
             break;
     }
     return b;
-}void CodeGenerator::EmitStringExpr(ir::String* expr) {
+}
+
+void CodeGenerator::EmitStringExpr(ir::String* expr) {
     auto text = expr->parent()->text();
     uint16_t index = rtti_->AddString(text, &data_);
     __ emit(OP_LOAD_STR, VarSlot(index));
-}
-
-void CodeGenerator::EmitThisExpr(ir::This* expr) {
-    auto decl = expr->decl();
-    if (decl->type()->isEnumStruct())
-        EmitAddress(decl);
 }
 
 void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
@@ -1644,15 +1640,15 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
         bool needs_temp = false;
         if (!arg) {
             // Legacy variadic arguments.
-            bool lvalue = expr->lvalue();
-            if (val.ident == iVARIABLE && !val.type()->isComposite()) {
-                assert(val.sym());
-                assert(lvalue);
+            if (auto* var = expr->as<ir::Variable>()) {
                 /* treat a "const" variable passed to a function with a non-const
                  * "variable argument list" as a constant here */
-                if (val.sym()->is_const() && !arg.is_const())
+                if (!val.type()->isComposite() && var->decl()->is_const() && !arg.is_const())
                     needs_temp = true;
-            } else if (expr->is(IrKind::Constant) || val.ident == iEXPRESSION) {
+            } else if (expr->is(IrKind::Constant) ||
+                       (!expr->lvalue() && !expr->is(IrKind::Typename) &&
+                        !expr->is(IrKind::MethodRef)))
+            {
                 needs_temp = !val.type()->isComposite();
             }
 
@@ -1662,7 +1658,7 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
                     EmitRvalue(expr, *binding);
                 else if (lval->is(IrKind::Variable))
                     EmitAddress(lval->as<ir::Variable>()->decl());
-                else if (lval->is(IrKind::FieldRef) || lval->is(IrKind::This))
+                else if (lval->is(IrKind::FieldRef))
                     EmitAddress(*binding);
                 else if (lval->is(IrKind::Upvar))
                     EmitAddress(*binding);
@@ -1907,11 +1903,10 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
     if (zap) {
-        const ExprVal& raw = expr->val();
-        if (raw.ident == iVARIABLE && raw.sym()->is_const())
-            zap = false;
-        else if (raw.ident == iACCESSOR && !raw.accessor()->setter())
-            zap = false;
+        if (auto* var = expr->as<ir::Variable>())
+            zap = !var->decl()->is_const();
+        else if (auto* accessor = expr->as<ir::Accessor>())
+            zap = (accessor->accessor()->setter() != nullptr);
     }
 
     std::optional<BoundLval> binding;
@@ -2097,9 +2092,6 @@ void CodeGenerator::EmitRvalue(ir::Value* node, const BoundLval& binding) {
         case IrKind::Variable:
             EmitLoadVar(lval->as<ir::Variable>()->decl());
             break;
-        case IrKind::This:
-            EmitLoadVar(lval->as<ir::This>()->decl());
-            break;
         default:
             assert(false);
             break;
@@ -2197,10 +2189,6 @@ void CodeGenerator::EmitStore(ir::Value* node, const BoundLval& binding) {
         case IrKind::Variable:
             EmitStoreVar(lval->as<ir::Variable>()->decl());
             break;
-        case IrKind::This:
-            // Store to |this| should never be generated.
-            assert(false);
-            break;
         default:
             assert(false);
             break;
@@ -2236,9 +2224,6 @@ void CodeGenerator::EmitAddress(const BoundLval& binding) {
     switch (lval->kind()) {
         case IrKind::Variable:
             EmitAddress(lval->as<ir::Variable>()->decl());
-            break;
-        case IrKind::This:
-            EmitAddress(lval->as<ir::This>()->decl());
             break;
         case IrKind::FieldRef:
             EmitAddrField(lval->as<ir::FieldRef>()->field());
@@ -2440,11 +2425,8 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
     std::map<cell, Label> case_labels;
 
     for (size_t i = 0; i < stmt->cases().size(); i++) {
-        for (const auto& expr : stmt->sema_case_exprs(i)) {
-            const auto& v = expr->val();
-            assert(v.ident == iCONSTEXPR);
-            case_labels.emplace(v.const_i32(), Label());
-        }
+        for (const auto& expr : stmt->sema_case_exprs(i))
+            case_labels.emplace(expr->to<ir::Constant>()->get_i32(), Label());
     }
 
     Label default_label;
@@ -2462,10 +2444,8 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
         const auto& case_entry = stmt->cases()[i];
         Stmt* stmt_node = case_entry.second;
 
-        for (const auto& expr : stmt->sema_case_exprs(i)) {
-            const auto& v = expr->val();
-            __ bind(&case_labels[v.const_i32()]);
-        }
+        for (const auto& expr : stmt->sema_case_exprs(i))
+            __ bind(&case_labels[expr->to<ir::Constant>()->get_i32()]);
 
         EmitStmt(stmt_node);
         if (stmt_node->flow_type() == Flow_None)

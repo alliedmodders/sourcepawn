@@ -14,10 +14,9 @@ namespace ir {
 
 static ExprVal RvalueVal(Value* operand) {
     ExprVal v = operand->val();
-    if (v.ident == iACCESSOR) {
-        if (v.accessor()->getter())
-            markusage(v.accessor()->getter(), uREAD);
-        v.ident = iEXPRESSION;
+    if (auto* accessor = operand->as<Accessor>()) {
+        if (accessor->accessor()->getter())
+            markusage(accessor->accessor()->getter(), uREAD);
     }
     if (v.type()->isReference())
         v.set_type(v.type()->inner());

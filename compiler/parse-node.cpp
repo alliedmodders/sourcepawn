@@ -18,10 +18,6 @@
 namespace sp {
 namespace cc {
 
-Type* NumberExpr::type() const {
-    return val_.type();
-}
-
 VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
                          const typeinfo_t& type, int vclass, VarDeclFlags flags, Expr* initializer)
   : Decl(kind, pos, name),
@@ -290,17 +286,14 @@ Type* PropertyDecl::property_type() const {
     return *valp->type();
 }
 
-ExprVal Decl::ConstVal() {
-    if (auto cv = as<ConstDecl>()) {
+ConstVal Decl::const_value() {
+    if (auto cv = as<ConstDecl>())
         return cv->value();
-    } else if (auto efd = as<EnumFieldDecl>()) {
-        ExprVal v;
-        v.set_constval(efd->type(), efd->const_val());
-        return v;
-    }
+    if (auto efd = as<EnumFieldDecl>())
+        return ConstVal(efd->type().unqualified(), efd->const_val());
 
     assert(false);
-    return ExprVal::ErrorValue();
+    return ConstVal(nullptr, 0);
 }
 
 QualType Decl::type() {
@@ -365,10 +358,6 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
-}
-
-ExprVal::ExprVal(VarDeclBase* decl) {
-    set_variable(decl, decl->type());
 }
 
 } // namespace cc

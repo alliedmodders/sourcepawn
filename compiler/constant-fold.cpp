@@ -29,34 +29,6 @@ inline bool IsInRange(int64_t value) {
     return value >= std::numeric_limits<T>::min() && value <= std::numeric_limits<T>::max();
 }
 
-ExprVal ConstVal(Type* type, cell value) {
-    ExprVal v;
-    v.set_constval(QualType(type), value);
-    return v;
-}
-
-ExprVal ConstVal(Type* type, bool value) {
-    return ConstVal(type, value ? 1 : 0);
-}
-
-ExprVal ConstVal(Type* type, int64_t value) {
-    ExprVal v;
-    v.set_const_int64(QualType(type), value);
-    return v;
-}
-
-ExprVal ConstVal(Type* type, double value) {
-    ExprVal v;
-    v.set_const_double(QualType(type), value);
-    return v;
-}
-
-ExprVal ConstVal(Type* type, float value) {
-    ExprVal v;
-    v.set_const_float(QualType(type), value);
-    return v;
-}
-
 template <typename T>
 static inline bool CheckedAdd(T a, T b, T* result) {
 #if defined(__clang__) || defined(__GNUC__)
@@ -106,8 +78,8 @@ static inline bool CheckedMul(T a, T b, T* result) {
 }
 
 template <typename T>
-std::optional<ExprVal> Calc(CompileContext& cc, const token_pos_t& pos, T left,
-                            T right, int oper_tok, Type* type)
+std::optional<ConstVal> Calc(CompileContext& cc, const token_pos_t& pos, T left,
+                             T right, int oper_tok, Type* type)
 {
     static_assert(std::is_same_v<T, int32_t> ||
                   std::is_same_v<T, int64_t> ||
@@ -233,8 +205,8 @@ std::optional<ExprVal> Calc(CompileContext& cc, const token_pos_t& pos, T left,
     }
 }
 
-std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Value* right,
-                                     Type* type)
+std::optional<ConstVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Value* right,
+                                      Type* type)
 {
     int token = expr->token();
     if (IsAssignOp(token))
@@ -245,22 +217,19 @@ std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Valu
     if (!left_const || !right_const)
         return std::nullopt;
 
-    const ExprVal& left_val = left_const->val();
-    const ExprVal& right_val = right_const->val();
-
-    Type* left_type = left_val.type();
-    Type* right_type = right_val.type();
+    Type* left_type = left_const->val().type();
+    Type* right_type = right_const->val().type();
 
     auto& cc = CompileContext::get();
 
     if (left_type->isDouble() && right_type->isDouble())
-        return Calc(cc, expr->pos(), left_val.const_double(), right_val.const_double(), token, type);
+        return Calc(cc, expr->pos(), left_const->get_double(), right_const->get_double(), token, type);
     if (left_type->isInt64() && right_type->isInt64())
-        return Calc(cc, expr->pos(), left_val.const_int64(), right_val.const_int64(), token, type);
+        return Calc(cc, expr->pos(), left_const->get_int64(), right_const->get_int64(), token, type);
     if (left_type->isIntPtr() && right_type->isIntPtr())
-        return Calc(cc, expr->pos(), left_val.const_intptr(), right_val.const_intptr(), token, type);
+        return Calc(cc, expr->pos(), left_const->get_intptr(), right_const->get_intptr(), token, type);
     if (left_type->coercesFromInt() && right_type->coercesFromInt())
-        return Calc(cc, expr->pos(), left_val.const_i32(), right_val.const_i32(), token, type);
+        return Calc(cc, expr->pos(), left_const->get_i32(), right_const->get_i32(), token, type);
     return std::nullopt;
 }
 
@@ -273,7 +242,7 @@ bool EvalConst(ir::Value* node, cell* value, Type** type) {
         return false;
 
     if (value)
-        *value = c->const_cell();
+        *value = c->get_cell();
     if (type)
         *type = c->val().type();
     return true;
@@ -284,39 +253,36 @@ std::optional<bool> FoldToConstantBool(ir::Value* cond) {
     if (!c)
         return std::nullopt;
     if (c->is_float()) {
-        float f = c->const_float();
+        float f = c->get_float();
         return f != 0.0f && !ke::IsNaN(f);
     }
     if (c->is_double()) {
-        double d = c->const_double();
+        double d = c->get_double();
         return d != 0.0 && !ke::IsNaN(d);
     }
     if (c->is_intptr())
-        return c->const_intptr() != 0;
+        return c->get_intptr() != 0;
     if (c->is_int64())
-        return c->const_int64() != 0;
-    return c->const_cell() != 0;
+        return c->get_int64() != 0;
+    return c->get_cell() != 0;
 }
 
-std::optional<ExprVal> TryFoldCast(ir::Value* from_node, Type* to) {
+std::optional<ConstVal> TryFoldCast(ir::Value* from_node, Type* to) {
     auto from = from_node->as<ir::Constant>();
     if (!from)
         return std::nullopt;
     if (from->val().type()->isWideType() || from->val().type()->isHeapItem())
         return std::nullopt;
 
-    cell val = from->const_cell();
+    cell val = from->get_cell();
     if (to->isInt16())
         val = (cell_t)(int16_t)val;
     else if (to->isInt8())
         val = (cell_t)(int8_t)val;
 
-    ExprVal out = {};
     if (to->isInt64())
-        out.set_const_int64(to, val);
-    else
-        out.set_constval(to, val);
-    return out;
+        return ConstVal(to, int64_t(val));
+    return ConstVal(to, val);
 }
 
 } // namespace cc

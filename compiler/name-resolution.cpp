@@ -243,16 +243,16 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
 
         if (field->value() && field->value()->Bind(sc)) {
             if (ir::Value* node = sc.sema()->CheckExprForConst(field->value())) {
-                const ExprVal* val = &node->val();
-                if (val->type()->isWideType()) {
-                    report(field->pos(), 459) << val->type();
+                const auto& val = node->val();
+                if (val.type()->isWideType()) {
+                    report(field->pos(), 459) << val.type();
                     return false;
                 }
-                if (!val->type()->isInt()) {
-                    sc.sema()->CheckCoercion(field->pos(), type_, val->qualified(),
+                if (!val.type()->isInt()) {
+                    sc.sema()->CheckCoercion(field->pos(), type_, val.qualified(),
                                              CvtContext::Assignment);
                 }
-                value = val->const_cell();
+                value = node->to<ir::Constant>()->get_cell();
             }
         }
 
@@ -481,7 +481,7 @@ ConstDecl::Bind(SemaContext& sc)
 
     sc.sema()->CheckCoercion(node, type_.type, node->val().qualified(), CvtContext::Assignment);
 
-    value_ = node->val();
+    value_ = node->to<ir::Constant>()->value();
 
     already_bound_ = true;
     return true;

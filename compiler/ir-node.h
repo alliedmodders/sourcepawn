@@ -11,6 +11,7 @@
 #include "ast-types.h"
 #include "parse-node.h"
 #include "pool-objects.h"
+#include "constant-fold.h"
 #include "value.h"
 
 namespace sp {
@@ -20,7 +21,6 @@ namespace ir {
 inline bool IsLvalue(IrKind kind) {
     switch (kind) {
         case IrKind::Variable:
-        case IrKind::This:
         case IrKind::Upvar:
         case IrKind::Index:
         case IrKind::FieldRef:
@@ -54,8 +54,6 @@ class Value : public PoolObject
     const token_pos_t& pos() const { return parent_->pos(); }
 
     bool lvalue() const {
-        assert(IsLvalue(kind_) ==
-               (val().is_lvalue() && kind_ != IrKind::Rvalue));
         return IsLvalue(kind_);
     }
 
@@ -69,6 +67,9 @@ class Value : public PoolObject
     template <class T> T* to() {
         assert(T::is_a(this));
         return reinterpret_cast<T*>(this);
+    }
+    template <class T> static inline T* As(Value* node) {
+        return node ? node->as<T>() : nullptr;
     }
 
   protected:
@@ -89,25 +90,31 @@ class Lvalue : public Value
 class Constant final : public Value
 {
   public:
-    Constant(Expr* parent, const ExprVal& val)
-      : Value(IrKind::Constant, parent, val)
+    Constant(Expr* parent, const ConstVal& value)
+      : Value(IrKind::Constant, parent),
+        value_(value)
     {
-        assert(val.ident == iCONSTEXPR);
+        val_.set_type(value.type);
     }
+
+    const ConstVal& value() const { return value_; }
 
     bool is_intptr() const { return val().type()->isIntPtr(); }
     bool is_float() const { return val().type()->isFloat(); }
     bool is_double() const { return val().type()->isDouble(); }
     bool is_int64() const { return val().type()->isInt64(); }
 
-    cell const_i32() const { return val().const_i32(); }
-    cell const_cell() const { return val().const_cell(); }
-    cell const_intptr() const { return val().const_intptr(); }
-    float const_float() const { return val().const_float(); }
-    double const_double() const { return val().const_double(); }
-    int64_t const_int64() const { return val().const_int64(); }
+    cell get_cell() const { return value_.get_cell(); }
+    cell get_i32() const { return value_.get_i32(); }
+    cell get_intptr() const { return value_.get_intptr(); }
+    float get_float() const { return value_.get_float(); }
+    double get_double() const { return value_.get_double(); }
+    int64_t get_int64() const { return value_.get_int64(); }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::Constant; }
+
+  private:
+    ConstVal value_;
 };
 
 class Rvalue final : public Value
@@ -126,15 +133,19 @@ class Rvalue final : public Value
 class Typename final : public Value
 {
   public:
-    explicit Typename(Expr* parent)
-      : Value(IrKind::Typename, parent)
-    {}
+    Typename(Expr* parent, Decl* decl)
+      : Value(IrKind::Typename, parent),
+        decl_(decl)
+    {
+        val_.set_type(decl->type());
+    }
 
-    Typename(Expr* parent, const ExprVal& val)
-      : Value(IrKind::Typename, parent, val)
-    {}
+    Decl* decl() const { return decl_; }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::Typename; }
+
+  private:
+    Decl* decl_;
 };
 
 class FunctionRef final : public Value
@@ -162,7 +173,7 @@ class Variable final : public Lvalue
       : Lvalue(IrKind::Variable, parent),
         decl_(decl)
     {
-        val_.set_variable(decl, decl->type());
+        val_.set_type(decl->type());
     }
 
     VarDeclBase* decl() const { return decl_; }
@@ -180,7 +191,7 @@ class Upvar final : public Lvalue
       : Lvalue(IrKind::Upvar, parent),
         decl_(decl)
     {
-        val_.set_upvar(decl, type);
+        val_.set_type(type);
     }
 
     UpvarDecl* decl() const { return decl_; }
@@ -201,18 +212,6 @@ class String final : public Value
     StringExpr* parent() const { return pn()->to<StringExpr>(); }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::String; }
-};
-
-class This final : public Lvalue
-{
-  public:
-    This(Expr* parent, const ExprVal& val)
-      : Lvalue(IrKind::This, parent, val)
-    {}
-
-    VarDeclBase* decl() const { return val().sym(); }
-
-    static bool is_a(Value* node) { return node->kind() == IrKind::This; }
 };
 
 class Unary final : public Value
@@ -248,7 +247,7 @@ class Index final : public Lvalue
         base_(base),
         index_(index)
     {
-        val_.set_slice(iARRAYELEM, QualType(elem_type));
+        val_.set_type(QualType(elem_type));
     }
 
     Value* base() const { return base_; }
@@ -291,7 +290,7 @@ class FieldRef final : public Lvalue
         base_(base),
         field_(field)
     {
-        val_.set_field(field, field->type());
+        val_.set_type(field->type());
     }
 
     int token() const { return token_; }
@@ -339,7 +338,6 @@ class Accessor final : public Lvalue
         prop_(prop)
     {
         val_.set_type(prop->property_type());
-        val_.set_accessor(prop);
     }
 
     int token() const { return token_; }

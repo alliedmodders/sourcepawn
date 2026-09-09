@@ -91,7 +91,7 @@ class CodeGenerator final
     };
 
     void EmitExpr(ir::Value* expr, unsigned int flags = EMIT_DEFAULT);
-    void EmitConstantExpr(const ExprVal& val);
+    void EmitConstantExpr(ir::Constant* expr);
     void EmitTest(ir::Value* expr, bool jump_on_true, sp::Label* target);
     void EmitUnary(ir::Unary* expr);
     void EmitIncDec(ir::IncDec* expr, unsigned int flags);
@@ -101,7 +101,6 @@ class CodeGenerator final
     void EmitChainedCompareExpr(ir::ChainedCompare* expr);
     void EmitTernaryExpr(ir::Ternary* expr, unsigned int flags);
     void EmitStringExpr(ir::String* expr);
-    void EmitThisExpr(ir::This* expr);
     void EmitIndexExpr(ir::Index* expr);
     void EmitSliceExpr(ir::Slice* expr);
     bool IsElidableSlice(ir::Value* expr, FunctionDecl* fun, QualType arg);
@@ -134,7 +133,6 @@ class CodeGenerator final
         bool canRematerialize() const {
             switch (lval->kind()) {
                 case IrKind::Variable:
-                case IrKind::This:
                 case IrKind::Upvar:
                     return true;
                 default:

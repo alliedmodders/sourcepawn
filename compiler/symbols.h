@@ -22,6 +22,10 @@ namespace cc {
 
 class CompileContext;
 class Decl;
+
+namespace ir {
+class Lvalue;
+} // namespace ir
 class FunctionDecl;
 class PropertyDecl;
 class SemaContext;
@@ -59,7 +63,7 @@ bool CheckNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos, 
 bool CheckTypeNameRedefinition(SemaContext& sc, Atom* name, const token_pos_t& pos);
 
 void markusage(Decl* decl, int usage);
-void markusage(const ExprVal& val, int usage);
+void markusage(ir::Lvalue* lval, int usage);
 Decl* FindEnumStructField(Type* type, Atom* name);
 Decl* FindClassField(Type* type, Atom* name);
 

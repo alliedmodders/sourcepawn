@@ -42,7 +42,7 @@ class ArrayTypeResolver
     bool ResolveDimExprs();
     void ResolveRank(size_t rank, Expr* init);
     void SetRankSize(Expr* expr, int rank, int size);
-    bool ResolveDimExpr(Expr* expr, ExprVal* v);
+    ir::Value* ResolveDimExpr(Expr* expr);
 
   private:
     Semantics* sema_;
@@ -316,16 +316,17 @@ bool ArrayTypeResolver::ResolveDimExprs() {
             continue;
         }
 
-        ExprVal v;
-        if (!ResolveDimExpr(expr, &v))
+        ir::Value* dim = ResolveDimExpr(expr);
+        if (!dim)
             return false;
 
+        const auto& v = dim->val();
         if (!IsValidIndexType(v.type())) {
             report(expr->pos(), 77) << v.type();
             return false;
         }
 
-        if (v.ident != iCONSTEXPR) {
+        if (!dim->is(IrKind::Constant)) {
             // Non-constant expressions in postdims is illegal for transitional
             // syntax:
             //     int blah[y];
@@ -350,27 +351,23 @@ bool ArrayTypeResolver::ResolveDimExprs() {
 
             // sLOCAL guarantees we have a decl.
             decl_->set_implicit_dynamic_array();
-        } else if (IsLegacyEnumType(sema_->current_scope(), v.type()) && v.sym() &&
-                   v.sym()->as<EnumDecl>())
-        {
-            report(expr->pos(), 153);
-            return false;
         } else {
             // Constant must be > 0.
-            if (v.const_i32() <= 0) {
+            cell dim_value = dim->to<ir::Constant>()->get_i32();
+            if (dim_value <= 0) {
                 report(expr->pos(), 9);
                 return false;
             }
-            computed_[i] = v.const_i32();
+            computed_[i] = dim_value;
         }
     }
     return true;
 }
 
-bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, ExprVal* v) {
+ir::Value* ArrayTypeResolver::ResolveDimExpr(Expr* expr) {
     auto& sc = *sema_->context();
     if (!expr->Bind(sc))
-        return false;
+        return nullptr;
 
     if (auto sym_expr = expr->as<SymbolExpr>()) {
         // Special case this:
@@ -380,19 +377,12 @@ bool ArrayTypeResolver::ResolveDimExpr(Expr* expr, ExprVal* v) {
         // For backward compatibility with a huge number of plugins.
         auto decl = sym_expr->decl();
         if (auto ed = decl->as<EnumDecl>()) {
-            *v = {};
-            v->set_constval(ed->array_size());
-            v->set_type(sc.cc().types()->type_int());
-            return true;
+            auto type = sc.cc().types()->type_int();
+            return new ir::Constant(expr, ConstVal(type, ed->array_size()));
         }
     }
 
-    ir::Value* checked = sema_->CheckExpr(expr);
-    if (!checked)
-        return false;
-
-    *v = checked->val();
-    return true;
+    return sema_->CheckExpr(expr);
 }
 
 bool ResolveArrayType(Semantics* sema, VarDeclBase* decl) {
@@ -659,7 +649,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         if (!node)
             return nullptr;
 
-        if (node->val().ident != iCONSTEXPR) {
+        if (!node->is(IrKind::Constant)) {
             report(init->pos(), 47);
             return nullptr;
         }
@@ -717,7 +707,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
 
         const auto& v = n->val();
-        if (v.ident != iCONSTEXPR) {
+        if (!n->is(IrKind::Constant)) {
             report(expr, 8);
             continue;
         }
@@ -725,8 +715,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         sema_->CheckCoercion(n, rank->inner(), v.type(), CvtContext::Assignment);
 
         prev2 = prev1;
-        if (v.ident == iCONSTEXPR)
-            prev1 = true;
+        prev1 = n->is(IrKind::Constant);
     }
 
     cell ncells = rank_size ? rank_size : array->exprs().size();

@@ -31,15 +31,14 @@ static const std::vector<std::pair<BuiltinType, BuiltinType>> BitwiseOperands{
 
 std::optional<ConversionKind> Semantics::FindConstantConversion(ir::Value* source, Type* from_type,
                                                                 Type* to, CvtContext why) {
-    if (to->isInt16() && from_type->isInt() && source->val().ident == iCONSTEXPR) {
-        cell_t v = source->val().const_i32();
+    auto* c = source->as<ir::Constant>();
+    if (to->isInt16() && from_type->isInt() && c) {
+        cell_t v = c->get_i32();
         if (v >= std::numeric_limits<int16_t>::min() && v <= std::numeric_limits<int16_t>::max())
             return ConversionKind::Numeric;
     }
-    if (to->isInt8() && source->val().ident == iCONSTEXPR &&
-        (from_type->isInt() || from_type->isInt16()))
-    {
-        cell_t v = source->val().const_i32();
+    if (to->isInt8() && c && (from_type->isInt() || from_type->isInt16())) {
+        cell_t v = c->get_i32();
         if (v >= std::numeric_limits<int8_t>::min() && v <= std::numeric_limits<int8_t>::max())
             return ConversionKind::Numeric;
     }
@@ -214,8 +213,8 @@ void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, Qua
     }
 
     // Build a more helpful message for specific cases.
-    if (formal->isInt16() && actual->isInt() && node->val().ident == iCONSTEXPR) {
-        cell_t v = node->val().const_i32();
+    if (formal->isInt16() && actual->isInt() && node->is(IrKind::Constant)) {
+        cell_t v = node->to<ir::Constant>()->get_i32();
         if (v < std::numeric_limits<int16_t>::min() || v > std::numeric_limits<int16_t>::max()) {
             report(node, 179) << v
                               << std::numeric_limits<int16_t>::min()
@@ -224,8 +223,8 @@ void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, Qua
             return;
         }
     }
-    if (formal->isInt8() && (actual->isInt() || actual->isInt16()) && node->val().ident == iCONSTEXPR) {
-        cell_t v = node->val().const_i32();
+    if (formal->isInt8() && (actual->isInt() || actual->isInt16()) && node->is(IrKind::Constant)) {
+        cell_t v = node->to<ir::Constant>()->get_i32();
         if (v < std::numeric_limits<int8_t>::min() || v > std::numeric_limits<int8_t>::max()) {
             report(node, 179) << v
                               << std::numeric_limits<int8_t>::min()
@@ -234,9 +233,9 @@ void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, Qua
             return;
         }
     }
-    if (formal->isIntPtr() && actual->isInt64() && node->val().ident == iCONSTEXPR) {
+    if (formal->isIntPtr() && actual->isInt64() && node->is(IrKind::Constant)) {
         // Encoding 64-bit integers into intptr is not allowed since the VM might be 32-bit.
-        int64_t v = node->val().const_int64();
+        int64_t v = node->to<ir::Constant>()->get_int64();
         if (v < std::numeric_limits<int32_t>::min() || v > std::numeric_limits<int32_t>::max()) {
             report(node, 178) << v
                               << std::numeric_limits<int32_t>::min()

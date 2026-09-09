@@ -18,6 +18,7 @@
 #include "ast-types.h"
 #include "coercion-rules.h"
 #include "lexer.h"
+#include "constant-fold.h"
 #include "sc.h"
 #include "utils/pool-allocator.h"
 #include "utils/string-pool.h"
@@ -284,7 +285,7 @@ class Decl : public Stmt
         name_(name)
     {}
 
-    ExprVal ConstVal();
+    ConstVal const_value();
 
     char vclass();
     bool is_const();
@@ -434,11 +435,11 @@ class ConstDecl : public VarDecl
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ConstDecl; }
 
-    const ExprVal& value() const { return value_; }
+    const ConstVal& value() const { return value_; }
 
   private:
     Expr* expr_;
-    ExprVal value_;
+    ConstVal value_ = ConstVal(nullptr, cell(0));
     bool already_bound_ : 1;
 };
 
@@ -1109,28 +1110,25 @@ class NumberExpr : public Expr
 {
   public:
     NumberExpr(const token_pos_t& pos, Type* type, cell value)
-      : Expr(ExprKind::NumberExpr, pos)
-    {
-        val_.set_constval(type, value);
-    }
+      : Expr(ExprKind::NumberExpr, pos),
+        val_(ConstVal(type, value))
+    {}
     NumberExpr(const token_pos_t& pos, Type* type, int64_t value)
-      : Expr(ExprKind::NumberExpr, pos)
-    {
-        val_.set_const_int64(type, value);
-    }
+      : Expr(ExprKind::NumberExpr, pos),
+        val_(ConstVal(type, value))
+    {}
     NumberExpr(const token_pos_t& pos, Type* type, double value)
-      : Expr(ExprKind::NumberExpr, pos)
-    {
-        val_.set_const_double(type, value);
-    }
+      : Expr(ExprKind::NumberExpr, pos),
+        val_(ConstVal(type, value))
+    {}
 
-    const ExprVal& val() const { return val_; }
+    const ConstVal& val() const { return val_; }
 
     static bool is_a(Expr* node) { return node->kind() == ExprKind::NumberExpr; }
-    Type* type() const;
+    Type* type() const { return val_.type; }
 
   private:
-    ExprVal val_ = {};
+    ConstVal val_;
 };
 
 class StringExpr final : public Expr
