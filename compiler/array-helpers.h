@@ -22,7 +22,8 @@ bool ResolveArrayType(Semantics* sema, VarDeclBase* decl);
 bool ResolveArrayType(Semantics* sema, const token_pos_t& pos, typeinfo_t* type, int vclass);
 
 // Perform type and size checks of an array and its initializer if present.
-bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init);
+bool CheckArrayInitialization(Semantics* sema, const typeinfo_t& type, Expr* init,
+                              ir::Value** out);
 
 } // namespace cc
 } // namespace sp

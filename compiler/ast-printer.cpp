@@ -8,9 +8,10 @@
 
 #include <inttypes.h>
 
+#include <amtl/am-string.h>
+#include "ir-node.h"
 #include "lexer.h"
 #include "parse-node.h"
-#include <amtl/am-string.h>
 
 namespace sp {
 namespace cc {
@@ -112,7 +113,8 @@ void AstPrinter::PrintContinueStmt(ContinueStmt* node, bool is_last) {
 void AstPrinter::PrintExprStmt(ExprStmt* node, bool is_last) {
     fprintf(out_, "ExprStmt\n");
     stack_.push_back(is_last);
-    Print(node->expr(), true);
+    Print(node->expr(), false);
+    PrintIr(node->sema_expr(), true);
     stack_.pop_back();
 }
 
@@ -166,8 +168,12 @@ void AstPrinter::PrintGlobalInitStmt(GlobalInitStmt* node, bool is_last) {
     fprintf(out_, "GlobalInitStmt\n");
     stack_.push_back(is_last);
     for (size_t i = 0; i < node->vars().size(); i++) {
-        PrintIndent(i == node->vars().size() - 1);
+        bool last = i == node->vars().size() - 1;
+        PrintIndent(last);
         fprintf(out_, "%s\n", node->vars()[i]->name()->chars());
+        stack_.push_back(last);
+        PrintIr(node->vars()[i]->sema_init_rhs(), true);
+        stack_.pop_back();
     }
     stack_.pop_back();
 }
@@ -178,7 +184,8 @@ void AstPrinter::PrintVarDecl(VarDecl* node, bool is_last) {
     fprintf(out_, ")\n");
     if (node->init()) {
         stack_.push_back(is_last);
-        Print(node->init(), true);
+        Print(node->init(), false);
+        PrintIr(node->sema_init_rhs(), true);
         stack_.pop_back();
     }
 }
@@ -189,7 +196,8 @@ void AstPrinter::PrintArgDecl(ArgDecl* node, bool is_last) {
     fprintf(out_, ")\n");
     if (node->init()) {
         stack_.push_back(is_last);
-        Print(node->init(), true);
+        Print(node->init(), false);
+        PrintIr(node->sema_init_rhs(), true);
         stack_.pop_back();
     }
 }
@@ -252,6 +260,7 @@ void AstPrinter::PrintIfStmt(IfStmt* node, bool is_last) {
     fprintf(out_, "IfStmt\n");
     stack_.push_back(is_last);
     Print(node->cond(), false);
+    PrintIr(node->sema_cond(), false);
     if (node->on_false()) {
         Print(node->on_true(), false);
         Print(node->on_false(), true);
@@ -265,7 +274,8 @@ void AstPrinter::PrintReturnStmt(ReturnStmt* node, bool is_last) {
     fprintf(out_, "ReturnStmt\n");
     if (node->expr()) {
         stack_.push_back(is_last);
-        Print(node->expr(), true);
+        Print(node->expr(), false);
+        PrintIr(node->sema_expr(), true);
         stack_.pop_back();
     }
 }
@@ -273,7 +283,8 @@ void AstPrinter::PrintReturnStmt(ReturnStmt* node, bool is_last) {
 void AstPrinter::PrintDeleteStmt(DeleteStmt* node, bool is_last) {
     fprintf(out_, "DeleteStmt\n");
     stack_.push_back(is_last);
-    Print(node->expr(), true);
+    Print(node->expr(), false);
+    PrintIr(node->sema_expr(), true);
     stack_.pop_back();
 }
 
@@ -281,6 +292,7 @@ void AstPrinter::PrintDoWhileStmt(DoWhileStmt* node, bool is_last) {
     fprintf(out_, "DoWhileStmt (token '%s')\n", get_token_string(node->token()).c_str());
     stack_.push_back(is_last);
     Print(node->cond(), false);
+    PrintIr(node->sema_cond(), false);
     Print(node->body(), true);
     stack_.pop_back();
 }
@@ -289,12 +301,15 @@ void AstPrinter::PrintForStmt(ForStmt* node, bool is_last) {
     fprintf(out_, "ForStmt\n");
     stack_.push_back(is_last);
 
-    size_t count = (node->init() ? 1 : 0) + (node->cond() ? 1 : 0) + (node->advance() ? 1 : 0) + 1;
+    size_t count = (node->init() ? 1 : 0) + (node->cond() ? 2 : 0) +
+                   (node->advance() ? 1 : 0) + 1;
     size_t current = 0;
     if (node->init())
         Print(node->init(), ++current == count);
-    if (node->cond())
+    if (node->cond()) {
         Print(node->cond(), ++current == count);
+        PrintIr(node->sema_cond(), ++current == count);
+    }
     if (node->advance())
         Print(node->advance(), ++current == count);
     Print(node->body(), ++current == count);
@@ -306,12 +321,14 @@ void AstPrinter::PrintSwitchStmt(SwitchStmt* node, bool is_last) {
     fprintf(out_, "SwitchStmt\n");
     stack_.push_back(is_last);
 
-    size_t count = 1 + node->cases().size() + (node->default_case() ? 1 : 0);
+    size_t count = 2 + node->cases().size() + (node->default_case() ? 1 : 0);
     size_t current = 0;
 
     Print(node->expr(), ++current == count);
+    PrintIr(node->sema_expr(), ++current == count);
 
-    for (const auto& cas : node->cases()) {
+    for (size_t ci = 0; ci < node->cases().size(); ci++) {
+        const auto& cas = node->cases()[ci];
         bool last = (++current == count);
         PrintIndent(last);
         fprintf(out_, "case ");
@@ -325,7 +342,10 @@ void AstPrinter::PrintSwitchStmt(SwitchStmt* node, bool is_last) {
             }
         }
         fprintf(out_, ":\n");
+        const auto& case_irs = node->sema_case_exprs(ci);
         stack_.push_back(last);
+        for (size_t i = 0; i < case_irs.size(); i++)
+            PrintIr(case_irs[i], i == case_irs.size() - 1);
         Print(cas.second, true);
         stack_.pop_back();
     }
@@ -570,22 +590,6 @@ void AstPrinter::PrintIndexExpr(IndexExpr* node, bool is_last) {
     stack_.pop_back();
 }
 
-void AstPrinter::PrintRvalueExpr(RvalueExpr* node, bool is_last) {
-    fprintf(out_, "RvalueExpr\n");
-    stack_.push_back(is_last);
-    Print(node->lval(), true);
-    stack_.pop_back();
-}
-
-void AstPrinter::PrintSliceExpr(SliceExpr* node, bool is_last) {
-    fprintf(out_, "RvalueExpr\n");
-    stack_.push_back(is_last);
-    Print(node->expr(), node->index() == nullptr);
-    if (node->index())
-        Print(node->index(), true);
-    stack_.pop_back();
-}
-
 void AstPrinter::PrintCommaExpr(CommaExpr* node, bool is_last) {
     fprintf(out_, "CommaExpr\n");
     stack_.push_back(is_last);
@@ -665,13 +669,6 @@ void AstPrinter::PrintStructInitFieldExpr(StructInitFieldExpr* node, bool is_las
     stack_.pop_back();
 }
 
-void AstPrinter::PrintSimpleCastExpr(SimpleCastExpr* node, bool is_last) {
-    fprintf(out_, "SimpleCastExpr\n");
-    stack_.push_back(is_last);
-    Print(node->from(), true);
-    stack_.pop_back();
-}
-
 void AstPrinter::PrintSpreadArgsExpr(SpreadArgsExpr* node, bool is_last) {
     fprintf(out_, "SpreadArgsExpr\n");
 }
@@ -680,6 +677,260 @@ void AstPrinter::PrintFunctionExpr(FunctionExpr* node, bool is_last) {
     fprintf(out_, "FunctionExpr: %s\n",
             node->decl()->name() ? node->decl()->name()->chars() : "(anonymous)");
     PrintFunctionBody(node->decl(), is_last);
+}
+
+void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
+    if (!expr)
+        return;
+
+    PrintIndent(is_last);
+    switch (expr->kind()) {
+        case IrKind::Number: {
+            const auto& v = expr->val();
+            if (v.type()->isInt64())
+                fprintf(out_, "Number i64 0x%" PRIx64 "\n", v.const_int64());
+            else if (v.type()->isIntPtr())
+                fprintf(out_, "Number intptr 0x%x\n", v.const_intptr());
+            else if (v.type()->isDouble())
+                fprintf(out_, "Number f64 %g\n", v.const_double());
+            else if (v.type()->isHeapItem())
+                fprintf(out_, "Number heapitem 0x%x\n", v.const_i32_);
+            else
+                fprintf(out_, "Number 0x%x\n", v.const_cell());
+            break;
+        }
+        case IrKind::Symbol:
+            fprintf(out_, "Symbol %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            break;
+        case IrKind::String:
+            fprintf(out_, "String \"%s\"\n", expr->pn()->to<StringExpr>()->text()->chars());
+            break;
+        case IrKind::This:
+            fprintf(out_, "This\n");
+            break;
+        case IrKind::Null:
+            fprintf(out_, "Null\n");
+            break;
+        case IrKind::Unary: {
+            auto u = expr->to<ir::Unary>();
+            fprintf(out_, "Unary '%c'\n", u->token());
+            stack_.push_back(is_last);
+            PrintIr(u->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Logical: {
+            auto e = expr->to<ir::Logical>();
+            fprintf(out_, "Logical '%s'\n", get_token_string(e->token()).c_str());
+            stack_.push_back(is_last);
+            PrintIr(e->left(), false);
+            PrintIr(e->right(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Ternary: {
+            auto e = expr->to<ir::Ternary>();
+            fprintf(out_, "Ternary\n");
+            stack_.push_back(is_last);
+            PrintIr(e->first(), false);
+            PrintIr(e->second(), false);
+            PrintIr(e->third(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Comma: {
+            auto e = expr->to<ir::Comma>();
+            fprintf(out_, "Comma\n");
+            stack_.push_back(is_last);
+            const auto& exprs = e->exprs();
+            for (size_t i = 0; i < exprs.size(); i++)
+                PrintIr(exprs[i], i == exprs.size() - 1);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Struct: {
+            auto e = expr->to<ir::Struct>();
+            fprintf(out_, "Struct\n");
+            stack_.push_back(is_last);
+            const auto& fields = e->fields();
+            for (size_t i = 0; i < fields.size(); i++)
+                PrintIr(fields[i], i == fields.size() - 1);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::StructInitField: {
+            auto e = expr->to<ir::StructInitField>();
+            auto ast = expr->pn()->to<StructInitFieldExpr>();
+            fprintf(out_, "StructInitField '%s'\n", ast->name->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->value(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::NewArray: {
+            auto e = expr->to<ir::NewArray>();
+            fprintf(out_, "NewArray\n");
+            stack_.push_back(is_last);
+            const auto& dims = e->dims();
+            for (size_t i = 0; i < dims.size(); i++) {
+                if (dims[i])
+                    PrintIr(dims[i], i == dims.size() - 1);
+                else {
+                    PrintIndent(i == dims.size() - 1);
+                    fprintf(out_, "(dim)\n");
+                }
+            }
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Array: {
+            auto e = expr->to<ir::Array>();
+            fprintf(out_, "Array%s\n", e->ellipses() ? " [..]" : "");
+            stack_.push_back(is_last);
+            const auto& elts = e->elements();
+            for (size_t i = 0; i < elts.size(); i++)
+                PrintIr(elts[i], i == elts.size() - 1);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Slice: {
+            auto e = expr->to<ir::Slice>();
+            fprintf(out_, "Slice\n");
+            stack_.push_back(is_last);
+            PrintIr(e->base(), !e->index());
+            if (e->index())
+                PrintIr(e->index(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Call: {
+            auto e = expr->to<ir::Call>();
+            fprintf(out_, "Call\n");
+            stack_.push_back(is_last);
+            if (e->target())
+                PrintIr(e->target(), false);
+            const auto& args = e->args();
+            for (size_t i = 0; i < args.size(); i++)
+                PrintIr(args[i], i == args.size() - 1);
+            if (!e->target() && args.empty())
+                fprintf(out_, "    (no children)\n");
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::DefaultArg: {
+            auto ast = expr->to<ir::DefaultArg>()->parent();
+            fprintf(out_, "DefaultArg %s\n", ast->arg()->name()->chars());
+            stack_.push_back(is_last);
+            PrintIr(ast->arg()->sema_init_rhs(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::NamedArg: {
+            auto e = expr->to<ir::NamedArg>();
+            auto ast = expr->pn()->to<NamedArgExpr>();
+            fprintf(out_, "NamedArg %s\n", ast->name->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::SpreadArgs:
+            fprintf(out_, "SpreadArgs\n");
+            break;
+        case IrKind::Function: {
+            auto ast = expr->to<ir::Function>()->parent();
+            fprintf(out_, "Function %s\n", ast->decl()->name()->chars());
+            break;
+        }
+        case IrKind::ChainedCompare: {
+            auto e = expr->to<ir::ChainedCompare>();
+            fprintf(out_, "ChainedCompare\n");
+            stack_.push_back(is_last);
+            PrintIr(e->first(), false);
+            const auto& ops = e->ops();
+            for (size_t i = 0; i < ops.size(); i++) {
+                bool last = i == ops.size() - 1;
+                PrintIndent(last);
+                fprintf(out_, "Op '%s'\n", get_token_string(ops[i].token).c_str());
+                stack_.push_back(last);
+                PrintIr(ops[i].expr, true);
+                stack_.pop_back();
+            }
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Binary: {
+            auto e = expr->to<ir::Binary>();
+            fprintf(out_, "Binary '%s'\n", get_token_string(e->token()).c_str());
+            stack_.push_back(is_last);
+            PrintIr(e->left(), false);
+            PrintIr(e->right(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::IncDec: {
+            auto e = expr->to<ir::IncDec>();
+            fprintf(out_, "IncDec '%s' %s\n", e->token() == tINC ? "++" : "--",
+                    e->prefix() ? "prefix" : "postfix");
+            stack_.push_back(is_last);
+            PrintIr(e->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Index: {
+            auto e = expr->to<ir::Index>();
+            fprintf(out_, "Index\n");
+            stack_.push_back(is_last);
+            PrintIr(e->base(), false);
+            PrintIr(e->index(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::FieldAccess: {
+            auto e = expr->to<ir::FieldAccess>();
+            fprintf(out_, "FieldAccess '%s'\n",
+                    e->token() == tDBLCOLON ? "::" : expr->pn()->to<FieldAccessExpr>()->name()->chars());
+            stack_.push_back(is_last);
+            PrintIr(e->base(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Cast: {
+            auto e = expr->to<ir::Cast>();
+            fprintf(out_, "Cast\n");
+            stack_.push_back(is_last);
+            PrintIr(e->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::SimpleCast: {
+            auto e = expr->to<ir::SimpleCast>();
+            fprintf(out_, "SimpleCast\n");
+            stack_.push_back(is_last);
+            PrintIr(e->from(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Sizeof: {
+            auto e = expr->to<ir::Sizeof>();
+            fprintf(out_, "Sizeof\n");
+            stack_.push_back(is_last);
+            PrintIr(e->child(), true);
+            stack_.pop_back();
+            break;
+        }
+        case IrKind::Rvalue: {
+            auto r = expr->to<ir::Rvalue>();
+            fprintf(out_, "Rvalue\n");
+            stack_.push_back(is_last);
+            PrintIr(r->expr(), true);
+            stack_.pop_back();
+            break;
+        }
+        default:
+            assert(false);
+            break;
+    }
 }
 
 } // namespace cc

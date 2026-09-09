@@ -112,6 +112,12 @@ static inline MessageBuilder report(ParseNode* node, int number) {
     return MessageBuilder(node, number);
 }
 
+namespace ir {
+class Value;
+}
+
+MessageBuilder report(ir::Value* node, int number);
+
 #ifdef NDEBUG
 static inline void break_on_error(int) {}
 #else

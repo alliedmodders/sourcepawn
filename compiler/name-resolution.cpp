@@ -12,6 +12,7 @@
 #include "array-helpers.h"
 #include "errors.h"
 #include "parse-node.h"
+#include "ir-node.h"
 #include "parser.h"
 #include "sc.h"
 #include "scopes.h"
@@ -241,7 +242,8 @@ bool EnumDecl::EnterNames(SemaContext& sc) {
         AutoErrorPos error_pos(field->pos());
 
         if (field->value() && field->value()->Bind(sc)) {
-            if (ExprVal* val = sc.sema()->AnalyzeForConst(field->value())) {
+            if (ir::Value* node = sc.sema()->CheckExprForConst(field->value())) {
+                const ExprVal* val = &node->val();
                 if (val->type()->isWideType()) {
                     report(field->pos(), 459) << val->type();
                     return false;
@@ -473,13 +475,13 @@ ConstDecl::Bind(SemaContext& sc)
     if (!expr_->Bind(sc))
         return false;
 
-    ExprVal* val = sc.sema()->AnalyzeForConst(expr_);
-    if (!val)
+    ir::Value* node = sc.sema()->CheckExprForConst(expr_);
+    if (!node)
         return false;
 
-    sc.sema()->CheckCoercion(expr_, type_.type, val->qualified(), CvtContext::Assignment);
+    sc.sema()->CheckCoercion(node, type_.type, node->val().qualified(), CvtContext::Assignment);
 
-    value_ = *val;
+    value_ = node->val();
 
     already_bound_ = true;
     return true;

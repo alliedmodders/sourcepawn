@@ -13,9 +13,14 @@
 
 #include "compile-context.h"
 #include "errors.h"
+#include "ir-node.h"
 
 namespace sp {
 namespace cc {
+
+Type* NumberExpr::type() const {
+    return val_.type();
+}
 
 VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
                          const typeinfo_t& type, int vclass, VarDeclFlags flags, Expr* initializer)
@@ -41,11 +46,6 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
 void VarDeclBase::set_init(Expr* expr) {
     init_ = new BinaryExpr(pos(), '=', new SymbolExpr(pos(), name()), expr);
     init_->set_initializer();
-}
-
-void VarDeclBase::set_sema_init(BinaryExpr* init) {
-    sema_init_ = init;
-    sema_init_rhs_ = init ? init->right() : nullptr;
 }
 
 Expr* VarDeclBase::init_rhs() const {
@@ -365,15 +365,6 @@ LayoutFieldDecl* PstructDecl::FindField(Atom* name) {
             return field;
     }
     return nullptr;
-}
-
-SimpleCastExpr::SimpleCastExpr(Expr* from, Type* to)
-  : EmitOnlyExpr(ExprKind::SimpleCastExpr, from->pos()),
-    from_(from),
-    to_(to)
-{
-    val_.ident = iEXPRESSION;
-    val_.set_type(to);
 }
 
 ExprVal::ExprVal(VarDeclBase* decl) {

@@ -14,7 +14,9 @@
 #include <amtl/am-raii.h>
 #include "builtin-generator.h"
 #include "compile-options.h"
+#include "constant-fold.h"
 #include "errors.h"
+#include "ir-node.h"
 #include "lexer.h"
 #include "lexer-inl.h"
 #include "parser.h"
@@ -326,7 +328,7 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     if (!expr->Bind(sc))
         return false;
-    Expr* checked = sema.CheckExpr(expr);
+    ir::Value* checked = sema.CheckExpr(expr);
     if (!checked)
         return false;
 
@@ -342,7 +344,7 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     // The preprocessor uses a bespoke constant evaluator, and I don't want to
     // touch the preprocessor, so it gets to keep this.
-    return checked->EvalConst(val, type);
+    return EvalConst(checked, val, type);
 }
 
 Stmt*

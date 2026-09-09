@@ -38,6 +38,20 @@ struct ExprVal {
         return sym_;
     }
 
+    bool is_lvalue() const {
+        switch (ident) {
+            case iVARIABLE:
+            case iACCESSOR:
+            case iARRAYELEM:
+            case iFIELD:
+            case iADDRESS:
+            case iUPVAR:
+                return true;
+            default:
+                return false;
+        }
+    }
+
     // Returns whether the value can be rematerialized based on static
     // information, or whether it is the result of an expression.
     bool canRematerialize() const {

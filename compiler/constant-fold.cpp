@@ -7,7 +7,11 @@
 //
 #include <cmath>
 #include <type_traits>
+
+#include <amtl/am-float.h>
+#include "constant-fold.h"
 #include "compile-context.h"
+#include "ir-node.h"
 #include "errors.h"
 #include "lexer.h"
 #include "parser.h"
@@ -229,102 +233,87 @@ std::optional<ExprVal> Calc(CompileContext& cc, const token_pos_t& pos, T left,
     }
 }
 
-bool Expr::FoldToConstant() {
-    switch (kind_) {
-        case ExprKind::BinaryExpr:
-            return to<BinaryExpr>()->FoldToConstant();
-        case ExprKind::TernaryExpr:
-            return to<TernaryExpr>()->FoldToConstant();
-        case ExprKind::SimpleCastExpr:
-            return to<SimpleCastExpr>()->FoldToConstant();
-        default:
-            return false;
-    }
-}
+std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Value* right,
+                                     Type* type)
+{
+    int token = expr->token();
+    if (IsAssignOp(token))
+        return std::nullopt;
 
-bool CastExpr::FoldToConstant() {
-    Type* from_type = expr_->val().type();
-    if (expr_->val().ident != iCONSTEXPR)
-        return false;
-    if (from_type->isWideType() || from_type->isHeapItem())
-        return false;
-
-    cell val = expr_->val().const_cell();
-
-    if (type()->isInt16())
-        val = (cell_t)(int16_t)val;
-    else if (type()->isInt8())
-        val = (cell_t)(int8_t)val;
-    if (type()->isInt64()) {
-        // set_constval would leave const_int64_ uninitialized; route through
-        // set_const_int64 so EmitExpr's const_int64() read is well-defined.
-        val_.set_const_int64(type(), val);
-    } else {
-        val_.set_constval(type(), val);
-    }
-    return true;
-}
-
-bool SimpleCastExpr::FoldToConstant() {
-    cell val;
-    Type* from_type;
-    if (!from_->EvalConst(&val, &from_type))
-        return false;
-    if (to_->isFloat() && from_type->coercesToInt()) {
-        float f = (float)val;
-        val = sp::FloatCellUnion(f).cell;
-    }
-    val_.set_constval(val);
-    val_.ident = iCONSTEXPR;
-    val_.set_type(to_);
-    return true;
-}
-
-bool BinaryExpr::FoldToConstant() {
-    if (IsAssignOp(token_))
-        return false;
-
-    const ExprVal& left_val = left_->val();
-    const ExprVal& right_val = right_->val();
+    const ExprVal& left_val = left->val();
+    const ExprVal& right_val = right->val();
 
     if (left_val.ident != iCONSTEXPR || right_val.ident != iCONSTEXPR)
-        return false;
+        return std::nullopt;
 
     Type* left_type = left_val.type();
     Type* right_type = right_val.type();
 
     auto& cc = CompileContext::get();
-    Type* bool_type = cc.types()->type_bool();
-    Type* type = IsCompare(token_) ? bool_type : val_.type();
-
-    std::optional<ExprVal> folded;
 
     if (left_type->isDouble() && right_type->isDouble())
-        folded = Calc(cc, pos_, left_val.const_double(), right_val.const_double(), token_, type);
-    else if (left_type->isInt64() && right_type->isInt64())
-        folded = Calc(cc, pos_, left_val.const_int64(), right_val.const_int64(), token_, type);
-    else if (left_type->isIntPtr() && right_type->isIntPtr())
-        folded = Calc(cc, pos_, left_val.const_intptr(), right_val.const_intptr(), token_, type);
-    else if (left_type->coercesFromInt() && right_type->coercesFromInt())
-        folded = Calc(cc, pos_, left_val.const_i32(), right_val.const_i32(), token_, type);
+        return Calc(cc, expr->pos(), left_val.const_double(), right_val.const_double(), token, type);
+    if (left_type->isInt64() && right_type->isInt64())
+        return Calc(cc, expr->pos(), left_val.const_int64(), right_val.const_int64(), token, type);
+    if (left_type->isIntPtr() && right_type->isIntPtr())
+        return Calc(cc, expr->pos(), left_val.const_intptr(), right_val.const_intptr(), token, type);
+    if (left_type->coercesFromInt() && right_type->coercesFromInt())
+        return Calc(cc, expr->pos(), left_val.const_i32(), right_val.const_i32(), token, type);
+    return std::nullopt;
+}
 
-    if (!folded)
+bool EvalConst(ir::Value* node, cell* value, Type** type) {
+    const ExprVal& v = node->val();
+    if (v.ident != iCONSTEXPR)
         return false;
 
-    val_ = *folded;
+    if (v.type()->isWideType() || v.type()->isHeapItem())
+        return false;
+
+    if (value)
+        *value = v.const_cell();
+    if (type)
+        *type = v.type();
     return true;
 }
 
-bool TernaryExpr::FoldToConstant() {
-    cell cond, left, right;
-    if (!first_->EvalConst(&cond, nullptr) || second_->EvalConst(&left, nullptr) ||
-        !third_->EvalConst(&right, nullptr))
-    {
-        return false;
+std::optional<bool> FoldToConstantBool(ir::Value* cond) {
+    const ExprVal& v = cond->val();
+    if (v.ident != iCONSTEXPR)
+        return std::nullopt;
+    if (v.type()->isFloat()) {
+        float f = v.const_float();
+        return f != 0.0f && !ke::IsNaN(f);
     }
+    if (v.type()->isDouble()) {
+        double d = v.const_double();
+        return d != 0.0 && !ke::IsNaN(d);
+    }
+    if (v.type()->isIntPtr())
+        return v.const_intptr() != 0;
+    if (v.type()->isInt64())
+        return v.const_int64() != 0;
+    return v.const_cell() != 0;
+}
 
-    val_.set_constval(cond ? left : right);
-    return true;
+std::optional<ExprVal> TryFoldCast(const ExprVal& from, Type* to) {
+    if (from.ident != iCONSTEXPR)
+        return std::nullopt;
+    if (from.type()->isWideType() || from.type()->isHeapItem())
+        return std::nullopt;
+
+    cell val = from.const_cell();
+    if (to->isInt16())
+        val = (cell_t)(int16_t)val;
+    else if (to->isInt8())
+        val = (cell_t)(int8_t)val;
+
+    ExprVal out = {};
+    if (to->isInt64())
+        out.set_const_int64(to, val);
+    else
+        out.set_constval(to, val);
+    return out;
 }
 
 } // namespace cc
