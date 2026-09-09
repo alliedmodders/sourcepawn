@@ -26,7 +26,7 @@ std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Valu
 
 std::optional<bool> FoldToConstantBool(ir::Value* cond);
 
-std::optional<ExprVal> TryFoldCast(const ExprVal& from, Type* to);
+std::optional<ExprVal> TryFoldCast(ir::Value* from, Type* to);
 bool EvalConst(ir::Value* node, cell* value, Type** type);
 
 } // namespace cc

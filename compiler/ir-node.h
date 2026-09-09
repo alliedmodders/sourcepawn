@@ -17,6 +17,21 @@ namespace sp {
 namespace cc {
 namespace ir {
 
+inline bool IsLvalue(IrKind kind) {
+    switch (kind) {
+        case IrKind::Variable:
+        case IrKind::This:
+        case IrKind::Upvar:
+        case IrKind::Index:
+        case IrKind::FieldRef:
+        case IrKind::Accessor:
+        case IrKind::LvalueCast:
+            return true;
+        default:
+            return false;
+    }
+}
+
 class Value : public PoolObject
 {
   public:
@@ -34,13 +49,14 @@ class Value : public PoolObject
     Expr* pn() const { return parent_; }
     IrKind kind() const { return kind_; }
 
-    ExprVal& val() { return val_; }
     const ExprVal& val() const { return val_; }
 
     const token_pos_t& pos() const { return parent_->pos(); }
 
     bool lvalue() const {
-        return val().is_lvalue() && kind_ != IrKind::Rvalue;
+        assert(IsLvalue(kind_) ==
+               (val().is_lvalue() && kind_ != IrKind::Rvalue));
+        return IsLvalue(kind_);
     }
 
     bool is(IrKind k) const { return kind() == k; }
@@ -61,44 +77,125 @@ class Value : public PoolObject
     ExprVal val_ = {};
 };
 
-class Number final : public Value
+class Lvalue : public Value
 {
   public:
-    Number(Expr* parent, const ExprVal& val)
-      : Value(IrKind::Number, parent, val)
-    {}
+    static bool is_a(Value* node) { return IsLvalue(node->kind()); }
 
-    static bool is_a(Value* node) { return node->kind() == IrKind::Number; }
+  protected:
+    using Value::Value;
+};
+
+class Constant final : public Value
+{
+  public:
+    Constant(Expr* parent, const ExprVal& val)
+      : Value(IrKind::Constant, parent, val)
+    {
+        assert(val.ident == iCONSTEXPR);
+    }
+
+    bool is_intptr() const { return val().type()->isIntPtr(); }
+    bool is_float() const { return val().type()->isFloat(); }
+    bool is_double() const { return val().type()->isDouble(); }
+    bool is_int64() const { return val().type()->isInt64(); }
+
+    cell const_i32() const { return val().const_i32(); }
+    cell const_cell() const { return val().const_cell(); }
+    cell const_intptr() const { return val().const_intptr(); }
+    float const_float() const { return val().const_float(); }
+    double const_double() const { return val().const_double(); }
+    int64_t const_int64() const { return val().const_int64(); }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::Constant; }
 };
 
 class Rvalue final : public Value
 {
   public:
-    explicit Rvalue(Value* operand);
+    explicit Rvalue(Lvalue* operand);
 
-    Value* expr() const { return expr_; }
+    Lvalue* expr() const { return expr_; }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::Rvalue; }
 
   private:
-    Value* expr_;
+    Lvalue* expr_;
 };
 
-class Symbol final : public Value
+class Typename final : public Value
 {
   public:
-    explicit Symbol(Expr* parent)
-      : Value(IrKind::Symbol, parent)
+    explicit Typename(Expr* parent)
+      : Value(IrKind::Typename, parent)
     {}
 
-    static bool is_a(Value* node) { return node->kind() == IrKind::Symbol; }
+    Typename(Expr* parent, const ExprVal& val)
+      : Value(IrKind::Typename, parent, val)
+    {}
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::Typename; }
+};
+
+class FunctionRef final : public Value
+{
+  public:
+    FunctionRef(Expr* parent, FunctionDecl* fun)
+      : Value(IrKind::FunctionRef, parent),
+        fun_(fun)
+    {
+        val_.set_expr(fun->type());
+    }
+
+    FunctionDecl* decl() const { return fun_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::FunctionRef; }
+
+  private:
+    FunctionDecl* fun_;
+};
+
+class Variable final : public Lvalue
+{
+  public:
+    Variable(Expr* parent, VarDeclBase* decl)
+      : Lvalue(IrKind::Variable, parent),
+        decl_(decl)
+    {
+        val_.set_variable(decl, decl->type());
+    }
+
+    VarDeclBase* decl() const { return decl_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::Variable; }
+
+  private:
+    VarDeclBase* decl_;
+};
+
+class Upvar final : public Lvalue
+{
+  public:
+    Upvar(Expr* parent, UpvarDecl* decl, QualType type)
+      : Lvalue(IrKind::Upvar, parent),
+        decl_(decl)
+    {
+        val_.set_upvar(decl, type);
+    }
+
+    UpvarDecl* decl() const { return decl_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::Upvar; }
+
+  private:
+    UpvarDecl* decl_;
 };
 
 class String final : public Value
 {
   public:
-    explicit String(Expr* parent)
-      : Value(IrKind::String, parent)
+    String(Expr* parent, const ExprVal& val = {})
+      : Value(IrKind::String, parent, val)
     {}
 
     StringExpr* parent() const { return pn()->to<StringExpr>(); }
@@ -106,24 +203,16 @@ class String final : public Value
     static bool is_a(Value* node) { return node->kind() == IrKind::String; }
 };
 
-class This final : public Value
+class This final : public Lvalue
 {
   public:
-    explicit This(Expr* parent)
-      : Value(IrKind::This, parent)
+    This(Expr* parent, const ExprVal& val)
+      : Lvalue(IrKind::This, parent, val)
     {}
+
+    VarDeclBase* decl() const { return val().sym(); }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::This; }
-};
-
-class Null final : public Value
-{
-  public:
-    explicit Null(Expr* parent)
-      : Value(IrKind::Null, parent)
-    {}
-
-    static bool is_a(Value* node) { return node->kind() == IrKind::Null; }
 };
 
 class Unary final : public Value
@@ -145,14 +234,22 @@ class Unary final : public Value
     Value* expr_;
 };
 
-class Index final : public Value
+class Index final : public Lvalue
 {
   public:
-    Index(Expr* parent, Value* base, Value* index)
-      : Value(IrKind::Index, parent),
+    Index(Expr* parent, Value* base, Value* index, const ExprVal& val)
+      : Lvalue(IrKind::Index, parent, val),
         base_(base),
         index_(index)
     {}
+
+    Index(Expr* parent, Value* base, Value* index, Type* elem_type)
+      : Lvalue(IrKind::Index, parent),
+        base_(base),
+        index_(index)
+    {
+        val_.set_slice(iARRAYELEM, QualType(elem_type));
+    }
 
     Value* base() const { return base_; }
     Value* index() const { return index_; }
@@ -164,29 +261,97 @@ class Index final : public Value
     Value* index_;
 };
 
-class FieldAccess final : public Value
+class StaticFieldRef final : public Value
 {
   public:
-    FieldAccess(Expr* parent, int token, Value* base, Decl* resolved)
-      : Value(IrKind::FieldAccess, parent),
+    StaticFieldRef(Expr* parent, Value* base, LayoutFieldDecl* field, Type* int_type)
+      : Value(IrKind::StaticFieldRef, parent),
+        base_(base),
+        field_(field)
+    {
+        val_.set_expr(int_type);
+    }
+
+    Value* base() const { return base_; }
+    LayoutFieldDecl* field() const { return field_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::StaticFieldRef; }
+
+  private:
+    Value* base_;
+    LayoutFieldDecl* field_;
+};
+
+class FieldRef final : public Lvalue
+{
+  public:
+    FieldRef(Expr* parent, int token, Value* base, LayoutFieldDecl* field)
+      : Lvalue(IrKind::FieldRef, parent),
         token_(token),
         base_(base),
-        resolved_(resolved)
-    {}
-
-    void set_base(Value* base) { base_ = base; }
-    void set_resolved(Decl* decl) { resolved_ = decl; }
+        field_(field)
+    {
+        val_.set_field(field, field->type());
+    }
 
     int token() const { return token_; }
     Value* base() const { return base_; }
-    Decl* resolved() const { return resolved_; }
+    LayoutFieldDecl* field() const { return field_; }
 
-    static bool is_a(Value* node) { return node->kind() == IrKind::FieldAccess; }
+    static bool is_a(Value* node) { return node->kind() == IrKind::FieldRef; }
 
   private:
     int token_;
     Value* base_;
-    Decl* resolved_;
+    LayoutFieldDecl* field_;
+};
+
+// Helper to bind a member function call target.
+class MethodRef final : public Value
+{
+  public:
+    MethodRef(Expr* parent, int token, Value* base, MemberFunctionDecl* method)
+      : Value(IrKind::MethodRef, parent),
+        token_(token),
+        base_(base),
+        method_(method)
+    {}
+
+    int token() const { return token_; }
+    Value* base() const { return base_; }
+    MemberFunctionDecl* decl() const { return method_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::MethodRef; }
+
+  private:
+    int token_;
+    Value* base_;
+    MemberFunctionDecl* method_;
+};
+
+class Accessor final : public Lvalue
+{
+  public:
+    Accessor(Expr* parent, int token, Value* base, PropertyDecl* prop)
+      : Lvalue(IrKind::Accessor, parent),
+        token_(token),
+        base_(base),
+        prop_(prop)
+    {
+        val_.set_type(prop->property_type());
+        val_.set_accessor(prop);
+    }
+
+    int token() const { return token_; }
+    Value* base() const { return base_; }
+    PropertyDecl* accessor() const { return prop_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::Accessor; }
+
+  private:
+    int token_;
+    Value* base_;
+    PropertyDecl* prop_;
 };
 
 class Cast final : public Value
@@ -205,16 +370,30 @@ class Cast final : public Value
     Value* expr_;
 };
 
+class LvalueCast final : public Lvalue
+{
+  public:
+    LvalueCast(Expr* parent, Value* expr, const ExprVal& val)
+      : Lvalue(IrKind::LvalueCast, parent, val),
+        expr_(expr)
+    {}
+
+    Value* expr() const { return expr_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::LvalueCast; }
+
+  private:
+    Value* expr_;
+};
+
 class SimpleCast final : public Value
 {
   public:
     SimpleCast(Expr* parent, Value* from, Type* to)
-      : Value(IrKind::SimpleCast, parent),
+      : Value(IrKind::SimpleCast, parent, ExpressionVal(to)),
         from_(from),
         to_(to)
-    {
-        val().set_expr(to);
-    }
+    {}
 
     Value* from() const { return from_; }
     Type* to() const { return to_; }
@@ -229,8 +408,8 @@ class SimpleCast final : public Value
 class Sizeof final : public Value
 {
   public:
-    Sizeof(Expr* parent, Value* child)
-      : Value(IrKind::Sizeof, parent),
+    Sizeof(Expr* parent, Value* child, const ExprVal& val)
+      : Value(IrKind::Sizeof, parent, val),
         child_(child)
     {}
 
@@ -245,8 +424,8 @@ class Sizeof final : public Value
 class IncDec final : public Value
 {
   public:
-    IncDec(Expr* parent, int token, bool prefix, Value* expr)
-      : Value(IrKind::IncDec, parent),
+    IncDec(Expr* parent, int token, bool prefix, Lvalue* expr, const ExprVal& val)
+      : Value(IrKind::IncDec, parent, val),
         token_(token),
         prefix_(prefix),
         expr_(expr)
@@ -254,14 +433,14 @@ class IncDec final : public Value
 
     int token() const { return token_; }
     bool prefix() const { return prefix_; }
-    Value* expr() const { return expr_; }
+    Lvalue* expr() const { return expr_; }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::IncDec; }
 
   private:
     int token_;
     bool prefix_;
-    Value* expr_;
+    Lvalue* expr_;
 };
 
 class Binary final : public Value
@@ -289,8 +468,8 @@ class Binary final : public Value
 class Logical final : public Value
 {
   public:
-    Logical(Expr* parent, int token, Value* left, Value* right)
-      : Value(IrKind::Logical, parent),
+    Logical(Expr* parent, int token, Value* left, Value* right, const ExprVal& val)
+      : Value(IrKind::Logical, parent, val),
         token_(token),
         left_(left),
         right_(right)
@@ -335,11 +514,9 @@ class Comma final : public Value
 {
   public:
     Comma(Expr* parent, std::vector<Value*> exprs)
-      : Value(IrKind::Comma, parent),
+      : Value(IrKind::Comma, parent, ExpressionVal(exprs.back()->val().qualified())),
         exprs_(std::move(exprs))
-    {
-        val().set_expr(exprs_.back()->val().qualified());
-    }
+    {}
 
     const PoolArray<Value*>& exprs() const { return exprs_; }
 
@@ -358,8 +535,8 @@ class ChainedCompare final : public Value
         Value* expr;
     };
 
-    ChainedCompare(Expr* parent, Value* first, std::vector<Op> ops)
-      : Value(IrKind::ChainedCompare, parent),
+    ChainedCompare(Expr* parent, Value* first, std::vector<Op> ops, const ExprVal& val)
+      : Value(IrKind::ChainedCompare, parent, val),
         first_(first),
         ops_(std::move(ops))
     {}
@@ -446,8 +623,8 @@ class Function final : public Value
 class Array final : public Value
 {
   public:
-    Array(Expr* parent, const std::vector<Value*>& elements, bool ellipses)
-      : Value(IrKind::Array, parent),
+    Array(Expr* parent, const std::vector<Value*>& elements, bool ellipses, const ExprVal& val = {})
+      : Value(IrKind::Array, parent, val),
         elements_(elements),
         ellipses_(ellipses)
     {}
@@ -466,13 +643,10 @@ class Slice final : public Value
 {
   public:
     Slice(Value* base, Value* index, Type* type)
-      : Value(IrKind::Slice, base->pn()),
+      : Value(IrKind::Slice, base->pn(), ExpressionVal(type)),
         base_(base),
         index_(index)
-    {
-        val().ident = iEXPRESSION;
-        val().set_type(type);
-    }
+    {}
 
     Value* base() const { return base_; }
     Value* index() const { return index_; }
@@ -487,7 +661,7 @@ class Slice final : public Value
 class NewArray final : public Value
 {
   public:
-    NewArray(Expr* parent, const std::vector<Value*>& dims, const ExprVal& val)
+    NewArray(Expr* parent, const std::vector<Value*>& dims, const ExprVal& val = {})
       : Value(IrKind::NewArray, parent, val),
         dims_(dims)
     {}

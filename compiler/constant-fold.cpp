@@ -240,11 +240,13 @@ std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Valu
     if (IsAssignOp(token))
         return std::nullopt;
 
-    const ExprVal& left_val = left->val();
-    const ExprVal& right_val = right->val();
-
-    if (left_val.ident != iCONSTEXPR || right_val.ident != iCONSTEXPR)
+    auto left_const = left->as<ir::Constant>();
+    auto right_const = right->as<ir::Constant>();
+    if (!left_const || !right_const)
         return std::nullopt;
+
+    const ExprVal& left_val = left_const->val();
+    const ExprVal& right_val = right_const->val();
 
     Type* left_type = left_val.type();
     Type* right_type = right_val.type();
@@ -263,46 +265,47 @@ std::optional<ExprVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Valu
 }
 
 bool EvalConst(ir::Value* node, cell* value, Type** type) {
-    const ExprVal& v = node->val();
-    if (v.ident != iCONSTEXPR)
+    auto c = node->as<ir::Constant>();
+    if (!c)
         return false;
 
-    if (v.type()->isWideType() || v.type()->isHeapItem())
+    if (c->val().type()->isWideType() || c->val().type()->isHeapItem())
         return false;
 
     if (value)
-        *value = v.const_cell();
+        *value = c->const_cell();
     if (type)
-        *type = v.type();
+        *type = c->val().type();
     return true;
 }
 
 std::optional<bool> FoldToConstantBool(ir::Value* cond) {
-    const ExprVal& v = cond->val();
-    if (v.ident != iCONSTEXPR)
+    auto c = cond->as<ir::Constant>();
+    if (!c)
         return std::nullopt;
-    if (v.type()->isFloat()) {
-        float f = v.const_float();
+    if (c->is_float()) {
+        float f = c->const_float();
         return f != 0.0f && !ke::IsNaN(f);
     }
-    if (v.type()->isDouble()) {
-        double d = v.const_double();
+    if (c->is_double()) {
+        double d = c->const_double();
         return d != 0.0 && !ke::IsNaN(d);
     }
-    if (v.type()->isIntPtr())
-        return v.const_intptr() != 0;
-    if (v.type()->isInt64())
-        return v.const_int64() != 0;
-    return v.const_cell() != 0;
+    if (c->is_intptr())
+        return c->const_intptr() != 0;
+    if (c->is_int64())
+        return c->const_int64() != 0;
+    return c->const_cell() != 0;
 }
 
-std::optional<ExprVal> TryFoldCast(const ExprVal& from, Type* to) {
-    if (from.ident != iCONSTEXPR)
+std::optional<ExprVal> TryFoldCast(ir::Value* from_node, Type* to) {
+    auto from = from_node->as<ir::Constant>();
+    if (!from)
         return std::nullopt;
-    if (from.type()->isWideType() || from.type()->isHeapItem())
+    if (from->val().type()->isWideType() || from->val().type()->isHeapItem())
         return std::nullopt;
 
-    cell val = from.const_cell();
+    cell val = from->const_cell();
     if (to->isInt16())
         val = (cell_t)(int16_t)val;
     else if (to->isInt8())

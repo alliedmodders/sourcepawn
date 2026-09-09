@@ -162,7 +162,7 @@ class Semantics final
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
     bool CheckEnumStructVarDecl(VarDeclBase* decl);
-    ir::Value* ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init);
+    ir::Value* ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init, Type* expr_type);
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
@@ -217,10 +217,10 @@ class Semantics final
     ir::Value* CheckBinaryExpr(BinaryExpr* expr);
     ir::Value* CheckUnaryExpr(UnaryExpr* expr);
     ir::Value* CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call);
-    ir::Value* CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir);
-    ir::Value* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+    ir::Value* CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base);
+    ir::Value* CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
                                                Type* type, EnumStructDecl* root, bool from_call);
-    ir::Value* CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::FieldAccess* field_ir,
+    ir::Value* CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
                                           Type* type, ClassDecl* decl, bool from_call);
     ir::Value* CheckFunctionExpr(FunctionExpr* expr);
 

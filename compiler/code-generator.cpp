@@ -331,7 +331,7 @@ void CodeGenerator::EmitGlobalInitStmt(GlobalInitStmt* stmt) {
         if (init)
             AddDebugLine(init->pos());
 
-        EmitInit(ExprVal(var), init);
+        EmitInit(var, init);
     }
 }
 
@@ -653,17 +653,15 @@ static inline bool IsInlineArrayInitializer(ir::Value* ctor) {
     }
 }
 
-void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
-    ExprVal val = lval;
-
-    auto type = val.type();
+void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
+    auto type = decl->type();
     if (auto array = type->as<ArrayType>()) {
         if (!ctor || IsInlineArrayInitializer(ctor)) {
             if (array->is_flat()) {
                 // No initialization needed for stack arrays.
                 if (!ctor)
                     return;
-                EmitAddress(val);
+                EmitAddress(decl);
             }
 
             EmitArrayCtor(array, ctor, 0);
@@ -671,28 +669,28 @@ void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
             // Non-flat arrays are heap allocated so we need to store the
             // pointer back.
             if (!array->is_flat())
-                EmitStore(ctor, val);
+                EmitStoreVar(decl);
         } else if (array->is_flat()) {
-            EmitAddress(val);
+            EmitAddress(decl);
             EmitExpr(ctor);
             __ emit(OP_COPYARRAY);
         } else {
             // Dynamic array with arbitrary RHS.
             EmitExpr(ctor);
-            EmitStore(ctor, val);
+            EmitStoreVar(decl);
         }
     } else if (type->asEnumStruct()) {
         // Enum structs are stack-allocated; no ctor is no allocation.
         if (!ctor)
             return;
-        EmitAddress(val);
+        EmitAddress(decl);
         EmitEnumStructCopy(type, ctor);
     } else {
         ExprVal rhs;
         if (ctor)
             rhs = ctor->val();
         else
-            rhs.set_constval(val.type()->normalize(), 0);
+            rhs.set_constval(type->normalize(), 0);
 
         // Optimize to a single instruction if we can. Note that intptr has a
         // lit size of 4 bytes, but OP_STOR_S_C doesn't accept it (yet), so
@@ -700,10 +698,9 @@ void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
         auto lit_size = rhs.type()->maybe_lit_size();
         if (rhs.ident == iCONSTEXPR && lit_size && lit_size <= sizeof(cell_t) &&
             !rhs.type()->isWideType() &&
-            val.ident == iVARIABLE && val.sym()->vclass() == sLOCAL &&
-            !val.sym()->is_shared() && !val.type()->isHeapItem())
+            decl->vclass() == sLOCAL && !decl->is_shared() && !type->isHeapItem())
         {
-            __ emit(OP_STOR_S_C, VarSlot(val.sym()), rhs.const_cell());
+            __ emit(OP_STOR_S_C, VarSlot(decl), rhs.const_cell());
             return;
         }
 
@@ -719,7 +716,7 @@ void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
         } else if (!ctor && rhs.type()->isDouble()) {
             __ emit(OP_PUSH_C_F64, DoubleValue(0.0));
         } else if (rhs.ident == iCONSTEXPR) {
-            if (rhs.type()->isNull() && val.type()->isHeapItem()) {
+            if (rhs.type()->isNull() && type->isHeapItem()) {
                 __ emit(OP_LOAD_NULL);
             } else if (rhs.type()->isFloat()) {
                 __ emit(OP_PUSH_C_F32, rhs.const_cell());
@@ -736,7 +733,7 @@ void CodeGenerator::EmitInit(const ExprVal& lval, ir::Value* ctor) {
         } else {
             EmitExpr(ctor);
         }
-        EmitStore(ctor, val);
+        EmitStoreVar(decl);
     }
 }
 
@@ -748,7 +745,7 @@ void CodeGenerator::EmitLocalVar(VarDeclBase* decl) {
         decl->BindAddress(slot);
     }
 
-    EmitInit(ExprVal(decl), decl->sema_init_rhs());
+    EmitInit(decl, decl->sema_init_rhs());
 }
 
 void
@@ -826,14 +823,14 @@ static bool HandlesDiscardResult(ir::Value* node) {
         case IrKind::Binary:
             return IsAssignOp(node->to<ir::Binary>()->token());
         default:
-            return node->val().ident == iCONSTEXPR;
+            return node->is(IrKind::Constant);
     }
 }
 
 void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
     AutoErrorPos aep(expr->pos());
 
-    if (expr->val().ident == iCONSTEXPR) {
+    if (expr->is(IrKind::Constant)) {
         if (!(flags & EMIT_DISCARD_RESULT))
             EmitConstantExpr(expr->val());
         return;
@@ -890,11 +887,20 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
         case IrKind::Index:
             EmitIndexExpr(expr->to<ir::Index>());
             break;
-        case IrKind::FieldAccess:
-            EmitFieldAccessExpr(expr->to<ir::FieldAccess>());
+        case IrKind::StaticFieldRef:
+            EmitLoadFieldOffset(expr->to<ir::StaticFieldRef>()->field());
+            break;
+        case IrKind::FieldRef:
+            EmitExpr(expr->to<ir::FieldRef>()->base());
+            break;
+        case IrKind::Accessor:
+            EmitExpr(expr->to<ir::Accessor>()->base());
             break;
         case IrKind::Cast:
-            EmitCastExpr(expr->to<ir::Cast>(), flags);
+            EmitCastExpr(expr, expr->to<ir::Cast>()->expr(), flags);
+            break;
+        case IrKind::LvalueCast:
+            EmitCastExpr(expr, expr->to<ir::LvalueCast>()->expr(), flags);
             break;
         case IrKind::SimpleCast:
             EmitSimpleCastExpr(expr->to<ir::SimpleCast>());
@@ -902,8 +908,22 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
         case IrKind::Sizeof:
             EmitSizeofExpr(expr->to<ir::Sizeof>());
             break;
-        case IrKind::Symbol:
-            EmitSymbolExpr(expr->to<ir::Symbol>());
+        case IrKind::FunctionRef: {
+            auto fun = expr->to<ir::FunctionRef>()->decl();
+            assert(fun == fun->canonical());
+            assert(!fun->is_native());
+            assert(fun->is_live());
+            __ emit(OP_LOAD_FN, &fun->cg()->method_id);
+            break;
+        }
+        case IrKind::Variable: {
+            auto var = expr->to<ir::Variable>()->decl();
+            if (var->type()->isCompositeValue())
+                EmitAddress(var);
+            break;
+        }
+        case IrKind::Upvar:
+            // l/r-value emit code handles upvars.
             break;
         case IrKind::String:
             EmitStringExpr(expr->to<ir::String>());
@@ -942,12 +962,8 @@ void CodeGenerator::EmitSizeofExpr(ir::Sizeof* expr) {
     // always int (the field offset), so grab the actual enum struct type from
     // the resolved field.
     if (!es) {
-        if (auto access = expr->child()->as<ir::FieldAccess>()) {
-            if (access->token() == tDBLCOLON) {
-                if (auto fd = access->resolved()->as<LayoutFieldDecl>())
-                    es = fd->type()->asEnumStruct();
-            }
-        }
+        if (auto access = expr->child()->as<ir::StaticFieldRef>())
+            es = access->field()->type()->asEnumStruct();
     }
 
     assert(es != nullptr);
@@ -1036,68 +1052,87 @@ CodeGenerator::EmitUnaryTest(ir::Unary* expr, bool jump_on_true, Label* target)
     return false;
 }
 
-ExprVal CodeGenerator::BindLvalue(ir::Value* expr, bool simple_address) {
-    ExprVal val = expr->val();
-    switch (val.ident) {
-        case iVARIABLE:
-            break;
-        case iARRAYELEM:
-            EmitExpr(expr, EMIT_ALLOW_LVALUE);
-            // Array types are loaded as addresses by OP_LOAD_ELEM_A and do not need OP_IDXADDR.
-            if (simple_address && !val.type()->isArray()) {
-                __ emit(OP_IDXADDR);
-                val.ident = iADDRESS;
-            }
-            break;
-        case iACCESSOR:
-            EmitExpr(expr, EMIT_ALLOW_LVALUE);
-            break;
-        case iUPVAR: {
-            auto upvar = val.upvar();
-            if (upvar->var()->is_shared()) {
-                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
-            }
-            break;
-        }
-        case iFIELD: {
-            EmitExpr(expr->to<ir::FieldAccess>()->base());
-            break;
-        }
-        case iADDRESS: {
-            EmitExpr(expr, EMIT_ALLOW_LVALUE);
-            break;
-        }
+int CodeGenerator::StackSlotsForLval(const BoundLval& b) {
+    switch (b.lval->kind()) {
+        case IrKind::Variable:
+        case IrKind::This:
+            return 0;
+        case IrKind::Upvar:
+            // For shared upvars we push the shared object ref on the stack.
+            return b.lval->as<ir::Upvar>()->decl()->var()->is_shared() ? 1 : 0;
+        case IrKind::Index:
+            return b.address_on_stack ? 1 : 2;
+        case IrKind::Accessor:
+        case IrKind::FieldRef:
+        case IrKind::LvalueCast:
+            return 1;
         default:
             assert(false);
+            return 0;
     }
-    return val;
 }
 
-void CodeGenerator::EmitStringExpr(ir::String* expr) {
+CodeGenerator::BoundLval CodeGenerator::BindLval(ir::Lvalue* lval, bool simple_address) {
+    BoundLval b;
+    b.lval = lval;
+    switch (lval->kind()) {
+        case IrKind::Variable:
+        case IrKind::This:
+            break;
+        case IrKind::Index:
+            EmitExpr(lval, EMIT_ALLOW_LVALUE);
+            // Array types are loaded as addresses by OP_LOAD_ELEM_A and do
+            // not need OP_IDXADDR.
+            if (simple_address && !lval->val().type()->isArray()) {
+                __ emit(OP_IDXADDR);
+                b.address_on_stack = true;
+            }
+            break;
+        case IrKind::Accessor:
+            EmitExpr(lval, EMIT_ALLOW_LVALUE);
+            break;
+        case IrKind::Upvar: {
+            auto upvar = lval->as<ir::Upvar>()->decl();
+            if (upvar->var()->is_shared())
+                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
+            break;
+        }
+        case IrKind::FieldRef:
+            EmitExpr(lval->as<ir::FieldRef>()->base());
+            break;
+        case IrKind::LvalueCast:
+            EmitExpr(lval, EMIT_ALLOW_LVALUE);
+            break;
+        default:
+            assert(false);
+            break;
+    }
+    return b;
+}void CodeGenerator::EmitStringExpr(ir::String* expr) {
     auto text = expr->parent()->text();
     uint16_t index = rtti_->AddString(text, &data_);
     __ emit(OP_LOAD_STR, VarSlot(index));
 }
 
 void CodeGenerator::EmitThisExpr(ir::This* expr) {
-    auto decl = expr->pn()->to<ThisExpr>()->decl();
+    auto decl = expr->decl();
     if (decl->type()->isEnumStruct())
         EmitAddress(decl);
 }
 
 void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
-    ExprVal val = BindLvalue(expr->expr(), true);
+    BoundLval binding = BindLval(expr->expr(), true);
 
-    Type* type = val.type();
+    Type* type = binding.lval->val().type();
     if (type->isReference())
         type = type->inner();
 
     // Save base address if needed.
-    if (!val.canRematerialize())
+    if (!binding.canRematerialize())
         __ emit(OP_DUP);
 
-    EmitRvalue(expr, val);
+    EmitRvalue(expr, binding);
 
     // We use a temporary to store the result value, if we need to due to the
     // l-value mucking up the operand stack.
@@ -1113,39 +1148,19 @@ void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
 
     if (expr->prefix() && !discard) {
         __ emit(OP_DUP);
-        if (!val.canRematerialize()) {
+        if (!binding.canRematerialize()) {
             temp_slot = {AcquireTempSlot(expr, type)};
             __ emit(OP_STOR_S, VarSlot(*temp_slot));
         }
     }
 
-    EmitStore(expr, val);
+    EmitStore(expr, binding);
 
     if (temp_slot)
         __ emit(OP_LOAD_S, VarSlot(*temp_slot));
 }
 
-[[maybe_unused]] static inline int StackSlotsForLval(const ExprVal& v) {
-    switch (v.ident) {
-        case iVARIABLE:
-            return 0;
-        case iUPVAR:
-            // For shared upvars we push the shared object ref on the stack.
-            return v.upvar()->var()->is_shared() ? 1 : 0;
-        case iACCESSOR:
-        case iADDRESS:
-        case iEXPRESSION:
-        case iFIELD:
-            return 1;
-        case iARRAYELEM:
-            return 2;
-        default:
-            assert(false);
-            return 0;
-    }
-}
-
-OPCODE GetBinaryOp(int oper_tok) {
+[[maybe_unused]] OPCODE GetBinaryOp(int oper_tok) {
     switch (oper_tok) {
         case '*': return OP_SMUL;
         case '/': return OP_SDIV;
@@ -1180,7 +1195,7 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
 
     Type* left_type = left->val().type();
     if (token == '=' && left_type->isEnumStruct()) {
-        EmitRvalueFromLvalue(left);
+        EmitRvalueFromLvalue(left->to<ir::Lvalue>());
 
         EmitExpr(right);
         auto es = left->val().type()->asEnumStruct();
@@ -1191,32 +1206,31 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
     }
 
     if (token == '=' && left_type->isFixedArray()) {
-        EmitRvalueFromLvalue(left);
+        EmitRvalueFromLvalue(left->to<ir::Lvalue>());
 
         EmitExpr(right);
         __ emit(OP_COPYARRAY);
         return;
     }
 
-    ExprVal left_val;
+    BoundLval left_binding;
     if (IsAssignOp(token)) {
-        left_val = BindLvalue(left, !!oper);
+        left_binding = BindLval(left->to<ir::Lvalue>(), !!oper);
 
         if (oper) {
-            assert(StackSlotsForLval(left_val) <= 1);
+            assert(StackSlotsForLval(left_binding) <= 1);
 
             // assign-modify needs the base address twice (load, store).
-            if (!left_val.canRematerialize())
+            if (!left_binding.canRematerialize())
                 __ emit(OP_DUP);
 
-            EmitRvalue(left, left_val);
+            EmitRvalue(left, left_binding);
         }
     } else {
         EmitExpr(left);
-        left_val = left->val();
     }
 
-    assert(!left_val.type()->isArray() || !left_val.type()->to<ArrayType>()->is_flat());
+    assert(!left->val().type()->isArray() || !left->val().type()->to<ArrayType>()->is_flat());
 
     EmitExpr(right);
     EmitBinaryTail(oper, left, right);
@@ -1226,27 +1240,27 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
 
         if (!discard) {
             // Stack is one of the following cases.
-            //   iVARIABLE:
+            //   Variable:
             //      [val]
-            //   iARRAYELEM: (implies !oper)
+            //   Index (implies !oper):
             //      [base, index, val]
-            //   iADDRESS: (implies oper)
+            //   Index bound to address / decayed Cast (implies oper):
             //      [base, val]
-            //   iACCESSOR:
-            //   iEXPRESSION:
+            //   Accessor:
+            //   rvalue:
             //      [base, val]
             //
             // Since we have !discard, we need to preserve the calculated value,
             // which we do via a local if there is too much stack manipulation
             // involved.
             __ emit(OP_DUP);
-            if (!left_val.canRematerialize()) {
+            if (!left_binding.canRematerialize()) {
                 auto temp_type = expr->val().type();
                 temp_slot = {AcquireTempSlot(expr, temp_type)};
                 __ emit(OP_STOR_S, VarSlot(*temp_slot));
             }
         }
-        EmitStore(expr, left_val);
+        EmitStore(expr, left_binding);
         if (temp_slot)
             __ emit(OP_LOAD_S, VarSlot(*temp_slot));
     }
@@ -1513,25 +1527,6 @@ void CodeGenerator::EmitChainedCompareExpr(ir::ChainedCompare* root) {
     __ bind(&done);
 }
 
-void CodeGenerator::EmitSymbolExpr(ir::Symbol* expr) {
-    Decl* sym = expr->pn()->to<SymbolExpr>()->decl();
-    if (auto fun = sym->as<FunctionDecl>()) {
-        assert(fun == fun->canonical());
-
-        assert(!fun->is_native());
-        assert(fun->is_live());
-
-        __ emit(OP_LOAD_FN, &fun->cg()->method_id);
-    } else if (auto var = sym->as<VarDeclBase>()) {
-        if (sym->type()->isCompositeValue())
-            EmitAddress(var);
-    } else if (sym->as<UpvarDecl>()) {
-        // Nothing to do, we handle this in l/r-value emit code.
-    } else {
-        assert(false);
-    }
-}
-
 void CodeGenerator::EmitIndexExpr(ir::Index* expr) {
     EmitExpr(expr->base());
     EmitExpr(expr->index());
@@ -1539,10 +1534,7 @@ void CodeGenerator::EmitIndexExpr(ir::Index* expr) {
 
 void CodeGenerator::EmitSliceExpr(ir::Slice* slice) {
     auto base = slice->base();
-    if (base->lvalue())
-        EmitRvalueFromLvalue(base);
-    else
-        EmitExpr(base);
+    EmitAsRvalue(base);
 
     auto es = base->val().type()->asEnumStruct();
     if (es) {
@@ -1573,41 +1565,12 @@ bool CodeGenerator::IsElidableSlice(ir::Value* expr, FunctionDecl* fun, QualType
 }
 
 void CodeGenerator::EmitElidedSliceExpr(ir::Slice* slice) {
-    if (slice->base()->lvalue())
-        EmitRvalueFromLvalue(slice->base());
-    else
-        EmitExpr(slice->base());
+    EmitAsRvalue(slice->base());
 
     if (slice->index()) {
         EmitExpr(slice->index());
         __ emit(OP_IDXADDR);
     }
-}
-
-void CodeGenerator::EmitFieldAccessExpr(ir::FieldAccess* expr) {
-    if (expr->token() == tDBLCOLON) {
-        LayoutFieldDecl* field = expr->resolved()->as<LayoutFieldDecl>();
-        EmitLoadFieldOffset(field);
-        return;
-    }
-
-    assert(expr->token() == '.');
-
-    // Note that we do not load an iACCESSOR here, we only make sure the base
-    // is computed. Emit() never performs loads on l-values, that ability is
-    // reserved for RvalueExpr().
-    EmitExpr(expr->base());
-
-    // Enum struct fields, and class properties, have resolved decls.
-    if (!expr->resolved())
-        return;
-
-    // Getter/setter invocation is handled by the caller via the iACCESSOR
-    // case in EmitRvalue/EmitStore. We only need to emit the base here.
-    if (expr->resolved()->as<PropertyDecl>())
-        return;
-
-    assert(false);
 }
 
 static inline Type* UnwrapRef(Type* type) {
@@ -1667,14 +1630,14 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
         // since "slice" and "array2native" cancel each other out.
         bool is_elided_slice = IsElidableSlice(expr, fun, arg);
 
-        ExprVal val = expr->val();
-        if (is_elided_slice) {
+        const ExprVal& val = expr->val();
+        std::optional<BoundLval> binding;
+        if (is_elided_slice)
             EmitElidedSliceExpr(expr->to<ir::Slice>());
-        } else if (expr->lvalue()) {
-            val = BindLvalue(expr, true);
-        } else {
+        else if (expr->lvalue())
+            binding = BindLval(expr->to<ir::Lvalue>(), true);
+        else
             EmitExpr(expr);
-        }
 
         if (expr->is(IrKind::DefaultArg))
             continue;
@@ -1689,20 +1652,21 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
                  * "variable argument list" as a constant here */
                 if (val.sym()->is_const() && !arg.is_const())
                     needs_temp = true;
-            } else if (val.ident == iCONSTEXPR || val.ident == iEXPRESSION) {
+            } else if (expr->is(IrKind::Constant) || val.ident == iEXPRESSION) {
                 needs_temp = !val.type()->isComposite();
             }
 
-            if (lvalue) {
+            if (binding) {
+                auto lval = binding->lval;
                 if (needs_temp)
-                    EmitRvalue(expr, val);
-                else if (val.ident == iVARIABLE)
-                    EmitAddress(val.sym());
-                 else if (val.ident == iFIELD)
-                     EmitAddress(val);
-                 else if (val.ident == iUPVAR)
-                     EmitAddress(val);
-             }
+                    EmitRvalue(expr, *binding);
+                else if (lval->is(IrKind::Variable))
+                    EmitAddress(lval->as<ir::Variable>()->decl());
+                else if (lval->is(IrKind::FieldRef) || lval->is(IrKind::This))
+                    EmitAddress(*binding);
+                else if (lval->is(IrKind::Upvar))
+                    EmitAddress(*binding);
+            }
 
             if (needs_temp) {
                 auto slot = AcquireTempSlot(expr, UnwrapRef(val.type()));
@@ -1710,15 +1674,19 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
         } else if (arg->isReference()) {
-            switch (val.ident) {
-                case iVARIABLE:
-                    if (!val.type()->isComposite())
-                         EmitAddress(val.sym());
-                    break;
-                case iFIELD:
-                case iUPVAR:
-                    EmitAddress(val);
-                    break;
+            if (binding) {
+                switch (binding->lval->kind()) {
+                    case IrKind::Variable:
+                        if (!val.type()->isComposite())
+                            EmitAddress(binding->lval->as<ir::Variable>()->decl());
+                        break;
+                    case IrKind::FieldRef:
+                    case IrKind::Upvar:
+                        EmitAddress(*binding);
+                        break;
+                    default:
+                        break;
+                }
             }
         }
 
@@ -1808,12 +1776,12 @@ void CodeGenerator::EmitDefaultArgExpr(ir::DefaultArg* expr) {
             }
         }
     } else {
-        if (init->val().ident == iCONSTEXPR && init->val().type()->isNull() &&
+        if (init->is(IrKind::Constant) && init->val().type()->isNull() &&
             !arg->type()->isHeapItem())
         {
             __ PUSH_C(0);
         } else if (init->lvalue()) {
-            EmitRvalue(init, init->val());
+            EmitRvalue(init, BindLval(init->to<ir::Lvalue>()));
         } else {
             EmitExpr(init);
         }
@@ -1935,24 +1903,25 @@ void
 CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
 {
     ir::Value* expr = stmt->sema_expr();
-    ExprVal v = expr->val();
 
     // Only zap non-const lvalues.
     bool zap = expr->lvalue();
     if (zap) {
-        if (v.ident == iVARIABLE && v.sym()->is_const())
+        const ExprVal& raw = expr->val();
+        if (raw.ident == iVARIABLE && raw.sym()->is_const())
             zap = false;
-        else if (v.ident == iACCESSOR && !v.accessor()->setter())
+        else if (raw.ident == iACCESSOR && !raw.accessor()->setter())
             zap = false;
     }
 
+    std::optional<BoundLval> binding;
     if (expr->lvalue()) {
-        v = BindLvalue(expr, true);
+        binding = BindLval(expr->to<ir::Lvalue>(), true);
 
-        if (zap && !v.canRematerialize())
+        if (zap && !binding->canRematerialize())
             __ emit(OP_DUP);
 
-        EmitRvalue(expr, v);
+        EmitRvalue(expr, *binding);
     } else {
         EmitExpr(expr);
     }
@@ -1962,7 +1931,7 @@ CodeGenerator::EmitDeleteStmt(DeleteStmt* stmt)
     if (zap) {
         // Store 0 back.
         __ PUSH_C(0);
-        EmitStore(expr, v);
+        EmitStore(expr, *binding);
     }
 }
 
@@ -1970,206 +1939,251 @@ void CodeGenerator::EmitRvalue(ir::Rvalue* expr) {
     EmitRvalueFromLvalue(expr->expr());
 }
 
-void CodeGenerator::EmitRvalueFromLvalue(ir::Value* expr) {
-    assert(expr->lvalue());
-    ExprVal val = BindLvalue(expr);
-    EmitRvalue(expr, val);
+void CodeGenerator::EmitRvalueFromLvalue(ir::Lvalue* expr) {
+    EmitRvalue(expr, BindLval(expr));
 }
 
-void CodeGenerator::EmitRvalue(ir::Value* node, const ExprVal& lval) {
-    switch (lval.ident) {
-        case iARRAYELEM:
-            assert(!lval.type()->isFlatArray());
-            if (lval.type()->isChar())
+void CodeGenerator::EmitAsRvalue(ir::Value* expr) {
+    if (expr->lvalue())
+        EmitRvalueFromLvalue(expr->to<ir::Lvalue>());
+    else
+        EmitExpr(expr);
+}
+
+void CodeGenerator::EmitIndirectLoad(Type* type) {
+    if (type->isChar())
+        __ emit(OP_LOAD_I_U8);
+    else if (type->isInt16())
+        __ emit(OP_LOAD_I_I16);
+    else if (type->isInt8())
+        __ emit(OP_LOAD_I_I8);
+    else if (type->isInt64())
+        __ emit(OP_LOAD_I_I64);
+    else if (type->isIntPtr())
+        __ emit(OP_LOAD_I_INTPTR);
+    else if (type->isDouble())
+        __ emit(OP_LOAD_I_F64);
+    else if (type->isFloat())
+        __ emit(OP_LOAD_I_F32);
+    else
+        __ emit(OP_LOAD_I_I32);
+}
+
+void CodeGenerator::EmitIndirectStore(Type* type) {
+    if (type->isChar())
+        __ emit(OP_STOR_I_I8);
+    else if (type->isInt16())
+        __ emit(OP_STOR_I_I16);
+    else if (type->isInt8())
+        __ emit(OP_STOR_I_I8);
+    else if (type->isInt64())
+        __ emit(OP_STOR_I_I64);
+    else if (type->isIntPtr())
+        __ emit(OP_STOR_I_INTPTR);
+    else if (type->isDouble())
+        __ emit(OP_STOR_I_F64);
+    else if (type->isFloat())
+        __ emit(OP_STOR_I_F32);
+    else if (type->isHeapItem())
+        __ emit(OP_STOR_I_A);
+    else
+        __ emit(OP_STOR_I_I32);
+}
+
+void CodeGenerator::EmitLoadVar(VarDeclBase* var) {
+    if (var->type()->isReference()) {
+        assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+        __ emit(OP_LOAD_S, VarSlot(var->addr()));
+        EmitIndirectLoad(var->type()->inner());
+        return;
+    }
+
+    if (var->is_shared()) {
+        __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+        auto field = fun_->GetSharedVarField(var);
+        if (var->type()->isCompositeValue())
+            EmitAddrField(field);
+        else
+            EmitLoadField(field);
+    } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
+        if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
+            __ emit(OP_LOAD_S, VarSlot(var->addr()));
+            EmitIndirectLoad(var->type().unqualified());
+        } else if (var->type()->isCompositeValue()) {
+            EmitAddress(var);
+        } else {
+            __ emit(OP_LOAD_S, VarSlot(var->addr()));
+        }
+    } else {
+        uint16_t slot = AcquireGlobalSlot(var);
+        if (var->type()->isCompositeValue())
+            __ emit(OP_ADDR_GLB, VarSlot(slot));
+        else
+            __ emit(OP_LOAD_GLB, VarSlot(slot));
+    }
+}
+
+void CodeGenerator::EmitRvalue(ir::Value* node, const BoundLval& binding) {
+    auto lval = binding.lval;
+    auto type = lval->val().type();
+    switch (lval->kind()) {
+        case IrKind::Index:
+            assert(!type->isFlatArray());
+            if (binding.address_on_stack) {
+                if (type->isComposite())
+                    break;
+                EmitIndirectLoad(type);
+                break;
+            }
+            if (type->isChar())
                 __ emit(OP_LOAD_ELEM_U8);
-            else if (lval.type()->isInt16())
+            else if (type->isInt16())
                 __ emit(OP_LOAD_ELEM_I16);
-            else if (lval.type()->isInt8())
+            else if (type->isInt8())
                 __ emit(OP_LOAD_ELEM_I8);
-            else if (lval.type()->isInt64())
+            else if (type->isInt64())
                 __ emit(OP_LOAD_ELEM_I64);
-            else if (lval.type()->isIntPtr())
+            else if (type->isIntPtr())
                 __ emit(OP_LOAD_ELEM_INTPTR);
-            else if (lval.type()->isDouble())
+            else if (type->isDouble())
                 __ emit(OP_LOAD_ELEM_F64);
-            else if (lval.type()->isFloat())
+            else if (type->isFloat())
                 __ emit(OP_LOAD_ELEM_F32);
-            else if (lval.type()->isHeapItem())
+            else if (type->isHeapItem())
                 __ emit(OP_LOAD_ELEM_A);
-            else if (!lval.type()->isComposite())
+            else if (!type->isComposite())
                 __ emit(OP_LOAD_ELEM_I32);
-            else if (lval.type()->isCompositeValue())
+            else if (type->isCompositeValue())
                 __ emit(OP_IDXADDR);
-            else if (lval.type()->isArray())
+            else if (type->isArray())
                 __ emit(OP_LOAD_ELEM_A);
             else
                 assert(false);
             break;
-        case iADDRESS:
-            if (lval.type()->isComposite())
+        case IrKind::LvalueCast:
+            // A decayed lvalue: the address is on the stack.
+            if (type->isComposite())
                 break;
-            if (lval.type()->isChar())
-                __ emit(OP_LOAD_I_U8);
-            else if (lval.type()->isInt16())
-                __ emit(OP_LOAD_I_I16);
-            else if (lval.type()->isInt8())
-                __ emit(OP_LOAD_I_I8);
-            else if (lval.type()->isInt64())
-                __ emit(OP_LOAD_I_I64);
-            else if (lval.type()->isIntPtr())
-                __ emit(OP_LOAD_I_INTPTR);
-            else if (lval.type()->isDouble())
-                __ emit(OP_LOAD_I_F64);
-            else if (lval.type()->isFloat())
-                __ emit(OP_LOAD_I_F32);
-            else
-                __ emit(OP_LOAD_I_I32);
+            EmitIndirectLoad(type);
             break;
-        case iFIELD: {
-            auto field = lval.field();
-            if (lval.type()->isCompositeValue())
+        case IrKind::FieldRef: {
+            auto field = lval->as<ir::FieldRef>()->field();
+            if (type->isCompositeValue())
                 EmitAddrField(field);
             else
                 EmitLoadField(field);
             break;
         }
-        case iACCESSOR:
-            InvokeGetter(node, lval.accessor());
+        case IrKind::Accessor:
+            InvokeGetter(node, lval->as<ir::Accessor>()->accessor());
             break;
-        case iUPVAR: {
-            auto upvar = lval.upvar();
+        case IrKind::Upvar: {
+            auto upvar = lval->as<ir::Upvar>()->decl();
             if (upvar->var()->is_shared()) {
                 // Shared object ref is already on the stack from BindLvalue.
                 auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
-                if (lval.type()->isCompositeValue())
+                if (type->isCompositeValue())
                     EmitAddrField(field);
                 else
                     EmitLoadField(field);
             } else {
-                if (lval.type()->isCompositeValue())
+                if (type->isCompositeValue())
                     __ emit(OP_ADDR_UPVAR, UpvarIndex(upvar->upvar_index()));
                 else
                     __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->upvar_index()));
             }
             break;
         }
-        case iVARIABLE: {
-            if (lval.type()->isReference()) {
-                auto var = lval.sym();
-                assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-                __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                if (lval.type()->inner()->isInt64())
-                    __ emit(OP_LOAD_I_I64);
-                else if (lval.type()->inner()->isIntPtr())
-                    __ emit(OP_LOAD_I_INTPTR);
-                else if (lval.type()->inner()->isDouble())
-                    __ emit(OP_LOAD_I_F64);
-                else if (lval.type()->inner()->isFloat())
-                    __ emit(OP_LOAD_I_F32);
-                else
-                    __ emit(OP_LOAD_I_I32);
-                break;
-            }
-            [[fallthrough]];
-        }
-        default: {
-            auto var = lval.sym();
-            if (var->is_shared()) {
-                __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
-                auto field = fun_->GetSharedVarField(var);
-                if (lval.type()->isCompositeValue())
-                    EmitAddrField(field);
-                else
-                    EmitLoadField(field);
-            } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    if (var->type()->isInt64())
-                        __ emit(OP_LOAD_I_I64);
-                    else if (var->type()->isIntPtr())
-                        __ emit(OP_LOAD_I_INTPTR);
-                    else
-                        __ emit(OP_LOAD_I_F64);
-                } else if (var->type()->isCompositeValue()) {
-                    EmitAddress(var);
-                } else {
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                }
-            } else {
-                uint16_t slot = AcquireGlobalSlot(var);
-                if (var->type()->isCompositeValue())
-                    __ emit(OP_ADDR_GLB, VarSlot(slot));
-                else
-                    __ emit(OP_LOAD_GLB, VarSlot(slot));
-            }
+        case IrKind::Variable:
+            EmitLoadVar(lval->as<ir::Variable>()->decl());
             break;
+        case IrKind::This:
+            EmitLoadVar(lval->as<ir::This>()->decl());
+            break;
+        default:
+            assert(false);
+            break;
+    }
+}
+void CodeGenerator::EmitStoreVar(VarDeclBase* var) {
+    if (var->type()->isReference()) {
+        assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
+        __ emit(OP_LOAD_S, VarSlot(var->addr()));
+        __ emit(OP_SWAP);
+        EmitIndirectStore(var->type()->inner());
+        return;
+    }
+
+    if (var->is_shared()) {
+        __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+        __ emit(OP_SWAP);
+        auto field = fun_->GetSharedVarField(var);
+        EmitStoreField(field);
+    } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
+        if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
+            __ emit(OP_LOAD_S, VarSlot(var->addr()));
+            __ emit(OP_SWAP);
+            EmitIndirectStore(var->type().unqualified());
+        } else {
+            __ emit(OP_STOR_S, VarSlot(var->addr()));
         }
+    } else {
+        uint16_t slot = AcquireGlobalSlot(var);
+        __ emit(OP_STOR_GLB, VarSlot(slot));
     }
 }
 
-void CodeGenerator::EmitStore(ir::Value* node, const ExprVal& lval) {
-    switch (lval.ident) {
-        case iARRAYELEM:
-            if (lval.type()->isChar())
+void CodeGenerator::EmitStore(ir::Value* node, const BoundLval& binding) {
+    auto lval = binding.lval;
+    auto type = lval->val().type();
+    switch (lval->kind()) {
+        case IrKind::Index:
+            if (binding.address_on_stack) {
+                EmitIndirectStore(type);
+                assert(!type->isEnumStruct());
+                break;
+            }
+            if (type->isChar())
                 __ emit(OP_STOR_ELEM_I8);
-            else if (lval.type()->isInt16())
+            else if (type->isInt16())
                 __ emit(OP_STOR_ELEM_I16);
-            else if (lval.type()->isInt8())
+            else if (type->isInt8())
                 __ emit(OP_STOR_ELEM_I8);
-            else if (lval.type()->isInt64())
+            else if (type->isInt64())
                 __ emit(OP_STOR_ELEM_I64);
-            else if (lval.type()->isIntPtr())
+            else if (type->isIntPtr())
                 __ emit(OP_STOR_ELEM_INTPTR);
-            else if (lval.type()->isDouble())
+            else if (type->isDouble())
                 __ emit(OP_STOR_ELEM_F64);
-            else if (lval.type()->isFloat())
+            else if (type->isFloat())
                 __ emit(OP_STOR_ELEM_F32);
-            else if (lval.type()->isHeapItem())
+            else if (type->isHeapItem())
                 __ emit(OP_STOR_ELEM_A);
             else
                 __ emit(OP_STOR_ELEM_I32);
-            assert(!lval.type()->isEnumStruct());
+            assert(!type->isEnumStruct());
             break;
-        case iADDRESS:
-            if (lval.type()->isChar())
-                __ emit(OP_STOR_I_I8);
-            else if (lval.type()->isInt16())
-                __ emit(OP_STOR_I_I16);
-            else if (lval.type()->isInt8())
-                __ emit(OP_STOR_I_I8);
-            else if (lval.type()->isInt64())
-                __ emit(OP_STOR_I_I64);
-            else if (lval.type()->isIntPtr())
-                __ emit(OP_STOR_I_INTPTR);
-            else if (lval.type()->isDouble())
-                __ emit(OP_STOR_I_F64);
-            else if (lval.type()->isFloat())
-                __ emit(OP_STOR_I_F32);
-            else if (lval.type()->isHeapItem())
-                __ emit(OP_STOR_I_A);
-            else
-                __ emit(OP_STOR_I_I32);
-            assert(!lval.type()->isEnumStruct());
+        case IrKind::LvalueCast:
+            EmitIndirectStore(type);
+            assert(!type->isEnumStruct());
             break;
-        case iFIELD: {
-            auto field = lval.field();
-            EmitStoreField(field);
+        case IrKind::FieldRef:
+            EmitStoreField(lval->as<ir::FieldRef>()->field());
             break;
-        }
-        case iACCESSOR:
-            if (lval.type()->isWideType()) {
+        case IrKind::Accessor:
+            if (type->isWideType()) {
                 // Need to pass the value as an address for native compatibility.
-                auto slot = AcquireTempSlot(node, lval.type()->builtin_type());
+                auto slot = AcquireTempSlot(node, type->builtin_type());
                 __ emit(OP_STOR_S, VarSlot(slot));
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
             // Calls have their arguments in reverse order, so we have to swap
             // the top of the stack.
             __ emit(OP_SWAP);
-            EmitCall(lval.accessor()->setter(), 2);
+            EmitCall(lval->as<ir::Accessor>()->accessor()->setter(), 2);
             break;
-        case iUPVAR: {
-            auto upvar = lval.upvar();
+        case IrKind::Upvar: {
+            auto upvar = lval->as<ir::Upvar>()->decl();
             if (upvar->var()->is_shared()) {
                 __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
                 __ emit(OP_SWAP);
@@ -2180,91 +2194,18 @@ void CodeGenerator::EmitStore(ir::Value* node, const ExprVal& lval) {
             }
             break;
         }
-        case iVARIABLE: {
-            if (lval.type()->isReference()) {
-                auto var = lval.sym();
-                assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-
-                __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                __ emit(OP_SWAP);
-                if (lval.type()->inner()->isInt64())
-                    __ emit(OP_STOR_I_I64);
-                else if (lval.type()->inner()->isIntPtr())
-                    __ emit(OP_STOR_I_INTPTR);
-                else if (lval.type()->inner()->isDouble())
-                    __ emit(OP_STOR_I_F64);
-                else if (lval.type()->inner()->isHeapItem())
-                    __ emit(OP_STOR_I_A);
-                else
-                    __ emit(OP_STOR_I_I32);
-                break;
-            }
-            [[fallthrough]];
-        }
-        default: {
-            auto var = lval.sym();
-            if (var->is_shared()) {
-                __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
-                __ emit(OP_SWAP);
-                auto field = fun_->GetSharedVarField(var);
-                EmitStoreField(field);
-            } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-                if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
-                    __ emit(OP_LOAD_S, VarSlot(var->addr()));
-                    __ emit(OP_SWAP);
-                    if (var->type()->isInt64())
-                        __ emit(OP_STOR_I_I64);
-                    else if (var->type()->isIntPtr())
-                        __ emit(OP_STOR_I_INTPTR);
-                    else
-                        __ emit(OP_STOR_I_F64);
-                } else {
-                    __ emit(OP_STOR_S, VarSlot(var->addr()));
-                }
-            } else {
-                uint16_t slot = AcquireGlobalSlot(var);
-                __ emit(OP_STOR_GLB, VarSlot(slot));
-            }
+        case IrKind::Variable:
+            EmitStoreVar(lval->as<ir::Variable>()->decl());
             break;
-        }
+        case IrKind::This:
+            // Store to |this| should never be generated.
+            assert(false);
+            break;
+        default:
+            assert(false);
+            break;
     }
 }
-
-void CodeGenerator::EmitAddress(const ExprVal& lval) {
-    switch (lval.ident) {
-        case iVARIABLE:
-            EmitAddress(lval.sym());
-            break;
-        case iFIELD: {
-            auto field = lval.field();
-            EmitAddrField(field);
-            break;
-        }
-        case iARRAYELEM:
-            if (!lval.type()->isArray())
-                __ emit(OP_IDXADDR);
-            else
-                __ emit(OP_LOAD_ELEM_A);
-            break;
-         case iADDRESS:
-             break;
-         case iUPVAR: {
-             auto upvar = lval.upvar();
-             if (upvar->var()->is_shared()) {
-                 __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
-                 auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
-                 EmitAddrField(field);
-             } else {
-                 __ emit(OP_ADDR_UPVAR, UpvarIndex(upvar->upvar_index()));
-             }
-             break;
-         }
-         default:
-             assert(false);
-             break;
-     }
- }
-
 void CodeGenerator::EmitAddress(VarDeclBase* decl) {
     if (decl->is_shared()) {
         __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
@@ -2290,6 +2231,44 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
     }
 }
 
+void CodeGenerator::EmitAddress(const BoundLval& binding) {
+    auto lval = binding.lval;
+    switch (lval->kind()) {
+        case IrKind::Variable:
+            EmitAddress(lval->as<ir::Variable>()->decl());
+            break;
+        case IrKind::This:
+            EmitAddress(lval->as<ir::This>()->decl());
+            break;
+        case IrKind::FieldRef:
+            EmitAddrField(lval->as<ir::FieldRef>()->field());
+            break;
+        case IrKind::Index:
+            if (binding.address_on_stack)
+                break;
+            if (!lval->val().type()->isArray())
+                __ emit(OP_IDXADDR);
+            else
+                __ emit(OP_LOAD_ELEM_A);
+            break;
+        case IrKind::LvalueCast:
+            break;
+        case IrKind::Upvar: {
+            auto upvar = lval->as<ir::Upvar>()->decl();
+            if (upvar->var()->is_shared()) {
+                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
+                auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
+                EmitAddrField(field);
+            } else {
+                __ emit(OP_ADDR_UPVAR, UpvarIndex(upvar->upvar_index()));
+            }
+            break;
+        }
+        default:
+            assert(false);
+            break;
+    }
+}
 void CodeGenerator::EmitLoadField(LayoutFieldDecl* field) {
     uint32_t ref = rtti_->AddFieldRef(field);
     __ emit(OP_LOAD_FLD, ref);
@@ -2595,9 +2574,9 @@ void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
         } else if (var->type()->isCompositeValue()) {
             EmitAddress(var);
         } else {
-            // Note: We can't BindLvalue because we don't have an expr, but we
+            // Note: We can't BindLval() because there is no storage node here; we
             // don't need one here technically, since it's just a variable.
-            EmitRvalue(nullptr, ExprVal{var});
+            EmitLoadVar(var);
         }
     }
 
@@ -2698,13 +2677,12 @@ void CodeGenerator::EmitSimpleCastExpr(ir::SimpleCast* expr) {
     }
 }
 
-void CodeGenerator::EmitCastExpr(ir::Cast* expr, unsigned int flags) {
-    auto from = expr->expr();
+void CodeGenerator::EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int flags) {
     if (expr->lvalue()) {
         assert(from->lvalue());
 
-        auto val = BindLvalue(from);
-        EmitAddress(val);
+        BoundLval binding = BindLval(from->to<ir::Lvalue>());
+        EmitAddress(binding);
     } else {
         EmitExpr(from);
 
