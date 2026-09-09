@@ -25,7 +25,6 @@ class Parser
     ParseTree* Parse();
 
   private:
-    typedef int (Parser::*HierFn)(ExprVal*);
     typedef Expr* (Parser::*NewHierFn)();
 
 

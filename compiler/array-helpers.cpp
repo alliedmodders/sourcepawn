@@ -320,9 +320,9 @@ bool ArrayTypeResolver::ResolveDimExprs() {
         if (!dim)
             return false;
 
-        const auto& v = dim->val();
-        if (!IsValidIndexType(v.type())) {
-            report(expr->pos(), 77) << v.type();
+        QualType v = dim->qual_type();
+        if (!IsValidIndexType(*v)) {
+            report(expr->pos(), 77) << *v;
             return false;
         }
 
@@ -548,7 +548,7 @@ bool ArrayValidator::ValidateInitializer() {
         init_ir_ = node;
         if (decl_)
             decl_->set_sema_init_rhs(node);
-        return sema_->CheckCoercion(node, at_, node->val().type(), CvtContext::Assignment);
+        return sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment);
     }
 
     // Not a dynamic array, check for a fixed initializer.
@@ -605,7 +605,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
                 return nullptr;
             elts.push_back(n);
         }
-        return new ir::Array(array, elts, array->ellipses());
+        return new ir::Array(array, elts, array->ellipses(), rank);
     }
 
     if (StringExpr* str = init->as<StringExpr>()) {
@@ -625,7 +625,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             report(str->pos(), 47);
             return nullptr;
         }
-        return new ir::String(str);
+        return new ir::String(str, rank);
     }
 
     // |rank_size| is the declared element count (0 if unbounded). It is used
@@ -673,7 +673,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
         }
         if (elts.size() != array->exprs().size())
             return nullptr;
-        return new ir::Array(array, elts, array->ellipses());
+        return new ir::Array(array, elts, array->ellipses(), rank);
     }
 
     if (rank_size) {
@@ -706,13 +706,13 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             continue;
         }
 
-        const auto& v = n->val();
+        QualType v = n->qual_type();
         if (!n->is(IrKind::Constant)) {
             report(expr, 8);
             continue;
         }
 
-        sema_->CheckCoercion(n, rank->inner(), v.type(), CvtContext::Assignment);
+        sema_->CheckCoercion(n, rank->inner(), *v, CvtContext::Assignment);
 
         prev2 = prev1;
         prev1 = n->is(IrKind::Constant);
@@ -745,7 +745,7 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             return nullptr;
         }
     }
-    return new ir::Array(array, elts, array->ellipses());
+    return new ir::Array(array, elts, array->ellipses(), rank);
 }
 
 bool ArrayValidator::AddCells(size_t ncells) {
@@ -835,7 +835,7 @@ bool Semantics::CheckArrayDeclaration(VarDeclBase* decl) {
                         return false;
                     dim_nodes.emplace_back(dim_node);
                 }
-                decl->set_sema_init_rhs(new ir::NewArray(na, dim_nodes));
+                decl->set_sema_init_rhs(new ir::NewArray(na, dim_nodes, array));
             }
         }
     }

@@ -17,7 +17,6 @@ struct ConstVal;
 class ParseTree;
 class Stmt;
 class Expr;
-struct ExprVal;
 struct typeinfo_t;
 
 namespace ir {

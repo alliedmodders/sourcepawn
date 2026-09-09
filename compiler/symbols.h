@@ -15,7 +15,6 @@
 #include "sc.h"
 #include "source-location.h"
 #include "stl/stl-unordered-map.h"
-#include "value.h"
 
 namespace sp {
 namespace cc {

@@ -217,8 +217,8 @@ std::optional<ConstVal> TryFoldBinary(BinaryExpr* expr, ir::Value* left, ir::Val
     if (!left_const || !right_const)
         return std::nullopt;
 
-    Type* left_type = left_const->val().type();
-    Type* right_type = right_const->val().type();
+    Type* left_type = left_const->type();
+    Type* right_type = right_const->type();
 
     auto& cc = CompileContext::get();
 
@@ -238,13 +238,13 @@ bool EvalConst(ir::Value* node, cell* value, Type** type) {
     if (!c)
         return false;
 
-    if (c->val().type()->isWideType() || c->val().type()->isHeapItem())
+    if (c->type()->isWideType() || c->type()->isHeapItem())
         return false;
 
     if (value)
         *value = c->get_cell();
     if (type)
-        *type = c->val().type();
+        *type = c->type();
     return true;
 }
 
@@ -271,7 +271,7 @@ std::optional<ConstVal> TryFoldCast(ir::Value* from_node, Type* to) {
     auto from = from_node->as<ir::Constant>();
     if (!from)
         return std::nullopt;
-    if (from->val().type()->isWideType() || from->val().type()->isHeapItem())
+    if (from->type()->isWideType() || from->type()->isHeapItem())
         return std::nullopt;
 
     cell val = from->get_cell();
