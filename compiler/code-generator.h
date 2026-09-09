@@ -131,21 +131,14 @@ class CodeGenerator final
 
         // Returns true if binding is idempotent and no operand needs to be
         // pushed onto the stack.
-        bool canRematerialize() const {
-            switch (lval->kind()) {
-                case IrKind::Variable:
-                case IrKind::Upvar:
-                    return true;
-                default:
-                    return false;
-            }
-        }
+        bool canRematerialize() const;
     };
 
     void EmitCall(const CallTarget& target, cell nargs, bool is_spread = false);
     void InvokeGetter(ir::Value* node, PropertyDecl* method);
     void EmitRvalue(ir::Value* node, const BoundLval& binding);
     void EmitLoadVar(VarDeclBase* var);
+    void EmitVarBase(VarDeclBase* var);
     void EmitStoreVar(VarDeclBase* var);
     void EmitIndirectLoad(Type* type);
     void EmitIndirectStore(Type* type);
