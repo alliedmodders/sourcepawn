@@ -43,6 +43,11 @@ void VarDeclBase::set_init(Expr* expr) {
     init_->set_initializer();
 }
 
+void VarDeclBase::set_sema_init(BinaryExpr* init) {
+    sema_init_ = init;
+    sema_init_rhs_ = init ? init->right() : nullptr;
+}
+
 Expr* VarDeclBase::init_rhs() const {
     if (!init_)
         return nullptr;

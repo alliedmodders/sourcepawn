@@ -324,10 +324,13 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     sema.set_context(&sc);
 
-    if (!expr->Bind(sc) || !sema.CheckExpr(expr))
+    if (!expr->Bind(sc))
+        return false;
+    Expr* checked = sema.CheckExpr(expr);
+    if (!checked)
         return false;
 
-    auto val_type = expr->val().type();
+    auto val_type = checked->val().type();
     if (val_type->isFloat() || val_type->isDouble()) {
         report(488);
         return false;
@@ -339,7 +342,7 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     // The preprocessor uses a bespoke constant evaluator, and I don't want to
     // touch the preprocessor, so it gets to keep this.
-    return expr->EvalConst(val, type);
+    return checked->EvalConst(val, type);
 }
 
 Stmt*
