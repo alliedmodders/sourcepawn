@@ -660,6 +660,9 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
                 if (!ctor)
                     return;
                 EmitAddress(decl);
+            } else {
+                // Bind: the store below needs the base under the address.
+                EmitVarBase(decl);
             }
 
             EmitArrayCtor(array, ctor, 0);
@@ -674,6 +677,7 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
             __ emit(OP_COPYARRAY);
         } else {
             // Dynamic array with arbitrary RHS.
+            EmitVarBase(decl);
             EmitExpr(ctor);
             EmitStoreVar(decl);
         }
@@ -707,6 +711,8 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
             __ emit(OP_STOR_S_C, VarSlot(decl), rhs->cell_bits());
             return;
         }
+
+        EmitVarBase(decl);
 
         if (!ctor && rhs_type->isHeapItem()) {
             // The zero value of a heap item is a null reference; emit a
@@ -1057,10 +1063,42 @@ CodeGenerator::EmitUnaryTest(ir::Unary* expr, bool jump_on_true, Label* target)
     return false;
 }
 
+static inline bool HasIndirectAddress(VarDeclBase* var) {
+    return var->type()->isReference() ||
+           var->is_shared() ||
+           (var->vclass() == sARGUMENT && var->type()->isWideType());
+}
+
+bool CodeGenerator::BoundLval::canRematerialize() const {
+    switch (lval->kind()) {
+        case IrKind::Variable:
+            // Not strictly true here as we CAN rematerialize this, it's just
+            // slightly inefficient to do so. IncDec uses this as a proxy for
+            // "pushes something on the stack" too.
+            return !HasIndirectAddress(lval->as<ir::Variable>()->decl());
+        case IrKind::Upvar:
+            // A shared upvar's shared-object ref is pushed at bind time and
+            // must survive rvalue reads, same as an indirect Variable.
+            return !lval->as<ir::Upvar>()->decl()->var()->is_shared();
+        default:
+            return false;
+    }
+}
+
+void CodeGenerator::EmitVarBase(VarDeclBase* var) {
+    if (!HasIndirectAddress(var))
+        return;
+
+    if (var->is_shared())
+        __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
+    else
+        __ emit(OP_LOAD_S, VarSlot(var->addr()));
+}
+
 int CodeGenerator::StackSlotsForLval(const BoundLval& b) {
     switch (b.lval->kind()) {
         case IrKind::Variable:
-            return 0;
+            return HasIndirectAddress(b.lval->as<ir::Variable>()->decl()) ? 1 : 0;
         case IrKind::Upvar:
             // For shared upvars we push the shared object ref on the stack.
             return b.lval->as<ir::Upvar>()->decl()->var()->is_shared() ? 1 : 0;
@@ -1081,6 +1119,7 @@ CodeGenerator::BoundLval CodeGenerator::BindLval(ir::Lvalue* lval, bool simple_a
     b.lval = lval;
     switch (lval->kind()) {
         case IrKind::Variable:
+            EmitVarBase(lval->as<ir::Variable>()->decl());
             break;
         case IrKind::Index:
             EmitExpr(lval, EMIT_ALLOW_LVALUE);
@@ -1653,14 +1692,9 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
             }
 
             if (binding) {
-                auto lval = binding->lval;
                 if (needs_temp)
                     EmitRvalue(expr, *binding);
-                else if (lval->is(IrKind::Variable))
-                    EmitAddress(lval->as<ir::Variable>()->decl());
-                else if (lval->is(IrKind::FieldRef))
-                    EmitAddress(*binding);
-                else if (lval->is(IrKind::Upvar))
+                else
                     EmitAddress(*binding);
             }
 
@@ -1672,10 +1706,12 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
         } else if (arg->isReference()) {
             if (binding) {
                 switch (binding->lval->kind()) {
-                    case IrKind::Variable:
-                        if (!type->isComposite())
-                            EmitAddress(binding->lval->as<ir::Variable>()->decl());
+                    case IrKind::Variable: {
+                        auto var = binding->lval->as<ir::Variable>()->decl();
+                        if (!type->isComposite() || HasIndirectAddress(var))
+                            EmitAddress(*binding);
                         break;
+                    }
                     case IrKind::FieldRef:
                     case IrKind::Upvar:
                         EmitAddress(*binding);
@@ -1737,11 +1773,10 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
             if (!return_type->isVoid() && !ft->needs_hidden_arg())
                 __ emit(OP_POP);
         } else if (hidden_slot) {
-            if (return_type->isCompositeValue()) {
+            if (return_type->isCompositeValue())
                 __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
-            } else {
+            else
                 __ emit(OP_LOAD_S, VarSlot(*hidden_slot));
-            }
         }
     }
 }
@@ -2089,9 +2124,25 @@ void CodeGenerator::EmitRvalue(ir::Value* node, const BoundLval& binding) {
             }
             break;
         }
-        case IrKind::Variable:
-            EmitLoadVar(lval->as<ir::Variable>()->decl());
+        case IrKind::Variable: {
+            auto var = lval->as<ir::Variable>()->decl();
+            if (!HasIndirectAddress(var)) {
+                EmitLoadVar(var);
+                break;
+            }
+            if (var->type()->isReference())
+                EmitIndirectLoad(var->type()->inner());
+            else if (var->is_shared()) {
+                auto field = fun_->GetSharedVarField(var);
+                if (var->type()->isCompositeValue())
+                    EmitAddrField(field);
+                else
+                    EmitLoadField(field);
+            } else {
+                EmitIndirectLoad(var->type().unqualified());
+            }
             break;
+        }
         default:
             assert(false);
             break;
@@ -2100,25 +2151,18 @@ void CodeGenerator::EmitRvalue(ir::Value* node, const BoundLval& binding) {
 void CodeGenerator::EmitStoreVar(VarDeclBase* var) {
     if (var->type()->isReference()) {
         assert(var->vclass() == sLOCAL || var->vclass() == sARGUMENT);
-        __ emit(OP_LOAD_S, VarSlot(var->addr()));
-        __ emit(OP_SWAP);
         EmitIndirectStore(var->type()->inner());
         return;
     }
 
     if (var->is_shared()) {
-        __ emit(OP_LOAD_S, VarSlot(fun_->shared_object()->addr()));
-        __ emit(OP_SWAP);
         auto field = fun_->GetSharedVarField(var);
         EmitStoreField(field);
     } else if (var->vclass() == sLOCAL || var->vclass() == sARGUMENT) {
-        if (var->vclass() == sARGUMENT && var->type()->isWideType()) {
-            __ emit(OP_LOAD_S, VarSlot(var->addr()));
-            __ emit(OP_SWAP);
+        if (var->vclass() == sARGUMENT && var->type()->isWideType())
             EmitIndirectStore(var->type().unqualified());
-        } else {
+        else
             __ emit(OP_STOR_S, VarSlot(var->addr()));
-        }
     } else {
         uint16_t slot = AcquireGlobalSlot(var);
         __ emit(OP_STOR_GLB, VarSlot(slot));
@@ -2177,8 +2221,6 @@ void CodeGenerator::EmitStore(ir::Value* node, const BoundLval& binding) {
         case IrKind::Upvar: {
             auto upvar = lval->as<ir::Upvar>()->decl();
             if (upvar->var()->is_shared()) {
-                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
-                __ emit(OP_SWAP);
                 auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
                 EmitStoreField(field);
             } else {
@@ -2222,9 +2264,18 @@ void CodeGenerator::EmitAddress(VarDeclBase* decl) {
 void CodeGenerator::EmitAddress(const BoundLval& binding) {
     auto lval = binding.lval;
     switch (lval->kind()) {
-        case IrKind::Variable:
-            EmitAddress(lval->as<ir::Variable>()->decl());
+        case IrKind::Variable: {
+            auto var = lval->as<ir::Variable>()->decl();
+            if (!HasIndirectAddress(var)) {
+                EmitAddress(var);
+                break;
+            }
+            // For references and wide arguments the address is already on the
+            // stack.
+            if (var->is_shared())
+                EmitAddrField(fun_->GetSharedVarField(var));
             break;
+        }
         case IrKind::FieldRef:
             EmitAddrField(lval->as<ir::FieldRef>()->field());
             break;
@@ -2241,7 +2292,6 @@ void CodeGenerator::EmitAddress(const BoundLval& binding) {
         case IrKind::Upvar: {
             auto upvar = lval->as<ir::Upvar>()->decl();
             if (upvar->var()->is_shared()) {
-                __ emit(OP_LOAD_UPVAR, UpvarIndex(upvar->shared_obj_upvar_index()));
                 auto field = upvar->enclosure()->GetSharedVarField(upvar->var());
                 EmitAddrField(field);
             } else {
