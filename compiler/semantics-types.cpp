@@ -249,18 +249,18 @@ void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, Qua
 
 ir::Value* Semantics::TryConversion(ir::Value* expr, QualType formal, CvtContext why) {
     ConversionKind ck;
-    if (auto constant_ck = FindConstantConversion(expr, expr->val().type(), *formal, why))
+    if (auto constant_ck = FindConstantConversion(expr, expr->type(), *formal, why))
         ck = *constant_ck;
     else
-        ck = FindConversion(expr->val().type(), *formal, why);
+        ck = FindConversion(expr->type(), *formal, why);
     if (HasImplicitConversion(ck)) {
         if (!IsNopConversion(ck))
             return BuildConversion(expr, ck, *formal);
         if (ck == ConversionKind::TagMismatch)
-            report(expr, 213) << formal << expr->val().type();
+            report(expr, 213) << formal << expr->type();
         return expr;
     }
-    ReportConversionDiagnostic(expr, formal, expr->val().type());
+    ReportConversionDiagnostic(expr, formal, expr->type());
     return nullptr;
 }
 

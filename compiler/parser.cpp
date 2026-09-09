@@ -332,7 +332,7 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
     if (!checked)
         return false;
 
-    auto val_type = checked->val().type();
+    auto val_type = checked->type();
     if (val_type->isFloat() || val_type->isDouble()) {
         report(488);
         return false;

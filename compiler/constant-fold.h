@@ -9,7 +9,6 @@
 #include <optional>
 
 #include "types.h"
-#include "value.h"
 
 namespace sp {
 namespace cc {

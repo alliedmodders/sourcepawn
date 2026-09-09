@@ -12,14 +12,14 @@ namespace sp {
 namespace cc {
 namespace ir {
 
-static ExprVal RvalueVal(Value* operand) {
-    ExprVal v = operand->val();
+static QualType RvalueVal(Value* operand) {
+    QualType v = operand->qual_type();
     if (auto* accessor = operand->as<Accessor>()) {
         if (accessor->accessor()->getter())
             markusage(accessor->accessor()->getter(), uREAD);
     }
-    if (v.type()->isReference())
-        v.set_type(v.type()->inner());
+    if (v->isReference())
+        v = v->inner();
     return v;
 }
 

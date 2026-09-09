@@ -12,7 +12,6 @@
 #include "parse-node.h"
 #include "pool-objects.h"
 #include "constant-fold.h"
-#include "value.h"
 
 namespace sp {
 namespace cc {
@@ -40,16 +39,17 @@ class Value : public PoolObject
         kind_(kind)
     {}
 
-    Value(IrKind kind, Expr* parent, const ExprVal& val)
+    Value(IrKind kind, Expr* parent, QualType type)
       : parent_(parent),
         kind_(kind),
-        val_(val)
+        type_(type)
     {}
 
     Expr* pn() const { return parent_; }
     IrKind kind() const { return kind_; }
 
-    const ExprVal& val() const { return val_; }
+    Type* type() const { return *type_; }
+    QualType qual_type() const { return type_; }
 
     const token_pos_t& pos() const { return parent_->pos(); }
 
@@ -75,7 +75,7 @@ class Value : public PoolObject
   protected:
     Expr* parent_;
     IrKind kind_;
-    ExprVal val_ = {};
+    QualType type_;
 };
 
 class Lvalue : public Value
@@ -91,18 +91,16 @@ class Constant final : public Value
 {
   public:
     Constant(Expr* parent, const ConstVal& value)
-      : Value(IrKind::Constant, parent),
+      : Value(IrKind::Constant, parent, value.type),
         value_(value)
-    {
-        val_.set_type(value.type);
-    }
+    {}
 
     const ConstVal& value() const { return value_; }
 
-    bool is_intptr() const { return val().type()->isIntPtr(); }
-    bool is_float() const { return val().type()->isFloat(); }
-    bool is_double() const { return val().type()->isDouble(); }
-    bool is_int64() const { return val().type()->isInt64(); }
+    bool is_intptr() const { return type()->isIntPtr(); }
+    bool is_float() const { return type()->isFloat(); }
+    bool is_double() const { return type()->isDouble(); }
+    bool is_int64() const { return type()->isInt64(); }
 
     cell get_cell() const { return value_.get_cell(); }
     cell get_i32() const { return value_.get_i32(); }
@@ -137,7 +135,7 @@ class Typename final : public Value
       : Value(IrKind::Typename, parent),
         decl_(decl)
     {
-        val_.set_type(decl->type());
+        type_ = decl->type();
     }
 
     Decl* decl() const { return decl_; }
@@ -155,7 +153,7 @@ class FunctionRef final : public Value
       : Value(IrKind::FunctionRef, parent),
         fun_(fun)
     {
-        val_.set_expr(fun->type());
+        type_ = fun->type();
     }
 
     FunctionDecl* decl() const { return fun_; }
@@ -173,7 +171,7 @@ class Variable final : public Lvalue
       : Lvalue(IrKind::Variable, parent),
         decl_(decl)
     {
-        val_.set_type(decl->type());
+        type_ = decl->type();
     }
 
     VarDeclBase* decl() const { return decl_; }
@@ -191,7 +189,7 @@ class Upvar final : public Lvalue
       : Lvalue(IrKind::Upvar, parent),
         decl_(decl)
     {
-        val_.set_type(type);
+        type_ = type;
     }
 
     UpvarDecl* decl() const { return decl_; }
@@ -205,8 +203,8 @@ class Upvar final : public Lvalue
 class String final : public Value
 {
   public:
-    String(Expr* parent, const ExprVal& val = {})
-      : Value(IrKind::String, parent, val)
+    String(Expr* parent, QualType type)
+      : Value(IrKind::String, parent, type)
     {}
 
     StringExpr* parent() const { return pn()->to<StringExpr>(); }
@@ -217,8 +215,8 @@ class String final : public Value
 class Unary final : public Value
 {
   public:
-    Unary(Expr* parent, int token, Value* expr, const ExprVal& val)
-      : Value(IrKind::Unary, parent, val),
+    Unary(Expr* parent, int token, Value* expr, QualType type)
+      : Value(IrKind::Unary, parent, type),
         token_(token),
         expr_(expr)
     {}
@@ -236,8 +234,8 @@ class Unary final : public Value
 class Index final : public Lvalue
 {
   public:
-    Index(Expr* parent, Value* base, Value* index, const ExprVal& val)
-      : Lvalue(IrKind::Index, parent, val),
+    Index(Expr* parent, Value* base, Value* index, QualType type)
+      : Lvalue(IrKind::Index, parent, type),
         base_(base),
         index_(index)
     {}
@@ -247,7 +245,7 @@ class Index final : public Lvalue
         base_(base),
         index_(index)
     {
-        val_.set_type(QualType(elem_type));
+        type_ = QualType(elem_type);
     }
 
     Value* base() const { return base_; }
@@ -268,7 +266,7 @@ class StaticFieldRef final : public Value
         base_(base),
         field_(field)
     {
-        val_.set_expr(int_type);
+        type_ = int_type;
     }
 
     Value* base() const { return base_; }
@@ -290,7 +288,7 @@ class FieldRef final : public Lvalue
         base_(base),
         field_(field)
     {
-        val_.set_type(field->type());
+        type_ = field->type();
     }
 
     int token() const { return token_; }
@@ -337,7 +335,7 @@ class Accessor final : public Lvalue
         base_(base),
         prop_(prop)
     {
-        val_.set_type(prop->property_type());
+        type_ = prop->property_type();
     }
 
     int token() const { return token_; }
@@ -355,8 +353,8 @@ class Accessor final : public Lvalue
 class Cast final : public Value
 {
   public:
-    Cast(Expr* parent, Value* expr, const ExprVal& val)
-      : Value(IrKind::Cast, parent, val),
+    Cast(Expr* parent, Value* expr, QualType type)
+      : Value(IrKind::Cast, parent, type),
         expr_(expr)
     {}
 
@@ -371,8 +369,8 @@ class Cast final : public Value
 class LvalueCast final : public Lvalue
 {
   public:
-    LvalueCast(Expr* parent, Value* expr, const ExprVal& val)
-      : Lvalue(IrKind::LvalueCast, parent, val),
+    LvalueCast(Expr* parent, Value* expr, QualType type)
+      : Lvalue(IrKind::LvalueCast, parent, type),
         expr_(expr)
     {}
 
@@ -388,7 +386,7 @@ class SimpleCast final : public Value
 {
   public:
     SimpleCast(Expr* parent, Value* from, Type* to)
-      : Value(IrKind::SimpleCast, parent, ExpressionVal(to)),
+      : Value(IrKind::SimpleCast, parent, QualType(to)),
         from_(from),
         to_(to)
     {}
@@ -406,8 +404,8 @@ class SimpleCast final : public Value
 class Sizeof final : public Value
 {
   public:
-    Sizeof(Expr* parent, Value* child, const ExprVal& val)
-      : Value(IrKind::Sizeof, parent, val),
+    Sizeof(Expr* parent, Value* child, QualType type)
+      : Value(IrKind::Sizeof, parent, type),
         child_(child)
     {}
 
@@ -422,8 +420,8 @@ class Sizeof final : public Value
 class IncDec final : public Value
 {
   public:
-    IncDec(Expr* parent, int token, bool prefix, Lvalue* expr, const ExprVal& val)
-      : Value(IrKind::IncDec, parent, val),
+    IncDec(Expr* parent, int token, bool prefix, Lvalue* expr, QualType type)
+      : Value(IrKind::IncDec, parent, type),
         token_(token),
         prefix_(prefix),
         expr_(expr)
@@ -444,8 +442,8 @@ class IncDec final : public Value
 class Binary final : public Value
 {
   public:
-    Binary(Expr* parent, int token, Value* left, Value* right, const ExprVal& val)
-      : Value(IrKind::Binary, parent, val),
+    Binary(Expr* parent, int token, Value* left, Value* right, QualType type)
+      : Value(IrKind::Binary, parent, type),
         token_(token),
         left_(left),
         right_(right)
@@ -466,8 +464,8 @@ class Binary final : public Value
 class Logical final : public Value
 {
   public:
-    Logical(Expr* parent, int token, Value* left, Value* right, const ExprVal& val)
-      : Value(IrKind::Logical, parent, val),
+    Logical(Expr* parent, int token, Value* left, Value* right, QualType type)
+      : Value(IrKind::Logical, parent, type),
         token_(token),
         left_(left),
         right_(right)
@@ -489,8 +487,8 @@ class Ternary final : public Value
 {
   public:
     Ternary(Expr* parent, Value* first, Value* second, Value* third,
-            const ExprVal& val)
-      : Value(IrKind::Ternary, parent, val),
+            QualType type)
+      : Value(IrKind::Ternary, parent, type),
         first_(first),
         second_(second),
         third_(third)
@@ -512,7 +510,7 @@ class Comma final : public Value
 {
   public:
     Comma(Expr* parent, std::vector<Value*> exprs)
-      : Value(IrKind::Comma, parent, ExpressionVal(exprs.back()->val().qualified())),
+      : Value(IrKind::Comma, parent, QualType(exprs.back()->qual_type())),
         exprs_(std::move(exprs))
     {}
 
@@ -533,8 +531,8 @@ class ChainedCompare final : public Value
         Value* expr;
     };
 
-    ChainedCompare(Expr* parent, Value* first, std::vector<Op> ops, const ExprVal& val)
-      : Value(IrKind::ChainedCompare, parent, val),
+    ChainedCompare(Expr* parent, Value* first, std::vector<Op> ops, QualType type)
+      : Value(IrKind::ChainedCompare, parent, type),
         first_(first),
         ops_(std::move(ops))
     {}
@@ -552,8 +550,8 @@ class ChainedCompare final : public Value
 class Call final : public Value
 {
   public:
-    Call(Expr* parent, Value* target, const std::vector<Value*>& args, const ExprVal& val)
-      : Value(IrKind::Call, parent, val),
+    Call(Expr* parent, Value* target, const std::vector<Value*>& args, QualType type)
+      : Value(IrKind::Call, parent, type),
         target_(target),
         args_(args)
     {}
@@ -583,8 +581,8 @@ class DefaultArg final : public Value
 class NamedArg final : public Value
 {
   public:
-    NamedArg(Expr* parent, Value* expr, const ExprVal& val)
-      : Value(IrKind::NamedArg, parent, val),
+    NamedArg(Expr* parent, Value* expr, QualType type)
+      : Value(IrKind::NamedArg, parent, type),
         expr_(expr)
     {}
 
@@ -609,8 +607,8 @@ class SpreadArgs final : public Value
 class Function final : public Value
 {
   public:
-    Function(Expr* parent, const ExprVal& val)
-      : Value(IrKind::Function, parent, val)
+    Function(Expr* parent, QualType type)
+      : Value(IrKind::Function, parent, type)
     {}
 
     FunctionExpr* parent() const { return pn()->to<FunctionExpr>(); }
@@ -621,8 +619,8 @@ class Function final : public Value
 class Array final : public Value
 {
   public:
-    Array(Expr* parent, const std::vector<Value*>& elements, bool ellipses, const ExprVal& val = {})
-      : Value(IrKind::Array, parent, val),
+    Array(Expr* parent, const std::vector<Value*>& elements, bool ellipses, QualType type)
+      : Value(IrKind::Array, parent, type),
         elements_(elements),
         ellipses_(ellipses)
     {}
@@ -641,7 +639,7 @@ class Slice final : public Value
 {
   public:
     Slice(Value* base, Value* index, Type* type)
-      : Value(IrKind::Slice, base->pn(), ExpressionVal(type)),
+      : Value(IrKind::Slice, base->pn(), QualType(type)),
         base_(base),
         index_(index)
     {}
@@ -659,8 +657,8 @@ class Slice final : public Value
 class NewArray final : public Value
 {
   public:
-    NewArray(Expr* parent, const std::vector<Value*>& dims, const ExprVal& val = {})
-      : Value(IrKind::NewArray, parent, val),
+    NewArray(Expr* parent, const std::vector<Value*>& dims, QualType type)
+      : Value(IrKind::NewArray, parent, type),
         dims_(dims)
     {}
 
@@ -693,8 +691,8 @@ class Struct final : public Value
 class StructInitField final : public Value
 {
   public:
-    StructInitField(Expr* parent, Value* value, const ExprVal& val)
-      : Value(IrKind::StructInitField, parent, val),
+    StructInitField(Expr* parent, Value* value, QualType type)
+      : Value(IrKind::StructInitField, parent, type),
         value_(value)
     {}
 

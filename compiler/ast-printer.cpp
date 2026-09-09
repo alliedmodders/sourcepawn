@@ -687,14 +687,14 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
     switch (expr->kind()) {
         case IrKind::Constant: {
             auto* c = expr->to<ir::Constant>();
-            const auto& v = c->val();
-            if (v.type()->isInt64())
+            QualType v = c->qual_type();
+            if (v->isInt64())
                 fprintf(out_, "Constant i64 0x%" PRIx64 "\n", c->get_int64());
-            else if (v.type()->isIntPtr())
+            else if (v->isIntPtr())
                 fprintf(out_, "Constant intptr 0x%x\n", c->get_intptr());
-            else if (v.type()->isDouble())
+            else if (v->isDouble())
                 fprintf(out_, "Constant f64 %g\n", c->get_double());
-            else if (v.type()->isHeapItem())
+            else if (v->isHeapItem())
                 fprintf(out_, "Constant heapitem 0x%x\n", c->value().i32);
             else
                 fprintf(out_, "Constant 0x%x\n", c->get_cell());
