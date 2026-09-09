@@ -148,6 +148,7 @@ class CompilerBase
     virtual void EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
                                  const std::span<const SwitchCaseEntry>& cases) = 0;
     virtual void EmitCallee(uint16_t dest_reg) = 0;
+    virtual void EmitSizeofArray(uint16_t src_reg, uint16_t dest_reg) = 0;
 
     // Errors.
     struct DeallocThunk;

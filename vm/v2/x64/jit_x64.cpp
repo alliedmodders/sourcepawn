@@ -1604,6 +1604,15 @@ void Compiler::EmitCallee(uint16_t dest_reg) {
     __ movl(RegAddr(dest_reg), rax);
 }
 
+void Compiler::EmitSizeofArray(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(rdx, RegAddr(src_reg));
+    __ testl(rdx, rdx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(rcx, HeapAddr(rdx, offsetof(SpArray, length)));
+    __ movl(RegAddr(dest_reg), rcx);
+}
+
 void Compiler::EmitGetFuncId(uint16_t src_reg, uint16_t dest_reg) {
     __ movl(rdx, RegAddr(src_reg));
     __ testl(rdx, rdx);

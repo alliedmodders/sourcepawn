@@ -105,6 +105,15 @@ Since "local" is guaranteed to be stack allocated, if the slice were to be
 assigned to a global variable, it would refer to invalid memory once the outer
 function returns, creating an invalid use-after-free.
 
+Finally, there is now an "array.size" intrinsic property. For fixed-size arrays,
+it yields a constant. For dynamic arrays, it will return the current length:
+
+    char[] whatever = new char[1000];
+    float vec[3];
+
+    printnum(whatever.size); // 1000
+    printnum(vec.size) // 3
+
 ### Classes
 
 SourcePawn now has support for classes. The syntax is almost identical to enum

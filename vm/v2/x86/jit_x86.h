@@ -108,6 +108,7 @@ class Compiler : public CompilerBase
     void EmitSwitchTable(uint16_t val_reg, uint32_t def_block,
                          const std::span<const SwitchCaseEntry>& cases) override;
     void EmitCallee(uint16_t dest_reg) override;
+    void EmitSizeofArray(uint16_t src_reg, uint16_t dest_reg) override;
 
     void EmitDeallocThunk(DeallocThunk* thunk) override;
     void EmitBoundsErrorThunk(BoundsErrorThunk* thunk) override;

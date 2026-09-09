@@ -1119,6 +1119,15 @@ MethodVerifier::verifyOp(OPCODE op) {
             return pushStack(ptr_type);
         }
 
+        case OP_SIZEOF: {
+            const TypeDesc* td;
+            if (!popStack(&td))
+                return false;
+            if (!td->IsArrayish() || td->array_has_fixed_size())
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return pushStack(cell_type());
+        }
+
         default:
             // Should have been caught earlier.
             return reportError(SP_ERROR_INVALID_INSTRUCTION);

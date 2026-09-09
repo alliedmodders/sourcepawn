@@ -704,6 +704,22 @@ class StructInitField final : public Value
     Value* value_;
 };
 
+class ArraySize final : public Value
+{
+  public:
+    ArraySize(Expr* parent, Value* array, QualType type)
+      : Value(IrKind::ArraySize, parent, type),
+        array_(array)
+    {}
+
+    Value* array() const { return array_; }
+
+    static bool is_a(Value* node) { return node->kind() == IrKind::ArraySize; }
+
+  private:
+    Value* array_;
+};
+
 } // namespace ir
 } // namespace cc
 } // namespace sp

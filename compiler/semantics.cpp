@@ -38,6 +38,7 @@ Semantics::Semantics(CompileContext& cc)
   : cc_(cc)
 {
     types_ = cc.types();
+    size_atom_ = cc_.atom("size");
 }
 
 bool Semantics::Analyze(ParseTree* tree) {
@@ -1778,7 +1779,16 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
         return CheckStaticFieldAccessExpr(expr, base);
 
     QualType base_type = base->qual_type();
-    if (base_type->isArray()) {
+    if (auto at = base_type->as<ArrayType>()) {
+        if (auto lval = base->as<ir::Lvalue>())
+            base = new ir::Rvalue(lval);
+
+        if (expr->name() == size_atom_) {
+            if (at->size() > 0)
+                return new ir::Constant(expr, ConstVal(types_->type_int(), at->size()));
+            return new ir::ArraySize(expr, base, types_->type_int());
+        }
+
         report(expr, 96) << expr->name() << "type" << "array";
         return nullptr;
     }

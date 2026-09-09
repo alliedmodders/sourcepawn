@@ -287,6 +287,7 @@ enum LLArgFmt : uint8_t {
     FOR_EACH(CVT_I8, "cvt.i8", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(CVT_F64, "cvt.f64", {LL_FMT_REG, LL_FMT_REG}) \
     FOR_EACH(CVT_F32_F64, "cvt.f32.f64", {LL_FMT_REG, LL_FMT_REG}) \
+    FOR_EACH(SIZEOF_ARRAY, "sizeofarray", {LL_FMT_REG, LL_FMT_REG}) \
 
 
 enum LLOp : uint16_t {

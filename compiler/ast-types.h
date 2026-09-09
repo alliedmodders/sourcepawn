@@ -40,7 +40,8 @@
     FOR_EACH(ChangeScopeNode) \
     FOR_EACH(PropertyDecl) \
     FOR_EACH(GlobalInitStmt) \
-    FOR_EACH(UpvarDecl)
+    FOR_EACH(UpvarDecl) \
+
 
 #define AST_EXPR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(UnaryExpr) \
@@ -68,6 +69,7 @@
     FOR_EACH(StructInitFieldExpr) \
     FOR_EACH(SpreadArgsExpr) \
     FOR_EACH(FunctionExpr) \
+
 
 #define IR_TYPE_LIST(FOR_EACH) \
     FOR_EACH(Constant) \
@@ -102,7 +104,8 @@
     FOR_EACH(Slice) \
     FOR_EACH(NewArray) \
     FOR_EACH(Struct) \
-    FOR_EACH(StructInitField)
+    FOR_EACH(StructInitField) \
+    FOR_EACH(ArraySize)
 
 
 enum class ExprKind : uint8_t

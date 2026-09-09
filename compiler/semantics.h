@@ -308,7 +308,8 @@ class Semantics final
     tr::vector<FunctionDecl*> maybe_used_;
     tr::vector<FunctionDecl*> closures_;
     SemaContext* sc_ = nullptr;
-    sp::Atom* this_atom_ = nullptr;
+    Atom* this_atom_ = nullptr;
+    Atom* size_atom_ = nullptr;
     int fun_expr_count_ = 0;
     int shared_class_count_ = 0;
 };

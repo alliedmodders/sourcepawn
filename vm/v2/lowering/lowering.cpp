@@ -1627,6 +1627,13 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_SIZEOF: {
+            ExprNode* val = popStack();
+            assert(val->type->IsArrayish() && !val->type->array_has_fixed_size());
+            pushStack(CreateUnaryOpNode(cell_type_, LL_SIZEOF_ARRAY, val));
+            break;
+        }
+
         default:
             assert(false);
             break;
