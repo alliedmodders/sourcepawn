@@ -933,6 +933,9 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
         case IrKind::String:
             EmitStringExpr(expr->to<ir::String>());
             break;
+        case IrKind::ArraySize:
+            EmitArraySize(expr->to<ir::ArraySize>());
+            break;
         default:
             assert(false);
             break;
@@ -2697,6 +2700,10 @@ void CodeGenerator::EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int 
     }
 }
 
+void CodeGenerator::EmitArraySize(ir::ArraySize* expr) {
+    EmitExpr(expr->array());
+    __ emit(OP_SIZEOF);
+}
 
 void CodeGenerator::EmitFloatBuiltin(ir::Call* expr) {
     assert(expr->args().size() == 1);

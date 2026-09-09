@@ -822,6 +822,12 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitLoadUpvar(op, args);
                 break;
             }
+            case LL_SIZEOF_ARRAY: {
+                uint16_t src_reg = reader.read<uint16_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                EmitSizeofArray(src_reg, dest_reg);
+                break;
+            }
 
             default:
                 fprintf(stderr, "Unimplemented opcode: %s\n", GetLLOpName(op));

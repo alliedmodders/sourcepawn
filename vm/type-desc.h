@@ -214,6 +214,9 @@ class TypeDesc final {
     bool can_global_cache() const { return can_global_cache_; }
 
     // For fixed arrays, length of arrays of this type.
+    bool array_has_fixed_size() const {
+        return kind_ == TypeKind::FixedArray || kind_ == TypeKind::FlatArray;
+    }
     uint32_t array_size() const {
         assert(kind_ == TypeKind::FixedArray || kind_ == TypeKind::FlatArray);
         return array.size;

@@ -1534,6 +1534,17 @@ bool Interpreter::run_internal() {
                 *slot = val;
                 break;
             }
+            case LL_SIZEOF_ARRAY: {
+                uint16_t src_reg = reader_.read<uint16_t>();
+                uint16_t dest_reg = reader_.read<uint16_t>();
+                auto array = rt_->heap().ToPhysAddr<SpArray*>(vregs_[src_reg]);
+                if (!array) {
+                    rt_->ReportErrorNumber(SP_ERROR_NULL_DEREF);
+                    return false;
+                }
+                vregs_[dest_reg] = array->length;
+                break;
+            }
 
             default:
                 fprintf(stderr, "Unimplemented opcode: %s\n", GetLLOpName(op));

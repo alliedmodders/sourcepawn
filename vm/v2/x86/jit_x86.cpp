@@ -1933,6 +1933,15 @@ void Compiler::EmitCopyObj(uint16_t src_reg, uint16_t dest_reg, uint32_t bytes) 
     __ movl(edi, Operand(esp, 0));
 }
 
+void Compiler::EmitSizeofArray(uint16_t src_reg, uint16_t dest_reg) {
+    __ movl(edx, RegAddr(src_reg));
+    __ testl(edx, edx);
+    JumpOnError(zero, SP_ERROR_NULL_DEREF);
+
+    __ movl(ecx, Operand(edx, offsetof(SpArray, length)));
+    __ movl(RegAddr(dest_reg), ecx);
+}
+
 void Compiler::EmitDeallocThunk(DeallocThunk* thunk) {
     if (thunk->save_reg)
         __ movl(Operand(esp, 4), *thunk->save_reg);

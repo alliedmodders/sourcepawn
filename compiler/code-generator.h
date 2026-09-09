@@ -118,6 +118,7 @@ class CodeGenerator final
     void EmitSizeofExpr(ir::Sizeof* expr);
     void EmitFunctionExpr(ir::Function* expr);
     void EmitNewClosure(FunctionDecl* fun);
+    void EmitArraySize(ir::ArraySize* expr);
 
     // Logical test helpers.
     bool EmitBinaryTest(ir::Binary* expr, bool jump_on_true, sp::Label* target);
