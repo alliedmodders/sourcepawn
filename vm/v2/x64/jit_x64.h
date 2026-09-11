@@ -113,6 +113,7 @@ class Compiler : public CompilerBase
     void EmitDeferredErrorThunk(DeferredErrorThunk* thunk) override;
     void EmitCallThunk(CallThunk* thunk) override;
     void EmitIndirectCallThunk(IndirectCallThunk* thunk) override;
+    void MarkFrameUninitForUnwind() override;
 
   private:
     void EmitIncRefForArrayEscape(Register obj_reg, Register tmp_reg);

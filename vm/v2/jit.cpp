@@ -874,7 +874,10 @@ bool CompilerBase::TryEmitSwitchTable(uint16_t val_reg, uint32_t def_block,
 }
 
 void CompilerBase::EmitErrorThunk(ErrorThunk* thunk) {
-    if (thunk->err == 0) {
+    if (thunk->err == kErrorStackLowPreInit) {
+        MarkFrameUninitForUnwind();
+        __ call(ExternalAddress(stubs_.throw_error_code[SP_ERROR_STACKLOW]));
+    } else if (thunk->err == 0) {
         __ call(ExternalAddress(stubs_.report_error));
     } else if (thunk->err == -1) {
         __ call(ExternalAddress(stubs_.return_reported_error));
@@ -951,17 +954,23 @@ void* CompilerBase::UnwindStack(cell_t* frm_regs) {
 
         entry_fp = frame->prev_fp;
 
-        if (frame->frame_type() != JitFrameType::Scripted) {
-            assert(frame->frame_type() == JitFrameType::Exit);
+        JitFrameType type = (JitFrameType)frame->frame_type();
+        if (type != JitFrameType::Scripted && type != JitFrameType::Uninitialized) {
+            assert(type == JitFrameType::Exit);
             continue;
         }
 
-        ke::RefPtr<MethodInfo> method = rt->AcquireMethod(frame->function_id());
-        const BitSet& gcobj_regs = method->llcode()->gcobj_regs();
-        gcobj_regs.for_each([&](size_t reg) {
-            if (HeapItem* item = rt->heap().ToPhysAddr<HeapItem*>(frm_regs[reg]))
-                item->Release();
-        });
+        // A pre-init frame raised the error in its prologue, before its
+        // callee registers were zeroed; its gcobj regs contain garbage and
+        // must not be released.
+        if (type == JitFrameType::Scripted) {
+            ke::RefPtr<MethodInfo> method = rt->AcquireMethod(frame->function_id());
+            const BitSet& gcobj_regs = method->llcode()->gcobj_regs();
+            gcobj_regs.for_each([&](size_t reg) {
+                if (HeapItem* item = rt->heap().ToPhysAddr<HeapItem*>(frm_regs[reg]))
+                    item->Release();
+            });
+        }
 
         frm_regs = static_cast<cell_t*>(
             JitScriptedFrameLayout::FromLayout(frame)->saved_frm);

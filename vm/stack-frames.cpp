@@ -152,6 +152,7 @@ FrameType
 JitFrameIterator::type() const {
     switch ((JitFrameType)cur_frame_->frame_type()) {
         case JitFrameType::Scripted:
+        case JitFrameType::Uninitialized:
             return FrameType::Scripted;
         case JitFrameType::Exit:
             if (GetExitFrameType(cur_frame_->function_id()) == ExitFrameType::Native)
@@ -163,8 +164,11 @@ JitFrameIterator::type() const {
 }
 
 BaseMethodInfo* JitFrameIterator::method() const {
-    if (cur_frame_->frame_type() != JitFrameType::Scripted)
+    if (cur_frame_->frame_type() != JitFrameType::Scripted &&
+        cur_frame_->frame_type() != JitFrameType::Uninitialized)
+    {
         return nullptr;
+    }
     return rt_->GetMethodFromFrameId(cur_frame_->function_id());
 }
 

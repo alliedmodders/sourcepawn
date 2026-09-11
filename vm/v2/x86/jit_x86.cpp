@@ -71,12 +71,15 @@ static constexpr int kCalleeSlotOffset = 8;
 void Compiler::EmitPrologue(const FrameInfo& frame) {
     __ enterFrame(JitFrameType::Scripted, method_info_->frame_id());
 
-    __ movl(eax, Operand(ExternalAddress(env_->addressOfThreadStackLimit())));
-    __ cmpl(esp, eax);
-    JumpOnError(below, SP_ERROR_STACKLOW);
-
     __ push(frm);
     __ subl(esp, kNativeStackAllowance);
+
+    // Note: the stack-low errors must fire after |push(frm)| so that
+    // UnwindStack can reach the caller's frame via |saved_frm|.
+    __ movl(eax, Operand(ExternalAddress(env_->addressOfThreadStackLimit())));
+    __ cmpl(esp, eax);
+    JumpOnError(below, kErrorStackLowPreInit);
+
     __ movl(frm, stk);
 
     if (frame.frame_size) {
@@ -85,7 +88,7 @@ void Compiler::EmitPrologue(const FrameInfo& frame) {
 
         __ movl(ecx, Operand(ExternalAddress(env_->addressOfSpTop())));
         __ cmpl(eax, ecx);
-        JumpOnError(above, SP_ERROR_STACKLOW);
+        JumpOnError(above, kErrorStackLowPreInit);
     }
 
     if (frame.callee_regs > 0) {
@@ -158,6 +161,10 @@ void Compiler::EmitIndirectCallThunk(IndirectCallThunk* thunk) {
 void Compiler::JumpOnError(ConditionCode cc, int err) {
     error_thunks_.emplace_back(op_cip_, err);
     __ j(cc, &error_thunks_.back().label);
+}
+
+void Compiler::MarkFrameUninitForUnwind() {
+    __ movl(Operand(ebp, -4), int32_t(JitFrameType::Uninitialized));
 }
 
 void Compiler::JumpAndReportOnError(ConditionCode cc) {
