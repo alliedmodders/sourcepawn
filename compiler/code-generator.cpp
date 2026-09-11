@@ -1263,7 +1263,8 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
         EmitExpr(left);
     }
 
-    assert(!left->type()->isArray() || !left->type()->to<ArrayType>()->is_flat());
+    assert(!left->type()->isArray() || !left->type()->to<ArrayType>()->is_flat() ||
+           (token == tlEQ || token == tlNE));
 
     EmitExpr(right);
     EmitBinaryTail(oper, left, right);
