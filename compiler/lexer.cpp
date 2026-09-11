@@ -1979,6 +1979,12 @@ bool Lexer::LexKeyword(full_token_t* tok, Atom* atom) {
     if (!tok_id)
         return false;
 
+    if (tok_id == tDEFINED && !IsPreprocessing()) {
+        tok->id = tSYMBOL;
+        tok->atom = atom;
+        return true;
+    }
+
     if (IsUnimplementedKeyword(tok_id)) {
         // Try to gracefully error.
         report(173) << atom;
@@ -2028,7 +2034,7 @@ void Lexer::LexSymbolOrKeyword(full_token_t* tok) {
 
     // Handle preprocessor keywords (ugh).
     Atom* atom = cc_.atom((const char *)token_start, len);
-    if (atom == defined_atom_) {
+    if (IsPreprocessing() && atom == defined_atom_) {
         tok->id = tDEFINED;
         return;
     }
