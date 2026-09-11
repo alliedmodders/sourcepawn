@@ -1780,8 +1780,14 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
             base = new ir::Rvalue(lval);
 
         if (expr->name() == size_atom_) {
-            if (at->size() > 0)
-                return new ir::Constant(expr, ConstVal(types_->type_int(), at->size()));
+            if (at->size() > 0) {
+                auto constant = new ir::Constant(expr, ConstVal(types_->type_int(), at->size()));
+                if (HasSideEffects(base)) {
+                    std::vector<ir::Value*> exprs = {base, constant};
+                    return new ir::Comma(expr, std::move(exprs));
+                }
+                return constant;
+            }
             return new ir::ArraySize(expr, base, types_->type_int());
         }
 
