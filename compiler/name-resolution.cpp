@@ -821,6 +821,10 @@ FunctionDecl* FunctionDecl::CanRedefine(Decl* other_decl) {
             report(pos_, 21) << name_;
             return nullptr;
         }
+        if (fun->proto_or_impl_) {
+            report(pos_, 21) << name_;
+            return nullptr;
+        }
         return fun;
     }
 
