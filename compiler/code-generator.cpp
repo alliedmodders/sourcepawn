@@ -1482,7 +1482,7 @@ bool CodeGenerator::EmitBinaryTest(ir::Binary* root, bool jump_on_true, Label* t
         return false;
 
     auto left = root->left();
-    if (left->type()->isInt64() || left->type()->isFloat())
+    if (left->type()->isFloat() || left->type()->isWideType())
         return false;
 
     auto right = root->right();
