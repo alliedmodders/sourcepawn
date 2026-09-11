@@ -1232,22 +1232,17 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
     bool discard = !!(flags & EMIT_DISCARD_RESULT);
 
     Type* left_type = left->type();
-    if (token == '=' && left_type->isEnumStruct()) {
+    if (token == '=' && (left_type->isEnumStruct() || left_type->isFixedArray())) {
         EmitRvalueFromLvalue(left->to<ir::Lvalue>());
 
-        EmitExpr(right);
-        auto es = left->type()->asEnumStruct();
-        assert(es != nullptr);
-        uint32_t type_id = rtti_->to_typeid(es->type());
-        __ emit(OP_COPYOBJ, type_id);
-        return;
-    }
-
-    if (token == '=' && left_type->isFixedArray()) {
-        EmitRvalueFromLvalue(left->to<ir::Lvalue>());
+        if (!discard)
+            __ emit(OP_DUP);
 
         EmitExpr(right);
-        __ emit(OP_COPYARRAY);
+        if (auto es = left_type->asEnumStruct())
+            __ emit(OP_COPYOBJ, rtti_->to_typeid(es->type()));
+        else
+            __ emit(OP_COPYARRAY);
         return;
     }
 
