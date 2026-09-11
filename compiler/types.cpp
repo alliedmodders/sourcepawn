@@ -205,7 +205,7 @@ Type* TypeManager::defineBuiltin(const char* name, BuiltinType type) {
 }
 
 ArrayType* TypeManager::defineArray(Type* element_type, int dim) {
-    assert(!element_type->isArray());
+    assert(!element_type->isFlatArray());
     auto lookup = ArrayCachePolicy::Lookup{element_type, dim, false};
     auto p = array_cache_.findForAdd(lookup);
     if (!p.found()) {
@@ -220,7 +220,7 @@ ArrayType* TypeManager::defineArray(Type* element_type, const PoolArray<int>& di
 }
 
 ArrayType* TypeManager::defineArray(Type* element_type, const int* dim_vec, int numdim) {
-    assert(!element_type->isArray());
+    assert(!element_type->isFlatArray());
     assert(numdim >= 1);
 
     size_t depth = numdim - 1;
