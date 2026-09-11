@@ -1,0 +1,15 @@
+(19) : warning 209: function has explicit 'int' tag but does not return a value
+(20) : warning 242: function "legacy_bool" should return an explicit value
+(21) : warning 242: function "legacy_float" should return an explicit value
+(22) : warning 242: function "legacy_char" should return an explicit value
+(23) : warning 242: function "legacy_any" should return an explicit value
+(24) : warning 242: function "legacy_enum" should return an explicit value
+(25) : warning 242: function "legacy_methodmap" should return an explicit value
+(28) : error 400: function "new_heap_array" must return a value
+(29) : error 400: function "new_callback" must return a value
+(30) : error 400: function "new_class" must return a value
+(31) : error 400: function "new_int64" must return a value
+(32) : error 400: function "new_intptr" must return a value
+(33) : error 400: function "new_double" must return a value
+(34) : error 400: function "new_int8" must return a value
+(35) : error 400: function "new_int16" must return a value

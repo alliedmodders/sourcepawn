@@ -3104,8 +3104,9 @@ void ReportFunctionReturnError(FunctionDecl* decl) {
     // :TODO: stronger enforcement when function result is used from call
     if (decl->return_type()->isInt()) {
         report(decl, 209) << decl->name();
-    } else if (decl->return_type()->isEnum() || decl->return_type()->isBool() ||
-               decl->return_type()->isFloat() || !decl->retvalue_used())
+    } else if (decl->return_type()->isEnumOrMethodmap() || decl->return_type()->isBool() ||
+               decl->return_type()->isFloat() || decl->return_type()->isChar() ||
+               decl->return_type()->isAny())
     {
         report(decl, 242) << decl->name();
     } else {
