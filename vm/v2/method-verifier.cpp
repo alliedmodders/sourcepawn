@@ -523,6 +523,17 @@ MethodVerifier::verifyOp(OPCODE op) {
             return ValidateStore(local, cell_type());
         }
 
+        case OP_ZEROFILL_S: {
+            cell_t offset = readInt16();
+            markArgSlotWritten(offset);
+            auto td = verifyStackOffset(offset);
+            if (!td)
+                return false;
+            if (td->kind() != TypeKind::FlatArray && td->kind() != TypeKind::EnumStruct)
+                return reportError(SP_ERROR_INSTRUCTION_PARAM);
+            return true;
+        }
+
         case OP_CVT_I64: {
             const TypeDesc* td;
             if (!popStack(&td))

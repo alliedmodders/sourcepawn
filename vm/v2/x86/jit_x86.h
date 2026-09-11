@@ -84,6 +84,7 @@ class Compiler : public CompilerBase
                        uint32_t pad_bytes) override;
     void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size,
                            uint32_t pad_bytes) override;
+    void EmitZeroFill(uint16_t slot_reg, uint32_t bytes) override;
     void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) override;
     void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) override;
     void EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) override;

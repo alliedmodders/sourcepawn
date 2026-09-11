@@ -1113,6 +1113,21 @@ void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint3
     }
 }
 
+void Compiler::EmitZeroFill(uint16_t slot_reg, uint32_t bytes)
+{
+    __ lea(rax, StkRelAddr(slot_reg));
+    __ lea(rdi, HeapAddr(rax));
+    __ xorl(rax, rax);
+    if (bytes >= 8) {
+        __ movl(rcx, bytes / 8);
+        __ rep_stosq();
+    }
+    if (bytes % 8) {
+        __ movl(rcx, bytes % 8);
+        __ rep_stosb();
+    }
+}
+
 static inline std::optional<Scale> EltSizeToScale(uint32_t elt_size) {
     switch (elt_size) {
         case 1:

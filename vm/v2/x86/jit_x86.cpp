@@ -1358,6 +1358,22 @@ void Compiler::EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint3
     __ movl(edi, Operand(esp, 0));
 }
 
+void Compiler::EmitZeroFill(uint16_t slot_reg, uint32_t bytes)
+{
+    __ movl(Operand(esp, 0), edi);
+    __ lea(edi, RegAddr(slot_reg));
+    __ movl(eax, 0);
+    if (bytes >= 4) {
+        __ movl(ecx, bytes / 4);
+        __ rep_stosd();
+    }
+    if (bytes % 4) {
+        __ movl(ecx, bytes % 4);
+        __ rep_stosb();
+    }
+    __ movl(edi, Operand(esp, 0));
+}
+
 static inline std::optional<Scale> EltSizeToScale(uint32_t elt_size) {
     switch (elt_size) {
         case 1:
