@@ -763,12 +763,8 @@ ir::Value* Semantics::AnalyzeForTest(Expr* expr) {
     }
 
     if (auto* c = node->as<ir::Constant>()) {
-        if (!sc_->preprocessing()) {
-            if (c->get_i32())
-                report(expr, 206);
-            else
-                report(expr, 205);
-        }
+        if (!sc_->preprocessing())
+            report(expr, *FoldToConstantBool(c) ? 206 : 205);
     } else if (auto sym_expr = expr->as<SymbolExpr>()) {
         if (sym_expr->decl()->as<FunctionDecl>())
             report(expr, 249);

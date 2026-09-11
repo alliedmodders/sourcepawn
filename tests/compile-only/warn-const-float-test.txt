@@ -1,0 +1,3 @@
+(5) : warning 206: redundant test: constant expression is non-zero
+(7) : warning 205: redundant code: constant expression is zero
+(9) : warning 206: redundant test: constant expression is non-zero
