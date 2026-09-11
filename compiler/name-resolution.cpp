@@ -349,10 +349,8 @@ bool PstructDecl::Bind(SemaContext& sc) {
 }
 
 bool TypedefDecl::EnterTypes(SemaContext& sc) {
-    if (sc.cc().types()->findBuiltin(name_)) {
-        report(pos_, 432) << name_;
+    if (!CheckTypeNameRedefinition(sc, name_, pos_))
         return false;
-    }
     placeholder_ = sc.cc().types()->declareTypedef(name_);
     AddScopedType(sc, placeholder_);
     return true;
