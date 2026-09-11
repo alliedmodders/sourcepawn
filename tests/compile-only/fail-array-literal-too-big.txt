@@ -1,0 +1,2 @@
+(6) : error 450: no viable conversion from 'int[4]' to 'int[3]'
+(7) : error 450: no viable conversion from 'int[]' to 'int[3]'

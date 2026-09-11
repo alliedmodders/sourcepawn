@@ -1672,7 +1672,7 @@ ir::Value* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
 
     QualType out_type;
     if (array_target->is_flat())
-        out_type = types_->defineFlatArray(formal_elt, array_target->size());
+        out_type = types_->defineFlatArray(formal_elt, (int)array->exprs().size());
     else
         out_type = types_->defineArray(formal_elt, (int)array->exprs().size());
     return new ir::Array(array, elements, array->ellipses(), out_type);
