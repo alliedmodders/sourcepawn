@@ -80,7 +80,9 @@ static bool CanUseFlatArray(Type* element_type, int array_size) {
         elt_size = 8;
     else
         elt_size = 4;
-    return array_size * elt_size <= kMaxFlatArrayBytes;
+    if (!ke::IsUint32MultiplySafe(array_size, elt_size))
+        return false;
+    return uint32_t(array_size) * uint32_t(elt_size) <= uint32_t(kMaxFlatArrayBytes);
 }
 
 ArrayTypeResolver::ArrayTypeResolver(Semantics* sema, VarDeclBase* decl)
