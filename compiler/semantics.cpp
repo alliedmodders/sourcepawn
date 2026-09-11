@@ -34,6 +34,17 @@ static bool AreSliceElementsCompatible(Type* t1, Type* t2) {
     return false;
 }
 
+// Don't allow implicit slices for the new int8 and int16 types. We allow
+// char slices since there's precedent, but users will be tempted to pass
+// one- or two-byte slots as a "%d" parameter, so we need to make sure
+// those are properly boxed in a cell.
+static inline bool CanSliceForLegacyVarargs(Type* type) {
+    if (type->isChar())
+        return true;
+    int size = type->podLoadSize();
+    return size == -1 || size >= 4;
+}
+
 Semantics::Semantics(CompileContext& cc)
   : cc_(cc)
 {
@@ -2454,7 +2465,10 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         }
         if (auto slice = ParamNeedsSlice(arg, nullptr))
             arg = slice;
-        if (arg->lvalue() && arg_type->isNonFlatArray()) {
+        if (arg->lvalue() &&
+            (arg_type->isNonFlatArray() ||
+             (arg->is(IrKind::Index) && !CanSliceForLegacyVarargs(*arg_type))))
+        {
             arg = new ir::Rvalue(arg->to<ir::Lvalue>());
             arg_type = arg->qual_type();
         }
@@ -3582,6 +3596,8 @@ static inline bool CanImplicitSliceArgument(ir::Value* param, ArrayType* to) {
         return false;
     if (param->is(IrKind::Index)) {
         if (param_type->isEnumStruct() || param_type->isArray())
+            return false;
+        if (!to && !CanSliceForLegacyVarargs(*param_type))
             return false;
         if (to && !AreSliceElementsCompatible(*param_type, to->inner()))
             return false;
