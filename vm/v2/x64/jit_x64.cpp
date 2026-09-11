@@ -74,7 +74,7 @@ void Compiler::EmitPrologue(const FrameInfo& frame) {
     // due to a misaligned stack.
     __ movq(rax, Operand(env_reg, Environment::offsetOfThreadStackLimit()));
     __ cmpq(rsp, rax);
-    JumpOnError(below, SP_ERROR_STACKLOW);
+    JumpOnError(below, kErrorStackLowPreInit);
 
     __ lea(frm, Operand(dat_reg, stk, NoScale));
 
@@ -84,7 +84,7 @@ void Compiler::EmitPrologue(const FrameInfo& frame) {
 
         __ movl(rcx, Operand(env_reg, Environment::offsetOfSpTop()));
         __ cmpl(rax, rcx);
-        JumpOnError(above, SP_ERROR_STACKLOW);
+        JumpOnError(above, kErrorStackLowPreInit);
     }
 
     if (frame.callee_regs > 0) {
@@ -1770,6 +1770,10 @@ void Compiler::EmitCallThunk(CallThunk* thunk) {
 void Compiler::JumpOnError(ConditionCode cc, int err) {
     error_thunks_.emplace_back(op_cip_, err);
     __ j(cc, &error_thunks_.back().label);
+}
+
+void Compiler::MarkFrameUninitForUnwind() {
+    __ movl(Operand(rbp, -8), int32_t(JitFrameType::Uninitialized));
 }
 
 void Compiler::JumpOnReportedError(ConditionCode cc) {

@@ -41,7 +41,13 @@ class MethodInfo;
 enum class FrameType { Internal, Scripted, Native };
 
 // These are specific to the JIT.
-enum class JitFrameType : intptr_t { None, Entry, Scripted, Exit };
+enum class JitFrameType : intptr_t {
+    None,
+    Entry,          // Used for top-level invoke.
+    Scripted,       // Used for normal script frames.
+    Uninitialized,  // Scripted, but with an uninitialized stack.
+    Exit            // When calling C++ from scripted frames.
+};
 KE_DEFINE_ENUM_COMPARATORS(JitFrameType, intptr_t);
 
 // These are specific to the JIT.

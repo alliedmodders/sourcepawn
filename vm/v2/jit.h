@@ -210,6 +210,9 @@ class CompilerBase
     struct ErrorThunk;
     void EmitErrorThunk(ErrorThunk* path);
 
+    // Stamps the current frame's type as JitFrameType::Uninitialized.
+    virtual void MarkFrameUninitForUnwind() = 0;
+
     void ReportError(int err);
 
   protected:
@@ -260,6 +263,11 @@ class CompilerBase
         const uint8_t* cip;
         int err;
     };
+
+    // Special error code for throwing an exception before the stack is
+    // initialized.
+    static constexpr int kErrorStackLowPreInit = -2;
+
     std::vector<ErrorThunk> error_thunks_;
 
     struct BoundsErrorThunk {

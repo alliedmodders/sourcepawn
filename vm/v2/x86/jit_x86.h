@@ -113,6 +113,7 @@ class Compiler : public CompilerBase
     void EmitDeallocThunk(DeallocThunk* thunk) override;
     void EmitBoundsErrorThunk(BoundsErrorThunk* thunk) override;
     void EmitDeferredErrorThunk(DeferredErrorThunk* thunk) override;
+    void MarkFrameUninitForUnwind() override;
 
   private:
     void EmitIncRef(Register obj_reg);
