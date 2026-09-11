@@ -300,10 +300,10 @@ class Environment : public ISourcePawnEnvironment
     ke::InlineList<v1::PluginRuntime> v1_runtimes_;
     ke::InlineList<v2::Runtime> v2_runtimes_;
 
-    uintptr_t frame_id_;
+    uintptr_t frame_id_ = 0;
 
     InvokeFrame* top_;
-    intptr_t* exit_fp_;
+    intptr_t* exit_fp_ = nullptr;
 
     // Global type cache.
     TypeCache types_;
