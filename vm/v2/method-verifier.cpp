@@ -1574,6 +1574,8 @@ bool MethodVerifier::verifyLocalSlots() {
             return false;
         if (td->IsFlatArray() && td->array_elt()->IsHeapItem())
             return reportError(SP_ERROR_RTTI);
+        if (td->slot_size() / sizeof(cell_t) > UINT16_MAX)
+            return reportError(SP_ERROR_ARRAY_TOO_BIG);
         // :TODO: forbid references
         local_types_[i] = td;
    }
