@@ -1435,6 +1435,12 @@ bool Interpreter::run_internal() {
                 vregs_[dest] = rt_->heap().ToLocalAddr(&vregs_[reg]);
                 break;
             }
+            case LL_ZEROFILL: {
+                uint32_t bytes = reader_.read<uint32_t>();
+                uint16_t reg = reader_.read<uint16_t>();
+                memset(&vregs_[reg], 0, bytes);
+                break;
+            }
             case LL_RELEASE: {
                 uint16_t reg = reader_.read<uint16_t>();
                 if (auto item = rt_->heap().ToPhysAddr<HeapItem*>(vregs_[reg])) {

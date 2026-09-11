@@ -67,6 +67,7 @@ void SpewOpcode(FILE* fp, Runtime* runtime, const uint8_t* start, const uint8_t*
         case OP_ADDR_S:
         case OP_LOAD_S:
         case OP_STOR_S:
+        case OP_ZEROFILL_S:
             fprintf(fp, "%d", reader.read<int16_t>());
             break;
 

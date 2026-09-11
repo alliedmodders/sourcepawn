@@ -236,6 +236,7 @@ namespace v2 {
     FOR_EACH(STOR_ELEM_F64, 118, "stor.elem.f64", 1) \
     FOR_EACH(CVT_F64, 119, "cvt.f64", 1) \
     FOR_EACH(SIZEOF, 120, "sizeof", 1) \
+    FOR_EACH(ZEROFILL_S, 121, "zerofill.s", 3) \
 
 
  enum OPCODE {

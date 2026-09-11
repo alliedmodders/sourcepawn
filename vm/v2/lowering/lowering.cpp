@@ -1015,6 +1015,20 @@ void MethodLowerer::LowerInstruction(OPCODE op) {
             break;
         }
 
+        case OP_ZEROFILL_S: {
+            int16_t offset = reader_.read<int16_t>();
+
+            // Technically this opcode is only used in initialization, so
+            // (1) the stack should be empty and (2) nothing should be
+            // reading the slot anyway. But we don't enforce this yet, so
+            // flush for safety.
+            FlushEmitStack();
+
+            const TypeDesc* td = method_->GetTypeOfLocal(offset);
+            emit(LL_ZEROFILL, (uint32_t)td->slot_size(), OffsetToVReg(offset));
+            break;
+        }
+
         case OP_STOR_S_C: {
             int16_t offset = reader_.read<int16_t>();
             cell_t value = reader_.read<cell_t>();

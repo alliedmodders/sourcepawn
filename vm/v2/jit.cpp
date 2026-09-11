@@ -628,6 +628,12 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 EmitFillArrayFlat(addr_reg, br.cursor(), *data_bytes, pad_bytes);
                 break;
             }
+            case LL_ZEROFILL: {
+                uint32_t bytes = reader.read<uint32_t>();
+                uint16_t reg = reader.read<uint16_t>();
+                EmitZeroFill(reg, bytes);
+                break;
+            }
             case LL_LOAD_ELEM_FLAT_I32:
             case LL_LOAD_ELEM_FLAT_F32:
             case LL_LOAD_ELEM_FLAT_X64:

@@ -124,6 +124,7 @@ class CompilerBase
                                uint32_t pad_bytes) = 0;
     virtual void EmitFillArrayFlat(uint16_t addr_reg, const void* data_addr, uint32_t data_size,
                                    uint32_t pad_bytes) = 0;
+    virtual void EmitZeroFill(uint16_t slot_reg, uint32_t bytes) = 0;
     virtual void EmitIdxAddrFlat(const IdxAddrFlatArgs& op) = 0;
     virtual void EmitLoadElemFlat(LLOp op, const LoadElemFlatArgs& args) = 0;
     virtual void EmitLoadElemFlatI(LLOp op, const LoadElemFlatArgs& args) = 0;

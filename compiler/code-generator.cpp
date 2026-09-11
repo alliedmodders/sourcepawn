@@ -656,9 +656,11 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
     if (auto array = type->as<ArrayType>()) {
         if (!ctor || IsInlineArrayInitializer(ctor)) {
             if (array->is_flat()) {
-                // No initialization needed for stack arrays.
-                if (!ctor)
+                if (!ctor) {
+                    if (decl->vclass() == sLOCAL && !decl->is_shared())
+                        __ emit(OP_ZEROFILL_S, VarSlot(decl));
                     return;
+                }
                 EmitAddress(decl);
             } else {
                 // Bind: the store below needs the base under the address.
@@ -683,8 +685,11 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
         }
     } else if (type->asEnumStruct()) {
         // Enum structs are stack-allocated; no ctor is no allocation.
-        if (!ctor)
+        if (!ctor) {
+            if (decl->vclass() == sLOCAL && !decl->is_shared())
+                __ emit(OP_ZEROFILL_S, VarSlot(decl));
             return;
+        }
         EmitAddress(decl);
         EmitEnumStructCopy(type, ctor);
     } else {
@@ -2596,7 +2601,10 @@ void CodeGenerator::EmitNewClosure(FunctionDecl* fun) {
             auto parent_upvar = fun_->FindUpvarDecl(var);
             assert(parent_upvar);
 
-            __ emit(OP_LOAD_UPVAR, UpvarIndex(parent_upvar->upvar_index()));
+            if (var->type()->isCompositeValue())
+                __ emit(OP_ADDR_UPVAR, UpvarIndex(parent_upvar->upvar_index()));
+            else
+                __ emit(OP_LOAD_UPVAR, UpvarIndex(parent_upvar->upvar_index()));
         } else if (var->type()->isCompositeValue()) {
             EmitAddress(var);
         } else {

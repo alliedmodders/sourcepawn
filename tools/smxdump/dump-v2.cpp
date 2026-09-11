@@ -154,6 +154,7 @@ void DumpTool::DumpOpcodeV2(const uint8_t* method_start, const uint8_t* cip, sp:
         case OP_ADDR_S:
         case OP_LOAD_S:
         case OP_STOR_S:
+        case OP_ZEROFILL_S:
             fprintf(stdout, " %d", reader.read<int16_t>());
             break;
 
