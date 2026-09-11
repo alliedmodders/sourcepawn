@@ -167,7 +167,6 @@ enum TokenKind {
     tEOL,            /* newline, only returned by peek_new_line() */
     tNEWDECL,        /* for declloc() */
     tENTERED_MACRO,  /* internal lexer command */
-    tMAYBE_LABEL,    /* internal lexer command, followed by ':' */
     // Make sure to update the token list in lexer.cpp.
     tLAST_TOKEN_ID
 };

@@ -116,12 +116,6 @@ static constexpr int SKIPMODE = 1;     /* bit field in "#if" stack */
 static constexpr int PARSEMODE = 2;    /* bit field in "#if" stack */
 static constexpr int HANDLED_ELSE = 4; /* bit field in "#if" stack */
 
-struct TokenCache : public ke::InlineListNode<TokenCache> {
-    std::deque<full_token_t> tokens;
-    bool require_newdecls;
-    bool need_semicolon;
-};
-
 class Lexer
 {
     friend class MacroProcessor;
@@ -157,20 +151,6 @@ class Lexer
     void LexDefinedKeyword();
     bool HasMacro(Atom* atom);
 
-    // Lexer must be at a '{' token. Lexes until it reaches a balanced '}' token,
-    // and returns a pointer to the cached tokens.
-    //
-    // The opening '{' token, even though already lexed, will be re-added to the
-    // stream. This is to avoid significantly changing parse_stmt.
-    TokenCache* LexFunctionBody();
-
-    // Consumes a TokenCache. The pointer is deleted after. Consumed tokens will
-    // be replayed by lex().
-    void InjectCachedTokens(TokenCache* cache);
-
-    // Throw away tokens injected by InjectCachedTokens().
-    void DiscardCachedTokens();
-
     full_token_t lex_tok() {
         lex();
         return *current_token();
@@ -201,7 +181,6 @@ class Lexer
     void HandleEof();
     void HandleSkippedSection();
     int LexNewToken();
-    int LexInjectedToken();
     void LexIntoToken(full_token_t* tok);
     void LexSymbolOrKeyword(full_token_t* tok);
     int LexKeywordImpl(Atom* atom);
@@ -223,7 +202,6 @@ class Lexer
     void SkipUtf8Bom();
     void PushLexerState();
     bool IsSameSourceFile(const token_pos_t& a, const token_pos_t& b);
-    void AssertCleanState();
 
     full_token_t* advance_token_ptr();
     full_token_t* next_token();
@@ -361,13 +339,6 @@ class Lexer
     LexerState state_;
     std::deque<std::shared_ptr<SourceFile>> file_queue_;
     tr::vector<LexerState> prev_state_;
-
-    // Set if tokens are being lexed into a new token cache.
-    bool caching_tokens_ = false;
-    ke::InlineList<TokenCache> token_caches_;
-
-    std::deque<full_token_t> injected_token_stream_;
-    bool using_injected_tokens_ = false;
 };
 
 std::string StringizePath(const std::filesystem::path& in_path);

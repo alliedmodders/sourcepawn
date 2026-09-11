@@ -182,33 +182,6 @@ Parser::Parse()
         add_to_end.pop_front();
     }
 
-    while (!delayed_functions_.empty() && !cc_.must_abort()) {
-        auto fun = ke::PopFront(&delayed_functions_);
-
-        auto tokens = fun->tokens();
-        fun->set_tokens(nullptr);
-
-        // Technically this is not good enough, as the lexer state could have
-        // changed in the middle of a function. But that's fairly complex to
-        // handle and pretty ridiculous as far as use cases go.
-        ke::SaveAndSet<bool> change_newdecls(&lexer_->require_newdecls(),
-                                             tokens->require_newdecls);
-        ke::SaveAndSet<bool> change_need_semicolon(&lexer_->need_semicolon(),
-                                             tokens->need_semicolon);
-
-        lexer_->InjectCachedTokens(tokens);
-
-        AutoCountErrors errors;
-        if (auto body = parse_stmt(false)) {
-            fun->set_body(BlockStmt::WrapStmt(body));
-
-            // If there were no errors, we should have consumed every token.
-            assert(!errors.ok() || !lexer_->freading());
-        }
-
-        lexer_->DiscardCachedTokens();
-    }
-
     auto list = new StmtList(token_pos_t{}, stmts);
     return new ParseTree(list);
 }
@@ -2037,11 +2010,8 @@ Parser::parse_function(FunctionDecl* fun, int tokid, bool has_this)
         return false;
     }
 
-    auto cache = lexer_->LexFunctionBody();
-    fun->set_tokens(cache);
+    fun->set_body(parse_compound());
     fun->set_end_pos(lexer_->pos());
-    delayed_functions_.emplace_back(fun);
-
     return true;
 }
 

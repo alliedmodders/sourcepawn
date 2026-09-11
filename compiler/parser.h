@@ -124,7 +124,6 @@ class Parser
     bool allow_empty_array_index_ = false;
     std::shared_ptr<Lexer> lexer_;
     TypeManager* types_ = nullptr;
-    tr::deque<FunctionDecl*> delayed_functions_;
     tr::unordered_map<size_t, SymbolScope*> static_scopes_;
     int sources_index_ = -1;
     Atom* class_atom_ = nullptr;

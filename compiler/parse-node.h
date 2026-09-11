@@ -1547,9 +1547,6 @@ class FunctionDecl : public Decl
     PoolList<Stmt*>& prebody() { return prebody_; }
     const PoolList<Stmt*>& prebody() const { return prebody_; }
 
-    TokenCache* tokens() const { return tokens_; }
-    void set_tokens(TokenCache* tokens) { tokens_ = tokens; }
-
     void set_name(Atom* name) { name_ = name; }
     int next_lambda_id() { return lambda_count_++; }
 
@@ -1694,7 +1691,6 @@ class FunctionDecl : public Decl
     Type* this_type_ = nullptr;
     FunctionType* signature_ = nullptr;
     PoolString* deprecate_ = nullptr;
-    TokenCache* tokens_ = nullptr;
     FunctionDecl* proto_or_impl_ = nullptr;
     ReturnArrayInfo* return_array_ = nullptr;
 
