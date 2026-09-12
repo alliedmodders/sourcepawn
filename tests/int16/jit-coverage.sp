@@ -6,6 +6,12 @@ int16 read_through(int16[] arr, int i) {
     return arr[i];
 }
 
+void bump(int16& x) {
+    printnum(x);      // load.i.i16
+    x++;              // load.i.i16 + stor.i.i16
+    printnum(x);      // load.i.i16 after store
+}
+
 public main() {
     // LL_CVT_I16: view_as<int16> truncates + sign-extends.
     printnum(view_as<int16>(0x12345));        // 0x2345 = 9029
@@ -36,4 +42,12 @@ public main() {
     // LL_LOAD_ELEM_FLAT_I_I16: indexed access on an int16[] argument.
     printnum(read_through(g_data, 1));        // -200
     printnum(read_through(local, 2));         // -300
+
+    // LL_LOAD_I_I16 + LL_STOR_I_I16: int16 reference parameter. The indirect
+    // store goes through HeapAddr, whose base register (r15) needs a REX
+    // byte; guards against the movw prefix-order bug that dropped the REX
+    // and sent the 16-bit store to a wild address.
+    int16 v = -200;
+    bump(v);
+    printnum(v);                              // -199
 }
