@@ -205,9 +205,17 @@ void AstPrinter::PrintArgDecl(ArgDecl* node, bool is_last) {
 void AstPrinter::PrintConstDecl(ConstDecl* node, bool is_last) {
     fprintf(out_, "ConstDecl: %s (type: ", node->name()->chars());
     PrintType(node->type_info());
-    fprintf(out_, ") value: ");
-    PrintConstVal(node->value());
+    fputc(')', out_);
+    if (node->value().type) {
+        fprintf(out_, " value: ");
+        PrintConstVal(node->value());
+    }
     fputc('\n', out_);
+    if (!node->value().type && node->expr()) {
+        stack_.push_back(is_last);
+        Print(node->expr(), true);
+        stack_.pop_back();
+    }
 }
 
 void AstPrinter::PrintConstVal(const ConstVal& cv) {

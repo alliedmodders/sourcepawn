@@ -436,6 +436,7 @@ class ConstDecl : public VarDecl
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::ConstDecl; }
 
     const ConstVal& value() const { return value_; }
+    Expr* expr() const { return expr_; }
 
   private:
     Expr* expr_;
