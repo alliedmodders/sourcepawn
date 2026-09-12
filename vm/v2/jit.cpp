@@ -545,6 +545,8 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 break;
             }
             case LL_LOAD_I_U8:
+            case LL_LOAD_I_I8:
+            case LL_LOAD_I_I16:
             case LL_LOAD_I_X32:
             case LL_LOAD_I_X64:
             {
@@ -554,6 +556,7 @@ bool CompilerBase::CompileBlock(const LLBlock& block) {
                 break;
             }
             case LL_STOR_I_I8:
+            case LL_STOR_I_I16:
             case LL_STOR_I_X32:
             case LL_STOR_I_X64:
             case LL_STOR_I_A:

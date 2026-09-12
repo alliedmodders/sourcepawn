@@ -656,7 +656,10 @@ class Assembler : public AssemblerBase
 
     template <typename DestType>
     void movw(const DestType& dest, Register src) {
-        emit2(0x66, 0x89, src, dest);
+        ensureSpace();
+        *pos_++ = 0x66;
+        maybe_emit_rex(src, dest);
+        emit1_tail(0x89, src, dest);
     }
 
     template <typename DestType>
