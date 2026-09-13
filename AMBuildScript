@@ -328,6 +328,10 @@ class SourcePawn(object):
         super(SourcePawn, self).__init__()
         self.root = root
         self.amtl = amtl
+        builder.AddConfigureFile('product.version')
+        version_file = os.path.join(builder.currentSourcePath, 'product.version')
+        with open(version_file, 'rt') as fp:
+            self.product_version = fp.read().strip()
         self.vars = {
             'Root': self.root,
             'SP': self,
@@ -621,7 +625,10 @@ class SourcePawn(object):
         arch = module.compiler.target.arch
         if arch == 'x86_64':
             arch = 'x64'
-        module.compiler.defines += ['SP_ARCH_STR="{}"'.format(arch)]
+        module.compiler.defines += [
+            'SP_ARCH_STR="{}"'.format(arch),
+            'SOURCEPAWN_VERSION="SourcePawn {}"'.format(self.product_version),
+        ]
 
         enable_jit = module.compiler.family != 'emscripten'
         if getattr(builder.options, 'disable_jit', False):
