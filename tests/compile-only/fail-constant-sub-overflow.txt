@@ -1,0 +1,2 @@
+(3) : error 097: overflow in integer division
+(8) : error 097: overflow in integer division

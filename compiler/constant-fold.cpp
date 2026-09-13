@@ -53,7 +53,7 @@ static inline bool CheckedSub(T a, T b, T* result) {
 
     if ((a < 0) == (b < 0))
         return true;
-    return (*result < 0) == (b < 0);
+    return (*result < 0) == (a < 0);
 #endif
 }
 
