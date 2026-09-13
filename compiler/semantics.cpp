@@ -839,7 +839,7 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                 return nullptr;
             }
             operand = BuildConversion(operand, ck, types_->type_bool());
-            out_type = operand->qual_type();
+            out_type = types_->type_bool();
 
             if (auto* c = operand->as<ir::Constant>())
                 folded = ConstVal(types_->type_bool(), c->get_i32() ? 0 : 1);
