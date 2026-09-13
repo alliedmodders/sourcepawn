@@ -317,6 +317,7 @@ class TypeDesc final {
             case TypeKind::Object:
             case TypeKind::Closure:
             case TypeKind::TopObject:
+            case TypeKind::Null:
                 return true;
             default:
                 return false;

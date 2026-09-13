@@ -1703,6 +1703,11 @@ void MethodLowerer::ReconcileStack(Block* target) {
     if (!data || !data->propagated)
         return;
 
+    // Assert only one successor (combined with the earlier checks, this is
+    // also asserting there is no critical edge). Otherwise, we couldn't be
+    // guaranteed that we own any HeapItem registers we're about to free.
+    assert(block_->successors().size() == 1 && block_->successors()[0] == target);
+
     const auto& target_stack = data->stack;
     assert(stack_.size() == target_stack.size());
 
@@ -1713,14 +1718,17 @@ void MethodLowerer::ReconcileStack(Block* target) {
     };
 
     std::list<Move> moves;
+    std::vector<VReg> gcregs_to_free;
     for (size_t i = 0; i < stack_.size(); i++) {
         assert(stack_[i]->kind == ExprNode::kReg);
         assert(target_stack[i]->kind == ExprNode::kReg);
 
         VReg src = stack_[i]->reg;
         VReg dest = target_stack[i]->reg;
-        if (src != dest)
+        if (src != dest) {
             moves.push_back({src, dest, stack_[i]->type});
+            gcregs_to_free.push_back(src);
+        }
     }
 
     std::vector<VReg> temps_to_free;
@@ -1764,6 +1772,13 @@ void MethodLowerer::ReconcileStack(Block* target) {
 
     for (VReg temp : temps_to_free)
         FreeReg(temp);
+
+    // Any registers that used to contain heap items need to have an
+    // LL_RELEASE emitted. As an optimization we could avoid the
+    // unnecessary Release/AddRef given that ownership is being
+    // transferred, but for now keep it simple.
+    for (VReg reg : gcregs_to_free)
+        FreeReg(reg);
 }
 
 void MethodLowerer::EmitJumpTarget(Block* target_block) {
