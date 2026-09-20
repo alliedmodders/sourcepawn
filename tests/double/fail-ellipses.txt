@@ -1,0 +1,1 @@
+error 068: cannot automatically increment values of type 'double'

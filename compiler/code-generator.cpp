@@ -489,16 +489,28 @@ void CodeGenerator::EmitArrayFillHeapItems(ArrayType* type, ir::Array* array) {
 }
 
 void CodeGenerator::EmitArrayFillIntptr(ArrayType* type, ir::Array* array) {
+    cell_t last = 0;
     for (size_t i = 0; i < array->elements().size(); i++) {
         auto* c = array->elements()[i]->to<ir::Constant>();
+        if (c->type()->isIntPtr())
+            last = c->get_intptr();
+        else
+            last = c->get_cell();
         __ emit(OP_DUP);
         __ PUSH_C((cell_t)i);
-        if (c->type()->isIntPtr())
-            __ emit(OP_PUSH_C, c->get_intptr());
-        else
-            __ emit(OP_PUSH_C, c->get_cell());
+        __ emit(OP_PUSH_C, last);
         __ emit(OP_CVT_INTPTR);
         __ emit(OP_STOR_ELEM_INTPTR);
+    }
+
+    if (array->ellipses()) {
+        for (size_t i = array->elements().size(); i < (size_t)type->size(); i++) {
+            __ emit(OP_DUP);
+            __ PUSH_C((cell_t)i);
+            __ emit(OP_PUSH_C, last);
+            __ emit(OP_CVT_INTPTR);
+            __ emit(OP_STOR_ELEM_INTPTR);
+        }
     }
 }
 
@@ -561,12 +573,14 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ir::Array* array) {
 
     uint32_t num_items = 0;
     std::optional<cell_t> prev1, prev2;
+    std::optional<double> prev_double;
     for (const auto& item : array->elements()) {
         prev2 = prev1;
         auto* c = item->to<ir::Constant>();
         if (c->type()->isDouble()) {
             AddValue<double>(&data, c->get_double());
             prev1 = {};
+            prev_double = c->get_double();
         } else if (c->type()->isInt64()) {
             AddValue<int64_t>(&data, c->get_int64());
             prev1 = {};
@@ -592,22 +606,30 @@ uint32_t CodeGenerator::EmitArrayFillData(ArrayType* type, ir::Array* array) {
     assert(!array->ellipses() || type->size());
 
     if (array->ellipses() && num_items < (uint32_t)type->size()) {
-        cell_t step = 0;
-        if (prev2)
-            step = *prev1 - *prev2;
+        if (type->inner()->isDouble()) {
+            double last = prev_double.value_or(0.0);
+            while (num_items < (uint32_t)type->size()) {
+                AddValue<double>(&data, last);
+                num_items++;
+            }
+        } else {
+            cell_t step = 0;
+            if (prev2)
+                step = *prev1 - *prev2;
 
-        cell_t next_value = *prev1 + step;
-        while (num_items < (uint32_t)type->size()) {
-            if (type->inner()->lit_size() == 1)
-                AddValue<int8_t>(&data, next_value);
-            else if (type->inner()->lit_size() == 2)
-                AddValue<int16_t>(&data, next_value);
-            else if (type->inner()->lit_size() == 8)
-                AddValue<int64_t>(&data, next_value);
-            else
-                AddValue<int32_t>(&data, next_value);
-            next_value += step;
-            num_items++;
+            cell_t next_value = *prev1 + step;
+            while (num_items < (uint32_t)type->size()) {
+                if (type->inner()->lit_size() == 1)
+                    AddValue<int8_t>(&data, next_value);
+                else if (type->inner()->lit_size() == 2)
+                    AddValue<int16_t>(&data, next_value);
+                else if (type->inner()->lit_size() == 8)
+                    AddValue<int64_t>(&data, next_value);
+                else
+                    AddValue<int32_t>(&data, next_value);
+                next_value += step;
+                num_items++;
+            }
         }
     }
 

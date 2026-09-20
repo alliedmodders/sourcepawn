@@ -708,13 +708,14 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             continue;
         }
 
-        QualType v = n->qual_type();
+        if (ir::Value* converted = sema_->TryConversion(n, rank->inner(), CvtContext::Assignment))
+            n = converted;
+        elts.back() = n;
+
         if (!n->is(IrKind::Constant)) {
             report(expr, 8);
             continue;
         }
-
-        sema_->CheckCoercion(n, rank->inner(), *v, CvtContext::Assignment);
 
         prev2 = prev1;
         prev1 = n->is(IrKind::Constant);

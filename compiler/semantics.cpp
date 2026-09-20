@@ -7,6 +7,7 @@
 //
 #include "semantics.h"
 
+#include <limits>
 #include <string>
 #include <unordered_set>
 
@@ -1665,14 +1666,13 @@ ir::Value* Semantics::CheckArrayExpr(ArrayExpr* array, Type* target) {
             if (!(enode = CheckExpr(entry)))
                 return nullptr;
 
-            QualType val = enode->qual_type();
+            if (!(enode = TryConversion(enode, formal_elt, CvtContext::Assignment)))
+                return nullptr;
+
             if (!enode->is(IrKind::Constant)) {
                 report(entry, 8);
                 return nullptr;
             }
-
-            if (!CheckCoercion(enode, formal_elt, *val, CvtContext::Assignment))
-                return nullptr;
         }
         elements.emplace_back(enode);
     }
@@ -3550,6 +3550,51 @@ ir::Value* Semantics::CoerceNull(ir::Value* expr, Type* formal) {
     return expr;
 }
 
+static inline ir::Value* BuildConstantCast(ir::Constant* c, BuiltinType to_type, Type* to) {
+    switch (to_type) {
+        case BuiltinType::Float:
+            if (c->type()->coercesToInt())
+                return new ir::Constant(c->pn(), ConstVal(to, float(c->get_cell())));
+            break;
+
+        case BuiltinType::Double:
+            if (c->type()->isInt())
+                return new ir::Constant(c->pn(), ConstVal(to, double(c->get_i32())));
+            if (c->type()->isFloat())
+                return new ir::Constant(c->pn(), ConstVal(to, double(c->get_float())));
+            break;
+
+        case BuiltinType::Int16:
+            if (c->type()->isInt()) {
+                assert(c->get_i32() >= std::numeric_limits<int16_t>::min() &&
+                       c->get_i32() <= std::numeric_limits<int16_t>::max());
+                return new ir::Constant(c->pn(), ConstVal(to, c->get_i32()));
+            }
+            break;
+
+        case BuiltinType::Int8:
+            if (c->type()->isInt() || c->type()->isInt16()) {
+                assert(c->get_i32() >= std::numeric_limits<int8_t>::min() &&
+                       c->get_i32() <= std::numeric_limits<int8_t>::max());
+                return new ir::Constant(c->pn(), ConstVal(to, c->get_i32()));
+            }
+            break;
+
+        case BuiltinType::Int64:
+            if (c->type()->isIntPtr())
+                return new ir::Constant(c->pn(), ConstVal(to, int64_t(c->get_intptr())));
+            if (c->type()->isInt() || c->type()->isInt8() || c->type()->isInt16())
+                return new ir::Constant(c->pn(), ConstVal(to, int64_t(c->get_i32())));
+            break;
+
+        case BuiltinType::IntPtr:
+            if (c->type()->isInt() || c->type()->isInt8() || c->type()->isInt16())
+                return new ir::Constant(c->pn(), ConstVal(to, c->get_i32()));
+            break;
+    }
+    return nullptr;
+}
+
 ir::Value* Semantics::BuildSimpleCast(ir::Value* from, BuiltinType type) {
     if (auto lval = from->as<ir::Lvalue>())
         from = new ir::Rvalue(lval);
@@ -3558,13 +3603,8 @@ ir::Value* Semantics::BuildSimpleCast(ir::Value* from, BuiltinType type) {
 
     // Fold constant conversions into a Constant rather than building a cast.
     if (auto* c = from->as<ir::Constant>()) {
-        if (type == BuiltinType::Float && c->type()->coercesToInt()) {
-            return new ir::Constant(from->pn(), ConstVal(to, float(c->get_cell())));
-        }
-        if (c->type()->isInt() && type == BuiltinType::Int64)
-            return new ir::Constant(from->pn(), ConstVal(to, int64_t(c->get_i32())));
-        if (c->type()->isInt() && type == BuiltinType::IntPtr)
-            return new ir::Constant(from->pn(), ConstVal(to, c->get_i32()));
+        if (auto result = BuildConstantCast(c, type, to))
+            return result;
     }
 
     return new ir::SimpleCast(from->pn(), from, to);
