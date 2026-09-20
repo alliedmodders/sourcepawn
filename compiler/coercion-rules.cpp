@@ -263,9 +263,11 @@ static ConversionKind CheckFunctions(FunctionType* from, FunctionType* to, CvtCo
 
 static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContext why) {
     if (to->isCanonicalFunction()) {
-        return from->conv() == FunctionType::Legacy
-               ? ConversionKind::Trivial
-               : ConversionKind::FuncToLegacy;
+        if (from->conv() == FunctionType::Legacy)
+            return ConversionKind::Trivial;
+        if (from->conv() == FunctionType::Closure)
+            return ConversionKind::Illegal;
+        return ConversionKind::FuncToLegacy;
     }
 
     if (auto other = to->as<FunctionType>()) {
@@ -302,8 +304,11 @@ static ConversionKind FindFuncConversion(FunctionType* from, Type* to, CvtContex
             break;
     }
 
-    if (best != ConversionKind::Illegal && from->conv() != FunctionType::Legacy)
+    if (best != ConversionKind::Illegal && from->conv() != FunctionType::Legacy) {
+        if (from->conv() == FunctionType::Closure)
+            return ConversionKind::Illegal;
         return ConversionKind::FuncToLegacy;
+    }
 
     return best;
 }
@@ -369,9 +374,11 @@ ConversionKind FindConversion(Type* from, Type* to, CvtContext why) {
             if (to->isAny())
             {
                 auto from_ft = from->to<FunctionType>();
-                return from_ft->conv() == FunctionType::Legacy
-                       ? ConversionKind::Trivial
-                       : ConversionKind::FuncToLegacy;
+                if (from_ft->conv() == FunctionType::Legacy)
+                    return ConversionKind::Trivial;
+                if (from_ft->conv() == FunctionType::Closure)
+                    return ConversionKind::Illegal;
+                return ConversionKind::FuncToLegacy;
             }
             return FindFuncConversion(from->to<FunctionType>(), to, why);
 

@@ -613,6 +613,7 @@ class TypeManager
                                  const std::vector<QualType>& args,
                                  bool variadic, FunctionType::Convention conv);
     FunctionType* UpdateReturnType(FunctionType* ft, QualType new_return_type);
+    FunctionType* UpdateConvention(FunctionType* ft, FunctionType::Convention conv);
 
     Type* type_object() const { return type_object_; }
     Type* type_null() const { return type_null_; }

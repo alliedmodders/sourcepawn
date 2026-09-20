@@ -3181,6 +3181,11 @@ bool Semantics::CheckFunctionDecl(FunctionDecl* info) {
     info->set_analyzed(CheckFunctionDeclImpl(info));
     info->set_is_analyzing(false);
 
+    // If a closure never captured any variables, we can relax its type, which
+    // allows conversion to Legacy typedefs.
+    if (info->signature()->conv() == FunctionType::Closure && info->NumUpvars() == 0)
+        info->set_function_type(types_->UpdateConvention(info->signature(), FunctionType::Typed));
+
     return info->analysis_status();
 }
 

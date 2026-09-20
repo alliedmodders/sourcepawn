@@ -199,13 +199,11 @@ void Semantics::ReportConversionDiagnostic(const token_pos_t& pos, QualType form
 }
 
 void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, QualType actual) {
-    // Print a better error message for when function signatures match but
-    // we're trying to convert a closure to a legacy ID.
+    // Print a better error message when a closure (which captures variables,
+    // by convention) cannot be converted to a legacy function ID.
     if (auto actual_ft = actual->as<FunctionType>()) {
-        if (auto formal_ft = formal->as<FunctionType>()) {
-            if (actual_ft->conv() == FunctionType::Closure &&
-                formal_ft->conv() == FunctionType::Legacy)
-            {
+        if (actual_ft->conv() == FunctionType::Closure) {
+            if (formal->as<FunctionType>() || formal->isFunction() || formal->isAny()) {
                 report(node, 489);
                 return;
             }

@@ -386,6 +386,13 @@ FunctionType* TypeManager::UpdateReturnType(FunctionType* ft, QualType new_retur
     return defineFunction(new_return_type, args, ft->variadic(), ft->conv());
 }
 
+FunctionType* TypeManager::UpdateConvention(FunctionType* ft, FunctionType::Convention conv) {
+    std::vector<QualType> args;
+    for (unsigned i = 0; i < ft->nargs(); i++)
+        args.push_back(ft->arg_type(i));
+    return defineFunction(ft->return_type(), args, ft->variadic(), conv);
+}
+
 bool TypeManager::ArrayCachePolicy::matches(const Lookup& lookup, ArrayType* type) {
     return lookup.type == type->inner() && lookup.size == type->size() && lookup.is_flat == type->is_flat();
 }
