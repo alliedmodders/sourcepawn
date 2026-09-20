@@ -1422,8 +1422,13 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
     if (from_type == to_type) {
         if (auto* c = inner_ir->as<ir::Constant>())
             return new ir::Constant(expr, c->value());
-        if (operand->lvalue())
+        if (operand->lvalue()) {
+            if (!operand->to<ir::Lvalue>()->HasAddress()) {
+                operand = new ir::Rvalue(operand->to<ir::Lvalue>());
+                return new ir::Cast(expr, operand, out_type);
+            }
             return new ir::LvalueCast(expr, operand, out_type);
+        }
         return new ir::Cast(expr, operand, out_type);
     }
 

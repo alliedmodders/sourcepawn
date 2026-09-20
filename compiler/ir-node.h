@@ -83,6 +83,15 @@ class Lvalue : public Value
   public:
     static bool is_a(Value* node) { return IsLvalue(node->kind()); }
 
+    bool HasAddress() const {
+        switch (kind()) {
+            case IrKind::Accessor:
+                return false;
+            default:
+                return true;
+        }
+    }
+
   protected:
     using Value::Value;
 };
