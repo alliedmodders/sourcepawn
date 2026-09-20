@@ -1896,6 +1896,13 @@ auto Semantics::BindCallTarget(CallExpr* call, Expr* target) -> CallBinding {
                 return {};
 
             if (!checked->is(IrKind::MethodRef)) {
+                if (auto lval = checked->as<ir::Lvalue>())
+                    checked = new ir::Rvalue(lval);
+                if (auto ft = checked->type()->as<FunctionType>()) {
+                    if (ft->conv() == FunctionType::Legacy)
+                        report(target, 33);
+                    return {checked};
+                }
                 report(target, 12);
                 return {};
             }
