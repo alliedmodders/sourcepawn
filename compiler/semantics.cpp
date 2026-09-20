@@ -3074,10 +3074,18 @@ bool Semantics::CheckSwitchStmt(SwitchStmt* stmt) {
             if (!tag_ok)
                 continue;
 
+            ConversionKind ck;
+
             QualType type = checked_expr->qual_type();
-            ConversionKind ck = FindConversion(checked->type(), *type, CvtContext::Assignment);
-            if (!IsNopConversion(ck)) {
-                report(expr, 450) << *type << checked->type();
+            auto const_ck = FindConstantConversion(checked, checked->type(), *type,
+                                                   CvtContext::Assignment);
+            if (const_ck)
+                ck = *const_ck;
+            else
+                ck = FindConversion(checked->type(), *type, CvtContext::Assignment);
+
+            if (!const_ck && !IsNopConversion(ck)) {
+                ReportConversionDiagnostic(checked, *type, checked->type());
                 continue;
             }
             if (ck == ConversionKind::TagMismatch)

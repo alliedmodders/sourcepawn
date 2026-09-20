@@ -2477,7 +2477,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
 
     for (size_t i = 0; i < stmt->cases().size(); i++) {
         for (const auto& expr : stmt->sema_case_exprs(i))
-            case_labels.emplace(expr->to<ir::Constant>()->get_i32(), Label());
+            case_labels.emplace(expr->to<ir::Constant>()->get_cell(), Label());
     }
 
     Label default_label;
@@ -2496,7 +2496,7 @@ CodeGenerator::EmitSwitchStmt(SwitchStmt* stmt)
         Stmt* stmt_node = case_entry.second;
 
         for (const auto& expr : stmt->sema_case_exprs(i))
-            __ bind(&case_labels[expr->to<ir::Constant>()->get_i32()]);
+            __ bind(&case_labels[expr->to<ir::Constant>()->get_cell()]);
 
         EmitStmt(stmt_node);
         if (stmt_node->flow_type() == Flow_None)
