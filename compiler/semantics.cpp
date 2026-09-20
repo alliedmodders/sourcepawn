@@ -293,7 +293,7 @@ bool Semantics::CheckTypedVarDecl(VarDeclBase* decl) {
             decl->mutable_type_info()->is_const = false;
     } else {
         if (type->isClass() && !decl->init()) {
-            report(decl->pos(), 478);
+            report(decl->pos(), 458) << decl->name();
             return false;
         }
         auto init = decl->init();

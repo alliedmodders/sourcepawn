@@ -319,7 +319,7 @@ static const char* errmsg_ex[] = {
     /*455*/ "unused\n",
     /*456*/ "expected scalar type, got \"%s\"\n",
     /*457*/ "unused\n",
-    /*458*/ "unused\n",
+    /*458*/ "variable \"%s\" must be initialized\n",
     /*459*/ "values of type \"%s\" cannot be declared as const\n",
     /*460*/ "cannot use view_as to cast type '%s' to type '%s'\n",
     /*461*/ "operator '%s' not defined for types '%s' and '%s'\n",
