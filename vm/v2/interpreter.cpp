@@ -1369,7 +1369,7 @@ bool Interpreter::run_internal() {
                 uint16_t dest = reader_.read<uint16_t>();
                 cell_t val = vregs_[size_reg];
                 if (val < 0) {
-                    rt_->ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+                    rt_->ReportErrorNumber(SP_ERROR_INVALID_ARRAY_SIZE);
                     return false;
                 }
                 auto array = rt_->NewArray(td, val);

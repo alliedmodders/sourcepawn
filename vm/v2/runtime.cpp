@@ -1197,7 +1197,7 @@ Handle<SpObject> Runtime::NewObject(const TypeDesc* td) {
 
 Handle<SpArray> Runtime::NewBulkArray(const TypeDesc* td, uint8_t dims, cell_t* sizes) {
     if (*sizes < 0) {
-        ReportErrorNumber(SP_ERROR_ARRAY_BOUNDS);
+        ReportErrorNumber(SP_ERROR_INVALID_ARRAY_SIZE);
         return nullptr;
     }
 

@@ -774,7 +774,7 @@ void Compiler::EmitMove(LLOp op, uint16_t src_reg, uint16_t dest_reg) {
 void Compiler::EmitNewArray(const TypeDesc* td, uint16_t size_reg, uint16_t dest_reg) {
     __ movl(eax, RegAddr(size_reg));
     __ cmpl(eax, 0);
-    JumpOnError(less, SP_ERROR_ARRAY_BOUNDS);
+    JumpOnError(less, SP_ERROR_INVALID_ARRAY_SIZE);
 
 #if defined(_WIN32)
     __ push(eax);
