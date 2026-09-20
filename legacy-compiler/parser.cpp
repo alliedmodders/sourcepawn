@@ -306,8 +306,11 @@ bool Parser::PreprocExpr(cell* val, Type** type) {
 
     Semantics sema(cc);
     Parser parser(cc, &sema);
+
+    AutoCountErrors errors;
+
     auto expr = parser.hier14();
-    if (!expr)
+    if (!expr || !errors.ok())
         return false;
 
     SemaContext sc(&sema);
@@ -861,6 +864,8 @@ Parser::hier2()
         case tDEC: /* --lval */
         {
             Expr* node = hier2();
+            if (!node)
+                return nullptr;
             return new PreIncExpr(pos, tok, node);
         }
         case '~':
@@ -868,6 +873,8 @@ Parser::hier2()
         case '!':
         {
             Expr* node = hier2();
+            if (!node)
+                return nullptr;
             return new UnaryExpr(pos, tok, node);
         }
         case tNEW:
@@ -900,6 +907,8 @@ Parser::hier2()
                 report(240) << lexer_->current_token()->atom;
             }
             Expr* expr = hier2();
+            if (!expr)
+                return nullptr;
             return new CastExpr(pos, tok, ti, expr);
         }
         case tSIZEOF:
@@ -1007,11 +1016,15 @@ Parser::primary()
         auto pos = lexer_->pos();
         do {
             Expr* child = hier14();
+            if (!child)
+                break;
             exprs.emplace_back(child);
         } while (lexer_->match(','));
         lexer_->need(')');
         lexer_->lexclr(FALSE); /* clear lexer_->lex() push-back, it should have been
                         * cleared already by lexer_->need() */
+        if (exprs.empty())
+            return nullptr;
         if (exprs.size() > 1)
             return new CommaExpr(pos, exprs);
         return exprs[0];
