@@ -350,4 +350,5 @@ static const char* errmsg_ex[] = {
     /*486*/ "constructors cannot have variadic arguments\n",
     /*487*/ "stack-allocated arrays cannot be passed to dynamically sized arguments that are captured\n",
     /*488*/ "floating-point literal is not allowed in preprocessor expression\n",
+    /*489*/ "closures cannot be converted to legacy function typedefs\n",
 };

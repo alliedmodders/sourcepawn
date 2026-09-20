@@ -206,7 +206,7 @@ void Semantics::ReportConversionDiagnostic(ir::Value* node, QualType formal, Qua
             if (actual_ft->conv() == FunctionType::Closure &&
                 formal_ft->conv() == FunctionType::Legacy)
             {
-                report(node, 43);
+                report(node, 489);
                 return;
             }
         }

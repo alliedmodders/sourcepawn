@@ -1,1 +1,1 @@
-error 043: closures cannot be passed through natives or varargs
+error 489: closures cannot be converted to legacy function typedefs
