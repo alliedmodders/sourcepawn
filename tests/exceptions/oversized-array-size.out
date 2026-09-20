@@ -1,0 +1,2 @@
+Exception thrown: Invalid array size
+  [0] oversized-array-size.sp::main, line 5

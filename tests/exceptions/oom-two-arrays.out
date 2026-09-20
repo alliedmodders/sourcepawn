@@ -1,0 +1,2 @@
+Exception thrown: Out of memory
+  [0] oom-two-arrays.sp::main, line 6

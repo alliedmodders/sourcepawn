@@ -1,0 +1,2 @@
+Exception thrown: Out of memory
+  [0] oom-new-array.sp::main, line 5

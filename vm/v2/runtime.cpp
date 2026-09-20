@@ -482,10 +482,8 @@ Handle<SpFunction> Runtime::CastFunctionId(funcid_t id, const TypeDesc* td) {
 
 Handle<SpFunction> Runtime::NewClosure(const TypeDesc* td, MethodInfo* method) {
     auto fn = heap_.New<SpFunction>(td, td->closure_upvar_size());
-    if (!fn) {
-        env_->ReportError(SP_ERROR_OUT_OF_MEMORY);
+    if (!fn)
         return nullptr;
-    }
     fn->method = method;
     memset(fn->upvars(), 0, td->closure_upvar_size());
     return fn;
@@ -1150,10 +1148,8 @@ Handle<SpArray> Runtime::NewArray(const TypeDesc* td, uint32_t size) {
     }
 
     auto base = heap_.New<SpArray>(td, size * elt_size);
-    if (!base) {
-        env_->ReportError(SP_ERROR_INVALID_ARRAY_SIZE);
+    if (!base)
         return nullptr;
-    }
     base->length = size;
 
     if (size) {
@@ -1183,10 +1179,8 @@ Handle<SpObject> Runtime::NewObject(const TypeDesc* td) {
     uint32_t size = td->cls_size();
 
     auto obj = heap_.New<SpObject>(td, size);
-    if (!obj) {
-        env_->ReportError(SP_ERROR_OUT_OF_MEMORY);
+    if (!obj)
         return nullptr;
-    }
 
     // Zero-initialize the payload.
     void* payload = reinterpret_cast<void*>(reinterpret_cast<uint8_t*>(obj.get()) + sizeof(SpObject));
