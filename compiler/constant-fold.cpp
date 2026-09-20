@@ -122,7 +122,7 @@ std::optional<ConstVal> Calc(CompileContext& cc, const token_pos_t& pos, T left,
 
                 if (!safe) {
                     if constexpr (sizeof(T) == sizeof(int64_t)) {
-                        report(pos, 97);
+                        report(pos, 57);
                         return std::nullopt;
                     }
 
