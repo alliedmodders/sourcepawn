@@ -1189,6 +1189,11 @@ void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
 
     __ emit(expr->token() == tINC ? OP_INC : OP_DEC);
 
+    if (type->isInt8())
+        __ emit(OP_CVT_I8);
+    else if (type->isInt16())
+        __ emit(OP_CVT_I16);
+
     if (expr->prefix() && !discard) {
         __ emit(OP_DUP);
         if (!binding.canRematerialize()) {
