@@ -1907,9 +1907,14 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
 
         // Packaged varargs are ultimately forwarded to a native, so arrays in
         // the package must be retrofit for natives, even if we're not lowering
-        // directly to a native call.
+        // directly to a native call. Sized array parameters of scripted
+        // functions are flat too, so heap arrays passed to them (2D array rows,
+        // string literals) must be aliased as flat storage as well.
+        uint32_t sig_index = ctor_type ? i + 1 : i;
+        bool flat_param = sig_index < expected_argc &&
+                          sig->args()[sig_index]->kind() == TypeKind::FlatArray;
         if (node->type->IsNonFlatArray() &&
-            (is_native || (package_varargs && i >= expected_argc)))
+            (is_native || flat_param || (package_varargs && i >= expected_argc)))
         {
             VReg dest = AllocateTempCells(1, false);
             emit(LL_ARRAY_TO_FLAT, arg_reg, dest);
