@@ -456,13 +456,14 @@ static BaseRuntime* LoadImage(std::shared_ptr<SmxImage> image, const char* file,
 
 BaseRuntime*
 Environment::LoadBinaryFromFile(const char* file, bool data_only) {
-    FILE* fp = fopen(file, "rb");
+    std::unique_ptr<FILE, decltype(&fclose)> fp(fopen(file, "rb"), fclose);
     if (!fp) {
         ReportError(SP_ERROR_NOT_FOUND, "could not open file");
         return nullptr;
     }
 
-    auto image = std::make_shared<SmxImage>(fp);
+    auto image = std::make_shared<SmxImage>(fp.get());
+    fp.reset();
     return LoadImage(std::move(image), file, data_only);
 }
 
