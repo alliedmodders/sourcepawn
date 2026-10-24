@@ -2777,6 +2777,15 @@ void CodeGenerator::EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int 
             // -> int8: truncate any wider integer (or char) to the low 8 bits
             // and sign-extend. Only reachable via an explicit view_as<int8>().
             __ emit(OP_CVT_I8);
+        } else if (to->isFloat() != from_type->isFloat()) {
+            // 32-bit int <-> float reinterpret. Opcodes are typed by their
+            // operands, so the value must carry the new type or e.g.
+            // view_as<float>(call()) * 2.0 lowers to an integer multiply.
+            // Round-trip it through a local of the target type.
+            auto slot = AcquireTempSlot(expr, to->isFloat() ? BuiltinType::Float
+                                                            : BuiltinType::Int);
+            __ emit(OP_STOR_S, VarSlot(slot));
+            __ emit(OP_LOAD_S, VarSlot(slot));
         }
     }
 }
