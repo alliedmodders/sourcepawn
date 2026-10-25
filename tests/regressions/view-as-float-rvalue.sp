@@ -1,11 +1,13 @@
 // Regression test for alliedmodders/sourcepawn#1197 and #1194. A view_as<>
-// (or legacy tag cast) between int and float over an rvalue, such as a call
-// result, emitted no instruction, so the value kept its old type on the
-// stack and the surrounding operator lowered to the wrong kind of
-// arithmetic: view_as<float>(call()) * 2.0 was an integer multiply.
+// (or legacy tag cast) between int and float, or int64 and double, over an
+// rvalue such as a call result emitted no instruction, so the value kept its
+// old type on the stack and the surrounding operator lowered to the wrong
+// kind of arithmetic: view_as<float>(call()) * 2.0 was an integer multiply.
 
 native void printnum(int x);
 native void printfloat(float x);
+native void printnum64(int64 x);
+native void printdouble(double x);
 native int dynamic_native(int arg);
 
 stock int IntFn(int x) {
@@ -17,6 +19,14 @@ stock any AnyFn(any x) {
 }
 
 stock float FloatFn(float x) {
+    return x;
+}
+
+stock int64 Int64Fn(int64 x) {
+    return x;
+}
+
+stock double DoubleFn(double x) {
     return x;
 }
 
@@ -38,4 +48,8 @@ public void main() {
     // The other direction: float call results reinterpreted as int.
     printnum(view_as<int>(FloatFn(2.5)) - view_as<int>(FloatFn(2.0)));
     printnum(view_as<int>(FloatFn(2.5)) + 1);
+
+    // Same for int64 <-> double.
+    printdouble(view_as<double>(Int64Fn(view_as<int64>(2.5d))) * 2.0d);
+    printnum64(view_as<int64>(DoubleFn(2.5d)) - view_as<int64>(DoubleFn(2.0d)));
 }
