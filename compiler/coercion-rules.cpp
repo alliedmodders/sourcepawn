@@ -185,9 +185,6 @@ ConversionKind FindArrayConversion(ArrayType* from, ArrayType* to, CvtContext wh
         if (why == CvtContext::FuncArg)
             return ConversionKind::Illegal;
 
-        auto ck = FindConversion(from_iter->inner(), to_iter->inner(), why);
-        if (IsNopConversion(ck))
-            return ck;
         return ConversionKind::Illegal;
     }
     return ConversionKind::Trivial;
