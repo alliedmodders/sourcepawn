@@ -1029,9 +1029,8 @@ ir::Value* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         if (op->right.ck == ConversionKind::TagMismatch)
             report(state.right, 213) << op->right.type << right_type;
 
-        if (!op->right.IsNop())
-            state.right = BuildConversion(state.right, op->right);
-        if (!op->left.IsNop() && !IsAssignOp(token))
+        state.right = BuildConversion(state.right, op->right);
+        if (!IsAssignOp(token))
             state.left = BuildConversion(state.left, op->left);
 
         if (IsCompare(token))
@@ -3691,6 +3690,16 @@ ir::Value* Semantics::BuildConversion(ir::Value* from, ConversionKind ck, Type* 
         }
         case ConversionKind::CoerceNull:
             return CoerceNull(from, to);
+        case ConversionKind::Trivial:
+        case ConversionKind::TagMismatch:
+            if (to->isFloat() && !from->type()->isFloat()) {
+                if (auto lval = from->as<ir::Lvalue>())
+                    from = new ir::Rvalue(lval);
+                if (auto* c = from->as<ir::Constant>())
+                    return new ir::Constant(from->pn(), ConstVal(to, c->get_cell()));
+                return new ir::Cast(from->pn(), from, to);
+            }
+            return from;
         default:
             return from;
     }
