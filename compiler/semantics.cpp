@@ -1346,10 +1346,13 @@ ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
             return nullptr;
         }
 
-        if (use_left_to_right)
+        if (use_left_to_right) {
             second = BuildConversion(second, left_to_right, *right);
-        else
+            if (!IsNopConversion(left_to_right))
+                out_type = second->qual_type();
+        } else {
             third = BuildConversion(third, right_to_left, *left);
+        }
 
         auto ck = use_left_to_right ? left_to_right : right_to_left;
         if (ck == ConversionKind::TagMismatch)
