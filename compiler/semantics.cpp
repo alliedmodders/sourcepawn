@@ -861,6 +861,8 @@ ir::Value* Semantics::CheckUnaryExpr(UnaryExpr* unary) {
                         folded = ConstVal(t, value);
                 } else if (c->is_double()) {
                     folded = ConstVal(t, -c->get_double());
+                } else if (c->is_intptr()) {
+                    folded = ConstVal(t, -c->get_intptr());
                 } else {
                     folded = ConstVal(t, -c->get_cell());
                 }
