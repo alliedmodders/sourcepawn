@@ -35,6 +35,10 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
             return;
         }
         std::unique_ptr<LLCode> code = LowerMethod(graph, method.get());
+        if (!code) {
+            fprintf(stdout, "    <failed to lower code>\n");
+            return;
+        }
         method->set_llcode(std::move(code));
     }
 
@@ -75,8 +79,9 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
 
         switch (op) {
             case LL_SWITCH: {
+                uint16_t val_reg = reader.read<uint16_t>();
                 cell_t ncases = reader.read<cell_t>();
-                fprintf(stdout, " cases:%d", (int)ncases);
+                fprintf(stdout, " %s, cases:%d", FormatRegister(val_reg).c_str(), (int)ncases);
                 cell_t def_offset = reader.read<cell_t>();
                 for (cell_t c = 0; c < ncases; c++) {
                     cell_t val = reader.read<cell_t>();
@@ -84,6 +89,21 @@ void DumpTool::DumpLoweredCode(uint32_t method_index) {
                     fprintf(stdout, "\n        case %d: %04x", (int)val, (uint32_t)target_offset);
                 }
                 fprintf(stdout, "\n        default: %04x", (uint32_t)def_offset);
+                break;
+            }
+
+            case LL_CALLI: {
+                uint16_t fn_reg = reader.read<uint16_t>();
+                uint8_t nargs = reader.read<uint8_t>();
+                uint16_t dest_reg = reader.read<uint16_t>();
+                std::vector<std::string> args;
+                args.push_back(FormatRegister(fn_reg));
+                args.push_back(std::to_string(nargs));
+                if (dest_reg != 0xffff)
+                    args.push_back("dest:" + FormatRegister(dest_reg));
+                for (uint32_t i = 0; i < nargs; i++)
+                    args.push_back(FormatRegister(reader.read<uint16_t>()));
+                fprintf(stdout, " %s", ke::Join(args, ", ").c_str());
                 break;
             }
 
