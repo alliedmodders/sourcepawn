@@ -2771,15 +2771,11 @@ void CodeGenerator::EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int 
             __ emit(OP_CVT_I64);
         } else if (to->isIntPtr() && (from_type->isIntN() || from_type->isAny())) {
             __ emit(OP_CVT_INTPTR);
-        } else if (to->isInt16() &&
-                   (from_type->isInt() || from_type->isWideInt() || from_type->isAny()))
-        {
+        } else if (to->isInt16() && (from_type->coercesToInt() || from_type->isWideInt())) {
             // -> int16: truncate any wider integer to the low 16 bits and
             // sign-extend. Only reachable via an explicit view_as<int16>().
             __ emit(OP_CVT_I16);
-        } else if (to->isInt8() &&
-                   (from_type->isIntN() || from_type->isChar() || from_type->isAny()))
-        {
+        } else if (to->isInt8() && (from_type->coercesToInt() || from_type->isWideInt())) {
             // -> int8: truncate any wider integer (or char) to the low 8 bits
             // and sign-extend. Only reachable via an explicit view_as<int8>().
             __ emit(OP_CVT_I8);
