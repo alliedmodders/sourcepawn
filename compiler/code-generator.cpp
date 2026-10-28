@@ -2717,7 +2717,7 @@ void CodeGenerator::EmitSimpleCastExpr(ir::SimpleCast* expr) {
         assert(from_type->isIntN() || from_type->isAny());
         __ emit(OP_CVT_I64);
     } else if (to_type->isIntPtr()) {
-        assert(from_type->isInt() || from_type->isAny() || from_type->isInt64());
+        assert(from_type->isIntN() || from_type->isAny());
         __ emit(OP_CVT_INTPTR);
     } else if (to_type->isDouble()) {
         __ emit(OP_CVT_F64);
@@ -2756,14 +2756,10 @@ void CodeGenerator::EmitCastExpr(ir::Value* expr, ir::Value* from, unsigned int 
         // Wide int -> int32: truncate.
         if ((to->isInt() || to->isAny()) && from_type->isWideInt()) {
             __ emit(OP_CVT_I32);
-        } else if (to->isInt64() &&
-                   (from_type->isIntN() || from_type->isAny()))
-        {
+        } else if (to->isInt64() && (from_type->isIntN() || from_type->isAny())) {
             // -> int64: from int, any, intptr, or int16.
             __ emit(OP_CVT_I64);
-        } else if (to->isIntPtr() &&
-                   (from_type->isInt() || from_type->isAny() || from_type->isInt64()))
-        {
+        } else if (to->isIntPtr() && (from_type->isIntN() || from_type->isAny())) {
             __ emit(OP_CVT_INTPTR);
         } else if (to->isInt16() &&
                    (from_type->isInt() || from_type->isWideInt() || from_type->isAny()))
