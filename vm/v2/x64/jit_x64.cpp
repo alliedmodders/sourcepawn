@@ -1774,11 +1774,12 @@ void Compiler::EmitCallThunk(CallThunk* thunk) {
     __ movq(ArgReg1, thunk->method_index);
     __ movq(ArgReg0, context_reg);
     __ callWithABI(ExternalAddress((void*)LazyCompileThunk));
-    __ leaveExitFrame();
 
+    // Check for null while the stack is still 16-byte aligned.
     __ testq(rax, rax);
     JumpOnReportedError(zero);
 
+    __ leaveExitFrame();
     __ jmp(rax);
 }
 

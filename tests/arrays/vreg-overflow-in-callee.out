@@ -1,0 +1,2 @@
+Exception thrown: Not enough space on the stack
+  [0] vreg-overflow-in-callee.sp::main, line 29
