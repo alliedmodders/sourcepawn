@@ -942,7 +942,8 @@ void* CompilerBase::LazyCompileThunk(Runtime* cx, uint32_t method_index, uint8_t
     }
 
     auto fn = IndirectCompileThunk(cx, method.get());
-    assert(fn);
+    if (!fn)
+        return nullptr;
 
     /* Right now, we always keep the code RWE */
     PatchCallThunk(pc, fn->GetEntryAddress());

@@ -1046,6 +1046,8 @@ bool Interpreter::run_internal() {
                     if (!graph)
                         return false;
                     std::unique_ptr<LLCode> code = LowerMethod(graph, target.get());
+                    if (!code)
+                        return false;
                     target->set_llcode(std::move(code));
                 }
 
