@@ -15,7 +15,7 @@ public void main() {
   Crab test[3] = { Crab:1, Crab:2, Crab:3 };
   float vec[3] = { 1.0, 2.0, 3.0 };
   FileHandle hFile;
-  WriteFile(hFile, test, 3, 4); // warning: tag mismatch but works
+  WriteFile(hFile, view_as<int>(test), 3, 4); // requires an explicit cast now
   WriteFile(hFile, _:test, 3, 4); // All fine
   WriteFile(hFile, view_as<int>(vec), 3, 4);
   WriteFile(hFile, view_as<int>(test), 3, 4); // Writes random memory
