@@ -201,17 +201,17 @@ class Semantics final
     ir::Value* CheckExpr(Expr* expr, uint32_t flags = EXPR_DEFAULT);
     ir::Value* CheckNewArrayExpr(NewArrayExpr* expr);
     ir::Value* CheckArrayExpr(ArrayExpr* expr, Type* target = nullptr);
-    ir::Value* CheckStringExpr(StringExpr* expr, Type* target = nullptr);
+    ir::Value* CheckStringExpr(StringExpr* expr, QualType target = {});
     ir::Value* CheckNullExpr(NullExpr* expr);
     ir::Value* CheckThisExpr(ThisExpr* expr);
-    ir::Value* CheckCommaExpr(CommaExpr* expr);
+    ir::Value* CheckCommaExpr(CommaExpr* expr, QualType target = {});
     ir::Value* CheckIndexExpr(IndexExpr* expr);
     ir::Value* CheckCallExpr(CallExpr* expr);
     ir::Value* CheckSymbolExpr(SymbolExpr* expr, bool allow_types);
     ir::Value* CheckSizeofExpr(SizeofExpr* expr);
-    ir::Value* CheckCastExpr(CastExpr* expr);
+    ir::Value* CheckCastExpr(CastExpr* expr, QualType target = {});
     ir::Value* CheckIncDecExpr(IncDecExpr* expr, uint32_t flags);
-    ir::Value* CheckTernaryExpr(TernaryExpr* expr, Type* target = nullptr);
+    ir::Value* CheckTernaryExpr(TernaryExpr* expr, QualType target = {});
     ir::Value* CheckChainedCompareExpr(ChainedCompareExpr* expr);
     ir::Value* CheckLogicalExpr(LogicalExpr* expr);
     ir::Value* CheckBinaryExpr(BinaryExpr* expr);
@@ -229,7 +229,7 @@ class Semantics final
     bool AddImplicitDynamicInitializer(VarDeclBase* decl);
     ir::Value* BuildConversion(ir::Value* from, ConversionKind ck, Type* to);
     ir::Value* BuildConversion(ir::Value* from, const Conversion& cv);
-    ir::Value* CheckRvalue(Expr* expr, Type* target = nullptr, uint32_t flags = 0);
+    ir::Value* CheckRvalue(Expr* expr, QualType target = {}, uint32_t flags = 0);
     ir::Value* BuildSimpleCast(ir::Value* from, BuiltinType type);
     ir::Value* CoerceNull(ir::Value* expr, Type* formal);
     std::optional<ConversionKind> FindConstantConversion(ir::Value* source, Type* from_type,
@@ -275,7 +275,6 @@ class Semantics final
     void CheckVoidDecl(const declinfo_t* decl, int variable);
 
     bool CheckScalarType(ir::Value* node);
-    bool IsThisAtom(sp::Atom* atom);
 
     bool IsIncluded(Decl* expr);
     bool IsIncludedStock(VarDeclBase* expr);
@@ -308,7 +307,6 @@ class Semantics final
     tr::vector<FunctionDecl*> maybe_used_;
     tr::vector<FunctionDecl*> closures_;
     SemaContext* sc_ = nullptr;
-    Atom* this_atom_ = nullptr;
     Atom* size_atom_ = nullptr;
     int fun_expr_count_ = 0;
     int shared_class_count_ = 0;

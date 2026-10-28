@@ -870,7 +870,8 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (this_type_) {
         typeinfo_t typeinfo = {};
         typeinfo.set_type(this_type_);
-        typeinfo.is_const = true;
+        // Enum structs are never const, even as |this|.
+        typeinfo.is_const = !this_type_->isEnumStruct();
 
         auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT,
                                 VARDECL_DEFAULT, nullptr);

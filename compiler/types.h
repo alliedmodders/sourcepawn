@@ -284,6 +284,7 @@ class Type : public PoolObject
     bool isCharArray() const;
     bool isNonHeapNullable() const;
     bool isFlatArray() const;
+    bool isNonFixedArray() const;
     bool isFixedArray() const;
     bool isNonFlatArray() const;
     bool isCompositeValue() const;

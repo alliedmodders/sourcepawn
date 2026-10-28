@@ -647,8 +647,8 @@ class Array final : public Value
 class Slice final : public Value
 {
   public:
-    Slice(Value* base, Value* index, Type* type)
-      : Value(IrKind::Slice, base->pn(), QualType(type)),
+    Slice(Value* base, Value* index, QualType type)
+      : Value(IrKind::Slice, base->pn(), type),
         base_(base),
         index_(index)
     {}

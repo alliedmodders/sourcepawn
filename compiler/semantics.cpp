@@ -290,8 +290,6 @@ bool Semantics::CheckTypedVarDecl(VarDeclBase* decl) {
     } else if (type->isEnumStruct()) {
         if (!CheckEnumStructVarDecl(decl))
             return false;
-        if (IsThisAtom(decl->name()))
-            decl->mutable_type_info()->is_const = false;
     } else {
         if (type->isClass() && !decl->init()) {
             report(decl->pos(), 458) << decl->name();
@@ -362,6 +360,7 @@ bool Semantics::CheckInferredVarDecl(VarDeclBase* decl) {
     // Assign the inferred type.
     auto* ti = decl->mutable_type_info();
     ti->type = rhs_type.unqualified();
+    ti->is_const = checked_rhs->qual_type().is_const();
     ti->resolved = true;
     ti->is_auto = false;
 
@@ -905,11 +904,9 @@ ir::Value* Semantics::CheckIncDecExpr(IncDecExpr* incdec, uint32_t flags) {
         markusage(prop->getter(), uREAD);
         markusage(prop->setter(), uREAD);
     } else {
-        if (auto* var = operand->as<ir::Variable>()) {
-            if (var->decl()->is_const()) {
-                report(incdec, 22); /* assignment to const argument */
-                return nullptr;
-            }
+        if (operand->qual_type().is_const()) {
+            report(incdec, 22); /* assignment to const argument */
+            return nullptr;
         }
         markusage(operand->to<ir::Lvalue>(), uWRITTEN);
         if (!(flags & EXPR_DISCARD_RESULT))
@@ -940,8 +937,27 @@ ir::Value* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
         return nullptr;
 
     if (state.expr->token() == '=') {
-        if (!state.rhs_resolved && !(state.right = CheckRvalue(state.expr->right(), state.left->type())))
-            return nullptr;
+        if (!state.rhs_resolved) {
+            // If the left-hand side is a fixed array, we will wind up emitting an
+            // array copy. If the right-hand side is a literal, we'd prefer for the
+            // literal to be interned, since we know we're not going to mutate it
+            // here, and a temporary buffer is pointless. To make that happen we
+            // rewrite the type as const as a hint to CheckStringExpr.
+            QualType rhs_target;
+            if (auto at = state.left->type()->as<ArrayType>(); at && at->isFixedArray()) {
+                // If the left-hand side is a flat array, fix up the type hint
+                // to be a fixed array so that CheckStringExpr (if called) will
+                // intern it. This is pretty gross and we should consider using
+                // a numeric flag instead.
+                if (at->is_flat())
+                    at = types_->defineArray(at->inner(), at->size());
+                rhs_target = QualType(at, true);
+            } else {
+                rhs_target = state.left->qual_type();
+            }
+            if (!(state.right = CheckRvalue(state.expr->right(), rhs_target)))
+                return nullptr;
+        }
     } else {
         if (!(state.right = CheckRvalue(state.expr->right())))
             return nullptr;
@@ -1064,6 +1080,16 @@ ir::Value* Semantics::CheckBinaryExprImpl(BinaryExprState& state) {
             if (!IsNopConversion(ck))
                 state.right = BuildConversion(state.right, ck, left_type);
         }
+
+        // If the array is copied by reference, we need to respect const.
+        if (token == '=' && left_type->isNonFixedArray() &&
+            state.right->qual_type().is_const() &&
+            !state.left->qual_type().is_const())
+        {
+            ReportConversionDiagnostic(state.expr->pos(), state.left->qual_type(),
+                                       state.right->qual_type());
+            return nullptr;
+        }
         out_type = left_type;
     } else {
         out_type = assign_type;
@@ -1112,13 +1138,10 @@ bool Semantics::CheckAssignmentLHS(BinaryExprState& state) {
         return false;
     }
 
-    // may not change "constant" parameters
     if (!state.expr->initializer()) {
-        if (auto* var = state.left->as<ir::Variable>()) {
-            if (var->decl()->is_const()) {
-                report(state.expr, 22);
-                return false;
-            }
+        if (state.left->qual_type().is_const()) {
+            report(state.expr, 22);
+            return false;
         }
     }
 
@@ -1268,7 +1291,7 @@ ir::Value* Semantics::CheckChainedCompareExpr(ChainedCompareExpr* chain) {
     return new ir::ChainedCompare(chain, first, std::move(irops), types_->type_bool());
 }
 
-ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
+ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, QualType target) {
     AutoErrorPos aep(expr->pos());
 
     ir::Value* second = CheckRvalue(expr->second(), target);
@@ -1287,7 +1310,9 @@ ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
     if (auto lval = third->as<ir::Lvalue>())
         third = new ir::Rvalue(lval);
 
-    QualType out_type = second->qual_type();
+    // If either branch is constant, the result must be constant too.
+    bool is_const = second->qual_type().is_const() || third->qual_type().is_const();
+    QualType out_type = QualType(*second->qual_type(), is_const);
 
     if (second->type() != third->type()) {
         if (second->type()->isArray() && third->type()->isArray()) {
@@ -1297,15 +1322,15 @@ ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
 
             // If sizes aren't equal, decay the result type to be unsized.
             if (!size)
-                out_type = types_->defineArray(left_array->inner(), 0);
+                out_type = QualType(types_->defineArray(left_array->inner(), 0), is_const);
 
             if (left_array->is_flat()) {
                 auto type = types_->defineArray(left_array->inner(), size);
-                second = new ir::Slice(second, nullptr, type);
+                second = new ir::Slice(second, nullptr, QualType(type, second->qual_type().is_const()));
             }
             if (right_array->is_flat()) {
                 auto type = types_->defineArray(right_array->inner(), size);
-                third = new ir::Slice(third, nullptr, type);
+                third = new ir::Slice(third, nullptr, QualType(type, third->qual_type().is_const()));
             }
         }
     }
@@ -1351,7 +1376,7 @@ ir::Value* Semantics::CheckTernaryExpr(TernaryExpr* expr, Type* target) {
         if (use_left_to_right) {
             second = BuildConversion(second, left_to_right, *right);
             if (!IsNopConversion(left_to_right))
-                out_type = second->qual_type();
+                out_type = QualType(*second->qual_type(), is_const);
         } else {
             third = BuildConversion(third, right_to_left, *left);
         }
@@ -1396,7 +1421,7 @@ static inline bool CastNeedsRvalue(ir::Value* inner, Type* to_type) {
     return false;
 }
 
-ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
+ir::Value* Semantics::CheckCastExpr(CastExpr* expr, QualType target) {
     AutoErrorPos aep(expr->pos());
 
     Type* to_type = expr->type();
@@ -1412,7 +1437,7 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
         if (!(inner_ir = CheckRvalue(array, target_array)))
             return nullptr;
     } else {
-        if (!(inner_ir = CheckExpr(inner)))
+        if (!(inner_ir = CheckRvalue(inner, target)))
             return nullptr;
     }
 
@@ -1548,9 +1573,13 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr) {
         const_result->type = to_type;
         return new ir::Constant(expr, *const_result);
     }
+
+    // If the source was const, the dest must be const too. We don't have a
+    // const_cast.
+    QualType cast_type = QualType(to_type, out_type.is_const());
     if (operand->lvalue())
-        return new ir::LvalueCast(expr, operand, to_type);
-    return new ir::Cast(expr, operand, to_type);
+        return new ir::LvalueCast(expr, operand, cast_type);
+    return new ir::Cast(expr, operand, cast_type);
 }
 
 // This is a hack. Most code is not prepared to handle iMETHODMAP in type
@@ -1625,13 +1654,17 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     return new ir::Typename(expr, decl);
 }
 
-ir::Value* Semantics::CheckCommaExpr(CommaExpr* comma) {
+ir::Value* Semantics::CheckCommaExpr(CommaExpr* comma, QualType target) {
     AutoErrorPos aep(comma->pos());
 
     size_t index = 0;
     std::vector<ir::Value*> exprs;
     for (auto& expr : comma->exprs()) {
-        ir::Value* e = CheckRvalue(expr);
+        QualType target_type;
+        if (index + 1 == comma->exprs().size())
+            target_type = target;
+
+        ir::Value* e = CheckRvalue(expr, target_type);
         if (!e)
             return nullptr;
         if (auto lval = e->as<ir::Lvalue>())
@@ -1749,7 +1782,12 @@ ir::Value* Semantics::CheckIndexExpr(IndexExpr* expr) {
         }
     }
 
-    return new ir::Index(expr, checked_base, checked_index, array->inner());
+    // This will yield "const T" where T can be primitive, which is pretty
+    // nonsensical in our IR design. It really should be a const reference,
+    // but since l-values are implicitly references right now, we just stick
+    // with the nonsense in order to propagate constness.
+    QualType index_type(array->inner(), base_type.is_const());
+    return new ir::Index(expr, checked_base, checked_index, index_type);
 }
 
 ir::Value* Semantics::CheckThisExpr(ThisExpr* expr) {
@@ -1763,7 +1801,7 @@ ir::Value* Semantics::CheckNullExpr(NullExpr* expr) {
     return new ir::Constant(expr, ConstVal(types_->type_null(), 0));
 }
 
-ir::Value* Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
+ir::Value* Semantics::CheckStringExpr(StringExpr* expr, QualType target) {
     auto arr = target ? target->as<ArrayType>() : nullptr;
     if (arr && arr->size() > 0 && arr->inner()->isChar()) {
         size_t needed = arr->size();
@@ -1775,8 +1813,16 @@ ir::Value* Semantics::CheckStringExpr(StringExpr* expr, Type* target) {
         }
     }
 
-    QualType type = types_->defineArray(types_->type_char(), (cell)expr->text()->length() + 1);
-    return new ir::String(expr, type);
+    auto size = (cell_t)expr->text()->length() + 1;
+
+    ArrayType* type;
+    if (arr && arr->is_flat())
+        type = types_->defineFlatArray(types_->type_char(), size);
+    else
+        type = types_->defineArray(types_->type_char(), size);
+
+    bool is_const = !arr || target.is_const();
+    return new ir::String(expr, QualType(type, is_const));
 }
 
 ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call) {
@@ -2420,7 +2466,7 @@ ir::Value* Semantics::CheckArgument(CallExpr* call, FunctionType* ft, QualType f
 
     ir::Value* arg = nullptr;
     if (formal) {
-        if (!(arg = CheckRvalue(param, *formal)))
+        if (!(arg = CheckRvalue(param, formal)))
             return nullptr;
     } else {
         if (!(arg = CheckExpr(param)))
@@ -2458,7 +2504,7 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
 
         // Always pass by reference.
         if (auto* var = arg->as<ir::Variable>()) {
-            if (var->decl()->is_const() && !formal.is_const()) {
+            if (var->decl()->is_const()) {
                 // Treat a "const" variable passed to a function with a
                 // non-const "variable argument list" as a constant here.
                 if (!lvalue) {
@@ -2499,11 +2545,9 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
             report(arg, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
-        if (auto* var = arg->as<ir::Variable>()) {
-            if (var->decl()->is_const() && !formal.is_const()) {
-                report(arg, 35) << visual_pos; // argument type mismatch
-                return nullptr;
-            }
+        if (arg_type.is_const() && !formal.is_const()) {
+            report(arg, 35) << visual_pos; // argument type mismatch
+            return nullptr;
         }
 
         if (formal->inner()->isWideInt()) {
@@ -2530,12 +2574,9 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         if (!CheckCoercion(arg, *formal, QualType(type), CvtContext::Argument))
             return nullptr;
 
-        ir::Value* target = arg->is(IrKind::Rvalue) ? arg->to<ir::Rvalue>()->expr() : arg;
-        if (auto* var = target->as<ir::Variable>()) {
-            if (var->decl()->is_const() && !formal.is_const()) {
-                report(arg, 35) << visual_pos; // argument type mismatch
-                return nullptr;
-            }
+        if (arg_type.is_const() && !formal.is_const()) {
+            report(arg, 35) << visual_pos; // argument type mismatch
+            return nullptr;
         }
     } else {
         if (lvalue) {
@@ -2667,7 +2708,7 @@ bool Semantics::CheckIfStmt(IfStmt* stmt) {
 }
 
 bool Semantics::CheckExprStmt(ExprStmt* stmt) {
-    auto node = CheckRvalue(stmt->expr(), nullptr, EXPR_DISCARD_RESULT);
+    auto node = CheckRvalue(stmt->expr(), {}, EXPR_DISCARD_RESULT);
     if (!node)
         return false;
     if (auto lval = node->as<ir::Lvalue>())
@@ -2805,7 +2846,7 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
         }
     }
 
-    ir::Value* node = CheckRvalue(expr);
+    ir::Value* node = CheckRvalue(expr, fun->signature()->return_type());
     if (!node)
         return false;
 
@@ -2836,6 +2877,15 @@ bool Semantics::CheckReturnStmt(ReturnStmt* stmt) {
     CvtContext why = already_returned ? CvtContext::Assignment : CvtContext::Return;
     if ((node = TryConversion(node, fun->return_type(), why)) == nullptr)
         return false;
+
+    // By-reference arrays must respect const.
+    if (node->type()->isNonFixedArray() && node->qual_type().is_const() &&
+        !fun->signature()->return_type().is_const())
+    {
+        ReportConversionDiagnostic(node, fun->signature()->return_type(),
+                                   node->qual_type());
+        return false;
+    }
     stmt->set_sema_expr(node);
 
     if (node->type()->isEnumStruct() || node->type()->isFixedArray()) {
@@ -3521,14 +3571,18 @@ void Semantics::DeduceMaybeUsed() {
     }
 }
 
-ir::Value* Semantics::CheckRvalue(Expr* expr, Type* target, uint32_t flags) {
+ir::Value* Semantics::CheckRvalue(Expr* expr, QualType target, uint32_t flags) {
     switch (expr->kind()) {
         case ExprKind::ArrayExpr:
-            return CheckArrayExpr(expr->to<ArrayExpr>(), target);
+            return CheckArrayExpr(expr->to<ArrayExpr>(), *target);
+        case ExprKind::CommaExpr:
+            return CheckCommaExpr(expr->to<CommaExpr>(), target);
         case ExprKind::TernaryExpr:
             return CheckTernaryExpr(expr->to<TernaryExpr>(), target);
         case ExprKind::StringExpr:
             return CheckStringExpr(expr->to<StringExpr>(), target);
+        case ExprKind::CastExpr:
+            return CheckCastExpr(expr->to<CastExpr>(), target);
         default:
             break;
     }
@@ -3549,12 +3603,6 @@ ir::Value* Semantics::CheckRvalueAccess(ir::Value* expr) {
             return nullptr;
     }
     return expr;
-}
-
-bool Semantics::IsThisAtom(sp::Atom* atom) {
-    if (!this_atom_)
-        this_atom_ = cc_.atom("this");
-    return atom == this_atom_;
 }
 
 
@@ -3701,8 +3749,9 @@ ir::Value* Semantics::ParamNeedsSlice(ir::Value* param, ArrayType* to) {
         inner_type = param->type();
     }
 
+    // The slice aliases the base's storage, so it inherits its const tag.
     Type* type = types_->defineArray(inner_type, size);
-    return new ir::Slice(base, index_expr, type);
+    return new ir::Slice(base, index_expr, QualType(type, base->qual_type().is_const()));
 }
 
 

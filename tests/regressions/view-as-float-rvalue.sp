@@ -1,8 +1,8 @@
 // Regression test for alliedmodders/sourcepawn#1197 and #1194. A view_as<>
-// (or legacy tag cast) between int and float, or int64 and double, over an
-// rvalue such as a call result emitted no instruction, so the value kept its
-// old type on the stack and the surrounding operator lowered to the wrong
-// kind of arithmetic: view_as<float>(call()) * 2.0 was an integer multiply.
+// (or legacy tag cast) between int and float over an rvalue, such as a call
+// result, emitted no instruction, so the value kept its old type on the
+// stack and the surrounding operator lowered to the wrong kind of
+// arithmetic: view_as<float>(call()) * 2.0 was an integer multiply.
 
 native void printnum(int x);
 native void printfloat(float x);

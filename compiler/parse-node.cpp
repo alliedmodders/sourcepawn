@@ -123,7 +123,8 @@ FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo
 }
 
 void FunctionDecl::update_return_type(Type* type) {
-    signature_ = CompileContext::get().types()->UpdateReturnType(signature_, QualType(type));
+    signature_ = CompileContext::get().types()->UpdateReturnType(
+        signature_, QualType(type, signature_->return_type().is_const()));
 }
 
 int FunctionDecl::FindNamedArg(Atom* name) const {

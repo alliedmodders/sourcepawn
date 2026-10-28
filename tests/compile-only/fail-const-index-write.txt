@@ -1,0 +1,7 @@
+(2) : error 022: must be lvalue (non-constant)
+(3) : error 022: must be lvalue (non-constant)
+(4) : error 022: must be lvalue (non-constant)
+(5) : error 022: must be lvalue (non-constant)
+(9) : error 022: must be lvalue (non-constant)
+(10) : error 022: must be lvalue (non-constant)
+(11) : error 022: must be lvalue (non-constant)

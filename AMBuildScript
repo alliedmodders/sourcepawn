@@ -113,8 +113,8 @@ class Config(object):
             if cxx.target.platform == 'linux':
                 cxx.postlink += ['-lpthread', '-lrt']
             elif cxx.target.platform == 'mac':
-                cxx.cflags += ['-mmacosx-version-min=10.15']
-                cxx.linkflags += ['-mmacosx-version-min=10.15']
+                cxx.cflags += ['-mmacosx-version-min=11.0']
+                cxx.linkflags += ['-mmacosx-version-min=11.0']
             elif cxx.target.platform == 'windows':
                 cxx.defines += ['WIN32', '_WINDOWS']
                 cxx.cxxdefines += ['NOMINMAX']

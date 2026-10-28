@@ -1180,9 +1180,20 @@ CodeGenerator::BoundLval CodeGenerator::BindLval(ir::Lvalue* lval, bool simple_a
 }
 
 void CodeGenerator::EmitStringExpr(ir::String* expr) {
-    auto text = expr->parent()->text();
-    uint16_t index = rtti_->AddString(text, &data_);
-    __ emit(OP_LOAD_STR, VarSlot(index));
+    auto dest_type = expr->type()->to<ArrayType>();
+    if (dest_type->is_flat()) {
+        auto slot = AcquireTempSlot(expr, dest_type);
+        __ emit(OP_ADDR_S, VarSlot(slot));
+        __ emit(OP_DUP);
+        EmitArrayCtor(dest_type, expr, EMIT_REPEATABLE);
+    } else if (!expr->qual_type().is_const()) {
+        EmitArrayCtor(dest_type, expr, EMIT_REPEATABLE);
+    } else {
+        // Best case: immutable fixed array.
+        auto text = expr->parent()->text();
+        uint16_t index = rtti_->AddString(text, &data_);
+        __ emit(OP_LOAD_STR, VarSlot(index));
+    }
 }
 
 void CodeGenerator::EmitIncDec(ir::IncDec* expr, unsigned int flags) {
@@ -1710,13 +1721,12 @@ void CodeGenerator::EmitCallExpr(ir::Call* call, unsigned int flags) {
         bool needs_temp = false;
         if (!arg) {
             // Legacy variadic arguments.
-            if (auto* var = expr->as<ir::Variable>()) {
-                /* treat a "const" variable passed to a function with a non-const
-                 * "variable argument list" as a constant here */
-                if (!type->isComposite() && var->decl()->is_const() && !arg.is_const())
-                    needs_temp = true;
-            } else if (!expr->lvalue()) {
+            if (!expr->lvalue()) {
                 needs_temp = !type->isComposite();
+            } else if (!type->isComposite() && expr->qual_type().is_const()) {
+                /* treat a "const" value passed to a function with a non-const
+                 * "variable argument list" as a constant here */
+                needs_temp = true;
             }
 
             if (binding) {

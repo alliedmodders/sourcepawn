@@ -1,0 +1,7 @@
+(5) : error 473: no viable conversion from 'const char[6]' (stack array) to 'char[]' (heap array)
+(10) : error 450: no viable conversion from 'const char[]' to 'char[]'
+(14) : error 450: no viable conversion from 'const char[]' to 'char[]'
+(19) : error 450: no viable conversion from 'const char[]' to 'char[]'
+(24) : error 035: argument type mismatch (argument 1)
+(25) : error 022: must be lvalue (non-constant)
+(30) : error 035: argument type mismatch (argument 1)
