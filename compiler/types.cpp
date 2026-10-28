@@ -95,6 +95,12 @@ bool Type::isFlatArray() const {
     return false;
 }
 
+bool Type::isNonFixedArray() const {
+    if (auto array = as<ArrayType>())
+        return !array->is_fixed();
+    return false;
+}
+
 bool Type::isFixedArray() const {
     if (auto array = as<ArrayType>())
         return array->is_fixed();

@@ -19,7 +19,7 @@ static QualType RvalueVal(Value* operand) {
             markusage(accessor->accessor()->getter(), uREAD);
     }
     if (v->isReference())
-        v = v->inner();
+        v = QualType(v->inner(), v.is_const());
     return v;
 }
 

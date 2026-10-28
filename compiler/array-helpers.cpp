@@ -416,7 +416,7 @@ class ArrayValidator final
         decl_(nullptr),
         pos_(init->pos()),
         init_(init),
-        type_(type.type)
+        type_(type.type, type.is_const)
     {}
 
     bool Validate();
@@ -542,15 +542,25 @@ bool ArrayValidator::ValidateInitializer() {
             report(init_->pos(), 160);
             return false;
         }
-        ir::Value* node = sema_->CheckRvalue(init_, at_);
+        QualType type(at_, type_.is_const());
+        ir::Value* node = sema_->CheckRvalue(init_, type);
         if (!node)
             return false;
         if (auto lval = node->as<ir::Lvalue>())
             node = new ir::Rvalue(lval);
+        if (!sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment))
+            return false;
+
+        // Do not allow assignment of a const array to a non-const array.
+        if (node->qual_type().is_const() && !type_.is_const()) {
+            sema_->ReportConversionDiagnostic(init_->pos(), type_, node->qual_type());
+            return false;
+        }
+
         init_ir_ = node;
         if (decl_)
             decl_->set_sema_init_rhs(node);
-        return sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment);
+        return true;
     }
 
     // Not a dynamic array, check for a fixed initializer.
@@ -577,6 +587,12 @@ bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
 
     if (!sema_->CheckCoercion(node, type_, var->type(), CvtContext::Argument))
         return false;
+
+    if (var->type().is_const() && !type_.is_const()) {
+        sema_->ReportConversionDiagnostic(expr->pos(), type_, node->qual_type());
+        return false;
+    }
+
     if (auto slice = sema_->ParamNeedsSlice(node, at_))
         node = slice;
     init_ir_ = node;
@@ -627,7 +643,17 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
             report(str->pos(), 47);
             return nullptr;
         }
-        return new ir::String(str, rank);
+
+        // Pad the string literal up to the requested size. This is normally
+        // not really needed, since most fixed arrays are flat. But if the
+        // array size exceeds the maximum flat size, it becomes heap-allocated,
+        // and the constructed object must be explicitly padded.
+        if (rank->size() && bytes < static_cast<size_t>(rank->size())) {
+            std::string new_str = str->text()->str();
+            new_str.append(static_cast<size_t>(rank->size()) - new_str.length() - 1, '\0');
+            str->set_text(sema_->cc_.atom(new_str));
+        }
+        return new ir::String(str, QualType(rank, type_.is_const()));
     }
 
     // |rank_size| is the declared element count (0 if unbounded). It is used

@@ -1908,8 +1908,10 @@ void MethodLowerer::LowerCall(uint32_t method_index, std::optional<uint8_t> argc
         // Packaged varargs are ultimately forwarded to a native, so arrays in
         // the package must be retrofit for natives, even if we're not lowering
         // directly to a native call.
+        bool formal_is_flat = !ctor_type && i < sig->args().size() &&
+                              sig->args()[i]->IsFlatArray();
         if (node->type->IsNonFlatArray() &&
-            (is_native || (package_varargs && i >= expected_argc)))
+            (is_native || formal_is_flat || (package_varargs && i >= expected_argc)))
         {
             VReg dest = AllocateTempCells(1, false);
             emit(LL_ARRAY_TO_FLAT, arg_reg, dest);
