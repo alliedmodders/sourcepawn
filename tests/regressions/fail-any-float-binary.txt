@@ -1,0 +1,5 @@
+error 461: operator '*' not defined for types 'any' and 'float'
+error 461: operator '*' not defined for types 'float' and 'any'
+error 461: operator '+' not defined for types 'any' and 'float'
+error 461: operator '<' not defined for types 'any' and 'float'
+error 461: operator '+' not defined for types 'any' and 'int64'
