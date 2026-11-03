@@ -7,6 +7,7 @@
 //
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
@@ -2451,6 +2452,21 @@ int
 ishex(char c)
 {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+/*  ParseInt64
+ *
+ *  Parse a decimal integer that makes up all of "str", without overflow.
+ */
+std::optional<int64_t>
+ParseInt64(const char* str)
+{
+    char* endptr;
+    errno = 0;
+    int64_t value = std::strtoll(str, &endptr, 10);
+    if (errno == ERANGE || endptr == str || *endptr != '\0')
+        return {};
+    return value;
 }
 
 /*  isoctal
