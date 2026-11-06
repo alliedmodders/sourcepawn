@@ -8,6 +8,7 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 
 #include <amtl/am-deque.h>
 #include <amtl/am-hashtable.h>
@@ -101,6 +102,7 @@ IsAssignOp(int token)
 void litadd_str(const char* str, size_t len, std::vector<cell>* out);
 int alphanum(char c);
 int ishex(char c);
+std::optional<int64_t> ParseInt64(const char* str);
 int isoctal(char c);
 int getlabel(void);
 std::string get_token_string(int tok_id);

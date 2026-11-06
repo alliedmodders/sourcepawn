@@ -76,7 +76,7 @@ int pc_tag_string = 0;
 int pc_tag_bool = 0;
 
 static void setconfig(const char* root);
-static void inst_datetime_defines(BuiltinGenerator& gen);
+static bool inst_datetime_defines(BuiltinGenerator& gen);
 static void inst_binary_name(BuiltinGenerator& gen, const std::string& binfile);
 
 enum {
@@ -141,7 +141,8 @@ int RunCompiler(int argc, char** argv, CompileContext& cc) {
 
     // Add builtin defines.
     inst_binary_name(gen, cc.outfname());
-    inst_datetime_defines(gen);
+    if (!inst_datetime_defines(gen))
+        goto cleanup;
 
     gen.AddBuiltinConstants();
     gen.AddDefaultInclude();
@@ -280,14 +281,24 @@ static void inst_binary_name(BuiltinGenerator& gen, const std::string& binfile) 
     gen.AddDefine("__BINARY_NAME__", StringizePath(binfile_name.string()));
 }
 
-static void inst_datetime_defines(BuiltinGenerator& gen) {
+static bool inst_datetime_defines(BuiltinGenerator& gen) {
     char date[64];
     char ltime[64];
     time_t td;
     struct tm* curtime;
 
-    time(&td);
-    curtime = localtime(&td);
+    if (const char* epoch = getenv("SOURCE_DATE_EPOCH")) {
+        auto value = ParseInt64(epoch);
+        if (!value || *value < 0) {
+            report(490) << epoch;
+            return false;
+        }
+        td = (time_t)*value;
+        curtime = gmtime(&td);
+    } else {
+        time(&td);
+        curtime = localtime(&td);
+    }
 
 #if defined __EMSCRIPTEN__
     snprintf(date, sizeof(date), "\"%02d/%02d/%04d\"", curtime->tm_mon + 1, curtime->tm_mday,
@@ -301,6 +312,7 @@ static void inst_datetime_defines(BuiltinGenerator& gen) {
 
     gen.AddDefine("__DATE__", date);
     gen.AddDefine("__TIME__", ltime);
+    return true;
 }
 
 static fs::path GetProcessPath([[maybe_unused]] const char* root) {

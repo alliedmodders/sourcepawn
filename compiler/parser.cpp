@@ -1178,12 +1178,10 @@ Parser::constant()
         case tNUMBER64:
         {
             const auto& atom = lexer_->current_token()->atom;
-            char* endptr;
-            errno = 0;
-            int64_t value = std::strtoll(atom->chars(), &endptr, 10);
-            if ((value == LLONG_MIN || value == LLONG_MAX) && errno == ERANGE)
+            auto value = ParseInt64(atom->chars());
+            if (!value)
                 report(135);
-            return new NumberExpr(pos, types_->type_int64(), value);
+            return new NumberExpr(pos, types_->type_int64(), value.value_or(0));
         }
         case tRATIONAL:
             return new NumberExpr(pos, types_->type_float(), lexer_->current_token()->value());
