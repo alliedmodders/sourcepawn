@@ -92,12 +92,12 @@ PerfJitdumpFile::PerfJitdumpFile(bool self_delete) {
     }
 
     // Use arch timestamps where there are any, unless the env var is explicitly set to 0.
-#    if defined(SP_HAS_ARCH_TIMESTAMP)
+#if defined(SP_HAS_ARCH_TIMESTAMP)
     char* env = getenv("JITDUMP_USE_ARCH_TIMESTAMP");
     use_arch_timestamp_ = !env || *env != '0';
-#    else
+#else
     use_arch_timestamp_ = false;
-#    endif
+#endif
 
     jitheader header = {};
     header.magic = JITHEADER_MAGIC;
@@ -182,11 +182,11 @@ uint64_t
 PerfJitdumpFile::GetTimestamp() {
     timespec ts;
 
-#    if defined(SP_HAS_ARCH_TIMESTAMP)
+#if defined(SP_HAS_ARCH_TIMESTAMP)
     if (use_arch_timestamp_) {
         return __rdtsc();
     }
-#    endif
+#endif
 
     if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
         return 0;
