@@ -28,6 +28,13 @@ jobs:
           - os: windows-latest
             build_type: debug
             build_target: arm64
+          # Linux on ARM, natively, so the tests run as well.
+          - os: ubuntu-24.04-arm
+            build_type: optimize
+            build_target: arm64
+          - os: ubuntu-24.04-arm
+            build_type: debug
+            build_target: arm64
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
@@ -74,8 +81,8 @@ jobs:
           python ../configure.py --enable-${{ matrix.build_type }} --targets=${{ matrix.build_target }} $ENABLE_ASAN
           ambuild
 
-      # Cannot run tests for ARM since the builder is amd64.
+      # Cannot run tests for ARM on Windows since the builder is amd64.
       - name: Test
-        if: ${{ !startsWith(matrix.build_target, 'arm') }}
+        if: ${{ !(startsWith(runner.os, 'Windows') && startsWith(matrix.build_target, 'arm')) }}
         run: |
           python tests/runtests.py objdir
