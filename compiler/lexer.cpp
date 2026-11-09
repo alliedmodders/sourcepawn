@@ -936,8 +936,10 @@ void Lexer::HandleSingleLineComment() {
     while (true) {
         char c = peek();
         if (c == '\0' || IsNewline(c)) {
-            if (prev_c == '\\')
-                report(49); // invalid line continuation
+            if (prev_c == '\\') {
+                auto pos = GetTokenPos();
+                report(pos, 49); // invalid line continuation
+            }
             break;
         }
         if (!IsSpace(c))
@@ -1616,6 +1618,12 @@ int Lexer::LexNewToken() {
     } while (tok->id == tENTERED_MACRO);
 
     return tok->id;
+}
+
+token_pos_t Lexer::GetTokenPos() {
+    token_pos_t pos;
+    FillTokenPos(&pos);
+    return pos;
 }
 
 void Lexer::FillTokenPos(token_pos_t* pos) {
