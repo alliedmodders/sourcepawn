@@ -196,6 +196,7 @@ class Lexer
     void SetFileDefines(const std::shared_ptr<SourceFile> file);
     void EnterFile(std::shared_ptr<SourceFile>&& fp, const token_pos_t& from);
     void FillTokenPos(token_pos_t* pos);
+    token_pos_t GetTokenPos();
     void SkipLineWhitespace();
     std::string SkimUntilEndOfLine(tr::vector<size_t>* macro_args = nullptr);
     std::string SkimMacroArgument();
