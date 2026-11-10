@@ -10,6 +10,7 @@
 
 #include <algorithm>
 
+#include <amtl/am-bits.h>
 #include <amtl/am-raii.h>
 #include "api.h"
 #include "code-stubs.h"
@@ -279,10 +280,10 @@ Environment::DeregisterRuntime(v2::Runtime* rt) {
 
 static inline void
 SwapLoopEdge(uint8_t* code, LoopEdge& e) {
-    int32_t* loc = reinterpret_cast<int32_t*>(code + e.offset - 4);
+    uint8_t* loc = code + e.offset - 4;
     int32_t new_disp32 = e.disp32;
-    e.disp32 = *loc;
-    *loc = new_disp32;
+    e.disp32 = ke::Peek<int32_t>(loc);
+    ke::Poke<int32_t>(loc, new_disp32);
 }
 
 void

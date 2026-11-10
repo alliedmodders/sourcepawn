@@ -233,7 +233,7 @@ struct Operand {
         length_(0)
     {
         modrm_disp0(rbp);
-        *reinterpret_cast<int32_t*>(bytes_ + 2) = offset;
+        ke::Poke<int32_t>(bytes_ + 2, offset);
         length_ = 5;
     }
 
@@ -288,7 +288,7 @@ struct Operand {
         // Callers must ensure this is encodable as a 32-bit address.
         KE_RELEASE_ASSERT(address.has32BitEncoding());
         sib(kModeDisp0, NoScale, kNoIndex, rbp);
-        *reinterpret_cast<int32_t*>(bytes_ + 2) = int32_t(address.value());
+        ke::Poke<int32_t>(bytes_ + 2, int32_t(address.value()));
         length_ = 6;
     }
 
@@ -308,7 +308,7 @@ struct Operand {
     }
     void modrm_disp32(Register rm, int32_t disp) {
         modrm(kModeDisp32, rm);
-        *reinterpret_cast<int32_t*>(bytes_ + 1) = disp;
+        ke::Poke<int32_t>(bytes_ + 1, disp);
         length_ = 5;
     }
     void sib(uint8_t mode, Scale scale, Register index, Register base) {
@@ -329,7 +329,7 @@ struct Operand {
     }
     void sib_disp32(Scale scale, Register index, Register base, int32_t disp) {
         sib(kModeDisp32, scale, index, base);
-        *reinterpret_cast<int32_t*>(bytes_ + 2) = disp;
+        ke::Poke<int32_t>(bytes_ + 2, disp);
         length_ = 6;
     }
 
@@ -383,9 +383,9 @@ class Assembler : public AssemblerBase
             ptrdiff_t delta = pos_ - (buffer() + offset);
             assert(delta >= INT_MIN && delta <= INT_MAX);
 
-            int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
-            status = *p;
-            *p = static_cast<int32_t>(delta);
+            uint8_t* p = buffer() + offset - 4;
+            status = ke::Peek<int32_t>(p);
+            ke::Poke<int32_t>(p, static_cast<int32_t>(delta));
         }
         target->bind(pc());
     }
@@ -396,7 +396,7 @@ class Assembler : public AssemblerBase
             intptr_t orig_rip = RipCodeLabel::ToOffset(label->status());
             intptr_t delta = intptr_t(pc()) - orig_rip;
             assert(delta >= INT_MIN && delta <= INT_MAX);
-            *reinterpret_cast<int32_t*>(buffer() + orig_rip - 4) = delta;
+            ke::Poke<int32_t>(buffer() + orig_rip - 4, delta);
         }
         label->bind(pc());
     }
@@ -407,7 +407,7 @@ class Assembler : public AssemblerBase
             intptr_t orig_rip = RipCodeLabel::ToOffset(label->status());
             intptr_t delta = -(orig_rip + address_table_.size() * sizeof(uintptr_t));
             assert(delta >= INT_MIN && delta <= INT_MAX);
-            *reinterpret_cast<int32_t*>(buffer() + orig_rip - 4) = delta;
+            ke::Poke<int32_t>(buffer() + orig_rip - 4, delta);
         }
         label->bind(pc());
     }
@@ -430,7 +430,7 @@ class Assembler : public AssemblerBase
                 // offset = -(pc + data_loc)
                 //  : -offset = pc + data_loc
                 //  : -offset - pc = data_loc
-                int32_t rip_offset = *reinterpret_cast<int32_t*>(base + 2);
+                int32_t rip_offset = ke::Peek<int32_t>(base + 2);
                 assert(rip_offset != INT_MIN);
                 assert(-rip_offset >= src_pc);
 
@@ -465,7 +465,7 @@ class Assembler : public AssemblerBase
         assert(*base == 0xff);
         assert(*(base + 1) == 0x15);
 
-        int32_t offset = *reinterpret_cast<int32_t*>(base + 2);
+        int32_t offset = ke::Peek<int32_t>(base + 2);
         uintptr_t* data = reinterpret_cast<uintptr_t*>(pc + offset);
         *data = target;
     }
@@ -1090,7 +1090,7 @@ class Assembler : public AssemblerBase
             outOfMemory_ = true;
             return;
         }
-        *reinterpret_cast<int32_t*>(pos_ - 4) = -(offset + data_size);
+        ke::Poke<int32_t>(pos_ - 4, -(offset + data_size));
         address_table_.emplace_back(value);
     }
     void emitRipRelativeLabel(PatchCodeLabel* label) {
