@@ -237,7 +237,7 @@ struct Operand {
     }
     void modrm_disp32(uint8_t rm, int32_t disp) {
         modrm(kModeDisp32, rm);
-        *reinterpret_cast<int32_t*>(bytes_ + 1) = disp;
+        ke::Poke<int32_t>(bytes_ + 1, disp);
     }
     void sib(uint8_t mode, Scale scale, uint8_t index, uint8_t base) {
         modrm(mode, kSIB);
@@ -256,7 +256,7 @@ struct Operand {
     }
     void sib_disp32(Scale scale, uint8_t index, uint8_t base, int32_t disp) {
         sib(kModeDisp32, scale, index, base);
-        *reinterpret_cast<int32_t*>(bytes_ + 2) = disp;
+        ke::Poke<int32_t>(bytes_ + 2, disp);
     }
 
   private:
@@ -806,9 +806,9 @@ class Assembler : public AssemblerBase
             ptrdiff_t delta = pos_ - (buffer() + offset);
             assert(delta >= INT_MIN && delta <= INT_MAX);
 
-            int32_t* p = reinterpret_cast<int32_t*>(buffer() + offset - 4);
-            status = *p;
-            *p = delta;
+            uint8_t* p = buffer() + offset - 4;
+            status = ke::Peek<int32_t>(p);
+            ke::Poke<int32_t>(p, delta);
         }
         target->bind(pc());
     }
@@ -819,7 +819,7 @@ class Assembler : public AssemblerBase
         if (address->used()) {
             int32_t offset = CodeLabel::ToOffset(address->status());
             assert(offset >= 0);
-            *reinterpret_cast<int32_t*>(buffer() + offset - 4) = position() - int32_t(offset);
+            ke::Poke<int32_t>(buffer() + offset - 4, position() - int32_t(offset));
         }
         address->bind(pc());
     }
@@ -1024,7 +1024,7 @@ class Assembler : public AssemblerBase
 
     static void PatchRel32Absolute(uint8_t* ip, void* ptr) {
         int32_t delta = uint32_t(ptr) - uint32_t(ip);
-        *reinterpret_cast<int32_t*>(ip - 4) = delta;
+        ke::Poke<int32_t>(ip - 4, delta);
     }
 
     void emitToExecutableMemory(LinkedCode* out) {
@@ -1037,7 +1037,7 @@ class Assembler : public AssemblerBase
         memcpy(base, buffer(), code_size());
         for (size_t i = 0; i < external_refs_.size(); i++) {
             size_t offset = external_refs_[i];
-            PatchRel32Absolute(base + offset, *reinterpret_cast<void**>(base + offset - 4));
+            PatchRel32Absolute(base + offset, ke::Peek<void*>(base + offset - 4));
         }
 
         // Relocate everything we emitted as an abs32 with an internal offset. Note
@@ -1045,8 +1045,8 @@ class Assembler : public AssemblerBase
         // and CodeLabel.
         for (size_t i = 0; i < local_refs_.size(); i++) {
             size_t offset = local_refs_[i];
-            int32_t delta = *reinterpret_cast<int32_t*>(base + offset - 4);
-            *reinterpret_cast<void**>(base + offset - 4) = base + offset + delta;
+            int32_t delta = ke::Peek<int32_t>(base + offset - 4);
+            ke::Poke<void*>(base + offset - 4, base + offset + delta);
         }
     }
 
