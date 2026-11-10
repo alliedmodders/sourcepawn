@@ -2497,9 +2497,6 @@ void CodeGenerator::EmitForStmt(ForStmt* stmt) {
             __ emit(OP_JUMP, &loop_cx.continue_to);
     }
     __ bind(&loop_cx.break_to);
-
-    if (scope)
-        debug_scope = {};
 }
 
 void
