@@ -258,6 +258,7 @@ static const char* warnmsg[] = {
     /*252*/ "sizeof on scalar will always return 1\n",
     /*253*/ "implicit conversion from \"%s\" to \"%s\" is undefined\n",
     /*254*/ "sizeof on enum structs is no longer constant, implicitly creating a dynamic array\n",
+    /*255*/ "break inside switch will terminate the outer loop, not the switch\n",
 };
 
 static const char* errmsg_ex[] = {
