@@ -1589,10 +1589,28 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr, QualType target) {
     return new ir::Cast(expr, operand, cast_type);
 }
 
-// This is a hack. Most code is not prepared to handle iMETHODMAP in type
-// checks, so for now, we forbid it by default. Since the '.' operator *is*
-// prepared for this, we have a special analysis option to allow returning
-// types as values.
+static ir::Value* FunctionAsValue(Expr* expr, FunctionDecl* fun) {
+    auto canonical = fun->canonical();
+    if (canonical->is_native()) {
+        report(expr, 76);
+        return nullptr;
+    }
+    if (canonical->return_array() || canonical->return_type()->isArray()) {
+        report(expr, 182);
+        return nullptr;
+    }
+    if (!canonical->impl()) {
+        report(expr, 4) << canonical->name();
+        return nullptr;
+    }
+
+    // Mark as being indirectly invoked. Direct invocations go
+    // through BindCallTarget.
+    canonical->set_is_callback();
+    markusage(canonical, uREAD);
+    return new ir::FunctionRef(expr, canonical);
+}
+
 ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     AutoErrorPos aep(expr->pos());
 
@@ -1614,27 +1632,8 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return new ir::Constant(expr, const_val);
         }
         case StmtKind::FunctionDecl:
-        case StmtKind::MemberFunctionDecl: {
-            auto fun = decl->as<FunctionDecl>()->canonical();
-            if (fun->is_native()) {
-                report(expr, 76);
-                return nullptr;
-            }
-            if (fun->return_array() || fun->return_type()->isArray()) {
-                report(expr, 182);
-                return nullptr;
-            }
-            if (!fun->impl()) {
-                report(expr, 4) << fun->name();
-                return nullptr;
-            }
-
-            // Mark as being indirectly invoked. Direct invocations go
-            // through BindCallTarget.
-            fun->set_is_callback();
-            markusage(fun, uREAD);
-            return new ir::FunctionRef(expr, fun);
-        }
+        case StmtKind::MemberFunctionDecl:
+            return FunctionAsValue(expr, decl->as<FunctionDecl>());
         case StmtKind::ClassDecl:
         case StmtKind::EnumStructDecl:
         case StmtKind::MethodmapDecl:
@@ -1887,10 +1886,8 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
             report(expr, 176) << method->decl_name() << typename_decl->name();
             return nullptr;
         }
-        if (!from_call) {
-            report(expr, 76);
-            return nullptr;
-        }
+        if (!from_call)
+            return FunctionAsValue(expr, method);
         markusage(method, uREAD);
         return new ir::MethodRef(expr, token, base, method);
     }
@@ -2144,6 +2141,16 @@ ir::Value* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Valu
     Type* type = *base_type;
     Decl* field = FindEnumStructField(type, expr->name());
     if (!field) {
+        // Static methods are accessed with "."; give a better diagnostic than
+        // pretending they don't exist (issue #1119). Note this also covers
+        // calls, since "::" never reaches the method call path.
+        auto layout = base->to<ir::Typename>()->decl()->as<LayoutDecl>();
+        if (auto member = layout ? layout->FindMember(expr->name()) : nullptr) {
+            if (auto fun = member->as<MemberFunctionDecl>(); fun && fun->is_static()) {
+                report(expr, 177) << fun->decl_name() << layout->name() << fun->decl_name();
+                return nullptr;
+            }
+        }
         report(expr, 105) << type << expr->name();
         return nullptr;
     }
