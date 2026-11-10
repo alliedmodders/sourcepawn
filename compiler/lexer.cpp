@@ -964,12 +964,12 @@ void Lexer::HandleMultiLineComment() {
         }
         if (match_char('/')) {
             if (peek() == '*')
-                report(216); // nested comment
+                report(GetTokenPos(), 216); // nested comment
             continue;
         }
         char c = peek();
         if (c == '\0') {
-            report(1) << "*/" << "-end of file-";
+            report(GetTokenPos(), 1) << "*/" << "-end of file-";
             return;
         }
         if (IsNewline(c)) {
