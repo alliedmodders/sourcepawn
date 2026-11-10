@@ -1547,6 +1547,8 @@ Parser::parse_stmt(bool allow_decl)
                 report(24);
                 return nullptr;
             }
+            if (tok == tBREAK && in_switch_)
+                report(pos, 255);
             if (tok == tBREAK)
                 return new BreakStmt(pos);
             return new ContinueStmt(pos);
@@ -1578,6 +1580,7 @@ Parser::parse_stmt(bool allow_decl)
             Stmt* stmt = nullptr;
             {
                 ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+                ke::SaveAndSet<bool> in_switch(&in_switch_, false);
                 stmt = parse_stmt(false);
             }
             lexer_->need(tWHILE);
@@ -1598,6 +1601,7 @@ Parser::parse_stmt(bool allow_decl)
             Stmt* stmt = nullptr;
             {
                 ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+                ke::SaveAndSet<bool> in_switch(&in_switch_, false);
                 stmt = parse_stmt(false);
             }
             if (!stmt || !cond)
@@ -1853,6 +1857,7 @@ Parser::parse_for()
     Stmt* body = nullptr;
     {
         ke::SaveAndSet<bool> in_loop(&in_loop_, true);
+        ke::SaveAndSet<bool> in_switch(&in_switch_, false);
         body = parse_stmt(false);
     }
     if (!body)
@@ -1877,6 +1882,7 @@ Parser::parse_switch()
 
     endtok = '}';
     lexer_->need('{');
+    ke::SaveAndSet<bool> in_switch(&in_switch_, true);
     while (true) {
         int tok = lexer_->lex();
 

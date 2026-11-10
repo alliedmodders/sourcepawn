@@ -120,6 +120,7 @@ class Parser
     CompileContext& cc_;
     Semantics* sema_;
     bool in_loop_ = false;
+    bool in_switch_ = false;
     bool in_test_ = false;
     bool allow_empty_array_index_ = false;
     std::shared_ptr<Lexer> lexer_;

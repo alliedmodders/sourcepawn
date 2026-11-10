@@ -1,0 +1,2 @@
+(13) : warning 255: break inside switch will terminate the outer loop, not the switch
+(17) : warning 255: break inside switch will terminate the outer loop, not the switch
