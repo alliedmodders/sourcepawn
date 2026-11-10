@@ -2765,7 +2765,7 @@ bool Semantics::TestSymbol(Decl* sym, bool testconst) {
         // for the function and check now.
         if (canonical->body()) {
             CheckFunctionReturnUsage(canonical);
-            if (canonical->scope() && !canonical->is_callback())
+            if (canonical->scope() && canonical->is_live() && !canonical->is_callback())
                 TestSymbols(canonical->scope(), true);
         }
     } else if (auto var = sym->as<VarDeclBase>()) {
