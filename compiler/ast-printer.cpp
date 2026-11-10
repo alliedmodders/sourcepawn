@@ -712,7 +712,7 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
             fprintf(out_, "Typename %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
             break;
         case IrKind::FunctionRef:
-            fprintf(out_, "FunctionRef %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());
+            fprintf(out_, "FunctionRef %s\n", expr->to<ir::FunctionRef>()->decl()->name()->chars());
             break;
         case IrKind::Variable:
             fprintf(out_, "Variable %s\n", expr->pn()->to<SymbolExpr>()->name()->chars());

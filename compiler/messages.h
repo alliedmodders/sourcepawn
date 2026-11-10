@@ -189,7 +189,7 @@ static const char* errmsg[] = {
     /*174*/ "symbol '%s' is a type and cannot be used as a value\n",
     /*175*/ "constructors cannot be static\n",
     /*176*/ "non-static method or property '%s' must be called with a value of type '%s'\n",
-    /*177*/ "static method '%s' must be invoked via its type (try '%s.%s')\n",
+    /*177*/ "static method '%s' must be accessed via its type (try '%s.%s')\n",
     /*178*/ "value %d is outside the guaranteed range [%d, %d] of %s\n",
     /*179*/ "value %d is outside the range [%d, %d] of %s\n",
     /*180*/ "function return type differs from prototype. expected '%s', but got '%s'\n",

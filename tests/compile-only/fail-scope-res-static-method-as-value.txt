@@ -1,0 +1,1 @@
+(15) : error 177: static method 'MyCallback' must be accessed via its type (try 'MyActions.MyCallback')
