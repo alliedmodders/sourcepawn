@@ -353,4 +353,5 @@ static const char* errmsg_ex[] = {
     /*488*/ "floating-point literal is not allowed in preprocessor expression\n",
     /*489*/ "closures that capture variables cannot be converted to legacy function types\n",
     /*490*/ "SOURCE_DATE_EPOCH must be a non-negative integer, got \"%s\"\n",
+    /*491*/ "cannot use 'const' with object type '%s'\n",
 };

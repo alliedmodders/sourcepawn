@@ -1501,11 +1501,11 @@ class PragmaUnusedStmt : public Stmt
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PragmaUnusedStmt; }
 
     PoolArray<Atom*>& names() { return names_; }
-    PoolArray<VarDeclBase*>& symbols() { return symbols_; }
+    PoolArray<Decl*>& symbols() { return symbols_; }
 
   private:
     PoolArray<Atom*> names_;
-    PoolArray<VarDeclBase*> symbols_;
+    PoolArray<Decl*> symbols_;
 };
 
 class FunctionDecl : public Decl

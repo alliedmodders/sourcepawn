@@ -1022,17 +1022,17 @@ bool FunctionDecl::BindArgs(SemaContext& sc) {
 bool
 PragmaUnusedStmt::Bind(SemaContext& sc)
 {
-    std::vector<VarDeclBase*> symbols;
+    std::vector<Decl*> symbols;
     for (const auto& name : names_) {
         auto decl = FindSymbol(sc, name);
-        if (!decl || !decl->as<VarDeclBase>()) {
+        if (!decl || !(decl->as<VarDeclBase>() || decl->as<FunctionDecl>())) {
             report(pos_, 17) << name;
             continue;
         }
-        symbols.emplace_back(decl->as<VarDeclBase>());
+        symbols.emplace_back(decl);
     }
 
-    symbols_ = PoolArray<VarDeclBase*>(symbols);
+    symbols_ = PoolArray<Decl*>(symbols);
 
     return names_.size() == symbols_.size();
 }

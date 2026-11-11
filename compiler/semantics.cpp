@@ -2092,7 +2092,8 @@ ir::Value* Semantics::CheckEnumStructFieldAccessExpr(FieldAccessExpr* expr, ir::
     auto field = field_decl->as<LayoutFieldDecl>();
     assert(field);
 
-    return new ir::FieldRef(expr, expr->token(), base, field);
+    QualType result_type(*field->type(), base->qual_type().is_const());
+    return new ir::FieldRef(expr, expr->token(), base, field, result_type);
 }
 
 ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base,
@@ -2126,7 +2127,7 @@ ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Value
     auto field = member->as<LayoutFieldDecl>();
     assert(field);
 
-    return new ir::FieldRef(expr, expr->token(), base, field);
+    return new ir::FieldRef(expr, expr->token(), base, field, field->type());
 }
 
 ir::Value* Semantics::CheckStaticFieldAccessExpr(FieldAccessExpr* expr, ir::Value* base) {
@@ -2596,6 +2597,13 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         if (lvalue) {
             arg = new ir::Rvalue(arg->to<ir::Lvalue>());
             arg_type = arg->qual_type();
+        }
+
+        // Enum structs are passed by reference, so const must be respected
+        // here just like it is for arrays (bug 758).
+        if (formal->isEnumStruct() && arg_type.is_const() && !formal.is_const()) {
+            report(arg, 35) << visual_pos; // argument type mismatch
+            return nullptr;
         }
 
         if (arg_type->isInt() && formal->isInt64()) {
@@ -3426,11 +3434,12 @@ ir::Value* Semantics::CheckFunctionExpr(FunctionExpr* expr) {
 
 bool Semantics::CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt) {
     for (const auto& decl : stmt->symbols()) {
-        decl->set_is_read();
-
-        if (decl->as<VarDecl>()) {
-            decl->set_is_written();
-            break;
+        if (auto var = decl->as<VarDeclBase>()) {
+            var->set_is_read();
+            if (var->as<VarDecl>())
+                var->set_is_written();
+        } else if (auto fun = decl->as<FunctionDecl>()) {
+            fun->canonical()->set_maybe_used();
         }
     }
     return true;
