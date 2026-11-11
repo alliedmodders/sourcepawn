@@ -32,7 +32,8 @@ VarDeclBase::VarDeclBase(StmtKind kind, const token_pos_t& pos, Atom* name,
     implicit_dynamic_array_(false),
     is_shared_((flags & VARDECL_SHARED) == VARDECL_SHARED),
     already_bound_(false),
-    is_emitted_(false)
+    is_emitted_(false),
+    is_this_(false)
 {
     // Having a BinaryExpr allows us to re-use assignment logic.
     if (initializer)

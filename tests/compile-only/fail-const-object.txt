@@ -1,0 +1,4 @@
+(20) : error 491: cannot use 'const' with object type 'KK'
+(21) : error 491: cannot use 'const' with object type 'KK'
+(22) : error 491: cannot use 'const' with object type 'KK'
+(24) : error 491: cannot use 'const' with object type 'KK'

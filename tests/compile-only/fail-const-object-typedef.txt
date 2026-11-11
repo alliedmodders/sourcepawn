@@ -1,0 +1,1 @@
+(13) : error 491: cannot use 'const' with object type 'KK'
