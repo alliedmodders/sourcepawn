@@ -380,6 +380,24 @@ bool TypedefDecl::Bind(SemaContext& sc) {
     return true;
 }
 
+// Disallow "const" on object types. Transitive const is kind of silly and this
+// eliminates any potential confusion around it in the SP2 object model.
+static void CheckConstOnObjectType(const token_pos_t& pos, const typeinfo_t& type) {
+    if (!type.is_const || !type.type)
+        return;
+
+    // Unresovled arrays are validated later.
+    if (!type.dim_exprs.empty())
+        return;
+
+    Type* t = type.type;
+    if (t->isReference())
+        t = t->inner();
+
+    if (t->isClass())
+        report(pos, 491) << t;
+}
+
 FunctionType* TypedefInfo::Bind(SemaContext& sc) {
     if (!sc.BindType(pos, &ret_type))
         return nullptr;
@@ -392,6 +410,8 @@ FunctionType* TypedefInfo::Bind(SemaContext& sc) {
 
         if (!arg->type.dim_exprs.empty())
             ResolveArrayType(sc.sema(), pos, &arg->type, sARGUMENT);
+
+        CheckConstOnObjectType(pos, arg->type);
 
         if (arg->type.is_varargs)
             variadic = true;
@@ -512,6 +532,13 @@ bool VarDeclBase::Bind(SemaContext& sc) {
         if (type_.is_varargs)
             markusage(this, uREAD);
     }
+
+    // |this| is always const. We don't have a way to distinguish transitive
+    // const from "immutable variable", so we just skip the const legality
+    // checks here. It doesn't actually impact anything since the error is just
+    // to prevent accidental use. There are no semantics around const objects.
+    if (!is_this())
+        CheckConstOnObjectType(pos_, type_);
 
     if (is_public_)
         is_read_ = true;
@@ -860,6 +887,8 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
     if (!decl_.type.dim_exprs.empty())
         ResolveArrayType(outer_sc.sema(), pos_, &decl_.type, sLOCAL);
 
+    CheckConstOnObjectType(pos_, decl_.type);
+
     // The forward's prototype is canonical. If this symbol has a forward, we
     // don't set or override the return type when we see the public
     // implementation. Note that args are checked similarly in BindArgs.
@@ -875,6 +904,7 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
         auto decl = new ArgDecl(pos_, outer_sc.cc().atom("this"), typeinfo, sARGUMENT,
                                 VARDECL_DEFAULT, nullptr);
+        decl->set_is_this();
         assert(args_[0] == nullptr);
         args_[0] = decl;
     }
@@ -892,7 +922,6 @@ bool FunctionDecl::Bind(SemaContext& outer_sc) {
 
     if (!ok)
         return false;
-
 
     SemaContext sc(outer_sc, this);
     auto restore_sc = ke::MakeScopeGuard([&outer_sc]() {

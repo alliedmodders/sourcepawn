@@ -1,0 +1,4 @@
+(19) : error 022: must be lvalue (non-constant)
+(20) : error 022: must be lvalue (non-constant)
+(21) : error 035: argument type mismatch (argument 1)
+(22) : error 035: argument type mismatch (argument 1)

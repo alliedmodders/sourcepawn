@@ -372,6 +372,8 @@ class VarDeclBase : public Decl
     void set_is_shared() { is_shared_ = true; }
     bool is_captured() const { return is_captures_; }
     void set_is_captured() { is_captures_ = true; }
+    bool is_this() const { return is_this_; }
+    void set_is_this() { is_this_ = true; }
 
   protected:
     typeinfo_t type_;
@@ -389,6 +391,7 @@ class VarDeclBase : public Decl
     bool is_captures_ : 1;
     bool already_bound_ : 1;
     bool is_emitted_ : 1;
+    bool is_this_ : 1;
     Label addr_;
 };
 
