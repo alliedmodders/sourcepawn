@@ -291,13 +291,13 @@ class StaticFieldRef final : public Value
 class FieldRef final : public Lvalue
 {
   public:
-    FieldRef(Expr* parent, int token, Value* base, LayoutFieldDecl* field)
+    FieldRef(Expr* parent, int token, Value* base, LayoutFieldDecl* field, QualType type)
       : Lvalue(IrKind::FieldRef, parent),
         token_(token),
         base_(base),
         field_(field)
     {
-        type_ = field->type();
+        type_ = type;
     }
 
     int token() const { return token_; }
