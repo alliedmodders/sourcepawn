@@ -1,8 +1,0 @@
-database:
- host: localhost
- user: root
- pass:
- name: pawn
-
-parser: ../../obj-linux-x86_64/tools/docparse/docparse/docparse
-includes: ../../../sourcemod/plugins/include
