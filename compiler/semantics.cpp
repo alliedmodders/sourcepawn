@@ -2507,9 +2507,7 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         arg = new ir::Rvalue(arg->to<ir::Lvalue>());
     }
 
-#ifndef NDEBUG
     bool handling_this = call->implicit_this() && (pos == 0);
-#endif
 
     QualType arg_type = arg->qual_type();
     bool lvalue = arg->lvalue();
@@ -2600,8 +2598,12 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
         }
 
         // Enum structs are passed by reference, so const must be respected
-        // here just like it is for arrays (bug 758).
-        if (formal->isEnumStruct() && arg_type.is_const() && !formal.is_const()) {
+        // here just like it is for arrays (bug 758). We make an exception
+        // for |this|: enum struct methods always receive a mutable |this|
+        // as there is no way to declare a const method.
+        if (!handling_this && formal->isEnumStruct() && arg_type.is_const() &&
+            !formal.is_const())
+        {
             report(arg, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
