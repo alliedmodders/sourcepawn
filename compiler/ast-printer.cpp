@@ -925,9 +925,11 @@ void AstPrinter::PrintIr(ir::Value* expr, bool is_last) {
         case IrKind::Accessor: {
             auto e = expr->to<ir::Accessor>();
             fprintf(out_, "Accessor '%s'\n", expr->pn()->to<FieldAccessExpr>()->name()->chars());
-            stack_.push_back(is_last);
-            PrintIr(e->base(), true);
-            stack_.pop_back();
+            if (!e->is_static()) {
+                stack_.push_back(is_last);
+                PrintIr(e->base(), true);
+                stack_.pop_back();
+            }
             break;
         }
         case IrKind::Cast: {

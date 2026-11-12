@@ -1894,11 +1894,12 @@ class ClassDecl : public LayoutDecl
 class PropertyDecl : public Decl {
   public:
     PropertyDecl(const token_pos_t& pos, Atom* name, const typeinfo_t& type,
-                 MemberFunctionDecl* getter, MemberFunctionDecl* setter)
+                 MemberFunctionDecl* getter, MemberFunctionDecl* setter, bool is_static = false)
       : Decl(StmtKind::PropertyDecl, pos, name),
         type_(type),
         getter_(getter),
-        setter_(setter)
+        setter_(setter),
+        is_static_(is_static)
     {}
 
     static bool is_a(Stmt* node) { return node->kind() == StmtKind::PropertyDecl; }
@@ -1910,6 +1911,7 @@ class PropertyDecl : public Decl {
     QualType type() const { return type_.qualified(); }
     MemberFunctionDecl* getter() const { return getter_; }
     MemberFunctionDecl* setter() const { return setter_; }
+    bool is_static() const { return is_static_; }
     LayoutDecl* parent() const {
         assert(getter_ || setter_);
         return getter_ ? getter_->parent() : setter_->parent();
@@ -1919,6 +1921,7 @@ class PropertyDecl : public Decl {
     typeinfo_t type_;
     MemberFunctionDecl* getter_;
     MemberFunctionDecl* setter_;
+    bool is_static_ : 1;
 };
 
 class UpvarDecl : public Decl

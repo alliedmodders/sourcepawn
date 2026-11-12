@@ -931,9 +931,12 @@ void CodeGenerator::EmitExpr(ir::Value* expr, unsigned int flags) {
         case IrKind::FieldRef:
             EmitExpr(expr->to<ir::FieldRef>()->base());
             break;
-        case IrKind::Accessor:
-            EmitExpr(expr->to<ir::Accessor>()->base());
+        case IrKind::Accessor: {
+            auto acc = expr->to<ir::Accessor>();
+            if (!acc->is_static())
+                EmitExpr(acc->base());
             break;
+        }
         case IrKind::Cast:
             EmitCastExpr(expr, expr->to<ir::Cast>()->expr(), flags);
             break;
@@ -1107,6 +1110,9 @@ bool CodeGenerator::BoundLval::canRematerialize() const {
             // A shared upvar's shared-object ref is pushed at bind time and
             // must survive rvalue reads, same as an indirect Variable.
             return !lval->as<ir::Upvar>()->decl()->var()->is_shared();
+        case IrKind::Accessor:
+            // A static property has no base.
+            return lval->as<ir::Accessor>()->is_static();
         default:
             return false;
     }
@@ -1131,7 +1137,10 @@ int CodeGenerator::StackSlotsForLval(const BoundLval& b) {
             return b.lval->as<ir::Upvar>()->decl()->var()->is_shared() ? 1 : 0;
         case IrKind::Index:
             return b.address_on_stack ? 1 : 2;
-        case IrKind::Accessor:
+        case IrKind::Accessor: {
+            auto accessor = b.lval->as<ir::Accessor>();
+            return accessor->is_static() ? 0 : 1;
+        }
         case IrKind::FieldRef:
         case IrKind::LvalueCast:
             return 1;
@@ -1326,6 +1335,8 @@ void CodeGenerator::EmitBinary(ir::Binary* expr, unsigned int flags) {
             //   Accessor:
             //   rvalue:
             //      [base, val]
+            //   static Accessor:
+            //      [val]
             //
             // Since we have !discard, we need to preserve the calculated value,
             // which we do via a local if there is too much stack manipulation
@@ -2244,7 +2255,8 @@ void CodeGenerator::EmitStore(ir::Value* node, const BoundLval& binding) {
         case IrKind::FieldRef:
             EmitStoreField(lval->as<ir::FieldRef>()->field());
             break;
-        case IrKind::Accessor:
+        case IrKind::Accessor: {
+            auto acc = lval->as<ir::Accessor>();
             if (type->isWideType()) {
                 // Need to pass the value as an address for native compatibility.
                 auto slot = AcquireTempSlot(node, type->builtin_type());
@@ -2252,10 +2264,16 @@ void CodeGenerator::EmitStore(ir::Value* node, const BoundLval& binding) {
                 __ emit(OP_ADDR_S, VarSlot(slot));
             }
             // Calls have their arguments in reverse order, so we have to swap
-            // the top of the stack.
-            __ emit(OP_SWAP);
-            EmitCall(lval->as<ir::Accessor>()->accessor()->setter(), 2);
+            // the top of the stack. A static property has no |this|, so the
+            // value is the only argument.
+            if (acc->is_static()) {
+                EmitCall(acc->accessor()->setter(), 1);
+            } else {
+                __ emit(OP_SWAP);
+                EmitCall(acc->accessor()->setter(), 2);
+            }
             break;
+        }
         case IrKind::Upvar: {
             auto upvar = lval->as<ir::Upvar>()->decl();
             if (upvar->var()->is_shared()) {
@@ -2372,7 +2390,7 @@ void CodeGenerator::InvokeGetter(ir::Value* node, PropertyDecl* prop) {
         hidden_slot = {AcquireTempSlot(node, return_type->builtin_type())};
     }
 
-    cell_t nargs = 1;
+    cell_t nargs = prop->is_static() ? 0 : 1;
     if (hidden_slot) {
         __ emit(OP_ADDR_S, VarSlot(*hidden_slot));
         nargs++;

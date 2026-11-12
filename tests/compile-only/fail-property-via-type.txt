@@ -1,0 +1,1 @@
+(10) : error 176: non-static method or property 'value' must be called with a value of type 'Clam'
