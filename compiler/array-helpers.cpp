@@ -694,7 +694,12 @@ ir::Value* ArrayValidator::ValidateRank(ArrayType* rank, Expr* init) {
     if (auto es = rank->inner()->asEnumStruct()) {
         std::vector<ir::Value*> elts;
         for (const auto& expr : array->exprs()) {
-            ir::Value* node = sema_->ValidateEnumStructInitializer(es, expr, nullptr);
+            auto elt_init = expr->as<ArrayExpr>();
+            if (!elt_init) {
+                report(expr->pos(), 47);
+                continue;
+            }
+            ir::Value* node = sema_->ValidateEnumStructInitializer(es, elt_init, nullptr);
             if (!node)
                 continue;
             elts.push_back(node);

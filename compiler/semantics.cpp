@@ -384,10 +384,10 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
         return true;
 
     // Handle array literal initializer — validate against enum struct fields.
-    if (init->as<ArrayExpr>()) {
+    if (auto array = init->as<ArrayExpr>()) {
         AutoErrorPos aep(init->pos());
         ir::Value* node =
-           ValidateEnumStructInitializer(decl->type()->asEnumStruct(), init, nullptr);
+            ValidateEnumStructInitializer(decl->type()->asEnumStruct(), array, nullptr);
         if (!node)
             return false;
         decl->set_sema_init_rhs(node);
@@ -419,15 +419,48 @@ bool Semantics::CheckEnumStructVarDecl(VarDeclBase* decl) {
     return true;
 }
 
-ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init,
-                                                    Type* expr_type)
-{
-    auto array = init->as<ArrayExpr>();
-    if (!array) {
-        report(init->pos(), 47);
+// Checks a single initializer entry against |field| of an enum struct.
+ir::Value* Semantics::CheckEnumStructField(LayoutFieldDecl* field, Expr* expr) {
+    const auto& type = field->type_info();
+    if (type.type->isArray()) {
+        ir::Value* elem = nullptr;
+        if (!CheckArrayInitialization(this, type, expr, &elem) || !elem)
+            return nullptr;
+        return elem;
+    }
+
+    if (auto es = type.type->asEnumStruct()) {
+        if (auto array = expr->as<ArrayExpr>())
+            return ValidateEnumStructInitializer(es, array, type.type);
+    }
+
+    AutoErrorPos pos(expr->pos());
+
+    ir::Value* expr_ir = CheckExpr(expr);
+    if (!expr_ir)
+        return nullptr;
+
+    QualType v = expr_ir->qual_type();
+    if (!expr_ir->is(IrKind::Constant)) {
+        report(8);
         return nullptr;
     }
 
+    ConversionKind ck = FindConversion(*v, type.type, CvtContext::Assignment);
+    if (!HasImplicitConversion(ck)) {
+        ReportConversionDiagnostic(expr->pos(), type.type, *v);
+        return nullptr;
+    }
+    if (IsNopConversion(ck))
+        return expr_ir;
+    ir::Value* converted = BuildConversion(expr_ir, ck, type.type);
+    assert(converted);
+    return converted;
+}
+
+ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array,
+                                                    Type* expr_type)
+{
     const auto& field_list = es->fields();
     auto field_iter = field_list.begin();
 
@@ -442,38 +475,8 @@ ir::Value* Semantics::ValidateEnumStructInitializer(EnumStructDecl* es, Expr* in
         auto field = *field_iter;
         field_iter++;
 
-        const auto& type = field->type_info();
-        if (type.type->isArray()) {
-            ir::Value* elem = nullptr;
-            if (!CheckArrayInitialization(this, type, expr, &elem) || !elem)
-                continue;
+        if (ir::Value* elem = CheckEnumStructField(field, expr))
             elements.emplace_back(elem);
-        } else {
-            AutoErrorPos pos(expr->pos());
-
-            ir::Value* expr_ir = CheckExpr(expr);
-            if (!expr_ir)
-                continue;
-
-            QualType v = expr_ir->qual_type();
-            if (!expr_ir->is(IrKind::Constant)) {
-                report(8);
-                continue;
-            }
-
-            ConversionKind ck = FindConversion(*v, type.type, CvtContext::Assignment);
-            if (!HasImplicitConversion(ck)) {
-                ReportConversionDiagnostic(expr->pos(), type.type, *v);
-                continue;
-            }
-            if (!IsNopConversion(ck)) {
-                ir::Value* converted = BuildConversion(expr_ir, ck, type.type);
-                assert(converted);
-                elements.emplace_back(converted);
-            } else {
-                elements.emplace_back(expr_ir);
-            }
-        }
     }
 
     if (array->ellipses()) {

@@ -162,7 +162,8 @@ class Semantics final
     bool CheckMethodmapDecl(MethodmapDecl* info);
     bool CheckEnumStructDecl(EnumStructDecl* info);
     bool CheckEnumStructVarDecl(VarDeclBase* decl);
-    ir::Value* ValidateEnumStructInitializer(EnumStructDecl* es, Expr* init, Type* expr_type);
+    ir::Value* ValidateEnumStructInitializer(EnumStructDecl* es, ArrayExpr* array, Type* expr_type);
+    ir::Value* CheckEnumStructField(LayoutFieldDecl* field, Expr* expr);
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
