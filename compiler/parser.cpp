@@ -511,17 +511,9 @@ Decl* Parser::parse_class() {
             break;
         }
 
-        int tok_id = lexer_->lex();
-        if (tok_id == tNATIVE) {
-            // "native" is not allowed in class declarations, but we still
-            // parse the line to stay in sync. parse_layout_method emits
-            // error 479 when native is seen on a non-methodmap.
-            lexer_->lexpush();
-            parse_layout_method(stmt);
-            continue;
-        }
-        if (tok_id == tSYMBOL && lexer_->current_token()->atom == property_atom_) {
-            auto prop = parse_layout_property(stmt);
+        bool is_static = lexer_->match(tSTATIC);
+        if (match_property_keyword()) {
+            auto prop = parse_layout_property(stmt, is_static);
             if (prop) {
                 props.emplace_back(prop);
             } else {
@@ -530,11 +522,18 @@ Decl* Parser::parse_class() {
             }
             continue;
         }
-        lexer_->lexpush();
+
+        if (lexer_->match(tNATIVE)) {
+            // "native" is not allowed in class declarations, but we still
+            // parse the line to stay in sync. parse_layout_method emits
+            // error 479 when native is seen on a non-methodmap.
+            lexer_->lexpush();
+            parse_layout_method(stmt);
+            continue;
+        }
 
         // Consume optional access modifier and static for class members.
         auto pos = lexer_->pos();
-        bool is_static = lexer_->match(tSTATIC);
         bool is_private = lexer_->match(tPRIVATE);
         if (!is_private)
             lexer_->match(tPUBLIC);
@@ -2149,20 +2148,25 @@ Parser::parse_methodmap()
     std::vector<PropertyDecl*> props;
     while (!lexer_->match('}')) {
         bool ok = true;
-        int tok_id = lexer_->lex();
-        if (tok_id == tPUBLIC) {
+        bool is_static = lexer_->match(tSTATIC);
+        if (match_property_keyword()) {
+            auto prop = parse_layout_property(decl, is_static);
+            if (prop)
+                props.emplace_back(prop);
+            else
+                ok = false;
+        } else if (!is_static && lexer_->match(tPUBLIC)) {
             auto method = parse_layout_method(decl);
             if (method)
                 methods.emplace_back(method);
             else
                 ok = false;
-        } else if (tok_id == tSYMBOL && lexer_->current_token()->atom == property_atom_) {
-            auto prop = parse_layout_property(decl);
-            if (prop)
-                props.emplace_back(prop);
-            else
-                ok = false;
         } else {
+            // consume_line() stops at a terminator without eating it, so
+            // error recovery would make no progress unless we lex what we
+            // failed to match.  this also ensures the report() call has the
+            // right token.
+            lexer_->lex();
             report(124);
             ok = false;
         }
@@ -2273,8 +2277,19 @@ MemberFunctionDecl* Parser::parse_layout_method(LayoutDecl* parent)
     return fun;
 }
 
+bool Parser::match_property_keyword() {
+    int tok_id = lexer_->lex();
+    if (tok_id == tSYMBOL) {
+        auto tok = lexer_->current_token();
+        if (tok->atom == property_atom_)
+            return true;
+    }
+    lexer_->lexpush();
+    return false;
+}
+
 PropertyDecl*
-Parser::parse_layout_property(LayoutDecl* parent)
+Parser::parse_layout_property(LayoutDecl* parent, bool is_static)
 {
     auto pos = lexer_->pos();
 
@@ -2293,7 +2308,7 @@ Parser::parse_layout_property(LayoutDecl* parent)
     MemberFunctionDecl* getter = nullptr;
     MemberFunctionDecl* setter = nullptr;
     while (!lexer_->match('}')) {
-        if (!parse_property_accessor(parent, ident, type, &getter, &setter))
+        if (!parse_property_accessor(parent, ident, type, is_static, &getter, &setter))
             lexer_->lexclr(TRUE);
         if (!lexer_->freading()) {
             if (errors.ok())
@@ -2303,11 +2318,11 @@ Parser::parse_layout_property(LayoutDecl* parent)
     }
 
     lexer_->require_newline(TerminatorPolicy::Newline);
-    return new PropertyDecl(pos, ident, type, getter, setter);
+    return new PropertyDecl(pos, ident, type, getter, setter, is_static);
 }
 
 bool Parser::parse_property_accessor(LayoutDecl* parent, Atom* name,
-                                     const typeinfo_t& type,
+                                     const typeinfo_t& type, bool is_static,
                                      MemberFunctionDecl** out_getter,
                                      MemberFunctionDecl** out_setter)
 {
@@ -2357,6 +2372,8 @@ bool Parser::parse_property_accessor(LayoutDecl* parent, Atom* name,
     auto fun = new MemberFunctionDecl(pos, parent, ret_type);
     if (is_private)
         fun->set_is_private();
+    if (is_static)
+        fun->set_is_static();
     std::string tmpname = parent->name()->str() + "." + name->str();
     if (getter)
         tmpname += ".get";
@@ -2369,7 +2386,7 @@ bool Parser::parse_property_accessor(LayoutDecl* parent, Atom* name,
     else
         fun->set_is_stock();
 
-    if (!parse_function(fun, is_native ? tMETHODMAP : 0, true))
+    if (!parse_function(fun, is_native ? tMETHODMAP : 0, !is_static))
         return false;
 
     if (getter && *out_getter) {

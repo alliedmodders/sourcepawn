@@ -1507,12 +1507,14 @@ bool LayoutDecl::BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->getter();
 
     // There should be no extra arguments.
-    if (fun->args().size() > 1) {
+    int expected_args = prop->is_static() ? 0 : 1;
+    if (fun->args().size() > expected_args) {
         report(fun->pos(), 127);
         return false;
     }
 
-    fun->set_this_type(type);
+    if (!prop->is_static())
+        fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;
@@ -1522,23 +1524,19 @@ bool LayoutDecl::BindGetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
 bool LayoutDecl::BindSetter(SemaContext& sc, PropertyDecl* prop, Type* type) {
     auto fun = prop->setter();
 
-    // Must have one extra argument taking the return type.
-    if (fun->args().size() > 2) {
+    int expected_args = prop->is_static() ? 1 : 2;
+    if (fun->args().size() != expected_args) {
         report(prop, 150) << prop->type();
         return false;
     }
 
-    fun->set_this_type(type);
+    if (!prop->is_static())
+        fun->set_this_type(type);
 
     if (!fun->Bind(sc))
         return false;
 
-    if (fun->args().size() <= 1) {
-        report(prop, 150) << prop->type();
-        return false;
-    }
-
-    auto decl = fun->args()[1];
+    auto decl = fun->args()[expected_args - 1];
     if (decl->init_rhs() || decl->type_info().qualified() != prop->type()) {
         report(prop, 150) << prop->type();
         return false;

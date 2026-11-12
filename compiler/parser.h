@@ -42,9 +42,10 @@ class Parser
     Decl* parse_class();
     Decl* parse_methodmap();
     MemberFunctionDecl* parse_layout_method(LayoutDecl* parent);
-    PropertyDecl* parse_layout_property(LayoutDecl* parent);
+    PropertyDecl* parse_layout_property(LayoutDecl* parent, bool is_static);
+    bool match_property_keyword();
     bool parse_property_accessor(LayoutDecl* parent, Atom* name, const typeinfo_t& type,
-                                 MemberFunctionDecl** out_getter,
+                                 bool is_static, MemberFunctionDecl** out_getter,
                                  MemberFunctionDecl** out_setter);
 
     struct VarParams {

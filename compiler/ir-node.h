@@ -344,12 +344,14 @@ class Accessor final : public Lvalue
         base_(base),
         prop_(prop)
     {
+        assert((base_ == nullptr) == prop->is_static());
         type_ = prop->property_type();
     }
 
     int token() const { return token_; }
     Value* base() const { return base_; }
     PropertyDecl* accessor() const { return prop_; }
+    bool is_static() const { return prop_->is_static(); }
 
     static bool is_a(Value* node) { return node->kind() == IrKind::Accessor; }
 

@@ -1,0 +1,1 @@
+(10) : error 152: no setter found for property value

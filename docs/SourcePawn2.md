@@ -138,26 +138,52 @@ Example of using classes in SourcePawn:
         private char[] name_;
 
         Player(int index) {
-            index_ = index;
+            this.index_ = index;
 
             char buffer[255];
-            GetClientName(index_, buffer, sizeof(buffer));
+            GetClientName(this.index_, buffer, sizeof(buffer));
 
             int size = strlen(buffer) + 1;
-            name_ = new char[size];
-            strcopy(name_, name_.size, buffer);
+            this.name_ = new char[size];
+            strcopy(this.name_, this.name_.size, buffer);
         }
 
         property int index {
-            get() { return index_; }
+            get() { return this.index_; }
         }
         property char[] name {
-            get() { return name; }
+            get() { return this.name_; }
         }
     }
 
     let player = new Player(client);
     PrintToServer("Player name: %s", player.name);
+
+#### Static Properties
+
+Classes can contain static properties. The syntax is straightforward:
+
+    class Player {
+        static property int MaxIndex {
+            public get() {
+                return MAXPLAYERS;
+            }
+        }
+    }
+
+    PrintToServer("Maximum player index: %d", Player.MaxIndex);
+
+Note that the property is accessed via the type, and not an instance.
+
+Methodmaps can also have static properties:
+
+    methodmap Player {
+        static property int MaxIndex {
+            public get() {
+                return MAXPLAYERS;
+            }
+        }
+    }
 
 ### Closures
 

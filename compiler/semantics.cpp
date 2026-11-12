@@ -1877,6 +1877,13 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
         }
 
         auto member = layout->FindMember(expr->name());
+        if (auto prop = member ? member->as<PropertyDecl>() : nullptr) {
+            if (!prop->is_static()) {
+                report(expr, 176) << prop->name() << typename_decl->name();
+                return nullptr;
+            }
+            return new ir::Accessor(expr, token, nullptr, prop);
+        }
         if (!member || !member->as<MemberFunctionDecl>()) {
             report(expr, 444) << typename_decl->name() << expr->name();
             return nullptr;
@@ -1923,6 +1930,10 @@ ir::Value* Semantics::CheckFieldAccessExpr(FieldAccessExpr* expr, bool from_call
     }
 
     if (auto prop = member->as<PropertyDecl>()) {
+        if (prop->is_static()) {
+            report(expr, 492) << prop->name() << map->name() << prop->name();
+            return nullptr;
+        }
         // This is the only scenario in which we need to compute a load of the
         // base address. Otherwise, we're only accessing the type.
         if (auto lval = base->as<ir::Lvalue>())
@@ -2109,6 +2120,10 @@ ir::Value* Semantics::CheckClassFieldAccessExpr(FieldAccessExpr* expr, ir::Value
         return nullptr;
 
     if (auto prop = member->as<PropertyDecl>()) {
+        if (prop->is_static()) {
+            report(expr, 492) << prop->name() << decl->name() << prop->name();
+            return nullptr;
+        }
         if (auto lval = base->as<ir::Lvalue>())
             base = new ir::Rvalue(lval);
         return new ir::Accessor(expr, expr->token(), base, prop);

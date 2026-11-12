@@ -1,0 +1,1 @@
+(14) : error 492: static property 'value' must be accessed via its type (try 'Clam.value')
