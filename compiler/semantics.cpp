@@ -2551,10 +2551,11 @@ ir::Value* Semantics::ProcessArgument(CallExpr* call, FunctionType* ft, QualType
     } else if (formal->isReference()) {
         assert(!handling_this);
 
-        if (!lvalue ||
-            (arg->is(IrKind::Index) &&
-             (arg_type->maybe_lit_size().value_or(4) != 4)))
-        {
+        if (!lvalue) {
+            report(arg, 22); // must be lvalue (non-constant)
+            return nullptr;
+        }
+        if (arg->is(IrKind::Index) && (arg_type->maybe_lit_size().value_or(4) != 4)) {
             report(arg, 35) << visual_pos; // argument type mismatch
             return nullptr;
         }
