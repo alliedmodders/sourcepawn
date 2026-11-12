@@ -1,0 +1,3 @@
+(9) : error 022: must be lvalue (non-constant)
+(10) : error 022: must be lvalue (non-constant)
+(11) : error 022: must be lvalue (non-constant)
