@@ -2307,7 +2307,11 @@ ir::Value* Semantics::CheckCallExpr(CallExpr* call) {
 
         markusage(fun, uREAD);
 
-        if (fun->deprecate())
+        // We only fire deprecated warnings for functions that are not
+        // themselves deprecated. Otherwise, migration of dependent
+        // functions becomes very annoying.
+        FunctionDecl* caller = sc_->func();
+        if (fun->deprecate() && !(caller && caller->deprecate()))
             report(call, 234) << fun->name() << fun->deprecate();
     } else if (target) {
         call->set_callee(target->type()->to<FunctionType>());

@@ -1,0 +1,4 @@
+(22) : warning 234: symbol "DeprecatedNonStock" is marked as deprecated: This function is deprecated.
+(32) : warning 234: symbol "DeprecatedNative" is marked as deprecated: Do not use this.
+(33) : warning 234: symbol "DeprecatedStock" is marked as deprecated: This function is deprecated.
+(39) : warning 234: symbol "DeprecatedNonStock" is marked as deprecated: This function is deprecated.
