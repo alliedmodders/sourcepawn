@@ -35,7 +35,7 @@ Compiler::~Compiler() {
 }
 
 void CompilerBase::PatchCallThunk(uint8_t* pc, void* target) {
-    *(intptr_t*)(pc - 4) = intptr_t(target) - intptr_t(pc);
+    ke::Poke<int32_t>(pc - 4, int32_t(intptr_t(target) - intptr_t(pc)));
 }
 
 bool CompilerBase::IsSupported() {
