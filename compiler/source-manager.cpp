@@ -6,7 +6,6 @@
 //
 #include "source-manager.h"
 
-#include <filesystem>
 #include <limits>
 
 #include <amtl/am-arithmetic.h>
@@ -25,17 +24,24 @@ SourceManager::SourceManager(CompileContext& cc)
 }
 
 std::shared_ptr<SourceFile> SourceManager::Open(const token_pos_t& from, const std::string& path) {
-    for (const auto& other : opened_files_) {
-        std::error_code ec;
-        if (std::filesystem::equivalent(path, other->path(), ec))
-            return other;
-    }
+    // Check if the file has already been opened, so we don't eat up the
+    // SourceLocation space unnecessarily. std::filesystem has equivalent but
+    // it forces an O(n^2) lookup, so we unfortunately need platform specific
+    // helpers.
+    auto id = GetFileIdentity(path);
+    if (!id)
+        return nullptr;
+    if (auto iter = opened_file_map_.find(*id); iter != opened_file_map_.end())
+        return iter->second;
 
     auto file = std::make_shared<SourceFile>();
     if (!file->Open(path))
         return nullptr;
+
     if (!Open(from, file))
         return nullptr;
+
+    opened_file_map_.emplace(*id, file);
     return file;
 }
 
