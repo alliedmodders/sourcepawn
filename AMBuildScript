@@ -43,6 +43,7 @@ class Config(object):
         super(Config, self).__init__()
         self.enable_coverage = getattr(builder.options, 'enable_coverage', False)
         self.enable_asan = getattr(builder.options, 'enable_asan', False)
+        self.enable_asserts = getattr(builder.options, 'enable_asserts', False)
         self.targets = []
         self.asan_libs = {}
         self.generated_headers = None
@@ -76,12 +77,10 @@ class Config(object):
 
         # Optimization
         if builder.options.opt == '1':
-            cxx.defines += ['NDEBUG']
+            if not self.enable_asserts:
+                cxx.defines += ['NDEBUG']
             if cxx.like('gcc'):
-                if self.enable_asan:
-                    cxx.cflags += ['-O1']
-                else:
-                    cxx.cflags += ['-O3']
+                cxx.cflags += ['-O3']
                 if cxx.like('emscripten'):
                     emflags = ['--closure', '1', '-flto', '--llvm-lto', '1']
                     cxx.cflags += emflags

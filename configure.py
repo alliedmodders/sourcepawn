@@ -44,6 +44,8 @@ parser.options.add_argument('--enable-debug', action='store_const', const='1', d
                             help='Enable debugging symbols')
 parser.options.add_argument('--enable-optimize', action='store_const', const='1', dest='opt',
                             help='Enable optimization')
+parser.options.add_argument('--enable-asserts', action='store_true', default=False, dest='enable_asserts',
+                            help='Keep debug assertions enabled (combine with --enable-optimize).')
 parser.options.add_argument('--amtl', type=str, dest='amtl', default=None, help='Custom AMTL path')
 parser.options.add_argument('--build', type=str, dest='build', default='all', 
                             help='Deprecated; no effect.')
