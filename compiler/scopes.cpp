@@ -6,53 +6,54 @@
 
 #include "scopes.h"
 
+#include "compile-context.h"
 #include "parse-node.h"
 
 namespace sp {
 namespace cc {
 
 void SymbolScope::Add(Decl* decl) {
-    if (!symbols_) {
-        auto& cc = CompileContext::get();
-        symbols_ = cc.NewSymbolMap();
-    }
+    if (!symbols_)
+        symbols_ = CompileContext::get().NewSymbolTable();
 
-    assert(symbols_->find(decl->name()) == symbols_->end());
-    symbols_->emplace(decl->name(), decl);
+    SymbolTable::Insert p = symbols_->findForAdd(decl->name());
+    assert(!p.found());
+    if (p.found())
+        return;
+    symbols_->add(p, NamedDecl{decl->name(), decl});
 }
 
 void SymbolScope::AddChain(Decl* decl) {
-    if (!symbols_) {
-        auto& cc = CompileContext::get();
-        symbols_ = cc.NewSymbolMap();
-    }
+    if (!symbols_)
+        symbols_ = CompileContext::get().NewSymbolTable();
 
-    auto iter = symbols_->find(decl->name());
-    if (iter == symbols_->end()) {
-        symbols_->emplace(decl->name(), decl);
+    SymbolTable::Insert p = symbols_->findForAdd(decl->name());
+    if (!p.found()) {
+        symbols_->add(p, NamedDecl{decl->name(), decl});
     } else {
-        decl->next = iter->second;
-        iter->second = decl;
+        decl->next = p->decl;
+        p->decl = decl;
     }
 }
 
 Type* SymbolScope::FindType(Atom* atom) const {
     if (!types_)
         return nullptr;
-    auto iter = types_->find(atom);
-    if (iter == types_->end())
+    TypeTable::Result r = types_->find(atom);
+    if (!r.found())
         return nullptr;
-    return iter->second;
+    return r->type;
 }
 
 void SymbolScope::AddType(Atom* atom, Type* type) {
-    if (!types_) {
-        auto& cc = CompileContext::get();
-        types_ = cc.NewTypeMap();
-    }
+    if (!types_)
+        types_ = CompileContext::get().NewTypeTable();
 
-    assert(types_->find(atom) == types_->end());
-    types_->emplace(atom, type);
+    TypeTable::Insert p = types_->findForAdd(atom);
+    assert(!p.found());
+    if (p.found())
+        return;
+    types_->add(p, NamedType{atom, type});
 }
 
 void SymbolScope::AddTypeChain(Atom* atom, Type* type) {
