@@ -6,7 +6,10 @@
 
 #pragma once
 
+#include <functional>
+
 #include "parse-node.h"
+#include "symbol-table.h"
 #include "symbols.h"
 
 namespace sp {
@@ -22,16 +25,17 @@ class SymbolScope final : public PoolObject
       : parent_(parent),
         kind_(kind),
         symbols_(nullptr),
+        types_(nullptr),
         fnumber_(fnumber)
     {}
 
     Decl* Find(Atom* atom) const {
         if (!symbols_)
             return nullptr;
-        auto iter = symbols_->find(atom);
-        if (iter == symbols_->end())
+        SymbolTable::Result r = symbols_->find(atom);
+        if (!r.found())
             return nullptr;
-        return iter->second;
+        return r->decl;
     }
 
     void Add(Decl* decl);
@@ -46,8 +50,8 @@ class SymbolScope final : public PoolObject
     void ForEachSymbol(const std::function<void(Decl*)>& callback) {
         if (!symbols_)
             return;
-        for (const auto& pair : *symbols_) {
-            for (auto iter = pair.second; iter; iter = iter->next)
+        for (SymbolTable::iterator i(symbols_); !i.empty(); i.next()) {
+            for (auto iter = i->decl; iter; iter = iter->next)
                 callback(iter);
         }
     }
@@ -68,8 +72,8 @@ class SymbolScope final : public PoolObject
   private:
     SymbolScope* parent_;
     ScopeKind kind_;
-    tr::unordered_map<Atom*, Decl*>* symbols_;
-    tr::unordered_map<Atom*, Type*>* types_;
+    SymbolTable* symbols_;
+    TypeTable* types_;
     int fnumber_;
 };
 

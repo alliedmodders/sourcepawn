@@ -52,14 +52,18 @@ CompileContext::InitLexer()
     lexer_ = std::make_shared<Lexer>(*this);
 }
 
-tr::unordered_map<Atom*, Decl*>* CompileContext::NewSymbolMap() {
-    symbol_maps_.emplace_front();
-    return &symbol_maps_.front();
+SymbolTable* CompileContext::NewSymbolTable() {
+    symbol_tables_.emplace_front();
+    SymbolTable* table = &symbol_tables_.front();
+    table->init();
+    return table;
 }
 
-tr::unordered_map<Atom*, Type*>* CompileContext::NewTypeMap() {
-    type_maps_.emplace_front();
-    return &type_maps_.front();
+TypeTable* CompileContext::NewTypeTable() {
+    type_tables_.emplace_front();
+    TypeTable* table = &type_tables_.front();
+    table->init();
+    return table;
 }
 
 void CompileContext::TrackMalloc(size_t bytes) {

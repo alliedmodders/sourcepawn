@@ -11,6 +11,7 @@
 #include <string>
 #include <unordered_set>
 
+#include "symbol-table.h"
 #include "utils/pool-allocator.h"
 #include "utils/string-pool.h"
 #include "source-file.h"
@@ -60,6 +61,9 @@ class CompileContext final
     SourceManager* sources() const { return sources_.get(); }
     TypeManager* types() const { return types_.get(); }
     StringPool* atoms() { return &atoms_; }
+
+    SymbolTable* NewSymbolTable();
+    TypeTable* NewTypeTable();
 
     Atom* atom(const std::string& str) {
         return atoms_.add(str);
@@ -113,11 +117,10 @@ class CompileContext final
     void operator =(const CompileContext&) = delete;
     void operator =(CompileContext&&) = delete;
 
-    tr::unordered_map<Atom*, Decl*>* NewSymbolMap();
-    tr::unordered_map<Atom*, Type*>* NewTypeMap();
-
   private:
     PoolAllocator allocator_;
+    tr::forward_list<SymbolTable> symbol_tables_;
+    tr::forward_list<TypeTable> type_tables_;
     SymbolScope* globals_;
     std::string default_include_;
     tr::unordered_set<FunctionDecl*> functions_;
@@ -147,9 +150,6 @@ class CompileContext final
 
     SemaContext* sc_ = nullptr;
 
-    // AST attachments.
-    tr::forward_list<tr::unordered_map<Atom*, Decl*>> symbol_maps_;
-    tr::forward_list<tr::unordered_map<Atom*, Type*>> type_maps_;
 
     size_t malloc_bytes_ = 0;
     size_t malloc_bytes_peak_ = 0;
