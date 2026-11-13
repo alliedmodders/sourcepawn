@@ -10,7 +10,9 @@
 
 #include <limits>
 #include <memory>
+#include <unordered_map>
 
+#include "utils/platform-helpers.h"
 #include "utils/string-pool.h"
 #include "stl/stl-unordered-map.h"
 #include "stl/stl-vector.h"
@@ -184,6 +186,10 @@ class SourceManager final
     CompileContext& cc_;
     tr::vector<std::shared_ptr<SourceFile>> opened_files_;
     tr::vector<LocationRange> loc_ranges_;
+
+    // Cache of which files we've opened, by dev+inode instead of path for
+    // case insensitive support.
+    std::unordered_map<FileIdentity, std::shared_ptr<SourceFile>> opened_file_map_;
 
     // Source ids start from 1. The source file id is 1 + len(source) + 1. This
     // lets us store source locations as a single integer, as we can always

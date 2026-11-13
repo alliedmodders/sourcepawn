@@ -12,6 +12,11 @@ module.sources += [
   'pool-allocator.cpp',
 ]
 
+if module.compiler.target.platform == 'windows':
+  module.sources += ['platform-windows.cpp']
+else:
+  module.sources += ['platform-posix.cpp']
+
 if module.compiler.target.platform == 'linux':
   module.sources += [
     'procmap.cpp',
