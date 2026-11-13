@@ -46,7 +46,7 @@ jobs:
         run: |
           mkdir objdir
           cd objdir
-          python ../configure.py --enable-optimize --enable-debug --enable-asan --targets=${{ matrix.build_target }}
+          python ../configure.py --enable-optimize --enable-asserts --enable-asan --targets=${{ matrix.build_target }}
           ambuild
           echo "VERIFIER=objdir/verifier/linux-x86_64/verifier" >> $GITHUB_ENV
 
