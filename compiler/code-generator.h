@@ -73,6 +73,7 @@ class CodeGenerator final
     void EmitGlobalInitStmt(GlobalInitStmt* stmt);
 
     void EmitArrayCtor(ArrayType* type, ir::Value* ctor, unsigned int flags);
+    void EmitArrayCopyInit(VarDeclBase* decl, ArrayType* type, ir::Value* ctor);
     void EmitEnumStructCtor(EnumStructDecl* es, ir::Value* ctor);
     void EmitEnumStructCopy(QualType type, ir::Value* rhs);
     void EmitArrayFillStructs(ArrayType* type, ir::Array* expr);

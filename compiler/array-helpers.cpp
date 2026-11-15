@@ -425,6 +425,9 @@ class ArrayValidator final
 
   private:
     bool ValidateInitializer();
+    bool ValidateDynamicArrayInitializer();
+    bool ValidateFixedArrayInitializer();
+    bool CanCopyInitialize() const;
     ir::Value* ValidateRank(ArrayType* rank, Expr* init);
     bool AddCells(size_t ncells);
     bool CheckArgument(SymbolExpr* init);
@@ -535,37 +538,91 @@ bool ArrayValidator::ValidateInitializer() {
         return true;
     }
 
-    // For dynamic (heap) arrays, allow initialization from another array
-    // expression (reference copy).
-    if (at_ && !at_->is_fixed()) {
-        if (init_->as<ArrayExpr>() && decl_ && decl_->vclass() != sARGUMENT) {
-            report(init_->pos(), 160);
-            return false;
-        }
-        QualType type(at_, type_.is_const());
-        ir::Value* node = sema_->CheckRvalue(init_, type);
-        if (!node)
-            return false;
-        if (auto lval = node->as<ir::Lvalue>())
-            node = new ir::Rvalue(lval);
-        if (!sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment))
-            return false;
+    // Fixed-size arrays are values, while dynamic arrays are references. Their
+    // initializers follow different rules.
+    if (!at_->is_fixed())
+        return ValidateDynamicArrayInitializer();
+    return ValidateFixedArrayInitializer();
+}
 
-        // Do not allow assignment of a const array to a non-const array.
-        if (node->qual_type().is_const() && !type_.is_const()) {
-            sema_->ReportConversionDiagnostic(init_->pos(), type_, node->qual_type());
-            return false;
-        }
-
-        init_ir_ = node;
-        if (decl_)
-            decl_->set_sema_init_rhs(node);
-        return true;
+bool ArrayValidator::ValidateDynamicArrayInitializer() {
+    // We don't allow array exprs to initialize dynamic arrays yet.
+    if (init_->is(ExprKind::ArrayExpr) && decl_ && decl_->vclass() != sARGUMENT) {
+        report(init_->pos(), 160);
+        return false;
     }
 
-    // Not a dynamic array, check for a fixed initializer.
+    ir::Value* node = sema_->CheckRvalue(init_, type_);
+    if (!node)
+        return false;
+
+    if (auto lval = node->as<ir::Lvalue>())
+        node = new ir::Rvalue(lval);
+
+    if (!sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment))
+        return false;
+
+    // Do not allow assignment of a const array to a non-const array.
+    if (node->qual_type().is_const() && !type_.is_const()) {
+        sema_->ReportConversionDiagnostic(init_->pos(), type_, node->qual_type());
+        return false;
+    }
+
+    init_ir_ = node;
+    if (decl_)
+        decl_->set_sema_init_rhs(node);
+    return true;
+}
+
+static inline bool IsLiteralInitializer(Expr* node) {
+    switch (node->kind()) {
+        case ExprKind::ArrayExpr:
+        case ExprKind::StringExpr:
+        case ExprKind::StructExpr:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool ArrayValidator::ValidateFixedArrayInitializer() {
+    // A non-literal array expression is deep-copied. This is only supported
+    // where the initializer is evaluated in the scope of the declaration.
+    if (!IsLiteralInitializer(init_) && CanCopyInitialize()) {
+        ir::Value* node = sema_->CheckRvalue(init_, type_);
+        if (!node)
+            return false;
+
+        if (node->type()->isArray()) {
+            if (auto lval = node->as<ir::Lvalue>())
+                node = new ir::Rvalue(lval);
+            if (!sema_->CheckCoercion(node, at_, node->type(), CvtContext::Assignment))
+                return false;
+
+            init_ir_ = node;
+            decl_->set_sema_init_rhs(node);
+            return true;
+        }
+    }
+
+    // Literals fall straight through to here; anything else reaching this
+    // point is either the deprecated scalar form ("int x[10] = 0") or an
+    // error. ValidateRank() diagnoses both.
     init_ir_ = ValidateRank(at_, init_);
     return !!init_ir_;
+}
+
+bool ArrayValidator::CanCopyInitialize() const {
+    // decl_ is only null when validating inner enum struct initializers.
+    if (!decl_)
+        return false;
+
+    // We exclude arguments since they are handled at callsites, there's no
+    // actual initialization. We also exclude statics, since they're a can
+    // of worms. Their name binding is local, not global. In addition, their
+    // initialization isn't properly ordered with respect to globals, so
+    // copy initialization from another global could break.
+    return decl_->vclass() == sLOCAL || decl_->vclass() == sGLOBAL;
 }
 
 bool ArrayValidator::CheckArgument(SymbolExpr* expr) {
