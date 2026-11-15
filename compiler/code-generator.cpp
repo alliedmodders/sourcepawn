@@ -673,6 +673,28 @@ static inline bool IsInlineArrayInitializer(ir::Value* ctor) {
     }
 }
 
+void CodeGenerator::EmitArrayCopyInit(VarDeclBase* decl, ArrayType* type, ir::Value* ctor) {
+    assert(type->is_fixed());
+
+    if (type->is_flat()) {
+        auto src = ctor->type()->to<ArrayType>();
+        if (decl->vclass() == sLOCAL && !decl->is_shared() && src->size() < type->size())
+            __ emit(OP_ZEROFILL_S, VarSlot(decl));
+        EmitAddress(decl);
+    } else {
+        // Fixed-size heap array: allocate the destination, then copy into it.
+        EmitVarBase(decl);
+        __ emit(OP_NEWARRAY, rtti_->to_typeid(type));
+        __ emit(OP_DUP);
+    }
+
+    EmitExpr(ctor);
+    __ emit(OP_COPYARRAY);
+
+    if (!type->is_flat())
+        EmitStoreVar(decl);
+}
+
 void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
     auto type = decl->type();
     if (auto array = type->as<ArrayType>()) {
@@ -695,10 +717,8 @@ void CodeGenerator::EmitInit(VarDeclBase* decl, ir::Value* ctor) {
             // pointer back.
             if (!array->is_flat())
                 EmitStoreVar(decl);
-        } else if (array->is_flat()) {
-            EmitAddress(decl);
-            EmitExpr(ctor);
-            __ emit(OP_COPYARRAY);
+        } else if (array->is_fixed()) {
+            EmitArrayCopyInit(decl, array, ctor);
         } else {
             // Dynamic array with arbitrary RHS.
             EmitVarBase(decl);
