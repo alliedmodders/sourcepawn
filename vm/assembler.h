@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <amtl/am-bits.h>
 #include "label.h"
 
 class AssemblerBase
@@ -78,7 +79,7 @@ class AssemblerBase
     template <typename T>
     void write(const T& t) {
         assertCanWrite(sizeof(T));
-        *reinterpret_cast<T*>(pos_) = t;
+        ke::Poke<T>(pos_, t);
         pos_ += sizeof(T);
     }
 
