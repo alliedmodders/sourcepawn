@@ -113,6 +113,7 @@ const TypeDesc* TypeCache::GetSlice(const TypeDesc* elt) {
         return *p;
 
     TypeDesc* td = NewTypeDesc(pool_, TypeKind::ArraySlice, elt);
+    td->set_finalizer(SpSlice::NestedFinalizer);
 
     cache_.add(p, td);
     return td;
