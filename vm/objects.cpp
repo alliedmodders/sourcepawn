@@ -37,6 +37,18 @@ void SpArray::NestedFinalizer(HeapItem* obj) {
     }
 }
 
+void SpSlice::NestedFinalizer(HeapItem* obj) {
+    auto slice = reinterpret_cast<SpSlice*>(obj);
+    if (!slice->owner)
+        return;
+
+    auto env = Environment::get();
+    auto& vm = env->virt_mem();
+
+    auto base = vm.ToPhysAddr<HeapItem*>(slice->owner);
+    base->Release();
+}
+
 void SpObject::NestedFinalizer(HeapItem* obj) {
     auto env = Environment::get();
     auto& vm = env->virt_mem();

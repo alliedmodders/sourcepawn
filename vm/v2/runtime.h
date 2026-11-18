@@ -23,6 +23,7 @@
 namespace sp {
 
 struct SpArray;
+struct SpSlice;
 
 namespace v2 {
 
@@ -139,9 +140,9 @@ class Runtime final : public BaseRuntime,
     bool CopyArrayOfObjects(cell_t src_addr, cell_t dest_addr);
     void FillFlatArray(cell_t local_addr, uint32_t data_offset, uint32_t pad_bytes);
     void* GetArrayElem(SpArray* array, uint32_t index);
-    Handle<SpArray> NewSlice(SpArray* array, uint32_t index);
-    Handle<SpArray> NewSliceEs(uint32_t data, uint32_t size);
-    Handle<SpArray> NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
+    Handle<SpSlice> NewSlice(SpArray* array, uint32_t index);
+    Handle<SpSlice> NewSliceEs(uint32_t data, uint32_t size);
+    Handle<SpSlice> NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index);
     Handle<SpFunction> NewClosure(const TypeDesc* td, MethodInfo* method);
 
     NativeEntry* NativeAt(size_t index) { return &natives_[index]; }

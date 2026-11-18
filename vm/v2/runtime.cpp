@@ -1255,7 +1255,7 @@ void* Runtime::GetArrayElem(SpArray* array, uint32_t index) {
     return data + (index * elt_size);
 }
 
-Handle<SpArray> Runtime::NewSlice(SpArray* array, uint32_t index) {
+Handle<SpSlice> Runtime::NewSlice(SpArray* array, uint32_t index) {
     assert(!array->td->array_elt()->IsArrayish());
     if (index >= array->length) {
         ReportOutOfBoundsError(index, array->length);
@@ -1266,35 +1266,42 @@ Handle<SpArray> Runtime::NewSlice(SpArray* array, uint32_t index) {
     if (td->kind() != TypeKind::ArraySlice)
         td = GetSliceType(td->array_elt());
 
-    auto slice = heap_.New<SpArray>(td);
+    auto slice = heap_.New<SpSlice>(td);
     if (!slice)
         return nullptr;
     slice->length = array->length - index;
     slice->data = heap_.ToLocalAddr(GetArrayElem(array, index));
+
+    // The slice's data points into |array|'s payload, so the slice must
+    // keep the base alive for as long as it is referenced.
+    array->AddRef();
+    slice->owner = heap_.ToLocalAddr(array);
     return slice;
 }
 
-Handle<SpArray> Runtime::NewSliceEs(uint32_t data, uint32_t size) {
+Handle<SpSlice> Runtime::NewSliceEs(uint32_t data, uint32_t size) {
     auto td = GetSliceType(GetPrimitiveType(TypeKind::Any));
-    auto slice = heap_.New<SpArray>(td);
+    auto slice = heap_.New<SpSlice>(td);
     if (!slice)
         return nullptr;
 
     slice->length = size;
     slice->data = data;
+    slice->owner = 0;
     return slice;
 }
 
-Handle<SpArray> Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index) {
+Handle<SpSlice> Runtime::NewFlatSlice(cell_t local_addr, const TypeDesc* td, uint32_t index) {
     assert(td->IsFlatArray());
     assert(index <= td->array_size());
 
     const TypeDesc* slice_td = GetSliceType(td->array_elt());
-    Handle<SpArray> slice = heap_.New<SpArray>(slice_td);
+    Handle<SpSlice> slice = heap_.New<SpSlice>(slice_td);
     if (!slice)
         return nullptr;
     slice->length = td->array_size() - index;
     slice->data = local_addr + index * td->array_elt()->element_size();
+    slice->owner = 0;
     return slice;
 }
 

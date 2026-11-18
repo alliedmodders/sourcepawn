@@ -58,6 +58,13 @@ struct SpArray : public HeapItem {
     static void NestedFinalizer(HeapItem* obj);
 };
 
+struct SpSlice : public SpArray {
+    // If non-null, the array that this slice is representing a view over.
+    uint32_t owner;
+
+    static void NestedFinalizer(HeapItem* obj);
+};
+
 struct SpObject : public HeapItem {
     static void NestedFinalizer(HeapItem* obj);
 };
