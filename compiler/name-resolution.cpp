@@ -878,6 +878,10 @@ bool FunctionExpr::Bind(SemaContext& sc) {
 }
 
 bool FunctionDecl::Bind(SemaContext& outer_sc) {
+    if (is_bound_)
+        return true;
+    set_is_bound();
+
     if (outer_sc.func())
         outer_ = outer_sc.func();
 
