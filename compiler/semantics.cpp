@@ -1592,12 +1592,40 @@ ir::Value* Semantics::CheckCastExpr(CastExpr* expr, QualType target) {
     return new ir::Cast(expr, operand, cast_type);
 }
 
+// Ensures the function is bound, and returns whether it has a signature.
+bool Semantics::BindFunctionOnDemand(FunctionDecl* fun) {
+    if (fun->signature())
+        return true;
+
+    // It's possible to use global functions in weird contexts before they've
+    // been evaluated yet, for example:
+    //
+    //     int f() { new x[h()]; }
+    //     int h() { return 5; }
+    //
+    // So, we allow recursively binding into global functions.
+    if (fun->is_bound() || fun->kind() != StmtKind::FunctionDecl)
+        return false;
+
+    SemaContext sc(this);
+    ke::SaveRestore<SemaContext*> push_sc(sc_, &sc);
+    fun->Bind(sc);
+    return !!fun->signature();
+}
+
 static ir::Value* FunctionAsValue(Expr* expr, FunctionDecl* fun) {
     auto canonical = fun->canonical();
     if (canonical->is_native()) {
         report(expr, 76);
         return nullptr;
     }
+
+    // We can see a null signature if a function name was used as part of a
+    // type in the function's own signature, eg: f(a[f]) {}
+    //
+    // Since this is cyclic we can't resolve it.
+    if (!canonical->signature())
+        return nullptr;
     if (canonical->return_array() || canonical->return_type()->isArray()) {
         report(expr, 182);
         return nullptr;
@@ -1627,6 +1655,22 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
     switch (decl->kind()) {
         case StmtKind::VarDecl:
         case StmtKind::ArgDecl:
+            if (!decl->as<VarDeclBase>()->type_info().type) {
+                // We can get here if we haven't processed a "let" declaration
+                // yet:
+                //
+                //   f() { x = 0; }
+                //   let x = 0;
+                //
+                // We can also get here if we're evaluating an expression in
+                // the bind phase, and semantic analysis hasn't had a chance
+                // to infer the type of 'x' yet:
+                //
+                //   let x = 5;
+                //   int a[x];
+                report(expr, 493) << decl->name();
+                return nullptr;
+            }
             return new ir::Variable(expr, decl->as<VarDeclBase>());
         case StmtKind::ConstDecl:
         case StmtKind::EnumFieldDecl: {
@@ -1635,8 +1679,12 @@ ir::Value* Semantics::CheckSymbolExpr(SymbolExpr* expr, bool allow_types) {
             return new ir::Constant(expr, const_val);
         }
         case StmtKind::FunctionDecl:
-        case StmtKind::MemberFunctionDecl:
-            return FunctionAsValue(expr, decl->as<FunctionDecl>());
+        case StmtKind::MemberFunctionDecl: {
+            auto fun = decl->as<FunctionDecl>();
+            if (!BindFunctionOnDemand(fun))
+                return nullptr;
+            return FunctionAsValue(expr, fun);
+        }
         case StmtKind::ClassDecl:
         case StmtKind::EnumStructDecl:
         case StmtKind::MethodmapDecl:
@@ -2297,6 +2345,11 @@ ir::Value* Semantics::CheckCallExpr(CallExpr* call) {
     if (fun) {
         assert(fun->canonical() == fun);
         call->set_callee(fun);
+
+        // If we are running during the name binding pass, we might not have
+        // a function signature yet. If so, bind it now.
+        if (!BindFunctionOnDemand(fun))
+            return nullptr;
 
         if (fun->return_type()->isArray() || fun->return_type()->isEnumStruct()) {
             if (fun->is_analyzing() || !CheckFunctionDecl(fun)) {

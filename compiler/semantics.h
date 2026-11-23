@@ -167,6 +167,7 @@ class Semantics final
     bool CheckClassDecl(ClassDecl* info);
     bool CheckFunctionDecl(FunctionDecl* info);
     bool CheckFunctionDeclImpl(FunctionDecl* info);
+    bool BindFunctionOnDemand(FunctionDecl* fun);
     void CheckFunctionReturnUsage(FunctionDecl* info);
     bool CheckPragmaUnusedStmt(PragmaUnusedStmt* stmt);
     bool CheckSwitchStmt(SwitchStmt* stmt);

@@ -355,4 +355,5 @@ static const char* errmsg_ex[] = {
     /*490*/ "SOURCE_DATE_EPOCH must be a non-negative integer, got \"%s\"\n",
     /*491*/ "cannot use 'const' with object type '%s'\n",
     /*492*/ "static property '%s' must be accessed via its type (try '%s.%s')\n",
+    /*493*/ "cannot use '%s' here because its type has not been inferred yet\n",
 };

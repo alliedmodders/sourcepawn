@@ -1607,6 +1607,8 @@ class FunctionDecl : public Decl
     const typeinfo_t& type_info() const { return decl_.type; }
     typeinfo_t& mutable_type_info() { return decl_.type; }
 
+    bool is_bound() const { return is_bound_; }
+    void set_is_bound() { is_bound_ = true; }
     bool is_analyzing() const { return is_analyzing_; }
     void set_is_analyzing(bool val) { is_analyzing_ = val; }
     bool is_analyzed() const { return analyzed_; }
@@ -1722,6 +1724,7 @@ class FunctionDecl : public Decl
     int32_t num_int64_slots_ = 0;
     int32_t num_int32_slots_ = 0;
 
+    bool is_bound_ SP_BITFIELD(1);
     bool analyzed_ SP_BITFIELD(1);
     bool analyze_result_ SP_BITFIELD(1);
     bool is_public_ SP_BITFIELD(1);

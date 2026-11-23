@@ -104,6 +104,7 @@ BinaryExprBase::BinaryExprBase(ExprKind kind, const token_pos_t& pos, int token,
 FunctionDecl::FunctionDecl(StmtKind kind, const token_pos_t& pos, const declinfo_t& decl)
   : Decl(kind, pos, decl.name),
     decl_(decl),
+    is_bound_(false),
     analyzed_(false),
     analyze_result_(false),
     is_public_(false),
