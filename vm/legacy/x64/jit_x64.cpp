@@ -362,7 +362,7 @@ bool Compiler::visitHEAP(cell_t amount) {
     } else {
         __ movl(tmp, hpAddr());
         __ lea(tmp, Operand(dat, tmp, NoScale, STACK_MARGIN));
-        __ cmpl(tmp, stk);
+        __ cmpq(tmp, stk);
         jumpOnError(above, SP_ERROR_HEAPLOW);
     }
     return true;
